@@ -39,6 +39,7 @@ export default {
     error: 'Error',
     critical: 'Critical',
     warning: 'Warning',
+    pageDisabledByAdmin: 'This page has been disabled by an administrator.',
     info: 'Info',
     active: 'Active',
     inactive: 'Inactive',
@@ -147,6 +148,7 @@ export default {
 
   // Navigation
   nav: {
+    checkIn: 'Daily Check-in',
     dashboard: 'Dashboard',
     announcements: 'Announcements',
     apiKeys: 'API Keys',

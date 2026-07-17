@@ -5897,6 +5897,15 @@
 	        <!-- Tab: Features (功能开关) -->
         <div v-show="activeTab === 'features'" class="space-y-6">
 
+        <CheckinSettingsCard />
+
+        <PageVisibilitySettingsSection
+          v-model:user-channel-status-enabled="form.user_channel_status_enabled"
+          v-model:user-subscriptions-enabled="form.user_subscriptions_enabled"
+          v-model:admin-promo-codes-enabled="form.admin_promo_codes_enabled"
+          v-model:admin-channel-management-enabled="form.admin_channel_management_enabled"
+        />
+
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
@@ -7518,6 +7527,8 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
+import CheckinSettingsCard from "@/components/admin/settings/CheckinSettingsCard.vue";
+import PageVisibilitySettingsSection from "@/components/admin/settings/PageVisibilitySettingsSection.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
@@ -8420,6 +8431,11 @@ const form = reactive<SettingsForm>({
   channel_monitor_default_interval_seconds: 60,
   // Available Channels feature switch
   available_channels_enabled: false,
+  // Page visibility switches
+  user_channel_status_enabled: true,
+  user_subscriptions_enabled: true,
+  admin_promo_codes_enabled: true,
+  admin_channel_management_enabled: true,
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: false,
   // Allow user view error requests
@@ -9816,6 +9832,11 @@ async function saveSettings() {
         Number(form.channel_monitor_default_interval_seconds) || 60,
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
+      // Page visibility switches
+      user_channel_status_enabled: form.user_channel_status_enabled,
+      user_subscriptions_enabled: form.user_subscriptions_enabled,
+      admin_promo_codes_enabled: form.admin_promo_codes_enabled,
+      admin_channel_management_enabled: form.admin_channel_management_enabled,
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
       allow_user_view_error_requests: form.allow_user_view_error_requests,

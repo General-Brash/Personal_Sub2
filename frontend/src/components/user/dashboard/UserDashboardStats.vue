@@ -9,10 +9,14 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
           </svg>
         </div>
-        <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.balance') }}</p>
-          <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400">${{ formatBalance(balance) }}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('common.available') }}</p>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.permanentBalance') }}</p>
+          <p data-test="dashboard-permanent-balance" class="break-all text-xl font-bold text-emerald-600 dark:text-emerald-400">
+            ${{ formatMoneyDisplay(balance) }}
+          </p>
+          <p data-test="dashboard-temporary-credit" class="break-all text-xs font-medium text-primary-600 dark:text-primary-400">
+            {{ t('dashboard.temporaryCredit') }}: ${{ formatMoneyDisplay(temporaryCredit) }}
+          </p>
         </div>
       </div>
     </div>
@@ -54,13 +58,13 @@
         <div>
           <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.todayCost') }}</p>
           <p class="text-xl font-bold text-gray-900 dark:text-white">
-            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">${{ formatCost(stats?.today_actual_cost || 0) }}</span>
-            <span class="text-sm font-normal text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.today_cost || 0) }}</span>
+            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">${{ formatMoneyDisplay(stats?.today_actual_cost) }}</span>
+            <span class="text-sm font-normal text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatMoneyDisplay(stats?.today_cost) }}</span>
           </p>
           <p class="text-xs">
             <span class="text-gray-500 dark:text-gray-400">{{ t('common.total') }}: </span>
-            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">${{ formatCost(stats?.total_actual_cost || 0) }}</span>
-            <span class="text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.total_cost || 0) }}</span>
+            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">${{ formatMoneyDisplay(stats?.total_actual_cost) }}</span>
+            <span class="text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatMoneyDisplay(stats?.total_cost) }}</span>
           </p>
         </div>
       </div>
@@ -156,13 +160,13 @@
             {{ item.isOther ? t('dashboard.platformOther') : platformLabel(item.platform) }}
           </span>
           <span class="font-mono text-sm text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">
-            ${{ formatCost(item.total_actual_cost) }}
+            ${{ formatMoneyDisplay(item.total_actual_cost) }}
           </span>
         </div>
         <div class="mt-2 space-y-1 text-xs">
           <div class="flex items-center justify-between">
             <span class="text-gray-500 dark:text-gray-400">{{ t('dashboard.todayCost') }}</span>
-            <span class="font-mono text-gray-900 dark:text-white">${{ formatCost(item.today_actual_cost) }}</span>
+            <span class="font-mono text-gray-900 dark:text-white">${{ formatMoneyDisplay(item.today_actual_cost) }}</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-gray-500 dark:text-gray-400">{{ t('dashboard.requests') }}</span>
@@ -200,7 +204,7 @@
                 <div class="flex items-center justify-between text-xs">
                   <span class="text-gray-600 dark:text-gray-300">{{ t(`dashboard.platformQuota.${w}`) }}</span>
                   <span class="font-mono text-gray-700 dark:text-gray-200">
-                    ${{ formatUsd((quotaVal(item.quota, `${w}_usage_usd`) as number) ?? 0) }} / ${{ formatUsd(quotaVal(item.quota, `${w}_limit_usd`) as number) }}
+                    ${{ formatMoneyDisplay((quotaVal(item.quota, `${w}_usage_usd`) as number) ?? 0) }} / ${{ formatMoneyDisplay(quotaVal(item.quota, `${w}_limit_usd`) as number) }}
                   </span>
                 </div>
                 <div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700">
@@ -228,6 +232,7 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import type { UserDashboardStats as UserStatsType } from '@/api/usage'
 import type { PlatformQuotaItem } from '@/types'
+import { formatMoneyDisplay } from '@/utils/format'
 
 interface FusedPlatformCard {
   platform: string
@@ -242,6 +247,7 @@ interface FusedPlatformCard {
 const props = defineProps<{
   stats: UserStatsType
   balance: number
+  temporaryCredit?: string | null
   isSimple: boolean
   platformQuotas?: PlatformQuotaItem[] | null
 }>()
@@ -350,17 +356,6 @@ function quotaBarClass(p: number): string {
   return 'bg-green-500'
 }
 
-// 与 formatBalance 一致使用 Intl.NumberFormat 做半偶舍入，避免 toFixed 在不同 JS 引擎
-// 下偶发截断而非四舍五入（与后端展示精度不一致）。
-const usdFormatter = new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-function formatUsd(n: number): string {
-  if (!Number.isFinite(n)) return '0.00'
-  return usdFormatter.format(n)
-}
-
 function formatResetTime(iso: string | null | undefined): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -374,14 +369,7 @@ function formatResetTime(iso: string | null | undefined): string {
   })
 }
 
-const formatBalance = (b: number) =>
-  new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(b)
-
 const formatNumber = (n: number) => n.toLocaleString()
-const formatCost = (c: number) => c.toFixed(4)
 const formatTokens = (t: number) => {
   if (t >= 1_000_000) return `${(t / 1_000_000).toFixed(1)}M`
   if (t >= 1000) return `${(t / 1000).toFixed(1)}K`

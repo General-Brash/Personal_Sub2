@@ -21,8 +21,10 @@ type IdempotencyRecord struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// Scope holds the value of the "scope" field.
-	Scope string `json:"scope,omitempty"`
+	// OperationScope holds the value of the "operation_scope" field.
+	OperationScope string `json:"operation_scope,omitempty"`
+	// ActorScope holds the value of the "actor_scope" field.
+	ActorScope string `json:"actor_scope,omitempty"`
 	// IdempotencyKeyHash holds the value of the "idempotency_key_hash" field.
 	IdempotencyKeyHash string `json:"idempotency_key_hash,omitempty"`
 	// RequestFingerprint holds the value of the "request_fingerprint" field.
@@ -49,7 +51,7 @@ func (*IdempotencyRecord) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case idempotencyrecord.FieldID, idempotencyrecord.FieldResponseStatus:
 			values[i] = new(sql.NullInt64)
-		case idempotencyrecord.FieldScope, idempotencyrecord.FieldIdempotencyKeyHash, idempotencyrecord.FieldRequestFingerprint, idempotencyrecord.FieldStatus, idempotencyrecord.FieldResponseBody, idempotencyrecord.FieldErrorReason:
+		case idempotencyrecord.FieldOperationScope, idempotencyrecord.FieldActorScope, idempotencyrecord.FieldIdempotencyKeyHash, idempotencyrecord.FieldRequestFingerprint, idempotencyrecord.FieldStatus, idempotencyrecord.FieldResponseBody, idempotencyrecord.FieldErrorReason:
 			values[i] = new(sql.NullString)
 		case idempotencyrecord.FieldCreatedAt, idempotencyrecord.FieldUpdatedAt, idempotencyrecord.FieldLockedUntil, idempotencyrecord.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
@@ -86,11 +88,17 @@ func (_m *IdempotencyRecord) assignValues(columns []string, values []any) error 
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
 			}
-		case idempotencyrecord.FieldScope:
+		case idempotencyrecord.FieldOperationScope:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field scope", values[i])
+				return fmt.Errorf("unexpected type %T for field operation_scope", values[i])
 			} else if value.Valid {
-				_m.Scope = value.String
+				_m.OperationScope = value.String
+			}
+		case idempotencyrecord.FieldActorScope:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field actor_scope", values[i])
+			} else if value.Valid {
+				_m.ActorScope = value.String
 			}
 		case idempotencyrecord.FieldIdempotencyKeyHash:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -186,8 +194,11 @@ func (_m *IdempotencyRecord) String() string {
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("scope=")
-	builder.WriteString(_m.Scope)
+	builder.WriteString("operation_scope=")
+	builder.WriteString(_m.OperationScope)
+	builder.WriteString(", ")
+	builder.WriteString("actor_scope=")
+	builder.WriteString(_m.ActorScope)
 	builder.WriteString(", ")
 	builder.WriteString("idempotency_key_hash=")
 	builder.WriteString(_m.IdempotencyKeyHash)

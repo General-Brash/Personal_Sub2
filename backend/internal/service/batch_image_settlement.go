@@ -255,6 +255,7 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 	}
 	billingMode := string(BillingModeImage)
 	accountRateMultiplier := job.AccountRateMultiplier
+	rateMultiplier := job.GroupRateMultiplier * job.BatchDiscountMultiplier
 	inboundEndpoint := "/v1/images/batches"
 	upstreamEndpoint := "vertex:batchPredictionJobs"
 	imageSize := "1K"
@@ -271,7 +272,7 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 		ImageOutputCost:       actualCost,
 		TotalCost:             actualCost,
 		ActualCost:            actualCost,
-		RateMultiplier:        job.GroupRateMultiplier * job.BatchDiscountMultiplier,
+		RateMultiplier:        rateMultiplier,
 		AccountRateMultiplier: &accountRateMultiplier,
 		BillingType:           BillingTypeBalance,
 		RequestType:           RequestTypeSync,

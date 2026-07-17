@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditconsumption"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -932,6 +933,21 @@ func (_u *UsageLogUpdate) SetSubscription(v *UserSubscription) *UsageLogUpdate {
 	return _u.SetSubscriptionID(v.ID)
 }
 
+// AddTemporaryCreditConsumptionIDs adds the "temporary_credit_consumptions" edge to the TemporaryCreditConsumption entity by IDs.
+func (_u *UsageLogUpdate) AddTemporaryCreditConsumptionIDs(ids ...int64) *UsageLogUpdate {
+	_u.mutation.AddTemporaryCreditConsumptionIDs(ids...)
+	return _u
+}
+
+// AddTemporaryCreditConsumptions adds the "temporary_credit_consumptions" edges to the TemporaryCreditConsumption entity.
+func (_u *UsageLogUpdate) AddTemporaryCreditConsumptions(v ...*TemporaryCreditConsumption) *UsageLogUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddTemporaryCreditConsumptionIDs(ids...)
+}
+
 // Mutation returns the UsageLogMutation object of the builder.
 func (_u *UsageLogUpdate) Mutation() *UsageLogMutation {
 	return _u.mutation
@@ -965,6 +981,27 @@ func (_u *UsageLogUpdate) ClearGroup() *UsageLogUpdate {
 func (_u *UsageLogUpdate) ClearSubscription() *UsageLogUpdate {
 	_u.mutation.ClearSubscription()
 	return _u
+}
+
+// ClearTemporaryCreditConsumptions clears all "temporary_credit_consumptions" edges to the TemporaryCreditConsumption entity.
+func (_u *UsageLogUpdate) ClearTemporaryCreditConsumptions() *UsageLogUpdate {
+	_u.mutation.ClearTemporaryCreditConsumptions()
+	return _u
+}
+
+// RemoveTemporaryCreditConsumptionIDs removes the "temporary_credit_consumptions" edge to TemporaryCreditConsumption entities by IDs.
+func (_u *UsageLogUpdate) RemoveTemporaryCreditConsumptionIDs(ids ...int64) *UsageLogUpdate {
+	_u.mutation.RemoveTemporaryCreditConsumptionIDs(ids...)
+	return _u
+}
+
+// RemoveTemporaryCreditConsumptions removes "temporary_credit_consumptions" edges to TemporaryCreditConsumption entities.
+func (_u *UsageLogUpdate) RemoveTemporaryCreditConsumptions(v ...*TemporaryCreditConsumption) *UsageLogUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveTemporaryCreditConsumptionIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1462,6 +1499,51 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usersubscription.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.TemporaryCreditConsumptionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.TemporaryCreditConsumptionsTable,
+			Columns: []string{usagelog.TemporaryCreditConsumptionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(temporarycreditconsumption.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedTemporaryCreditConsumptionsIDs(); len(nodes) > 0 && !_u.mutation.TemporaryCreditConsumptionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.TemporaryCreditConsumptionsTable,
+			Columns: []string{usagelog.TemporaryCreditConsumptionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(temporarycreditconsumption.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.TemporaryCreditConsumptionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.TemporaryCreditConsumptionsTable,
+			Columns: []string{usagelog.TemporaryCreditConsumptionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(temporarycreditconsumption.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -2389,6 +2471,21 @@ func (_u *UsageLogUpdateOne) SetSubscription(v *UserSubscription) *UsageLogUpdat
 	return _u.SetSubscriptionID(v.ID)
 }
 
+// AddTemporaryCreditConsumptionIDs adds the "temporary_credit_consumptions" edge to the TemporaryCreditConsumption entity by IDs.
+func (_u *UsageLogUpdateOne) AddTemporaryCreditConsumptionIDs(ids ...int64) *UsageLogUpdateOne {
+	_u.mutation.AddTemporaryCreditConsumptionIDs(ids...)
+	return _u
+}
+
+// AddTemporaryCreditConsumptions adds the "temporary_credit_consumptions" edges to the TemporaryCreditConsumption entity.
+func (_u *UsageLogUpdateOne) AddTemporaryCreditConsumptions(v ...*TemporaryCreditConsumption) *UsageLogUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddTemporaryCreditConsumptionIDs(ids...)
+}
+
 // Mutation returns the UsageLogMutation object of the builder.
 func (_u *UsageLogUpdateOne) Mutation() *UsageLogMutation {
 	return _u.mutation
@@ -2422,6 +2519,27 @@ func (_u *UsageLogUpdateOne) ClearGroup() *UsageLogUpdateOne {
 func (_u *UsageLogUpdateOne) ClearSubscription() *UsageLogUpdateOne {
 	_u.mutation.ClearSubscription()
 	return _u
+}
+
+// ClearTemporaryCreditConsumptions clears all "temporary_credit_consumptions" edges to the TemporaryCreditConsumption entity.
+func (_u *UsageLogUpdateOne) ClearTemporaryCreditConsumptions() *UsageLogUpdateOne {
+	_u.mutation.ClearTemporaryCreditConsumptions()
+	return _u
+}
+
+// RemoveTemporaryCreditConsumptionIDs removes the "temporary_credit_consumptions" edge to TemporaryCreditConsumption entities by IDs.
+func (_u *UsageLogUpdateOne) RemoveTemporaryCreditConsumptionIDs(ids ...int64) *UsageLogUpdateOne {
+	_u.mutation.RemoveTemporaryCreditConsumptionIDs(ids...)
+	return _u
+}
+
+// RemoveTemporaryCreditConsumptions removes "temporary_credit_consumptions" edges to TemporaryCreditConsumption entities.
+func (_u *UsageLogUpdateOne) RemoveTemporaryCreditConsumptions(v ...*TemporaryCreditConsumption) *UsageLogUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveTemporaryCreditConsumptionIDs(ids...)
 }
 
 // Where appends a list predicates to the UsageLogUpdate builder.
@@ -2949,6 +3067,51 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usersubscription.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.TemporaryCreditConsumptionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.TemporaryCreditConsumptionsTable,
+			Columns: []string{usagelog.TemporaryCreditConsumptionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(temporarycreditconsumption.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedTemporaryCreditConsumptionsIDs(); len(nodes) > 0 && !_u.mutation.TemporaryCreditConsumptionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.TemporaryCreditConsumptionsTable,
+			Columns: []string{usagelog.TemporaryCreditConsumptionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(temporarycreditconsumption.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.TemporaryCreditConsumptionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.TemporaryCreditConsumptionsTable,
+			Columns: []string{usagelog.TemporaryCreditConsumptionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(temporarycreditconsumption.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

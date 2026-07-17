@@ -516,6 +516,18 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AvailableChannelsEnabled != after.AvailableChannelsEnabled {
 		changed = append(changed, "available_channels_enabled")
 	}
+	if before.UserChannelStatusEnabled != after.UserChannelStatusEnabled {
+		changed = append(changed, "user_channel_status_enabled")
+	}
+	if before.UserSubscriptionsEnabled != after.UserSubscriptionsEnabled {
+		changed = append(changed, "user_subscriptions_enabled")
+	}
+	if before.AdminPromoCodesEnabled != after.AdminPromoCodesEnabled {
+		changed = append(changed, "admin_promo_codes_enabled")
+	}
+	if before.AdminChannelManagementEnabled != after.AdminChannelManagementEnabled {
+		changed = append(changed, "admin_channel_management_enabled")
+	}
 	if before.AffiliateEnabled != after.AffiliateEnabled {
 		changed = append(changed, "affiliate_enabled")
 	}

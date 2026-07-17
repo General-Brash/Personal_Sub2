@@ -652,6 +652,12 @@ export interface SystemSettings {
   // Available Channels feature switch
   available_channels_enabled: boolean;
 
+  // Page visibility switches
+  user_channel_status_enabled: boolean;
+  user_subscriptions_enabled: boolean;
+  admin_promo_codes_enabled: boolean;
+  admin_channel_management_enabled: boolean;
+
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
 
@@ -918,6 +924,12 @@ export interface UpdateSettingsRequest {
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;
+
+  // Page visibility switches
+  user_channel_status_enabled?: boolean;
+  user_subscriptions_enabled?: boolean;
+  admin_promo_codes_enabled?: boolean;
+  admin_channel_management_enabled?: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;
@@ -1324,6 +1336,34 @@ export interface BetaPolicySettings {
   rules: BetaPolicyRule[];
 }
 
+export interface CheckinRewardTier {
+  day: number;
+  amount: string;
+}
+
+export interface CheckinSettings {
+  enabled: boolean;
+  max_reward_day: number;
+  reward_tiers: CheckinRewardTier[];
+}
+
+export async function getCheckinSettings(): Promise<CheckinSettings> {
+  const { data } = await apiClient.get<CheckinSettings>(
+    "/admin/settings/checkin",
+  );
+  return data;
+}
+
+export async function updateCheckinSettings(
+  settings: CheckinSettings,
+): Promise<CheckinSettings> {
+  const { data } = await apiClient.put<CheckinSettings>(
+    "/admin/settings/checkin",
+    settings,
+  );
+  return data;
+}
+
 /**
  * Get beta policy settings
  * @returns Beta policy settings
@@ -1431,6 +1471,8 @@ export const settingsAPI = {
   updateStreamTimeoutSettings,
   getRectifierSettings,
   updateRectifierSettings,
+  getCheckinSettings,
+  updateCheckinSettings,
   getBetaPolicySettings,
   updateBetaPolicySettings,
   getWebSearchEmulationConfig,

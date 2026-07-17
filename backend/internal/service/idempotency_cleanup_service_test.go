@@ -18,7 +18,7 @@ type idempotencyCleanupRepoStub struct {
 func (r *idempotencyCleanupRepoStub) CreateProcessing(context.Context, *IdempotencyRecord) (bool, error) {
 	return false, nil
 }
-func (r *idempotencyCleanupRepoStub) GetByScopeAndKeyHash(context.Context, string, string) (*IdempotencyRecord, error) {
+func (r *idempotencyCleanupRepoStub) GetByScopeActorScopeAndKeyHash(context.Context, string, string, string) (*IdempotencyRecord, error) {
 	return nil, nil
 }
 func (r *idempotencyCleanupRepoStub) TryReclaim(context.Context, int64, string, time.Time, time.Time, time.Time) (bool, error) {

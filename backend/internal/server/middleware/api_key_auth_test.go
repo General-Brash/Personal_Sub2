@@ -1264,7 +1264,7 @@ func TestAPIKeyAuthRejectsExhaustedBalance(t *testing.T) {
 
 	cfg := &config.Config{RunMode: config.RunModeStandard}
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
-	router := newAuthTestRouter(apiKeyService, nil, cfg)
+	router := newAuthTestRouterWithAvailableCreditChecker(apiKeyService, nil, cfg, &availableCreditEligibilityCheckerStub{err: service.ErrInsufficientBalance})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/t", nil)
@@ -1275,7 +1275,57 @@ func TestAPIKeyAuthRejectsExhaustedBalance(t *testing.T) {
 	requireAPIKeyAuthError(t, w, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 }
 
+func TestAPIKeyAuthFallsBackToPositivePermanentBalanceWithoutAvailableCreditChecker(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	user := &service.User{
+		ID:          105,
+		Role:        service.RoleUser,
+		Status:      service.StatusActive,
+		Balance:     1,
+		Concurrency: 3,
+	}
+	apiKey := &service.APIKey{
+		ID:     105,
+		UserID: user.ID,
+		Key:    "permanent-balance-fallback",
+		Status: service.StatusActive,
+		User:   user,
+	}
+	apiKeyRepo := &stubApiKeyRepo{
+		getByKey: func(_ context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			userClone := *user
+			clone.User = &userClone
+			return &clone, nil
+		},
+	}
+
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.GET("/t", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
 func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) *gin.Engine {
+	return newAuthTestRouterWithAvailableCreditChecker(apiKeyService, subscriptionService, cfg, &availableCreditEligibilityCheckerStub{})
+}
+
+func newAuthTestRouterWithAvailableCreditChecker(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config, checker service.AvailableCreditEligibilityChecker) *gin.Engine {
+	apiKeyService.SetAvailableCreditEligibilityChecker(checker)
 	router := gin.New()
 	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))
 	ok := func(c *gin.Context) {

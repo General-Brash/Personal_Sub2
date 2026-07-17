@@ -332,6 +332,11 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 
 		AvailableChannelsEnabled: settings.AvailableChannelsEnabled,
 
+		UserChannelStatusEnabled:      settings.UserChannelStatusEnabled,
+		UserSubscriptionsEnabled:      settings.UserSubscriptionsEnabled,
+		AdminPromoCodesEnabled:        settings.AdminPromoCodesEnabled,
+		AdminChannelManagementEnabled: settings.AdminChannelManagementEnabled,
+
 		AffiliateEnabled: settings.AffiliateEnabled,
 
 		AllowUserViewErrorRequests: settings.AllowUserViewErrorRequests,

@@ -33,8 +33,12 @@ type userRepository struct {
 }
 
 var _ service.RedeemUserAdjustmentRepository = (*userRepository)(nil)
+var _ service.AvailableCreditSnapshotReader = (*userRepository)(nil)
 
 func NewUserRepository(client *dbent.Client, sqlDB *sql.DB) service.UserRepository {
+	if sqlDB == nil {
+		return newUserRepositoryWithSQL(client, nil)
+	}
 	return newUserRepositoryWithSQL(client, sqlDB)
 }
 
@@ -134,6 +138,48 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 		out.AllowedGroups = v
 	}
 	return out, nil
+}
+
+func (r *userRepository) GetAvailableCreditSnapshot(ctx context.Context, userID int64) (service.AvailableCreditSnapshot, error) {
+	if r == nil || r.sql == nil {
+		return service.AvailableCreditSnapshot{}, errors.New("user repository sql executor is nil")
+	}
+
+	rows, err := r.sql.QueryContext(ctx, `
+SELECT u.balance, COALESCE(SUM(g.remaining_amount), 0), MIN(g.expires_at)
+FROM users AS u
+LEFT JOIN temporary_credit_grants AS g
+  ON g.user_id = u.id
+ AND g.remaining_amount > 0
+ AND g.expires_at > clock_timestamp()
+WHERE u.id = $1
+  AND u.deleted_at IS NULL
+GROUP BY u.id, u.balance`, userID)
+	if err != nil {
+		return service.AvailableCreditSnapshot{}, fmt.Errorf("query available credit snapshot: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return service.AvailableCreditSnapshot{}, fmt.Errorf("query available credit snapshot: %w", err)
+		}
+		return service.AvailableCreditSnapshot{}, sql.ErrNoRows
+	}
+
+	var snapshot service.AvailableCreditSnapshot
+	var earliestExpiry sql.NullTime
+	if err := rows.Scan(&snapshot.PermanentBalance, &snapshot.TemporaryCredit, &earliestExpiry); err != nil {
+		return service.AvailableCreditSnapshot{}, fmt.Errorf("scan available credit snapshot: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return service.AvailableCreditSnapshot{}, fmt.Errorf("query available credit snapshot: %w", err)
+	}
+	if earliestExpiry.Valid {
+		expiresAt := earliestExpiry.Time
+		snapshot.EarliestTemporaryCreditExpiry = &expiresAt
+	}
+	return snapshot, nil
 }
 
 func (r *userRepository) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.User, error) {

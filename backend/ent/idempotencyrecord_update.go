@@ -34,16 +34,30 @@ func (_u *IdempotencyRecordUpdate) SetUpdatedAt(v time.Time) *IdempotencyRecordU
 	return _u
 }
 
-// SetScope sets the "scope" field.
-func (_u *IdempotencyRecordUpdate) SetScope(v string) *IdempotencyRecordUpdate {
-	_u.mutation.SetScope(v)
+// SetOperationScope sets the "operation_scope" field.
+func (_u *IdempotencyRecordUpdate) SetOperationScope(v string) *IdempotencyRecordUpdate {
+	_u.mutation.SetOperationScope(v)
 	return _u
 }
 
-// SetNillableScope sets the "scope" field if the given value is not nil.
-func (_u *IdempotencyRecordUpdate) SetNillableScope(v *string) *IdempotencyRecordUpdate {
+// SetNillableOperationScope sets the "operation_scope" field if the given value is not nil.
+func (_u *IdempotencyRecordUpdate) SetNillableOperationScope(v *string) *IdempotencyRecordUpdate {
 	if v != nil {
-		_u.SetScope(*v)
+		_u.SetOperationScope(*v)
+	}
+	return _u
+}
+
+// SetActorScope sets the "actor_scope" field.
+func (_u *IdempotencyRecordUpdate) SetActorScope(v string) *IdempotencyRecordUpdate {
+	_u.mutation.SetActorScope(v)
+	return _u
+}
+
+// SetNillableActorScope sets the "actor_scope" field if the given value is not nil.
+func (_u *IdempotencyRecordUpdate) SetNillableActorScope(v *string) *IdempotencyRecordUpdate {
+	if v != nil {
+		_u.SetActorScope(*v)
 	}
 	return _u
 }
@@ -234,9 +248,14 @@ func (_u *IdempotencyRecordUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *IdempotencyRecordUpdate) check() error {
-	if v, ok := _u.mutation.Scope(); ok {
-		if err := idempotencyrecord.ScopeValidator(v); err != nil {
-			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "IdempotencyRecord.scope": %w`, err)}
+	if v, ok := _u.mutation.OperationScope(); ok {
+		if err := idempotencyrecord.OperationScopeValidator(v); err != nil {
+			return &ValidationError{Name: "operation_scope", err: fmt.Errorf(`ent: validator failed for field "IdempotencyRecord.operation_scope": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ActorScope(); ok {
+		if err := idempotencyrecord.ActorScopeValidator(v); err != nil {
+			return &ValidationError{Name: "actor_scope", err: fmt.Errorf(`ent: validator failed for field "IdempotencyRecord.actor_scope": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.IdempotencyKeyHash(); ok {
@@ -277,8 +296,11 @@ func (_u *IdempotencyRecordUpdate) sqlSave(ctx context.Context) (_node int, err 
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(idempotencyrecord.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.Scope(); ok {
-		_spec.SetField(idempotencyrecord.FieldScope, field.TypeString, value)
+	if value, ok := _u.mutation.OperationScope(); ok {
+		_spec.SetField(idempotencyrecord.FieldOperationScope, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ActorScope(); ok {
+		_spec.SetField(idempotencyrecord.FieldActorScope, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.IdempotencyKeyHash(); ok {
 		_spec.SetField(idempotencyrecord.FieldIdempotencyKeyHash, field.TypeString, value)
@@ -345,16 +367,30 @@ func (_u *IdempotencyRecordUpdateOne) SetUpdatedAt(v time.Time) *IdempotencyReco
 	return _u
 }
 
-// SetScope sets the "scope" field.
-func (_u *IdempotencyRecordUpdateOne) SetScope(v string) *IdempotencyRecordUpdateOne {
-	_u.mutation.SetScope(v)
+// SetOperationScope sets the "operation_scope" field.
+func (_u *IdempotencyRecordUpdateOne) SetOperationScope(v string) *IdempotencyRecordUpdateOne {
+	_u.mutation.SetOperationScope(v)
 	return _u
 }
 
-// SetNillableScope sets the "scope" field if the given value is not nil.
-func (_u *IdempotencyRecordUpdateOne) SetNillableScope(v *string) *IdempotencyRecordUpdateOne {
+// SetNillableOperationScope sets the "operation_scope" field if the given value is not nil.
+func (_u *IdempotencyRecordUpdateOne) SetNillableOperationScope(v *string) *IdempotencyRecordUpdateOne {
 	if v != nil {
-		_u.SetScope(*v)
+		_u.SetOperationScope(*v)
+	}
+	return _u
+}
+
+// SetActorScope sets the "actor_scope" field.
+func (_u *IdempotencyRecordUpdateOne) SetActorScope(v string) *IdempotencyRecordUpdateOne {
+	_u.mutation.SetActorScope(v)
+	return _u
+}
+
+// SetNillableActorScope sets the "actor_scope" field if the given value is not nil.
+func (_u *IdempotencyRecordUpdateOne) SetNillableActorScope(v *string) *IdempotencyRecordUpdateOne {
+	if v != nil {
+		_u.SetActorScope(*v)
 	}
 	return _u
 }
@@ -558,9 +594,14 @@ func (_u *IdempotencyRecordUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *IdempotencyRecordUpdateOne) check() error {
-	if v, ok := _u.mutation.Scope(); ok {
-		if err := idempotencyrecord.ScopeValidator(v); err != nil {
-			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "IdempotencyRecord.scope": %w`, err)}
+	if v, ok := _u.mutation.OperationScope(); ok {
+		if err := idempotencyrecord.OperationScopeValidator(v); err != nil {
+			return &ValidationError{Name: "operation_scope", err: fmt.Errorf(`ent: validator failed for field "IdempotencyRecord.operation_scope": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ActorScope(); ok {
+		if err := idempotencyrecord.ActorScopeValidator(v); err != nil {
+			return &ValidationError{Name: "actor_scope", err: fmt.Errorf(`ent: validator failed for field "IdempotencyRecord.actor_scope": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.IdempotencyKeyHash(); ok {
@@ -618,8 +659,11 @@ func (_u *IdempotencyRecordUpdateOne) sqlSave(ctx context.Context) (_node *Idemp
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(idempotencyrecord.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.Scope(); ok {
-		_spec.SetField(idempotencyrecord.FieldScope, field.TypeString, value)
+	if value, ok := _u.mutation.OperationScope(); ok {
+		_spec.SetField(idempotencyrecord.FieldOperationScope, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ActorScope(); ok {
+		_spec.SetField(idempotencyrecord.FieldActorScope, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.IdempotencyKeyHash(); ok {
 		_spec.SetField(idempotencyrecord.FieldIdempotencyKeyHash, field.TypeString, value)

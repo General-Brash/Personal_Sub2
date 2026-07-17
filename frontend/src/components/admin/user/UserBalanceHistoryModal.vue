@@ -1,9 +1,14 @@
 <template>
-  <BaseDialog :show="show" :title="t('admin.users.balanceHistoryTitle')" width="wide" :close-on-click-outside="true" :z-index="40" @close="$emit('close')">
+  <BaseDialog
+    :show="show"
+    :title="dialogTitle"
+    width="wide"
+    :close-on-click-outside="true"
+    :z-index="40"
+    @close="emit('close')"
+  >
     <div v-if="user" class="space-y-4">
-      <!-- User header: two-row layout with full user info -->
-      <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-700">
-        <!-- Row 1: avatar + email/username/created_at (left) + current balance (right) -->
+      <div class="bg-gray-50 p-4 dark:bg-dark-700">
         <div class="flex items-center gap-3">
           <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30">
             <span class="text-lg font-medium text-primary-700 dark:text-primary-300">
@@ -13,7 +18,10 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <p class="truncate font-medium text-gray-900 dark:text-white">{{ user.email }}</p>
-              <span v-if="user.deleted_at" class="flex-shrink-0 inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:ring-rose-500/30">
+              <span
+                v-if="user.deleted_at"
+                class="inline-flex flex-shrink-0 items-center rounded px-1 py-px text-[10px] font-medium leading-tight text-rose-600 ring-1 ring-inset ring-rose-200 dark:text-rose-400 dark:ring-rose-500/30"
+              >
                 {{ t('admin.usage.userDeletedBadge') }}
               </span>
               <span
@@ -27,119 +35,139 @@
               {{ t('admin.users.createdAt') }}: {{ formatDateTime(user.created_at) }}
             </p>
           </div>
-          <!-- Current balance: prominent display on the right -->
           <div class="flex-shrink-0 text-right">
             <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('admin.users.currentBalance') }}</p>
             <p class="text-xl font-bold text-gray-900 dark:text-white">
-              ${{ user.balance?.toFixed(2) || '0.00' }}
+              ${{ formatDecimalAmount(user.balance) }}
             </p>
           </div>
         </div>
-        <!-- Row 2: notes + total recharged -->
         <div class="mt-2.5 flex items-center justify-between border-t border-gray-200/60 pt-2.5 dark:border-dark-600/60">
           <p class="min-w-0 flex-1 truncate text-xs text-gray-500 dark:text-dark-400" :title="user.notes || ''">
             <template v-if="user.notes">{{ t('admin.users.notes') }}: {{ user.notes }}</template>
             <template v-else>&nbsp;</template>
           </p>
-          <p class="ml-4 flex-shrink-0 text-xs text-gray-500 dark:text-dark-400">
-            {{ t('admin.users.totalRecharged') }}: <span class="font-semibold text-emerald-600 dark:text-emerald-400">${{ totalRecharged.toFixed(2) }}</span>
+          <p
+            v-if="viewMode === 'permanent'"
+            class="ml-4 flex-shrink-0 text-xs text-gray-500 dark:text-dark-400"
+          >
+            {{ t('admin.users.totalRecharged') }}:
+            <span class="font-semibold text-emerald-600 dark:text-emerald-400">
+              ${{ formatDecimalAmount(totalRecharged) }}
+            </span>
           </p>
         </div>
       </div>
 
-      <!-- Type filter + Action buttons -->
-      <div class="flex items-center gap-3">
+      <div
+        class="grid h-10 grid-cols-2 overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-dark-600 dark:bg-dark-700"
+        role="group"
+        :aria-label="t('checkin.admin.historyView')"
+      >
+        <button
+          type="button"
+          data-testid="history-view-permanent"
+          :aria-pressed="viewMode === 'permanent'"
+          :class="viewButtonClass('permanent')"
+          @click="selectView('permanent')"
+        >
+          {{ t('checkin.admin.permanentHistory') }}
+        </button>
+        <button
+          type="button"
+          data-testid="history-view-temporary"
+          :aria-pressed="viewMode === 'temporary'"
+          :class="viewButtonClass('temporary')"
+          @click="selectView('temporary')"
+        >
+          {{ t('checkin.admin.audit') }}
+        </button>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
         <Select
+          v-if="viewMode === 'permanent'"
           v-model="typeFilter"
           :options="typeOptions"
           class="w-56"
           @change="loadHistory(1)"
         />
-        <!-- Deposit button - matches menu style -->
-        <button
-          v-if="!hideActions"
-          @click="emit('deposit')"
-          class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
-        >
-          <Icon name="plus" size="sm" class="text-emerald-500" :stroke-width="2" />
-          {{ t('admin.users.deposit') }}
+        <div class="ml-auto flex items-center gap-3">
+          <button
+            v-if="!hideActions"
+            type="button"
+            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
+            @click="emit('deposit')"
+          >
+            <Icon name="plus" size="sm" class="text-emerald-500" :stroke-width="2" />
+            {{ t('admin.users.deposit') }}
+          </button>
+          <button
+            v-if="!hideActions"
+            type="button"
+            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
+            @click="emit('withdraw')"
+          >
+            <Icon name="arrowDown" size="sm" class="text-amber-500" :stroke-width="2" />
+            {{ t('admin.users.withdraw') }}
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-if="loading"
+        class="flex min-h-48 items-center justify-center"
+        data-testid="history-loading"
+      >
+        <Icon name="refresh" size="lg" class="animate-spin text-primary-500" />
+      </div>
+
+      <div
+        v-else-if="loadError"
+        class="flex min-h-48 flex-col items-center justify-center gap-3 text-center"
+        role="alert"
+        data-testid="history-error"
+      >
+        <p class="text-sm text-red-600 dark:text-red-400">{{ errorMessage }}</p>
+        <button type="button" class="btn btn-secondary" @click="loadHistory(currentPage)">
+          <Icon name="refresh" size="sm" />
+          {{ t('checkin.admin.retry') }}
         </button>
-        <!-- Withdraw button - matches menu style -->
-        <button
-          v-if="!hideActions"
-          @click="emit('withdraw')"
-          class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
-        >
-          <svg class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-          </svg>
-          {{ t('admin.users.withdraw') }}
-        </button>
       </div>
 
-      <!-- Loading -->
-      <div v-if="loading" class="flex justify-center py-8">
-        <svg class="h-8 w-8 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
+      <div v-else-if="activeItems.length === 0" class="min-h-48 py-16 text-center" data-testid="history-empty">
+        <p class="text-sm text-gray-500">
+          {{ viewMode === 'temporary' ? t('checkin.admin.noTemporaryCredits') : t('admin.users.noBalanceHistory') }}
+        </p>
       </div>
 
-      <!-- Empty state -->
-      <div v-else-if="history.length === 0" class="py-8 text-center">
-        <p class="text-sm text-gray-500">{{ t('admin.users.noBalanceHistory') }}</p>
-      </div>
-
-      <!-- History list -->
-      <div v-else class="max-h-[28rem] space-y-3 overflow-y-auto">
+      <div v-else-if="viewMode === 'permanent'" class="max-h-[28rem] space-y-3 overflow-y-auto">
         <div
-          v-for="item in history"
+          v-for="item in balanceHistory"
           :key="item.id"
-          class="rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800"
+          class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800"
         >
           <div class="flex items-start justify-between">
-            <!-- Left: type icon + description -->
             <div class="flex items-start gap-3">
-              <div
-                :class="[
-                  'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg',
-                  getIconBg(item)
-                ]"
-              >
+              <div :class="['flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg', getIconBg(item)]">
                 <Icon :name="getIconName(item)" size="sm" :class="getIconColor(item)" />
               </div>
               <div>
-                <p class="text-sm font-medium text-gray-900 dark:text-white">
-                  {{ getItemTitle(item) }}
-                </p>
-                <!-- Notes (admin adjustment reason) -->
-                <p
-                  v-if="item.notes"
-                  class="mt-0.5 text-xs text-gray-500 dark:text-dark-400"
-                  :title="item.notes"
-                >
-                  {{ item.notes.length > 60 ? item.notes.substring(0, 55) + '...' : item.notes }}
+                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ getItemTitle(item) }}</p>
+                <p v-if="item.notes" class="mt-0.5 text-xs text-gray-500 dark:text-dark-400" :title="item.notes">
+                  {{ item.notes.length > 60 ? `${item.notes.substring(0, 55)}...` : item.notes }}
                 </p>
                 <p class="mt-0.5 text-xs text-gray-400 dark:text-dark-500">
                   {{ formatDateTime(item.used_at || item.created_at) }}
                 </p>
               </div>
             </div>
-            <!-- Right: value -->
             <div class="text-right">
-              <p :class="['text-sm font-semibold', getValueColor(item)]">
-                {{ formatValue(item) }}
-              </p>
-              <p
-                v-if="isAdminType(item.type)"
-                class="text-xs text-gray-400 dark:text-dark-500"
-              >
+              <p :class="['text-sm font-semibold', getValueColor(item)]">{{ formatValue(item) }}</p>
+              <p v-if="isAdminType(item.type)" class="text-xs text-gray-400 dark:text-dark-500">
                 {{ t('redeem.adminAdjustment') }}
               </p>
-              <p
-                v-else
-                class="font-mono text-xs text-gray-400 dark:text-dark-500"
-              >
+              <p v-else class="font-mono text-xs text-gray-400 dark:text-dark-500">
                 {{ item.code.slice(0, 8) }}...
               </p>
             </div>
@@ -147,19 +175,74 @@
         </div>
       </div>
 
-      <!-- Pagination -->
-      <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 pt-2">
+      <div v-else class="max-h-[32rem] space-y-3 overflow-y-auto" data-testid="temporary-credit-audit-list">
+        <article
+          v-for="item in temporaryCredits"
+          :key="item.id"
+          class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800"
+        >
+          <div class="mb-3 flex items-start justify-between gap-4">
+            <div class="flex items-center gap-2">
+              <Icon :name="item.source === 'checkin' ? 'calendar' : 'gift'" size="sm" class="text-primary-500" />
+              <span class="text-sm font-medium text-gray-900 dark:text-white">
+                {{ temporaryCreditSourceLabel(item.source) }}
+              </span>
+            </div>
+            <span class="font-mono text-xs text-gray-400">#{{ item.id }}</span>
+          </div>
+          <dl class="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt class="text-xs text-gray-500">{{ t('checkin.admin.amount') }}</dt>
+              <dd class="mt-0.5 font-mono text-gray-900 dark:text-white">{{ formatDecimalAmount(item.amount) }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-gray-500">{{ t('checkin.admin.remainingAmount') }}</dt>
+              <dd class="mt-0.5 font-mono text-gray-900 dark:text-white">{{ formatDecimalAmount(item.remaining_amount) }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-gray-500">{{ t('checkin.admin.expiresAtLabel') }}</dt>
+              <dd class="mt-0.5 text-gray-900 dark:text-white">
+                <time :datetime="item.expires_at">{{ formatDateTime(item.expires_at) }}</time>
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-gray-500">{{ t('checkin.admin.createdAt') }}</dt>
+              <dd class="mt-0.5 text-gray-900 dark:text-white">
+                <time :datetime="item.created_at">{{ formatDateTime(item.created_at) }}</time>
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-gray-500">{{ t('checkin.admin.checkinId') }}</dt>
+              <dd class="mt-0.5 font-mono text-gray-900 dark:text-white">
+                {{ item.checkin_id == null ? '-' : `#${item.checkin_id}` }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-gray-500">{{ t('checkin.admin.grantedBy') }}</dt>
+              <dd class="mt-0.5 font-mono text-gray-900 dark:text-white">
+                {{ item.granted_by == null ? '-' : `#${item.granted_by}` }}
+              </dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="text-xs text-gray-500">{{ t('admin.users.notes') }}</dt>
+              <dd class="mt-0.5 break-words text-gray-900 dark:text-white">{{ item.notes || '-' }}</dd>
+            </div>
+          </dl>
+        </article>
+      </div>
+
+      <div v-if="!loading && !loadError && totalPages > 1" class="flex items-center justify-center gap-2 pt-2">
         <button
+          type="button"
           :disabled="currentPage <= 1"
           class="btn btn-secondary px-3 py-1 text-sm"
           @click="loadHistory(currentPage - 1)"
         >
           {{ t('pagination.previous') }}
         </button>
-        <span class="text-sm text-gray-500 dark:text-dark-400">
-          {{ currentPage }} / {{ totalPages }}
-        </span>
+        <span class="text-sm text-gray-500 dark:text-dark-400">{{ currentPage }} / {{ totalPages }}</span>
         <button
+          type="button"
           :disabled="currentPage >= totalPages"
           class="btn btn-secondary px-3 py-1 text-sm"
           @click="loadHistory(currentPage + 1)"
@@ -172,30 +255,74 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { adminAPI, type BalanceHistoryItem } from '@/api/admin'
-import { formatDateTime } from '@/utils/format'
+import {
+  adminAPI,
+  type BalanceHistoryItem,
+  type TemporaryCreditAuditItem,
+} from '@/api/admin'
+import { formatDateTime, formatDecimalAmount } from '@/utils/format'
 import type { AdminUser } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 
-const props = defineProps<{ show: boolean; user: AdminUser | null; hideActions?: boolean }>()
-const emit = defineEmits(['close', 'deposit', 'withdraw'])
+type HistoryView = 'permanent' | 'temporary'
+
+interface HistoryState {
+  currentPage: number
+  total: number
+  loading: boolean
+  loadError: boolean
+  requestSequence: number
+}
+
+const props = defineProps<{
+  show: boolean
+  user: AdminUser | null
+  hideActions?: boolean
+}>()
+const emit = defineEmits<{
+  (event: 'close'): void
+  (event: 'deposit'): void
+  (event: 'withdraw'): void
+}>()
 const { t } = useI18n()
 
-const history = ref<BalanceHistoryItem[]>([])
-const loading = ref(false)
-const currentPage = ref(1)
-const total = ref(0)
+const viewMode = ref<HistoryView>('temporary')
+const balanceHistory = ref<BalanceHistoryItem[]>([])
+const temporaryCredits = ref<TemporaryCreditAuditItem[]>([])
+const permanentState = reactive<HistoryState>(createHistoryState())
+const temporaryState = reactive<HistoryState>(createHistoryState())
 const totalRecharged = ref(0)
-const pageSize = 15
 const typeFilter = ref('')
+const balancePageSize = 15
+const temporaryPageSize = 20
 
-const totalPages = computed(() => Math.ceil(total.value / pageSize) || 1)
-
-// Type filter options
+const dialogTitle = computed(() =>
+  viewMode.value === 'temporary'
+    ? t('checkin.admin.audit')
+    : t('admin.users.balanceHistoryTitle'),
+)
+const activePageSize = computed(() =>
+  viewMode.value === 'temporary' ? temporaryPageSize : balancePageSize,
+)
+const activeState = computed(() => stateFor(viewMode.value))
+const loading = computed(() => activeState.value.loading)
+const loadError = computed(() => activeState.value.loadError)
+const currentPage = computed(() => activeState.value.currentPage)
+const totalPages = computed(() =>
+  Math.ceil(activeState.value.total / activePageSize.value) || 1,
+)
+const activeItems = computed(() =>
+  viewMode.value === 'temporary' ? temporaryCredits.value : balanceHistory.value,
+)
+const errorMessage = computed(() =>
+  viewMode.value === 'temporary'
+    ? t('checkin.admin.failedToLoadAudit')
+    : t('admin.users.failedToLoadBalanceHistory'),
+)
 const typeOptions = computed(() => [
   { value: '', label: t('admin.users.allTypes') },
   { value: 'balance', label: t('admin.users.typeBalance') },
@@ -203,56 +330,133 @@ const typeOptions = computed(() => [
   { value: 'admin_balance', label: t('admin.users.typeAdminBalance') },
   { value: 'concurrency', label: t('admin.users.typeConcurrency') },
   { value: 'admin_concurrency', label: t('admin.users.typeAdminConcurrency') },
-  { value: 'subscription', label: t('admin.users.typeSubscription') }
+  { value: 'subscription', label: t('admin.users.typeSubscription') },
 ])
 
-// Watch modal open
-watch(() => props.show, (v) => {
-  if (v && props.user) {
+watch(
+  [() => props.show, () => props.user?.id],
+  ([visible, userID]) => {
+    if (!visible || !userID) {
+      invalidateHistoryRequests()
+      return
+    }
+    resetHistory()
+    viewMode.value = 'temporary'
     typeFilter.value = ''
-    loadHistory(1)
-  }
-})
+    void loadHistory(1)
+  },
+  { immediate: true },
+)
 
-const loadHistory = async (page: number) => {
+function viewButtonClass(view: HistoryView): string[] {
+  return [
+    'text-sm font-medium transition-colors',
+    viewMode.value === view
+      ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-800 dark:text-white'
+      : 'text-gray-500 dark:text-gray-400',
+  ]
+}
+
+async function selectView(view: HistoryView) {
+  if (viewMode.value === view) return
+  viewMode.value = view
+  await loadHistory(stateFor(view).currentPage)
+}
+
+async function loadHistory(page: number) {
   if (!props.user) return
-  loading.value = true
-  currentPage.value = page
+  const requestedView = viewMode.value
+  const state = stateFor(requestedView)
+  const sequence = ++state.requestSequence
+  state.loading = true
+  state.loadError = false
+  state.currentPage = page
   try {
-    const res = await adminAPI.users.getUserBalanceHistory(
-      props.user.id,
-      page,
-      pageSize,
-      typeFilter.value || undefined
-    )
-    history.value = res.items || []
-    total.value = res.total || 0
-    totalRecharged.value = res.total_recharged || 0
+    if (requestedView === 'temporary') {
+      const response = await adminAPI.users.getTemporaryCredits(
+        props.user.id,
+        page,
+        temporaryPageSize,
+      )
+      if (sequence !== state.requestSequence) return
+      temporaryCredits.value = response.items ?? []
+      state.total = response.total ?? 0
+    } else {
+      const response = await adminAPI.users.getUserBalanceHistory(
+        props.user.id,
+        page,
+        balancePageSize,
+        typeFilter.value || undefined,
+      )
+      if (sequence !== state.requestSequence) return
+      balanceHistory.value = response.items ?? []
+      state.total = response.total ?? 0
+      totalRecharged.value = response.total_recharged ?? 0
+    }
   } catch (error) {
-    console.error('Failed to load balance history:', error)
+    if (sequence !== state.requestSequence) return
+    console.error('Failed to load user history:', error)
+    state.loadError = true
+    state.total = 0
+    if (requestedView === 'temporary') temporaryCredits.value = []
+    else {
+      balanceHistory.value = []
+      totalRecharged.value = 0
+    }
   } finally {
-    loading.value = false
+    if (sequence === state.requestSequence) state.loading = false
   }
 }
 
-// Helper: check if admin type
+function createHistoryState(): HistoryState {
+  return {
+    currentPage: 1,
+    total: 0,
+    loading: false,
+    loadError: false,
+    requestSequence: 0,
+  }
+}
+
+function stateFor(view: HistoryView): HistoryState {
+  return view === 'temporary' ? temporaryState : permanentState
+}
+
+function resetHistory() {
+  for (const state of [permanentState, temporaryState]) {
+    const requestSequence = state.requestSequence + 1
+    Object.assign(state, createHistoryState(), { requestSequence })
+  }
+  balanceHistory.value = []
+  temporaryCredits.value = []
+  totalRecharged.value = 0
+}
+
+function invalidateHistoryRequests() {
+  for (const state of [permanentState, temporaryState]) {
+    state.requestSequence += 1
+    state.loading = false
+  }
+}
+
+function temporaryCreditSourceLabel(source: string): string {
+  if (source === 'checkin') return t('checkin.admin.sourceCheckin')
+  if (source === 'admin_grant') return t('checkin.admin.sourceAdminGrant')
+  return source
+}
+
 const isAdminType = (type: string) => type === 'admin_balance' || type === 'admin_concurrency'
-
-// Helper: check if balance type (includes admin_balance)
-const isBalanceType = (type: string) => type === 'balance' || type === 'admin_balance' || type === 'affiliate_balance'
-
-// Helper: check if subscription type
+const isBalanceType = (type: string) =>
+  type === 'balance' || type === 'admin_balance' || type === 'affiliate_balance'
 const isSubscriptionType = (type: string) => type === 'subscription'
 
-// Icon name based on type
-const getIconName = (item: BalanceHistoryItem) => {
+function getIconName(item: BalanceHistoryItem): 'dollar' | 'badge' | 'bolt' {
   if (isBalanceType(item.type)) return 'dollar'
   if (isSubscriptionType(item.type)) return 'badge'
-  return 'bolt' // concurrency
+  return 'bolt'
 }
 
-// Icon background color
-const getIconBg = (item: BalanceHistoryItem) => {
+function getIconBg(item: BalanceHistoryItem): string {
   if (isBalanceType(item.type)) {
     return item.value >= 0
       ? 'bg-emerald-100 dark:bg-emerald-900/30'
@@ -264,8 +468,7 @@ const getIconBg = (item: BalanceHistoryItem) => {
     : 'bg-orange-100 dark:bg-orange-900/30'
 }
 
-// Icon text color
-const getIconColor = (item: BalanceHistoryItem) => {
+function getIconColor(item: BalanceHistoryItem): string {
   if (isBalanceType(item.type)) {
     return item.value >= 0
       ? 'text-emerald-600 dark:text-emerald-400'
@@ -277,51 +480,32 @@ const getIconColor = (item: BalanceHistoryItem) => {
     : 'text-orange-600 dark:text-orange-400'
 }
 
-// Value text color
-const getValueColor = (item: BalanceHistoryItem) => {
-  if (isBalanceType(item.type)) {
-    return item.value >= 0
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : 'text-red-600 dark:text-red-400'
-  }
-  if (isSubscriptionType(item.type)) return 'text-purple-600 dark:text-purple-400'
-  return item.value >= 0
-    ? 'text-blue-600 dark:text-blue-400'
-    : 'text-orange-600 dark:text-orange-400'
-}
+const getValueColor = getIconColor
 
-// Item title
-const getItemTitle = (item: BalanceHistoryItem) => {
+function getItemTitle(item: BalanceHistoryItem): string {
   switch (item.type) {
-    case 'balance':
-      return t('redeem.balanceAddedRedeem')
-    case 'affiliate_balance':
-      return t('redeem.balanceAddedAffiliate')
+    case 'balance': return t('redeem.balanceAddedRedeem')
+    case 'affiliate_balance': return t('redeem.balanceAddedAffiliate')
     case 'admin_balance':
       return item.value >= 0 ? t('redeem.balanceAddedAdmin') : t('redeem.balanceDeductedAdmin')
-    case 'concurrency':
-      return t('redeem.concurrencyAddedRedeem')
+    case 'concurrency': return t('redeem.concurrencyAddedRedeem')
     case 'admin_concurrency':
       return item.value >= 0 ? t('redeem.concurrencyAddedAdmin') : t('redeem.concurrencyReducedAdmin')
-    case 'subscription':
-      return t('redeem.subscriptionAssigned')
-    default:
-      return t('common.unknown')
+    case 'subscription': return t('redeem.subscriptionAssigned')
+    default: return t('common.unknown')
   }
 }
 
-// Format display value
-const formatValue = (item: BalanceHistoryItem) => {
+function formatValue(item: BalanceHistoryItem): string {
   if (isBalanceType(item.type)) {
     const sign = item.value >= 0 ? '+' : ''
-    return `${sign}$${item.value.toFixed(2)}`
+    return `${sign}$${formatDecimalAmount(item.value)}`
   }
   if (isSubscriptionType(item.type)) {
     const days = item.validity_days || Math.round(item.value)
     const groupName = item.group?.name || ''
     return groupName ? `${days}d - ${groupName}` : `${days}d`
   }
-  // concurrency types
   const sign = item.value >= 0 ? '+' : ''
   return `${sign}${item.value}`
 }

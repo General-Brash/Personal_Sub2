@@ -69,9 +69,13 @@ vi.mock('@/stores/app', () => ({
   }),
 }))
 
-vi.mock('@/utils/format', () => ({
-  formatReasoningEffort: (value: string | null | undefined) => value ?? '-',
-}))
+vi.mock('@/utils/format', async () => {
+  const actual = await vi.importActual<typeof import('@/utils/format')>('@/utils/format')
+  return {
+    ...actual,
+    formatReasoningEffort: (value: string | null | undefined) => value ?? '-',
+  }
+})
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')

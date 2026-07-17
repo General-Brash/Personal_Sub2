@@ -22,6 +22,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -38,6 +39,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditconsumption"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditgrant"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -483,6 +486,33 @@ func (f TraverseChannelMonitorRequestTemplate) Traverse(ctx context.Context, q e
 	return fmt.Errorf("unexpected query type %T. expect *ent.ChannelMonitorRequestTemplateQuery", q)
 }
 
+// The DailyCheckinFunc type is an adapter to allow the use of ordinary function as a Querier.
+type DailyCheckinFunc func(context.Context, *ent.DailyCheckinQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f DailyCheckinFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.DailyCheckinQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.DailyCheckinQuery", q)
+}
+
+// The TraverseDailyCheckin type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseDailyCheckin func(context.Context, *ent.DailyCheckinQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseDailyCheckin) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseDailyCheckin) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.DailyCheckinQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.DailyCheckinQuery", q)
+}
+
 // The ErrorPassthroughRuleFunc type is an adapter to allow the use of ordinary function as a Querier.
 type ErrorPassthroughRuleFunc func(context.Context, *ent.ErrorPassthroughRuleQuery) (ent.Value, error)
 
@@ -915,6 +945,60 @@ func (f TraverseTLSFingerprintProfile) Traverse(ctx context.Context, q ent.Query
 	return fmt.Errorf("unexpected query type %T. expect *ent.TLSFingerprintProfileQuery", q)
 }
 
+// The TemporaryCreditConsumptionFunc type is an adapter to allow the use of ordinary function as a Querier.
+type TemporaryCreditConsumptionFunc func(context.Context, *ent.TemporaryCreditConsumptionQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f TemporaryCreditConsumptionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.TemporaryCreditConsumptionQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.TemporaryCreditConsumptionQuery", q)
+}
+
+// The TraverseTemporaryCreditConsumption type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseTemporaryCreditConsumption func(context.Context, *ent.TemporaryCreditConsumptionQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseTemporaryCreditConsumption) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseTemporaryCreditConsumption) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.TemporaryCreditConsumptionQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.TemporaryCreditConsumptionQuery", q)
+}
+
+// The TemporaryCreditGrantFunc type is an adapter to allow the use of ordinary function as a Querier.
+type TemporaryCreditGrantFunc func(context.Context, *ent.TemporaryCreditGrantQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f TemporaryCreditGrantFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.TemporaryCreditGrantQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.TemporaryCreditGrantQuery", q)
+}
+
+// The TraverseTemporaryCreditGrant type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseTemporaryCreditGrant func(context.Context, *ent.TemporaryCreditGrantQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseTemporaryCreditGrant) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseTemporaryCreditGrant) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.TemporaryCreditGrantQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.TemporaryCreditGrantQuery", q)
+}
+
 // The UsageCleanupTaskFunc type is an adapter to allow the use of ordinary function as a Querier.
 type UsageCleanupTaskFunc func(context.Context, *ent.UsageCleanupTaskQuery) (ent.Value, error)
 
@@ -1162,6 +1246,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.ChannelMonitorHistoryQuery, predicate.ChannelMonitorHistory, channelmonitorhistory.OrderOption]{typ: ent.TypeChannelMonitorHistory, tq: q}, nil
 	case *ent.ChannelMonitorRequestTemplateQuery:
 		return &query[*ent.ChannelMonitorRequestTemplateQuery, predicate.ChannelMonitorRequestTemplate, channelmonitorrequesttemplate.OrderOption]{typ: ent.TypeChannelMonitorRequestTemplate, tq: q}, nil
+	case *ent.DailyCheckinQuery:
+		return &query[*ent.DailyCheckinQuery, predicate.DailyCheckin, dailycheckin.OrderOption]{typ: ent.TypeDailyCheckin, tq: q}, nil
 	case *ent.ErrorPassthroughRuleQuery:
 		return &query[*ent.ErrorPassthroughRuleQuery, predicate.ErrorPassthroughRule, errorpassthroughrule.OrderOption]{typ: ent.TypeErrorPassthroughRule, tq: q}, nil
 	case *ent.GroupQuery:
@@ -1194,6 +1280,10 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.SubscriptionPlanQuery, predicate.SubscriptionPlan, subscriptionplan.OrderOption]{typ: ent.TypeSubscriptionPlan, tq: q}, nil
 	case *ent.TLSFingerprintProfileQuery:
 		return &query[*ent.TLSFingerprintProfileQuery, predicate.TLSFingerprintProfile, tlsfingerprintprofile.OrderOption]{typ: ent.TypeTLSFingerprintProfile, tq: q}, nil
+	case *ent.TemporaryCreditConsumptionQuery:
+		return &query[*ent.TemporaryCreditConsumptionQuery, predicate.TemporaryCreditConsumption, temporarycreditconsumption.OrderOption]{typ: ent.TypeTemporaryCreditConsumption, tq: q}, nil
+	case *ent.TemporaryCreditGrantQuery:
+		return &query[*ent.TemporaryCreditGrantQuery, predicate.TemporaryCreditGrant, temporarycreditgrant.OrderOption]{typ: ent.TypeTemporaryCreditGrant, tq: q}, nil
 	case *ent.UsageCleanupTaskQuery:
 		return &query[*ent.UsageCleanupTaskQuery, predicate.UsageCleanupTask, usagecleanuptask.OrderOption]{typ: ent.TypeUsageCleanupTask, tq: q}, nil
 	case *ent.UsageLogQuery:

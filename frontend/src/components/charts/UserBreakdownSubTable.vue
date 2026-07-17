@@ -42,6 +42,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import type { UserBreakdownItem } from '@/types'
+import { formatMoneyDisplay } from '@/utils/format'
 
 const { t } = useI18n()
 
@@ -63,11 +64,5 @@ const formatTokens = (value: number): string => {
   return value.toLocaleString()
 }
 
-const formatCost = (value: number | undefined | null): string => {
-  if (value == null) return '0.0000'
-  if (value >= 1000) return (value / 1000).toFixed(2) + 'K'
-  if (value >= 1) return value.toFixed(2)
-  if (value >= 0.01) return value.toFixed(3)
-  return value.toFixed(4)
-}
+const formatCost = formatMoneyDisplay
 </script>

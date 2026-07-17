@@ -274,6 +274,67 @@ export interface BalanceHistoryResponse extends PaginatedResponse<BalanceHistory
   total_recharged: number
 }
 
+export interface GrantTemporaryCreditRequest {
+  amount: string
+  notes?: string
+}
+
+export interface GrantTemporaryCreditResult {
+  temporary_credit_grant_id: number
+  amount: string
+  remaining_amount: string
+  expires_at: string
+  notes: string
+}
+
+export interface TemporaryCreditAuditItem {
+  id: number
+  user_id: number
+  source: string
+  checkin_id: number | null
+  amount: string
+  remaining_amount: string
+  expires_at: string
+  notes: string
+  granted_by: number | null
+  created_at: string
+  updated_at: string
+}
+
+export type TemporaryCreditAuditResponse = PaginatedResponse<TemporaryCreditAuditItem>
+
+/**
+ * Grant a temporary credit batch to a user.
+ * Amount stays a decimal string so the strict backend contract is preserved.
+ */
+export async function grantTemporaryCredit(
+  id: number,
+  request: GrantTemporaryCreditRequest,
+  idempotencyKey: string
+): Promise<GrantTemporaryCreditResult> {
+  const { data } = await apiClient.post<GrantTemporaryCreditResult>(
+    `/admin/users/${id}/temporary-credits`,
+    request,
+    { headers: { 'Idempotency-Key': idempotencyKey } }
+  )
+  return data
+}
+
+/**
+ * List a user's temporary credit batches in stable server order.
+ */
+export async function getTemporaryCredits(
+  id: number,
+  page: number = 1,
+  pageSize: number = 20
+): Promise<TemporaryCreditAuditResponse> {
+  const { data } = await apiClient.get<TemporaryCreditAuditResponse>(
+    `/admin/users/${id}/temporary-credits`,
+    { params: { page, page_size: pageSize } }
+  )
+  return data
+}
+
 /**
  * Get user's balance/concurrency change history
  * @param id - User ID
@@ -412,6 +473,8 @@ export const usersAPI = {
   getUserApiKeys,
   getUserUsageStats,
   getUserBalanceHistory,
+  grantTemporaryCredit,
+  getTemporaryCredits,
   replaceGroup,
   bindUserAuthIdentity,
   getPlatformQuotas,

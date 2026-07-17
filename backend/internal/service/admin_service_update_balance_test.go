@@ -193,3 +193,28 @@ func TestAdminService_UpdateUserBalance_AffiliateFailureDoesNotRollbackRecharge(
 	require.Equal(t, []adminRechargeAffiliateAccrual{{userID: 7, amount: 5}}, affiliate.calls)
 	require.Len(t, redeemRepo.created, 1)
 }
+
+func TestAdminService_UpdateUserBalance_PreservesLegacyFloatContract(t *testing.T) {
+	baseRepo := &userRepoStub{user: &User{
+		ID:      7,
+		Balance: 0.1,
+	}}
+	repo := &balanceUserRepoStub{userRepoStub: baseRepo}
+	redeemRepo := &balanceRedeemRepoStub{redeemRepoStub: &redeemRepoStub{}}
+	svc := &adminServiceImpl{
+		userRepo:       repo,
+		redeemCodeRepo: redeemRepo,
+	}
+
+	updated, err := svc.UpdateUserBalance(
+		context.Background(),
+		7,
+		0.2,
+		"add",
+		"",
+	)
+	require.NoError(t, err)
+	require.InDelta(t, 0.3, updated.Balance, 1e-12)
+	require.Len(t, redeemRepo.created, 1)
+	require.InDelta(t, 0.2, redeemRepo.created[0].Value, 1e-12)
+}

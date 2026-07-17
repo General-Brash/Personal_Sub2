@@ -13,6 +13,7 @@ import (
 
 const (
 	systemOperationLockScope = "admin.system.operations.global_lock"
+	systemOperationLockActorScope = "system:global"
 	systemOperationLockKey   = "global-system-operation-lock"
 )
 
@@ -80,6 +81,7 @@ func (s *SystemOperationLockService) Acquire(ctx context.Context, operationID st
 
 	record := &IdempotencyRecord{
 		Scope:              systemOperationLockScope,
+		ActorScope:         systemOperationLockActorScope,
 		IdempotencyKeyHash: keyHash,
 		RequestFingerprint: operationID,
 		Status:             IdempotencyStatusProcessing,
@@ -92,7 +94,7 @@ func (s *SystemOperationLockService) Acquire(ctx context.Context, operationID st
 		return nil, ErrIdempotencyStoreUnavail.WithCause(err)
 	}
 	if !owner {
-		existing, getErr := s.repo.GetByScopeAndKeyHash(ctx, systemOperationLockScope, keyHash)
+		existing, getErr := s.repo.GetByScopeActorScopeAndKeyHash(ctx, systemOperationLockScope, systemOperationLockActorScope, keyHash)
 		if getErr != nil {
 			return nil, ErrIdempotencyStoreUnavail.WithCause(getErr)
 		}
@@ -114,7 +116,7 @@ func (s *SystemOperationLockService) Acquire(ctx context.Context, operationID st
 			return nil, ErrIdempotencyStoreUnavail.WithCause(reclaimErr)
 		}
 		if !reclaimed {
-			latest, _ := s.repo.GetByScopeAndKeyHash(ctx, systemOperationLockScope, keyHash)
+			latest, _ := s.repo.GetByScopeActorScopeAndKeyHash(ctx, systemOperationLockScope, systemOperationLockActorScope, keyHash)
 			if latest != nil {
 				return nil, s.busyError(latest.RequestFingerprint, latest.LockedUntil, now)
 			}

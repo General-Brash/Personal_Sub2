@@ -8,6 +8,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestResolveImageRateMultiplier_Float64(t *testing.T) {
+	const base = 1.25
+
+	var _ func(*APIKey, float64) float64 = resolveImageRateMultiplier
+
+	tests := []struct {
+		name   string
+		apiKey *APIKey
+		want   float64
+	}{
+		{"default keeps base", nil, base},
+		{"independent uses group value", &APIKey{Group: &Group{ImageRateIndependent: true, ImageRateMultiplier: 0.5}}, 0.5},
+		{"negative independent clamps to zero", &APIKey{Group: &Group{ImageRateIndependent: true, ImageRateMultiplier: -0.5}}, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, resolveImageRateMultiplier(tt.apiKey, base))
+		})
+	}
+}
+
 // TestCalculateImageCost_DefaultPricing 测试无分组配置时使用默认价格
 func TestCalculateImageCost_DefaultPricing(t *testing.T) {
 	svc := &BillingService{} // pricingService 为 nil，使用硬编码默认值

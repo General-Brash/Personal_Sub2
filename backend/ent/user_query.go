@@ -16,12 +16,14 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
+	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditgrant"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
@@ -33,25 +35,28 @@ import (
 // UserQuery is the builder for querying User entities.
 type UserQuery struct {
 	config
-	ctx                       *QueryContext
-	order                     []user.OrderOption
-	inters                    []Interceptor
-	predicates                []predicate.User
-	withAPIKeys               *APIKeyQuery
-	withRedeemCodes           *RedeemCodeQuery
-	withSubscriptions         *UserSubscriptionQuery
-	withAssignedSubscriptions *UserSubscriptionQuery
-	withAnnouncementReads     *AnnouncementReadQuery
-	withAllowedGroups         *GroupQuery
-	withUsageLogs             *UsageLogQuery
-	withAttributeValues       *UserAttributeValueQuery
-	withPromoCodeUsages       *PromoCodeUsageQuery
-	withPaymentOrders         *PaymentOrderQuery
-	withAuthIdentities        *AuthIdentityQuery
-	withPendingAuthSessions   *PendingAuthSessionQuery
-	withPlatformQuotas        *UserPlatformQuotaQuery
-	withUserAllowedGroups     *UserAllowedGroupQuery
-	modifiers                 []func(*sql.Selector)
+	ctx                              *QueryContext
+	order                            []user.OrderOption
+	inters                           []Interceptor
+	predicates                       []predicate.User
+	withAPIKeys                      *APIKeyQuery
+	withRedeemCodes                  *RedeemCodeQuery
+	withSubscriptions                *UserSubscriptionQuery
+	withAssignedSubscriptions        *UserSubscriptionQuery
+	withAnnouncementReads            *AnnouncementReadQuery
+	withAllowedGroups                *GroupQuery
+	withUsageLogs                    *UsageLogQuery
+	withAttributeValues              *UserAttributeValueQuery
+	withPromoCodeUsages              *PromoCodeUsageQuery
+	withPaymentOrders                *PaymentOrderQuery
+	withAuthIdentities               *AuthIdentityQuery
+	withPendingAuthSessions          *PendingAuthSessionQuery
+	withPlatformQuotas               *UserPlatformQuotaQuery
+	withDailyCheckins                *DailyCheckinQuery
+	withTemporaryCreditGrants        *TemporaryCreditGrantQuery
+	withGrantedTemporaryCreditGrants *TemporaryCreditGrantQuery
+	withUserAllowedGroups            *UserAllowedGroupQuery
+	modifiers                        []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -374,6 +379,72 @@ func (_q *UserQuery) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 	return query
 }
 
+// QueryDailyCheckins chains the current query on the "daily_checkins" edge.
+func (_q *UserQuery) QueryDailyCheckins() *DailyCheckinQuery {
+	query := (&DailyCheckinClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(dailycheckin.Table, dailycheckin.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.DailyCheckinsTable, user.DailyCheckinsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryTemporaryCreditGrants chains the current query on the "temporary_credit_grants" edge.
+func (_q *UserQuery) QueryTemporaryCreditGrants() *TemporaryCreditGrantQuery {
+	query := (&TemporaryCreditGrantClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(temporarycreditgrant.Table, temporarycreditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.TemporaryCreditGrantsTable, user.TemporaryCreditGrantsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryGrantedTemporaryCreditGrants chains the current query on the "granted_temporary_credit_grants" edge.
+func (_q *UserQuery) QueryGrantedTemporaryCreditGrants() *TemporaryCreditGrantQuery {
+	query := (&TemporaryCreditGrantClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(temporarycreditgrant.Table, temporarycreditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.GrantedTemporaryCreditGrantsTable, user.GrantedTemporaryCreditGrantsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups chains the current query on the "user_allowed_groups" edge.
 func (_q *UserQuery) QueryUserAllowedGroups() *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: _q.config}).Query()
@@ -583,25 +654,28 @@ func (_q *UserQuery) Clone() *UserQuery {
 		return nil
 	}
 	return &UserQuery{
-		config:                    _q.config,
-		ctx:                       _q.ctx.Clone(),
-		order:                     append([]user.OrderOption{}, _q.order...),
-		inters:                    append([]Interceptor{}, _q.inters...),
-		predicates:                append([]predicate.User{}, _q.predicates...),
-		withAPIKeys:               _q.withAPIKeys.Clone(),
-		withRedeemCodes:           _q.withRedeemCodes.Clone(),
-		withSubscriptions:         _q.withSubscriptions.Clone(),
-		withAssignedSubscriptions: _q.withAssignedSubscriptions.Clone(),
-		withAnnouncementReads:     _q.withAnnouncementReads.Clone(),
-		withAllowedGroups:         _q.withAllowedGroups.Clone(),
-		withUsageLogs:             _q.withUsageLogs.Clone(),
-		withAttributeValues:       _q.withAttributeValues.Clone(),
-		withPromoCodeUsages:       _q.withPromoCodeUsages.Clone(),
-		withPaymentOrders:         _q.withPaymentOrders.Clone(),
-		withAuthIdentities:        _q.withAuthIdentities.Clone(),
-		withPendingAuthSessions:   _q.withPendingAuthSessions.Clone(),
-		withPlatformQuotas:        _q.withPlatformQuotas.Clone(),
-		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
+		config:                           _q.config,
+		ctx:                              _q.ctx.Clone(),
+		order:                            append([]user.OrderOption{}, _q.order...),
+		inters:                           append([]Interceptor{}, _q.inters...),
+		predicates:                       append([]predicate.User{}, _q.predicates...),
+		withAPIKeys:                      _q.withAPIKeys.Clone(),
+		withRedeemCodes:                  _q.withRedeemCodes.Clone(),
+		withSubscriptions:                _q.withSubscriptions.Clone(),
+		withAssignedSubscriptions:        _q.withAssignedSubscriptions.Clone(),
+		withAnnouncementReads:            _q.withAnnouncementReads.Clone(),
+		withAllowedGroups:                _q.withAllowedGroups.Clone(),
+		withUsageLogs:                    _q.withUsageLogs.Clone(),
+		withAttributeValues:              _q.withAttributeValues.Clone(),
+		withPromoCodeUsages:              _q.withPromoCodeUsages.Clone(),
+		withPaymentOrders:                _q.withPaymentOrders.Clone(),
+		withAuthIdentities:               _q.withAuthIdentities.Clone(),
+		withPendingAuthSessions:          _q.withPendingAuthSessions.Clone(),
+		withPlatformQuotas:               _q.withPlatformQuotas.Clone(),
+		withDailyCheckins:                _q.withDailyCheckins.Clone(),
+		withTemporaryCreditGrants:        _q.withTemporaryCreditGrants.Clone(),
+		withGrantedTemporaryCreditGrants: _q.withGrantedTemporaryCreditGrants.Clone(),
+		withUserAllowedGroups:            _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -751,6 +825,39 @@ func (_q *UserQuery) WithPlatformQuotas(opts ...func(*UserPlatformQuotaQuery)) *
 	return _q
 }
 
+// WithDailyCheckins tells the query-builder to eager-load the nodes that are connected to
+// the "daily_checkins" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithDailyCheckins(opts ...func(*DailyCheckinQuery)) *UserQuery {
+	query := (&DailyCheckinClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withDailyCheckins = query
+	return _q
+}
+
+// WithTemporaryCreditGrants tells the query-builder to eager-load the nodes that are connected to
+// the "temporary_credit_grants" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithTemporaryCreditGrants(opts ...func(*TemporaryCreditGrantQuery)) *UserQuery {
+	query := (&TemporaryCreditGrantClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withTemporaryCreditGrants = query
+	return _q
+}
+
+// WithGrantedTemporaryCreditGrants tells the query-builder to eager-load the nodes that are connected to
+// the "granted_temporary_credit_grants" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithGrantedTemporaryCreditGrants(opts ...func(*TemporaryCreditGrantQuery)) *UserQuery {
+	query := (&TemporaryCreditGrantClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withGrantedTemporaryCreditGrants = query
+	return _q
+}
+
 // WithUserAllowedGroups tells the query-builder to eager-load the nodes that are connected to
 // the "user_allowed_groups" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithUserAllowedGroups(opts ...func(*UserAllowedGroupQuery)) *UserQuery {
@@ -840,7 +947,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [14]bool{
+		loadedTypes = [17]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
@@ -854,6 +961,9 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			_q.withAuthIdentities != nil,
 			_q.withPendingAuthSessions != nil,
 			_q.withPlatformQuotas != nil,
+			_q.withDailyCheckins != nil,
+			_q.withTemporaryCreditGrants != nil,
+			_q.withGrantedTemporaryCreditGrants != nil,
 			_q.withUserAllowedGroups != nil,
 		}
 	)
@@ -970,6 +1080,31 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadPlatformQuotas(ctx, query, nodes,
 			func(n *User) { n.Edges.PlatformQuotas = []*UserPlatformQuota{} },
 			func(n *User, e *UserPlatformQuota) { n.Edges.PlatformQuotas = append(n.Edges.PlatformQuotas, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withDailyCheckins; query != nil {
+		if err := _q.loadDailyCheckins(ctx, query, nodes,
+			func(n *User) { n.Edges.DailyCheckins = []*DailyCheckin{} },
+			func(n *User, e *DailyCheckin) { n.Edges.DailyCheckins = append(n.Edges.DailyCheckins, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withTemporaryCreditGrants; query != nil {
+		if err := _q.loadTemporaryCreditGrants(ctx, query, nodes,
+			func(n *User) { n.Edges.TemporaryCreditGrants = []*TemporaryCreditGrant{} },
+			func(n *User, e *TemporaryCreditGrant) {
+				n.Edges.TemporaryCreditGrants = append(n.Edges.TemporaryCreditGrants, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withGrantedTemporaryCreditGrants; query != nil {
+		if err := _q.loadGrantedTemporaryCreditGrants(ctx, query, nodes,
+			func(n *User) { n.Edges.GrantedTemporaryCreditGrants = []*TemporaryCreditGrant{} },
+			func(n *User, e *TemporaryCreditGrant) {
+				n.Edges.GrantedTemporaryCreditGrants = append(n.Edges.GrantedTemporaryCreditGrants, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -1408,6 +1543,99 @@ func (_q *UserQuery) loadPlatformQuotas(ctx context.Context, query *UserPlatform
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadDailyCheckins(ctx context.Context, query *DailyCheckinQuery, nodes []*User, init func(*User), assign func(*User, *DailyCheckin)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(dailycheckin.FieldUserID)
+	}
+	query.Where(predicate.DailyCheckin(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.DailyCheckinsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadTemporaryCreditGrants(ctx context.Context, query *TemporaryCreditGrantQuery, nodes []*User, init func(*User), assign func(*User, *TemporaryCreditGrant)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(temporarycreditgrant.FieldUserID)
+	}
+	query.Where(predicate.TemporaryCreditGrant(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.TemporaryCreditGrantsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadGrantedTemporaryCreditGrants(ctx context.Context, query *TemporaryCreditGrantQuery, nodes []*User, init func(*User), assign func(*User, *TemporaryCreditGrant)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(temporarycreditgrant.FieldGrantedBy)
+	}
+	query.Where(predicate.TemporaryCreditGrant(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.GrantedTemporaryCreditGrantsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GrantedBy
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "granted_by" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "granted_by" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}

@@ -31,6 +31,7 @@ type CreateUsageLogRequest struct {
 	CacheCreation1hTokens int     `json:"cache_creation_1h_tokens"`
 	InputCost             float64 `json:"input_cost"`
 	OutputCost            float64 `json:"output_cost"`
+	ImageOutputCost       float64 `json:"image_output_cost"`
 	CacheCreationCost     float64 `json:"cache_creation_cost"`
 	CacheReadCost         float64 `json:"cache_read_cost"`
 	TotalCost             float64 `json:"total_cost"`
@@ -56,10 +57,20 @@ type UsageStats struct {
 
 // UsageService 使用统计服务
 type UsageService struct {
-	usageRepo            UsageLogRepository
-	userRepo             UserRepository
-	entClient            *dbent.Client
-	authCacheInvalidator APIKeyAuthCacheInvalidator
+	usageRepo                  UsageLogRepository
+	userRepo                   UserRepository
+	entClient                  *dbent.Client
+	authCacheInvalidator       APIKeyAuthCacheInvalidator
+	availableCreditInvalidator AvailableCreditInvalidator
+}
+
+// SetAvailableCreditInvalidator wires the post-commit available-credit cache
+// invalidation hook without changing the existing UsageService constructor.
+func (s *UsageService) SetAvailableCreditInvalidator(invalidator AvailableCreditInvalidator) {
+	if s == nil {
+		return
+	}
+	s.availableCreditInvalidator = invalidator
 }
 
 // NewUsageService 创建使用统计服务实例
@@ -75,13 +86,18 @@ func NewUsageService(usageRepo UsageLogRepository, userRepo UserRepository, entC
 // Create 创建使用日志
 func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*UsageLog, error) {
 	// 使用数据库事务保证「使用日志插入」与「扣费」的原子性，避免重复扣费或漏扣风险。
-	tx, err := s.entClient.Tx(ctx)
-	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
-		return nil, fmt.Errorf("begin transaction: %w", err)
-	}
-
 	txCtx := ctx
-	if err == nil {
+	tx := dbent.TxFromContext(ctx)
+	ownsTransaction := tx == nil
+	var err error
+	if ownsTransaction {
+		tx, err = s.entClient.Tx(ctx)
+		if err != nil {
+			if errors.Is(err, dbent.ErrTxStarted) {
+				return nil, errors.New("usage billing transaction context is required")
+			}
+			return nil, fmt.Errorf("begin transaction: %w", err)
+		}
 		defer func() { _ = tx.Rollback() }()
 		txCtx = dbent.NewTxContext(ctx, tx)
 	}
@@ -105,6 +121,7 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 		CacheReadTokens:       req.CacheReadTokens,
 		CacheCreation5mTokens: req.CacheCreation5mTokens,
 		CacheCreation1hTokens: req.CacheCreation1hTokens,
+		ImageOutputCost:       req.ImageOutputCost,
 		InputCost:             req.InputCost,
 		OutputCost:            req.OutputCost,
 		CacheCreationCost:     req.CacheCreationCost,
@@ -121,31 +138,77 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 		return nil, fmt.Errorf("create usage log: %w", err)
 	}
 
-	// 扣除用户余额
+	// Consume temporary credit and only deduct the permanent-balance remainder
+	// in this same Ent transaction after the usage log has its immutable ID.
 	balanceUpdated := false
 	if inserted && req.ActualCost > 0 {
-		if err := s.userRepo.UpdateBalance(txCtx, req.UserID, -req.ActualCost); err != nil {
-			return nil, fmt.Errorf("update user balance: %w", err)
+		activeTx := tx
+		if activeTx == nil {
+			activeTx = dbent.TxFromContext(txCtx)
 		}
-		balanceUpdated = true
+		if activeTx == nil {
+			return nil, errors.New("usage billing transaction is required")
+		}
+		executor, err := temporaryCreditExecutorFromEntTx(activeTx)
+		if err != nil {
+			return nil, fmt.Errorf("bind temporary credit to usage billing transaction: %w", err)
+		}
+		if usageLog.ID <= 0 {
+			return nil, errors.New("created usage log id is required for temporary credit consumption")
+		}
+		usageLogID := usageLog.ID
+		ledgerActualCost := usageBillingLedgerAmountFromFloat64(req.ActualCost)
+		permanentBalanceCost, err := NewTemporaryCreditAllocationExecutor().Allocate(
+			txCtx,
+			executor,
+			req.UserID,
+			ledgerActualCost,
+			TemporaryCreditConsumptionReference{UsageLogID: &usageLogID},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("consume temporary credit: %w", err)
+		}
+		if permanentBalanceCost > 0 {
+			if err := activeTx.User.UpdateOneID(req.UserID).AddBalance(-permanentBalanceCost).Exec(txCtx); err != nil {
+				return nil, fmt.Errorf("update user balance: %w", err)
+			}
+			balanceUpdated = true
+		}
 	}
 
-	if tx != nil {
+	if ownsTransaction {
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("commit transaction: %w", err)
 		}
+		s.invalidateUsageCaches(ctx, req.UserID, balanceUpdated, inserted && req.ActualCost > 0)
+		return usageLog, nil
 	}
 
-	s.invalidateUsageCaches(ctx, req.UserID, balanceUpdated)
+	if inserted && req.ActualCost > 0 && s.availableCreditInvalidator != nil {
+		tx.OnCommit(func(next dbent.Committer) dbent.Committer {
+			return dbent.CommitFunc(func(commitCtx context.Context, committedTx *dbent.Tx) error {
+				if err := next.Commit(commitCtx, committedTx); err != nil {
+					return err
+				}
+				_ = s.availableCreditInvalidator.InvalidateAvailableCredit(commitCtx, req.UserID)
+				return nil
+			})
+		})
+	}
+
+	// Keep the existing auth-cache behavior unchanged for outer transactions.
+	s.invalidateUsageCaches(ctx, req.UserID, balanceUpdated, false)
 
 	return usageLog, nil
 }
 
-func (s *UsageService) invalidateUsageCaches(ctx context.Context, userID int64, balanceUpdated bool) {
-	if !balanceUpdated || s.authCacheInvalidator == nil {
-		return
+func (s *UsageService) invalidateUsageCaches(ctx context.Context, userID int64, balanceUpdated, availableCreditChanged bool) {
+	if balanceUpdated && s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
-	s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
+	if availableCreditChanged && s.availableCreditInvalidator != nil {
+		_ = s.availableCreditInvalidator.InvalidateAvailableCredit(ctx, userID)
+	}
 }
 
 // GetByID 根据ID获取使用日志

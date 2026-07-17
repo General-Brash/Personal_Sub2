@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -35,6 +36,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditconsumption"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditgrant"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -865,6 +868,29 @@ func init() {
 	channelmonitorrequesttemplate.DefaultBodyOverrideMode = channelmonitorrequesttemplateDescBodyOverrideMode.Default.(string)
 	// channelmonitorrequesttemplate.BodyOverrideModeValidator is a validator for the "body_override_mode" field. It is called by the builders before save.
 	channelmonitorrequesttemplate.BodyOverrideModeValidator = channelmonitorrequesttemplateDescBodyOverrideMode.Validators[0].(func(string) error)
+	dailycheckinMixin := schema.DailyCheckin{}.Mixin()
+	dailycheckinMixinFields0 := dailycheckinMixin[0].Fields()
+	_ = dailycheckinMixinFields0
+	dailycheckinFields := schema.DailyCheckin{}.Fields()
+	_ = dailycheckinFields
+	// dailycheckinDescCreatedAt is the schema descriptor for created_at field.
+	dailycheckinDescCreatedAt := dailycheckinMixinFields0[0].Descriptor()
+	// dailycheckin.DefaultCreatedAt holds the default value on creation for the created_at field.
+	dailycheckin.DefaultCreatedAt = dailycheckinDescCreatedAt.Default.(func() time.Time)
+	// dailycheckinDescUpdatedAt is the schema descriptor for updated_at field.
+	dailycheckinDescUpdatedAt := dailycheckinMixinFields0[1].Descriptor()
+	// dailycheckin.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	dailycheckin.DefaultUpdatedAt = dailycheckinDescUpdatedAt.Default.(func() time.Time)
+	// dailycheckin.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	dailycheckin.UpdateDefaultUpdatedAt = dailycheckinDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// dailycheckinDescStreakDay is the schema descriptor for streak_day field.
+	dailycheckinDescStreakDay := dailycheckinFields[2].Descriptor()
+	// dailycheckin.StreakDayValidator is a validator for the "streak_day" field. It is called by the builders before save.
+	dailycheckin.StreakDayValidator = dailycheckinDescStreakDay.Validators[0].(func(int) error)
+	// dailycheckinDescRewardDay is the schema descriptor for reward_day field.
+	dailycheckinDescRewardDay := dailycheckinFields[3].Descriptor()
+	// dailycheckin.RewardDayValidator is a validator for the "reward_day" field. It is called by the builders before save.
+	dailycheckin.RewardDayValidator = dailycheckinDescRewardDay.Validators[0].(func(int) error)
 	errorpassthroughruleMixin := schema.ErrorPassthroughRule{}.Mixin()
 	errorpassthroughruleMixinFields0 := errorpassthroughruleMixin[0].Fields()
 	_ = errorpassthroughruleMixinFields0
@@ -1112,24 +1138,28 @@ func init() {
 	idempotencyrecord.DefaultUpdatedAt = idempotencyrecordDescUpdatedAt.Default.(func() time.Time)
 	// idempotencyrecord.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	idempotencyrecord.UpdateDefaultUpdatedAt = idempotencyrecordDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// idempotencyrecordDescScope is the schema descriptor for scope field.
-	idempotencyrecordDescScope := idempotencyrecordFields[0].Descriptor()
-	// idempotencyrecord.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
-	idempotencyrecord.ScopeValidator = idempotencyrecordDescScope.Validators[0].(func(string) error)
+	// idempotencyrecordDescOperationScope is the schema descriptor for operation_scope field.
+	idempotencyrecordDescOperationScope := idempotencyrecordFields[0].Descriptor()
+	// idempotencyrecord.OperationScopeValidator is a validator for the "operation_scope" field. It is called by the builders before save.
+	idempotencyrecord.OperationScopeValidator = idempotencyrecordDescOperationScope.Validators[0].(func(string) error)
+	// idempotencyrecordDescActorScope is the schema descriptor for actor_scope field.
+	idempotencyrecordDescActorScope := idempotencyrecordFields[1].Descriptor()
+	// idempotencyrecord.ActorScopeValidator is a validator for the "actor_scope" field. It is called by the builders before save.
+	idempotencyrecord.ActorScopeValidator = idempotencyrecordDescActorScope.Validators[0].(func(string) error)
 	// idempotencyrecordDescIdempotencyKeyHash is the schema descriptor for idempotency_key_hash field.
-	idempotencyrecordDescIdempotencyKeyHash := idempotencyrecordFields[1].Descriptor()
+	idempotencyrecordDescIdempotencyKeyHash := idempotencyrecordFields[2].Descriptor()
 	// idempotencyrecord.IdempotencyKeyHashValidator is a validator for the "idempotency_key_hash" field. It is called by the builders before save.
 	idempotencyrecord.IdempotencyKeyHashValidator = idempotencyrecordDescIdempotencyKeyHash.Validators[0].(func(string) error)
 	// idempotencyrecordDescRequestFingerprint is the schema descriptor for request_fingerprint field.
-	idempotencyrecordDescRequestFingerprint := idempotencyrecordFields[2].Descriptor()
+	idempotencyrecordDescRequestFingerprint := idempotencyrecordFields[3].Descriptor()
 	// idempotencyrecord.RequestFingerprintValidator is a validator for the "request_fingerprint" field. It is called by the builders before save.
 	idempotencyrecord.RequestFingerprintValidator = idempotencyrecordDescRequestFingerprint.Validators[0].(func(string) error)
 	// idempotencyrecordDescStatus is the schema descriptor for status field.
-	idempotencyrecordDescStatus := idempotencyrecordFields[3].Descriptor()
+	idempotencyrecordDescStatus := idempotencyrecordFields[4].Descriptor()
 	// idempotencyrecord.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	idempotencyrecord.StatusValidator = idempotencyrecordDescStatus.Validators[0].(func(string) error)
 	// idempotencyrecordDescErrorReason is the schema descriptor for error_reason field.
-	idempotencyrecordDescErrorReason := idempotencyrecordFields[6].Descriptor()
+	idempotencyrecordDescErrorReason := idempotencyrecordFields[7].Descriptor()
 	// idempotencyrecord.ErrorReasonValidator is a validator for the "error_reason" field. It is called by the builders before save.
 	idempotencyrecord.ErrorReasonValidator = idempotencyrecordDescErrorReason.Validators[0].(func(string) error)
 	identityadoptiondecisionMixin := schema.IdentityAdoptionDecision{}.Mixin()
@@ -1803,6 +1833,35 @@ func init() {
 	tlsfingerprintprofileDescEnableGrease := tlsfingerprintprofileFields[2].Descriptor()
 	// tlsfingerprintprofile.DefaultEnableGrease holds the default value on creation for the enable_grease field.
 	tlsfingerprintprofile.DefaultEnableGrease = tlsfingerprintprofileDescEnableGrease.Default.(bool)
+	temporarycreditconsumptionFields := schema.TemporaryCreditConsumption{}.Fields()
+	_ = temporarycreditconsumptionFields
+	// temporarycreditconsumptionDescRequestID is the schema descriptor for request_id field.
+	temporarycreditconsumptionDescRequestID := temporarycreditconsumptionFields[2].Descriptor()
+	// temporarycreditconsumption.RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
+	temporarycreditconsumption.RequestIDValidator = temporarycreditconsumptionDescRequestID.Validators[0].(func(string) error)
+	// temporarycreditconsumptionDescCreatedAt is the schema descriptor for created_at field.
+	temporarycreditconsumptionDescCreatedAt := temporarycreditconsumptionFields[4].Descriptor()
+	// temporarycreditconsumption.DefaultCreatedAt holds the default value on creation for the created_at field.
+	temporarycreditconsumption.DefaultCreatedAt = temporarycreditconsumptionDescCreatedAt.Default.(func() time.Time)
+	temporarycreditgrantMixin := schema.TemporaryCreditGrant{}.Mixin()
+	temporarycreditgrantMixinFields0 := temporarycreditgrantMixin[0].Fields()
+	_ = temporarycreditgrantMixinFields0
+	temporarycreditgrantFields := schema.TemporaryCreditGrant{}.Fields()
+	_ = temporarycreditgrantFields
+	// temporarycreditgrantDescCreatedAt is the schema descriptor for created_at field.
+	temporarycreditgrantDescCreatedAt := temporarycreditgrantMixinFields0[0].Descriptor()
+	// temporarycreditgrant.DefaultCreatedAt holds the default value on creation for the created_at field.
+	temporarycreditgrant.DefaultCreatedAt = temporarycreditgrantDescCreatedAt.Default.(func() time.Time)
+	// temporarycreditgrantDescUpdatedAt is the schema descriptor for updated_at field.
+	temporarycreditgrantDescUpdatedAt := temporarycreditgrantMixinFields0[1].Descriptor()
+	// temporarycreditgrant.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	temporarycreditgrant.DefaultUpdatedAt = temporarycreditgrantDescUpdatedAt.Default.(func() time.Time)
+	// temporarycreditgrant.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	temporarycreditgrant.UpdateDefaultUpdatedAt = temporarycreditgrantDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// temporarycreditgrantDescNotes is the schema descriptor for notes field.
+	temporarycreditgrantDescNotes := temporarycreditgrantFields[6].Descriptor()
+	// temporarycreditgrant.DefaultNotes holds the default value on creation for the notes field.
+	temporarycreditgrant.DefaultNotes = temporarycreditgrantDescNotes.Default.(string)
 	usagecleanuptaskMixin := schema.UsageCleanupTask{}.Mixin()
 	usagecleanuptaskMixinFields0 := usagecleanuptaskMixin[0].Fields()
 	_ = usagecleanuptaskMixinFields0

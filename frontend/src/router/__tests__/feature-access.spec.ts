@@ -8,6 +8,7 @@ type NavigationGuard = (
 
 const routerHarness = vi.hoisted(() => ({
   guard: null as NavigationGuard | null,
+  routes: [] as Array<Record<string, any>>,
 }))
 
 const authStore = vi.hoisted(() => ({
@@ -25,20 +26,36 @@ const appStore = vi.hoisted(() => ({
   cachedPublicSettings: null as null | {
     payment_enabled?: boolean
     risk_control_enabled?: boolean
+    user_channel_status_enabled?: boolean
+    user_subscriptions_enabled?: boolean
+    admin_promo_codes_enabled?: boolean
+    admin_channel_management_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
+  showWarning: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
   createWebHistory: vi.fn(() => ({})),
-  createRouter: vi.fn(() => ({
-    beforeEach: vi.fn((guard: NavigationGuard) => {
-      routerHarness.guard = guard
-    }),
-    afterEach: vi.fn(),
-    onError: vi.fn(),
-  })),
+  createRouter: vi.fn((options: { routes: Array<Record<string, any>> }) => {
+    routerHarness.routes = options.routes
+    return {
+      beforeEach: vi.fn((guard: NavigationGuard) => {
+        routerHarness.guard = guard
+      }),
+      afterEach: vi.fn(),
+      onError: vi.fn(),
+    }
+  }),
+}))
+
+vi.mock('@/i18n', () => ({
+  i18n: {
+    global: {
+      t: (key: string) => key,
+    },
+  },
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -117,6 +134,20 @@ describe('feature route guard', () => {
     appStore.publicSettingsLoaded = false
     appStore.cachedPublicSettings = null
     appStore.fetchPublicSettings.mockReset()
+    appStore.showWarning.mockReset()
+  })
+
+  it.each([
+    ['/monitor', 'user_channel_status_enabled'],
+    ['/subscriptions', 'user_subscriptions_enabled'],
+    ['/admin/promo-codes', 'admin_promo_codes_enabled'],
+    ['/admin/channels', 'admin_channel_management_enabled'],
+    ['/admin/channels/pricing', 'admin_channel_management_enabled'],
+    ['/admin/channels/monitor', 'admin_channel_management_enabled'],
+  ])('binds %s to the %s route meta flag', (path, key) => {
+    const route = routerHarness.routes.find((item) => item.path === path)
+
+    expect(route?.meta?.requiredFeatureFlag?.key).toBe(key)
   })
 
   it('waits for the first public-settings request before deciding payment access', async () => {
@@ -142,6 +173,17 @@ describe('feature route guard', () => {
   it.each([
     ['payment', { requiresPayment: true }, '/purchase'],
     ['risk control', { requiresRiskControl: true }, '/admin/risk-control'],
+    [
+      'page visibility',
+      {
+        requiredFeatureFlag: {
+          key: 'user_subscriptions_enabled',
+          mode: 'opt-out',
+          label: 'User Subscriptions',
+        },
+      },
+      '/subscriptions',
+    ],
   ])('does not treat a failed %s settings load as explicitly disabled', async (_name, meta, path) => {
     authStore.isAdmin = meta.requiresRiskControl === true
     appStore.fetchPublicSettings.mockResolvedValue(null)
@@ -173,5 +215,39 @@ describe('feature route guard', () => {
     expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith(target)
+  })
+
+  it.each([
+    [
+      'user page',
+      false,
+      '/subscriptions',
+      'user_subscriptions_enabled',
+      '/dashboard',
+    ],
+    [
+      'administrator page',
+      true,
+      '/admin/promo-codes',
+      'admin_promo_codes_enabled',
+      '/admin/dashboard',
+    ],
+  ])('redirects a disabled %s and shows a warning', async (_name, isAdmin, path, key, target) => {
+    authStore.isAdmin = isAdmin
+    appStore.cachedPublicSettings = { [key]: false }
+    appStore.publicSettingsLoaded = true
+
+    const { navigation, next } = runGuard(
+      {
+        requiresAdmin: isAdmin,
+        requiredFeatureFlag: { key, mode: 'opt-out', label: key },
+      },
+      path,
+    )
+    await navigation
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith(target)
+    expect(appStore.showWarning).toHaveBeenCalledWith('common.pageDisabledByAdmin')
   })
 })

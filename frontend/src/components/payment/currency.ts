@@ -31,20 +31,9 @@ export function currencySymbol(currency?: string | null): string {
   return PAYMENT_CURRENCY_SYMBOLS[normalized] || normalized
 }
 
-function paymentCurrencyFractionDigits(currency: string): number {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-    }).resolvedOptions().maximumFractionDigits ?? 2
-  } catch {
-    return 2
-  }
-}
-
 export function formatPaymentAmount(amount: number, currency?: string | null, locale?: string): string {
   const normalized = normalizePaymentCurrency(currency)
-  const fractionDigits = paymentCurrencyFractionDigits(normalized)
+  const fractionDigits = 2
   try {
     return new Intl.NumberFormat(locale || undefined, {
       style: 'currency',

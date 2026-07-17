@@ -14,6 +14,25 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// ProvideTemporaryCreditService wires the expiring-credit ledger service.
+func ProvideTemporaryCreditService(repo TemporaryCreditRepository, availableCreditInvalidator AvailableCreditInvalidator) *TemporaryCreditService {
+	return NewTemporaryCreditServiceWithAvailableCreditInvalidator(repo, availableCreditInvalidator)
+}
+
+// ProvideUsageService wires the post-commit available-credit invalidation hook
+// while preserving the existing API-key authentication cache dependency.
+func ProvideUsageService(
+	usageRepo UsageLogRepository,
+	userRepo UserRepository,
+	entClient *dbent.Client,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	availableCreditInvalidator AvailableCreditInvalidator,
+) *UsageService {
+	svc := NewUsageService(usageRepo, userRepo, entClient, authCacheInvalidator)
+	svc.SetAvailableCreditInvalidator(availableCreditInvalidator)
+	return svc
+}
+
 // BuildInfo contains build information
 type BuildInfo struct {
 	Version   string
@@ -636,6 +655,7 @@ func ProvideAPIKeyService(
 ) *APIKeyService {
 	svc := NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, cache, cfg)
 	svc.SetRateLimitCacheInvalidator(billingCacheService)
+	svc.SetAvailableCreditEligibilityChecker(billingCacheService)
 	svc.SetConcurrencyService(concurrencyService)
 	return svc
 }
@@ -645,6 +665,10 @@ var ProviderSet = wire.NewSet(
 	// Core services
 	NewAuthService,
 	NewUserService,
+	ProvideTemporaryCreditService,
+	NewAdminTemporaryCreditService,
+	NewCheckinService,
+	wire.Bind(new(DailyCheckinPolicyProvider), new(*SettingService)),
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
 	NewGroupService,
@@ -652,11 +676,12 @@ var ProviderSet = wire.NewSet(
 	NewProxyService,
 	NewRedeemService,
 	NewPromoService,
-	NewUsageService,
+	ProvideUsageService,
 	NewDashboardService,
 	ProvidePricingService,
 	NewBillingService,
 	ProvideBillingCacheService,
+	wire.Bind(new(AvailableCreditInvalidator), new(*BillingCacheService)),
 	NewAnnouncementService,
 	NewAdminService,
 	NewGatewayService,

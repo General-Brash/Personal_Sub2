@@ -143,4 +143,42 @@ describe('admin DashboardView', () => {
       granularity: 'hour'
     }))
   })
+
+  it('renders dashboard costs with two decimal places without compacting amounts', async () => {
+    getSnapshotV2.mockResolvedValue({
+      stats: {
+        ...createDashboardStats(),
+        today_actual_cost: 0.004,
+        today_account_cost: 0.005,
+        today_cost: 0.006,
+        total_actual_cost: 1234.567,
+        total_account_cost: 2.345,
+        total_cost: 0.0049
+      },
+      trend: [],
+      models: []
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('$1234.57')
+    expect(text).toContain('$2.35')
+    expect(text).not.toContain('$1.23K')
+  })
 })

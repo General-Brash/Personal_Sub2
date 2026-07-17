@@ -21,7 +21,7 @@ type storeUnavailableRepoStub struct{}
 func (storeUnavailableRepoStub) CreateProcessing(context.Context, *service.IdempotencyRecord) (bool, error) {
 	return false, errors.New("store unavailable")
 }
-func (storeUnavailableRepoStub) GetByScopeAndKeyHash(context.Context, string, string) (*service.IdempotencyRecord, error) {
+func (storeUnavailableRepoStub) GetByScopeActorScopeAndKeyHash(context.Context, string, string, string) (*service.IdempotencyRecord, error) {
 	return nil, errors.New("store unavailable")
 }
 func (storeUnavailableRepoStub) TryReclaim(context.Context, int64, string, time.Time, time.Time, time.Time) (bool, error) {
@@ -106,8 +106,8 @@ func newMemoryIdempotencyRepoStub() *memoryIdempotencyRepoStub {
 	}
 }
 
-func (r *memoryIdempotencyRepoStub) key(scope, keyHash string) string {
-	return scope + "|" + keyHash
+func (r *memoryIdempotencyRepoStub) key(scope, actorScope, keyHash string) string {
+	return scope + "|" + actorScope + "|" + keyHash
 }
 
 func (r *memoryIdempotencyRepoStub) clone(in *service.IdempotencyRecord) *service.IdempotencyRecord {
@@ -137,7 +137,7 @@ func (r *memoryIdempotencyRepoStub) clone(in *service.IdempotencyRecord) *servic
 func (r *memoryIdempotencyRepoStub) CreateProcessing(_ context.Context, record *service.IdempotencyRecord) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	k := r.key(record.Scope, record.IdempotencyKeyHash)
+	k := r.key(record.Scope, record.ActorScope, record.IdempotencyKeyHash)
 	if _, ok := r.data[k]; ok {
 		return false, nil
 	}
@@ -149,10 +149,10 @@ func (r *memoryIdempotencyRepoStub) CreateProcessing(_ context.Context, record *
 	return true, nil
 }
 
-func (r *memoryIdempotencyRepoStub) GetByScopeAndKeyHash(_ context.Context, scope, keyHash string) (*service.IdempotencyRecord, error) {
+func (r *memoryIdempotencyRepoStub) GetByScopeActorScopeAndKeyHash(_ context.Context, scope, actorScope, keyHash string) (*service.IdempotencyRecord, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.clone(r.data[r.key(scope, keyHash)]), nil
+	return r.clone(r.data[r.key(scope, actorScope, keyHash)]), nil
 }
 
 func (r *memoryIdempotencyRepoStub) TryReclaim(_ context.Context, id int64, fromStatus string, now, newLockedUntil, newExpiresAt time.Time) (bool, error) {

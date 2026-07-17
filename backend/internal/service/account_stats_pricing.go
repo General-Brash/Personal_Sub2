@@ -180,7 +180,10 @@ func calculateStatsCost(pricing *ChannelModelPricing, tokens UsageTokens, reques
 
 // calculatePerRequestStatsCost 按次/图片计费。
 func calculatePerRequestStatsCost(pricing *ChannelModelPricing, requestCount int) *float64 {
-	if pricing.PerRequestPrice == nil || *pricing.PerRequestPrice <= 0 {
+	if pricing.PerRequestPrice == nil {
+		return nil
+	}
+	if *pricing.PerRequestPrice <= 0 {
 		return nil
 	}
 	cost := *pricing.PerRequestPrice * float64(requestCount)

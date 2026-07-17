@@ -20,6 +20,7 @@ func executeUserIdempotentJSON(
 	payload any,
 	ttl time.Duration,
 	execute func(context.Context) (any, error),
+	returnCommittedDataOnSuccessPersistenceFailure ...bool,
 ) {
 	coordinator := service.DefaultIdempotencyCoordinator()
 	if coordinator == nil {
@@ -37,7 +38,57 @@ func executeUserIdempotentJSON(
 		actorScope = "user:" + strconv.FormatInt(subject.UserID, 10)
 	}
 
+	allowCommittedResult := len(returnCommittedDataOnSuccessPersistenceFailure) > 0 && returnCommittedDataOnSuccessPersistenceFailure[0]
 	result, err := coordinator.Execute(c.Request.Context(), service.IdempotencyExecuteOptions{
+		Scope:          scope,
+		ActorScope:     actorScope,
+		Method:         c.Request.Method,
+		Route:          c.FullPath(),
+		IdempotencyKey: c.GetHeader("Idempotency-Key"),
+		Payload:        payload,
+		RequireKey:     true,
+		TTL:            ttl,
+		ReturnCommittedDataOnSuccessPersistenceFailure: allowCommittedResult,
+	}, execute)
+	if err != nil {
+		if infraerrors.Code(err) == infraerrors.Code(service.ErrIdempotencyStoreUnavail) {
+			service.RecordIdempotencyStoreUnavailable(c.FullPath(), scope, "handler_fail_close")
+			logger.LegacyPrintf("handler.idempotency", "[Idempotency] store unavailable: method=%s route=%s scope=%s strategy=fail_close", c.Request.Method, c.FullPath(), scope)
+		}
+		if retryAfter := service.RetryAfterSecondsFromError(err); retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		response.ErrorFrom(c, err)
+		return
+	}
+	if result != nil && result.Replayed {
+		c.Header("X-Idempotency-Replayed", "true")
+	}
+	if result != nil && result.PersistencePending {
+		c.Header("X-Idempotency-Persistence", "pending")
+	}
+	response.Success(c, result.Data)
+}
+
+func executeUserAtomicIdempotentJSON(
+	c *gin.Context,
+	scope string,
+	payload any,
+	ttl time.Duration,
+	execute func(context.Context, *service.IdempotencyAtomicClaim) (any, error),
+) {
+	coordinator := service.DefaultIdempotencyCoordinator()
+	if coordinator == nil {
+		c.Header("Retry-After", "1")
+		response.ErrorFrom(c, service.ErrIdempotencyStoreUnavail)
+		return
+	}
+
+	actorScope := "user:0"
+	if subject, ok := middleware2.GetAuthSubjectFromContext(c); ok {
+		actorScope = "user:" + strconv.FormatInt(subject.UserID, 10)
+	}
+	result, err := coordinator.ExecuteAtomic(c.Request.Context(), service.IdempotencyExecuteOptions{
 		Scope:          scope,
 		ActorScope:     actorScope,
 		Method:         c.Request.Method,
@@ -48,10 +99,6 @@ func executeUserIdempotentJSON(
 		TTL:            ttl,
 	}, execute)
 	if err != nil {
-		if infraerrors.Code(err) == infraerrors.Code(service.ErrIdempotencyStoreUnavail) {
-			service.RecordIdempotencyStoreUnavailable(c.FullPath(), scope, "handler_fail_close")
-			logger.LegacyPrintf("handler.idempotency", "[Idempotency] store unavailable: method=%s route=%s scope=%s strategy=fail_close", c.Request.Method, c.FullPath(), scope)
-		}
 		if retryAfter := service.RetryAfterSecondsFromError(err); retryAfter > 0 {
 			c.Header("Retry-After", strconv.Itoa(retryAfter))
 		}

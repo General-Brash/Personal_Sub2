@@ -114,6 +114,8 @@ const (
 	EdgeGroup = "group"
 	// EdgeSubscription holds the string denoting the subscription edge name in mutations.
 	EdgeSubscription = "subscription"
+	// EdgeTemporaryCreditConsumptions holds the string denoting the temporary_credit_consumptions edge name in mutations.
+	EdgeTemporaryCreditConsumptions = "temporary_credit_consumptions"
 	// Table holds the table name of the usagelog in the database.
 	Table = "usage_logs"
 	// UserTable is the table that holds the user relation/edge.
@@ -151,6 +153,13 @@ const (
 	SubscriptionInverseTable = "user_subscriptions"
 	// SubscriptionColumn is the table column denoting the subscription relation/edge.
 	SubscriptionColumn = "subscription_id"
+	// TemporaryCreditConsumptionsTable is the table that holds the temporary_credit_consumptions relation/edge.
+	TemporaryCreditConsumptionsTable = "temporary_credit_consumptions"
+	// TemporaryCreditConsumptionsInverseTable is the table name for the TemporaryCreditConsumption entity.
+	// It exists in this package in order to avoid circular dependency with the "temporarycreditconsumption" package.
+	TemporaryCreditConsumptionsInverseTable = "temporary_credit_consumptions"
+	// TemporaryCreditConsumptionsColumn is the table column denoting the temporary_credit_consumptions relation/edge.
+	TemporaryCreditConsumptionsColumn = "usage_log_id"
 )
 
 // Columns holds all SQL columns for usagelog fields.
@@ -546,6 +555,20 @@ func BySubscriptionField(field string, opts ...sql.OrderTermOption) OrderOption 
 		sqlgraph.OrderByNeighborTerms(s, newSubscriptionStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByTemporaryCreditConsumptionsCount orders the results by temporary_credit_consumptions count.
+func ByTemporaryCreditConsumptionsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newTemporaryCreditConsumptionsStep(), opts...)
+	}
+}
+
+// ByTemporaryCreditConsumptions orders the results by temporary_credit_consumptions terms.
+func ByTemporaryCreditConsumptions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newTemporaryCreditConsumptionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -579,5 +602,12 @@ func newSubscriptionStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SubscriptionInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, SubscriptionTable, SubscriptionColumn),
+	)
+}
+func newTemporaryCreditConsumptionsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(TemporaryCreditConsumptionsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, TemporaryCreditConsumptionsTable, TemporaryCreditConsumptionsColumn),
 	)
 }

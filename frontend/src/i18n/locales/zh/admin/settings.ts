@@ -14,6 +14,28 @@ export default {
         payment: '支付设置',
       },
       features: {
+        pageVisibility: {
+          title: '页面可见性',
+          description: '控制指定页面是否出现在侧边栏，并阻止通过地址直接访问。',
+          userPages: '用户页面',
+          adminPages: '管理员页面',
+          userChannelStatus: {
+            label: '渠道状态',
+            hint: '控制用户侧边栏中的渠道状态页面。渠道监控总开关关闭时，该入口仍会隐藏。',
+          },
+          userSubscriptions: {
+            label: '我的订阅',
+            hint: '控制用户侧边栏中的我的订阅页面。',
+          },
+          adminPromoCodes: {
+            label: '优惠码管理',
+            hint: '控制管理员侧边栏中的优惠码页面。',
+          },
+          adminChannelManagement: {
+            label: '渠道管理',
+            hint: '控制渠道定价和渠道监控两个管理员页面。',
+          },
+        },
         channelMonitor: {
           title: '渠道监控',
           description: '定期对配置的渠道发起健康检查，向用户展示可用性与延迟。关闭后调度器停止扫描，用户端列表为空。',

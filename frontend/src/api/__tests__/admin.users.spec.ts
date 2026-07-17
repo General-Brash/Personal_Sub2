@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { post } = vi.hoisted(() => ({
+const { get, post } = vi.hoisted(() => ({
+  get: vi.fn(),
   post: vi.fn(),
 }))
 
 vi.mock('@/api/client', () => ({
   apiClient: {
+    get,
     post,
   },
 }))
@@ -13,10 +15,15 @@ vi.mock('@/api/client', () => ({
 import {
   batchUpdateLimits,
   bindUserAuthIdentity,
+  getTemporaryCredits,
+  grantTemporaryCredit,
   type AdminBindAuthIdentityRequest,
   type AdminBoundAuthIdentity,
   type BatchUpdateUserLimitsRequest,
   type BatchUpdateUserLimitsResponse,
+  type GrantTemporaryCreditRequest,
+  type GrantTemporaryCreditResult,
+  type TemporaryCreditAuditItem,
 } from '@/api/admin/users'
 
 type Assert<T extends true> = T
@@ -83,6 +90,7 @@ const batchResponseContractExact: Assert<
 
 describe('admin users api auth identity binding', () => {
   beforeEach(() => {
+    get.mockReset()
     post.mockReset()
   })
 
@@ -146,5 +154,71 @@ describe('admin users api auth identity binding', () => {
     expect(result).toEqual({ affected: 2 })
     expect(batchRequestContractExact).toBe(true)
     expect(batchResponseContractExact).toBe(true)
+  })
+})
+
+describe('admin users temporary credit api', () => {
+  beforeEach(() => {
+    get.mockReset()
+    post.mockReset()
+  })
+
+  it('keeps the grant amount as a strict decimal string and sends the idempotency key', async () => {
+    const request: GrantTemporaryCreditRequest = {
+      amount: '0.00000001',
+      notes: 'manual adjustment',
+    }
+    const response: GrantTemporaryCreditResult = {
+      temporary_credit_grant_id: 18,
+      amount: '0.00000001',
+      remaining_amount: '0.00000001',
+      expires_at: '2026-07-17T16:00:00Z',
+      notes: 'manual adjustment',
+    }
+    post.mockResolvedValue({ data: response })
+
+    const result = await grantTemporaryCredit(9, request, 'admin-grant-9-20260716')
+
+    expect(post).toHaveBeenCalledWith(
+      '/admin/users/9/temporary-credits',
+      request,
+      { headers: { 'Idempotency-Key': 'admin-grant-9-20260716' } },
+    )
+    expect(result).toEqual(response)
+    expect(typeof post.mock.calls[0]?.[1]?.amount).toBe('string')
+  })
+
+  it('preserves nullable audit fields, fixed amount strings, and pagination', async () => {
+    const item: TemporaryCreditAuditItem = {
+      id: 18,
+      user_id: 9,
+      source: 'checkin',
+      checkin_id: 5,
+      amount: '1.25000000',
+      remaining_amount: '0.25000000',
+      expires_at: '2026-07-17T16:00:00Z',
+      notes: '',
+      granted_by: null,
+      created_at: '2026-07-16T03:00:00Z',
+      updated_at: '2026-07-16T04:00:00Z',
+    }
+    const response = {
+      items: [item],
+      total: 1,
+      page: 2,
+      page_size: 20,
+      pages: 3,
+    }
+    get.mockResolvedValue({ data: response })
+
+    const result = await getTemporaryCredits(9, 2, 20)
+
+    expect(get).toHaveBeenCalledWith('/admin/users/9/temporary-credits', {
+      params: { page: 2, page_size: 20 },
+    })
+    expect(result).toEqual(response)
+    expect(result.items[0]?.checkin_id).toBe(5)
+    expect(result.items[0]?.granted_by).toBeNull()
+    expect(result.items[0]?.amount).toBe('1.25000000')
   })
 })

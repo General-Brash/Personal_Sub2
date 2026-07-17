@@ -63,6 +63,14 @@ func (s *openAIRecordUsageBillingRepoStub) Apply(ctx context.Context, cmd *Usage
 	return &UsageBillingApplyResult{Applied: true}, nil
 }
 
+func requireUnifiedUsageLog(t *testing.T, billingRepo *openAIRecordUsageBillingRepoStub, usageRepo *openAIRecordUsageLogRepoStub) *UsageLog {
+	t.Helper()
+	require.NotNil(t, billingRepo.lastCmd)
+	require.NotNil(t, billingRepo.lastCmd.UsageLog)
+	require.Zero(t, usageRepo.calls)
+	return billingRepo.lastCmd.UsageLog
+}
+
 func TestOpenAIGatewayServiceRecordUsage_RejectsNilInput(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	require.Error(t, svc.RecordUsage(context.Background(), nil))
@@ -297,24 +305,23 @@ func TestOpenAIGatewayServiceRecordUsage_ZeroUsageStillWritesUsageLog(t *testing
 
 	require.NoError(t, err)
 	require.Equal(t, 1, billingRepo.calls)
-	require.Equal(t, 1, usageRepo.calls)
 	require.Equal(t, 0, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
 	require.Equal(t, 0, quotaSvc.quotaCalls)
 	require.Equal(t, 0, quotaSvc.rateLimitCalls)
 
-	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, "resp_zero_usage", usageRepo.lastLog.RequestID)
-	require.Zero(t, usageRepo.lastLog.InputTokens)
-	require.Zero(t, usageRepo.lastLog.OutputTokens)
-	require.Zero(t, usageRepo.lastLog.CacheCreationTokens)
-	require.Zero(t, usageRepo.lastLog.CacheReadTokens)
-	require.Zero(t, usageRepo.lastLog.ImageOutputTokens)
-	require.Zero(t, usageRepo.lastLog.ImageCount)
-	require.Zero(t, usageRepo.lastLog.InputCost)
-	require.Zero(t, usageRepo.lastLog.OutputCost)
-	require.Zero(t, usageRepo.lastLog.TotalCost)
-	require.Zero(t, usageRepo.lastLog.ActualCost)
+	usageLog := requireUnifiedUsageLog(t, billingRepo, usageRepo)
+	require.Equal(t, "resp_zero_usage", usageLog.RequestID)
+	require.Zero(t, usageLog.InputTokens)
+	require.Zero(t, usageLog.OutputTokens)
+	require.Zero(t, usageLog.CacheCreationTokens)
+	require.Zero(t, usageLog.CacheReadTokens)
+	require.Zero(t, usageLog.ImageOutputTokens)
+	require.Zero(t, usageLog.ImageCount)
+	require.Zero(t, usageLog.InputCost)
+	require.Zero(t, usageLog.OutputCost)
+	require.Zero(t, usageLog.TotalCost)
+	require.Zero(t, usageLog.ActualCost)
 
 	require.NotNil(t, billingRepo.lastCmd)
 	require.Zero(t, billingRepo.lastCmd.BalanceCost)
@@ -350,22 +357,21 @@ func TestOpenAIGatewayServiceRecordUsage_MissingPricingRecordsZeroCostUsageLog(t
 
 	require.NoError(t, err)
 	require.Equal(t, 1, billingRepo.calls)
-	require.Equal(t, 1, usageRepo.calls)
 	require.Equal(t, 0, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
 	require.Equal(t, 0, quotaSvc.quotaCalls)
 	require.Equal(t, 0, quotaSvc.rateLimitCalls)
 
-	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, "resp_missing_pricing", usageRepo.lastLog.RequestID)
-	require.Equal(t, "pricing-missing-test-model", usageRepo.lastLog.Model)
-	require.Equal(t, "pricing-missing-test-model", usageRepo.lastLog.RequestedModel)
-	require.Equal(t, 1200, usageRepo.lastLog.InputTokens)
-	require.Equal(t, 300, usageRepo.lastLog.OutputTokens)
-	require.Zero(t, usageRepo.lastLog.TotalCost)
-	require.Zero(t, usageRepo.lastLog.ActualCost)
-	require.NotNil(t, usageRepo.lastLog.BillingMode)
-	require.Equal(t, string(BillingModeToken), *usageRepo.lastLog.BillingMode)
+	usageLog := requireUnifiedUsageLog(t, billingRepo, usageRepo)
+	require.Equal(t, "resp_missing_pricing", usageLog.RequestID)
+	require.Equal(t, "pricing-missing-test-model", usageLog.Model)
+	require.Equal(t, "pricing-missing-test-model", usageLog.RequestedModel)
+	require.Equal(t, 1200, usageLog.InputTokens)
+	require.Equal(t, 300, usageLog.OutputTokens)
+	require.Zero(t, usageLog.TotalCost)
+	require.Zero(t, usageLog.ActualCost)
+	require.NotNil(t, usageLog.BillingMode)
+	require.Equal(t, string(BillingModeToken), *usageLog.BillingMode)
 
 	require.NotNil(t, billingRepo.lastCmd)
 	require.Zero(t, billingRepo.lastCmd.BalanceCost)
@@ -452,7 +458,7 @@ func TestOpenAIGatewayServiceRecordUsage_PeakRateAffectsTokenModeImageOutputToke
 				PeakRateEnabled:    true,
 				PeakStart:          "00:00",
 				PeakEnd:            "23:59",
-				PeakRateMultiplier: 3.0,
+				PeakRateMultiplier: 3,
 			},
 		},
 		User:    &User{ID: 2004},
@@ -594,8 +600,8 @@ func TestOpenAIGatewayServiceRecordUsage_FallsBackToGroupDefaultRateWhenResolver
 	require.Equal(t, groupRate, usageRepo.lastLog.RateMultiplier)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_DuplicateUsageLogSkipsBilling(t *testing.T) {
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false}
+func TestOpenAIGatewayServiceRecordUsage_DuplicateUnifiedBillingSkipsEffects(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: false}}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
@@ -618,13 +624,13 @@ func TestOpenAIGatewayServiceRecordUsage_DuplicateUsageLogSkipsBilling(t *testin
 
 	require.NoError(t, err)
 	require.Equal(t, 1, billingRepo.calls)
-	require.Equal(t, 1, usageRepo.calls)
+	requireUnifiedUsageLog(t, billingRepo, usageRepo)
 	require.Equal(t, 0, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_DuplicateBillingKeySkipsBillingWithRepo(t *testing.T) {
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false}
+	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: false}}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
@@ -652,7 +658,7 @@ func TestOpenAIGatewayServiceRecordUsage_DuplicateBillingKeySkipsBillingWithRepo
 
 	require.NoError(t, err)
 	require.Equal(t, 1, billingRepo.calls)
-	require.Equal(t, 1, usageRepo.calls)
+	requireUnifiedUsageLog(t, billingRepo, usageRepo)
 	require.Equal(t, 0, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
 	require.Equal(t, 0, quotaSvc.quotaCalls)
@@ -778,8 +784,7 @@ func TestOpenAIGatewayServiceRecordUsage_BillingRepoUsesDetachedContext(t *testi
 	require.NoError(t, err)
 	require.Equal(t, 1, billingRepo.calls)
 	require.NoError(t, billingRepo.lastCtxErr)
-	require.Equal(t, 1, usageRepo.calls)
-	require.NoError(t, usageRepo.lastCtxErr)
+	requireUnifiedUsageLog(t, billingRepo, usageRepo)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_BillingFingerprintIncludesRequestPayloadHash(t *testing.T) {
@@ -806,9 +811,12 @@ func TestOpenAIGatewayServiceRecordUsage_BillingFingerprintIncludesRequestPayloa
 	require.NoError(t, err)
 	require.NotNil(t, billingRepo.lastCmd)
 	require.Equal(t, payloadHash, billingRepo.lastCmd.RequestPayloadHash)
+	require.NotNil(t, billingRepo.lastCmd.UsageLog)
+	require.Equal(t, "openai_payload_hash", billingRepo.lastCmd.UsageLog.RequestID)
+	require.Zero(t, usageRepo.calls)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_UsesFallbackRequestIDForBillingAndUsageLog(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_FallsBackToLocalRequestIDForBillingAndUsageLog(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
 	userRepo := &openAIRecordUsageUserRepoStub{}
@@ -833,12 +841,41 @@ func TestOpenAIGatewayServiceRecordUsage_UsesFallbackRequestIDForBillingAndUsage
 
 	require.NoError(t, err)
 	require.NotNil(t, billingRepo.lastCmd)
-	require.Equal(t, "local:req-local-fallback", billingRepo.lastCmd.RequestID)
-	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, "local:req-local-fallback", usageRepo.lastLog.RequestID)
+	require.Equal(t, "req-local-fallback", billingRepo.lastCmd.RequestID)
+	usageLog := requireUnifiedUsageLog(t, billingRepo, usageRepo)
+	require.Equal(t, "req-local-fallback", usageLog.RequestID)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_PrefersClientRequestIDOverUpstreamRequestID(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_UsesUnprefixedClientRequestIDForBillingAndUsageLog(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+
+	const clientRequestID = "openai-client-only-123"
+	ctx := context.WithValue(context.Background(), ctxkey.ClientRequestID, clientRequestID)
+	err := svc.RecordUsage(ctx, &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			Usage: OpenAIUsage{
+				InputTokens:  8,
+				OutputTokens: 4,
+			},
+			Model:    "gpt-5.1",
+			Duration: time.Second,
+		},
+		APIKey:  &APIKey{ID: 10048},
+		User:    &User{ID: 20048},
+		Account: &Account{ID: 30048},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, billingRepo.lastCmd)
+	require.Equal(t, clientRequestID, billingRepo.lastCmd.RequestID)
+	require.Equal(t, "client:"+clientRequestID, billingRepo.lastCmd.RequestPayloadHash)
+	usageLog := requireUnifiedUsageLog(t, billingRepo, usageRepo)
+	require.Equal(t, clientRequestID, usageLog.RequestID)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_PrefersUpstreamRequestIDOverClientRequestID(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
 	userRepo := &openAIRecordUsageUserRepoStub{}
@@ -863,9 +900,9 @@ func TestOpenAIGatewayServiceRecordUsage_PrefersClientRequestIDOverUpstreamReque
 
 	require.NoError(t, err)
 	require.NotNil(t, billingRepo.lastCmd)
-	require.Equal(t, "client:openai-client-stable-123", billingRepo.lastCmd.RequestID)
-	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, "client:openai-client-stable-123", usageRepo.lastLog.RequestID)
+	require.Equal(t, "upstream-openai-volatile-456", billingRepo.lastCmd.RequestID)
+	usageLog := requireUnifiedUsageLog(t, billingRepo, usageRepo)
+	require.Equal(t, "upstream-openai-volatile-456", usageLog.RequestID)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_WSModePrefersUpstreamRequestIDOverClientRequestID(t *testing.T) {
@@ -895,11 +932,11 @@ func TestOpenAIGatewayServiceRecordUsage_WSModePrefersUpstreamRequestIDOverClien
 	require.NoError(t, err)
 	require.NotNil(t, billingRepo.lastCmd)
 	require.Equal(t, "resp_openai_ws_turn_456", billingRepo.lastCmd.RequestID)
-	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, "resp_openai_ws_turn_456", usageRepo.lastLog.RequestID)
+	usageLog := requireUnifiedUsageLog(t, billingRepo, usageRepo)
+	require.Equal(t, "resp_openai_ws_turn_456", usageLog.RequestID)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_GeneratesRequestIDWhenAllSourcesMissing(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_GeneratesUnprefixedRequestIDWhenAllSourcesMissing(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
 	userRepo := &openAIRecordUsageUserRepoStub{}
@@ -923,9 +960,10 @@ func TestOpenAIGatewayServiceRecordUsage_GeneratesRequestIDWhenAllSourcesMissing
 
 	require.NoError(t, err)
 	require.NotNil(t, billingRepo.lastCmd)
-	require.True(t, strings.HasPrefix(billingRepo.lastCmd.RequestID, "generated:"))
-	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, billingRepo.lastCmd.RequestID, usageRepo.lastLog.RequestID)
+	require.NotEmpty(t, billingRepo.lastCmd.RequestID)
+	require.False(t, strings.HasPrefix(billingRepo.lastCmd.RequestID, "generated:"))
+	usageLog := requireUnifiedUsageLog(t, billingRepo, usageRepo)
+	require.Equal(t, billingRepo.lastCmd.RequestID, usageLog.RequestID)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_BillingErrorSkipsUsageLogWrite(t *testing.T) {
@@ -1627,7 +1665,7 @@ func TestOpenAIGatewayServiceRecordUsage_SubscriptionBillingSetsSubscriptionFiel
 			Model:     "gpt-5.1",
 			Duration:  time.Second,
 		},
-		APIKey:       &APIKey{ID: 100, GroupID: i64p(88), Group: &Group{ID: 88, SubscriptionType: SubscriptionTypeSubscription, RateMultiplier: 1.0}},
+		APIKey:       &APIKey{ID: 100, GroupID: i64p(88), Group: &Group{ID: 88, SubscriptionType: SubscriptionTypeSubscription, RateMultiplier: 1}},
 		User:         &User{ID: 200},
 		Account:      &Account{ID: 300},
 		Subscription: subscription,
@@ -1714,7 +1752,7 @@ func TestOpenAIGatewayServiceRecordUsage_EmptyImageSizeDefaultsBeforeBillingAndP
 			GroupID: i64p(groupID),
 			Group: &Group{
 				ID:             groupID,
-				RateMultiplier: 1.0,
+				RateMultiplier: 1,
 				ImagePrice2K:   &imagePrice2K,
 			},
 		},
@@ -1758,7 +1796,7 @@ func TestOpenAIGatewayServiceRecordUsage_OutputImageSizeWinsBeforeBillingAndPers
 			GroupID: i64p(groupID),
 			Group: &Group{
 				ID:             groupID,
-				RateMultiplier: 1.0,
+				RateMultiplier: 1,
 				ImagePrice1K:   &imagePrice1K,
 				ImagePrice4K:   &imagePrice4K,
 			},
@@ -1809,7 +1847,7 @@ func TestOpenAIGatewayServiceRecordUsage_ImageUsesPerImageBillingEvenWithUsageTo
 			GroupID: i64p(groupID),
 			Group: &Group{
 				ID:             groupID,
-				RateMultiplier: 1.0,
+				RateMultiplier: 1,
 				ImagePrice1K:   &imagePrice,
 			},
 		},
@@ -2430,16 +2468,15 @@ func TestGatewayServiceCalculateRecordUsageCost_ChannelImageBillingUsesImageCoun
 }
 
 func TestGatewayServiceCalculateRecordUsageCost_ChannelImageBillingUsesSizeTier(t *testing.T) {
+	testPtrFloat64 := func(v float64) *float64 { return &v }
 	groupID := int64(127)
-	defaultPrice := 0.10
-	price4K := 0.40
 	cache := newEmptyChannelCache()
 	cache.pricingByGroupModel[channelModelKey{groupID: groupID, model: "gemini-image"}] = &ChannelModelPricing{
 		BillingMode:     BillingModeImage,
-		PerRequestPrice: &defaultPrice,
+		PerRequestPrice: testPtrFloat64(0.10),
 		Intervals: []PricingInterval{{
 			TierLabel:       "4K",
-			PerRequestPrice: &price4K,
+			PerRequestPrice: testPtrFloat64(0.40),
 		}},
 	}
 	cache.channelByGroupID[groupID] = &Channel{ID: groupID, Status: StatusActive}
@@ -2525,16 +2562,15 @@ func TestRecordUsageMarksCyberRequestType(t *testing.T) {
 }
 
 func TestGatewayServiceCalculateRecordUsageCost_ChannelImageBillingNormalizesMissingSizeTier(t *testing.T) {
+	testPtrFloat64 := func(v float64) *float64 { return &v }
 	groupID := int64(128)
-	defaultPrice := 0.10
-	price2K := 0.22
 	cache := newEmptyChannelCache()
 	cache.pricingByGroupModel[channelModelKey{groupID: groupID, model: "gemini-image"}] = &ChannelModelPricing{
 		BillingMode:     BillingModeImage,
-		PerRequestPrice: &defaultPrice,
+		PerRequestPrice: testPtrFloat64(0.10),
 		Intervals: []PricingInterval{{
 			TierLabel:       "2K",
-			PerRequestPrice: &price2K,
+			PerRequestPrice: testPtrFloat64(0.22),
 		}},
 	}
 	cache.channelByGroupID[groupID] = &Channel{ID: groupID, Status: StatusActive}

@@ -56,15 +56,20 @@ export function formatNumber(num: number | null | undefined): string {
  * 格式化货币金额
  * @param amount 金额
  * @param currency 货币代码，默认 USD
+ * @param fractionDigitsOverride 指定小数位数，默认按金额大小决定
  * @returns 格式化后的字符串，如 "$1.25"
  */
-export function formatCurrency(amount: number | null | undefined, currency: string = 'USD'): string {
+export function formatCurrency(
+  amount: number | null | undefined,
+  currency: string = 'USD',
+  fractionDigitsOverride?: number
+): string {
   if (amount === null || amount === undefined) return '$0.00'
 
   const locale = getLocale()
 
   // For very small amounts, show more decimals
-  const fractionDigits = amount > 0 && amount < 0.01 ? 6 : 2
+  const fractionDigits = fractionDigitsOverride ?? (amount > 0 && amount < 0.01 ? 6 : 2)
 
   return new Intl.NumberFormat(locale, {
     style: 'currency',
@@ -72,6 +77,84 @@ export function formatCurrency(amount: number | null | undefined, currency: stri
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits
   }).format(amount)
+}
+
+/**
+ * 将十进制金额精确四舍五入为固定两位小数。
+ * 字符串金额全程按十进制位处理，避免先转成 Number 丢失精度。
+ */
+export function formatMoneyDisplay(
+  amount: string | number | null | undefined
+): string {
+  const normalized = normalizeDecimalAmount(amount)
+  if (!normalized) return '0.00'
+
+  const negative = normalized.startsWith('-')
+  const unsigned = negative || normalized.startsWith('+')
+    ? normalized.slice(1)
+    : normalized
+  const [rawInteger = '0', rawFraction = ''] = unsigned.split('.')
+  const integer = rawInteger.replace(/^0+(?=\d)/, '') || '0'
+  const fraction = rawFraction.padEnd(3, '0')
+  const retainedFraction = fraction.slice(0, 2)
+  const shouldRoundUp = fraction.charCodeAt(2) >= 53
+
+  let scaled = `${integer}${retainedFraction}`.replace(/^0+(?=\d)/, '') || '0'
+  if (shouldRoundUp) scaled = incrementDecimalDigits(scaled)
+
+  const padded = scaled.padStart(3, '0')
+  const formatted = `${padded.slice(0, -2)}.${padded.slice(-2)}`
+  return negative && !/^0\.00$/.test(formatted) ? `-${formatted}` : formatted
+}
+
+// Backward-compatible alias for existing credit-ledger displays.
+export function formatDecimalAmount(
+  amount: string | number | null | undefined
+): string {
+  return formatMoneyDisplay(amount)
+}
+
+function normalizeDecimalAmount(
+  amount: string | number | null | undefined
+): string | null {
+  if (amount === null || amount === undefined) return null
+  if (typeof amount === 'number' && !Number.isFinite(amount)) return null
+
+  const raw = String(amount).trim()
+  const match = raw.match(
+    /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/
+  )
+  if (!match) return null
+
+  const sign = match[1]
+  const integer = match[2] ?? '0'
+  const fraction = match[3] ?? match[4] ?? ''
+  if (match[5] === undefined) return `${sign}${integer}.${fraction}`
+
+  const exponent = Number.parseInt(match[5], 10)
+  if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > 1000) return null
+
+  const digits = `${integer}${fraction}`
+  const decimalIndex = integer.length + exponent
+  if (decimalIndex <= 0) {
+    return `${sign}0.${'0'.repeat(-decimalIndex)}${digits}`
+  }
+  if (decimalIndex >= digits.length) {
+    return `${sign}${digits}${'0'.repeat(decimalIndex - digits.length)}.`
+  }
+  return `${sign}${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`
+}
+
+function incrementDecimalDigits(value: string): string {
+  const digits = value.split('')
+  for (let index = digits.length - 1; index >= 0; index -= 1) {
+    if (digits[index] !== '9') {
+      digits[index] = String(Number(digits[index]) + 1)
+      return digits.join('')
+    }
+    digits[index] = '0'
+  }
+  return `1${digits.join('')}`
 }
 
 /**

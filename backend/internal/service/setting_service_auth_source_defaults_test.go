@@ -12,8 +12,9 @@ import (
 )
 
 type authSourceDefaultsRepoStub struct {
-	values  map[string]string
-	updates map[string]string
+	values           map[string]string
+	updates          map[string]string
+	setMultipleCalls int
 }
 
 func (s *authSourceDefaultsRepoStub) Get(ctx context.Context, key string) (*Setting, error) {
@@ -39,6 +40,7 @@ func (s *authSourceDefaultsRepoStub) GetMultiple(ctx context.Context, keys []str
 }
 
 func (s *authSourceDefaultsRepoStub) SetMultiple(ctx context.Context, settings map[string]string) error {
+	s.setMultipleCalls++
 	s.updates = make(map[string]string, len(settings))
 	for key, value := range settings {
 		s.updates[key] = value

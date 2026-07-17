@@ -126,7 +126,6 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 	defer cancel()
 
 	cost := p.Cost
-
 	if p.IsSubscriptionBill {
 		// Subscription usage tracked by ActualCost so group rate multiplier
 		// consumes the quota at the expected speed.
@@ -193,18 +192,18 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 }
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
-	if ctx != nil {
-		if clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
-			return "client:" + strings.TrimSpace(clientRequestID)
-		}
-		if requestID, _ := ctx.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
-			return "local:" + strings.TrimSpace(requestID)
-		}
-	}
 	if requestID := strings.TrimSpace(upstreamRequestID); requestID != "" {
 		return requestID
 	}
-	return "generated:" + generateRequestID()
+	if ctx != nil {
+		if clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
+			return strings.TrimSpace(clientRequestID)
+		}
+		if requestID, _ := ctx.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
+			return strings.TrimSpace(requestID)
+		}
+	}
+	return generateRequestID()
 }
 
 func resolveUsageBillingPayloadFingerprint(ctx context.Context, requestPayloadHash string) string {
@@ -234,6 +233,7 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		AccountID:          p.Account.ID,
 		AccountType:        p.Account.Type,
 		RequestPayloadHash: strings.TrimSpace(p.RequestPayloadHash),
+		UsageLog:           usageLog,
 	}
 	if usageLog != nil {
 		cmd.Model = usageLog.Model
@@ -260,22 +260,21 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	// on "> 0" still correctly skip free subscriptions (RateMultiplier == 0).
 	if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
 		cmd.SubscriptionID = &p.Subscription.ID
-		cmd.SubscriptionCost = p.Cost.ActualCost
+		cmd.SubscriptionCost = usageBillingLedgerAmountFromFloat64(p.Cost.ActualCost)
 	} else if p.Cost.ActualCost > 0 {
-		cmd.BalanceCost = p.Cost.ActualCost
+		cmd.BalanceCost = usageBillingLedgerAmountFromFloat64(p.Cost.ActualCost)
 	}
 
 	if p.shouldDeductAPIKeyQuota() {
-		cmd.APIKeyQuotaCost = p.Cost.ActualCost
+		cmd.APIKeyQuotaCost = usageBillingLedgerAmountFromFloat64(p.Cost.ActualCost)
 	}
 	if p.shouldUpdateRateLimits() {
-		cmd.APIKeyRateLimitCost = p.Cost.ActualCost
+		cmd.APIKeyRateLimitCost = usageBillingLedgerAmountFromFloat64(p.Cost.ActualCost)
 	}
 	if p.shouldUpdateAccountQuota() {
-		cmd.AccountQuotaCost = p.Cost.TotalCost * p.AccountRateMultiplier
+		cmd.AccountQuotaCost = usageBillingLedgerAmountFromFloat64(p.Cost.TotalCost * p.AccountRateMultiplier)
 	}
 
-	cmd.Normalize()
 	return cmd
 }
 
@@ -287,7 +286,7 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
 		postUsageBilling(ctx, p, deps)
-		return true, nil
+		return false, nil
 	}
 
 	billingCtx, cancel := detachedBillingContext(ctx)
@@ -300,7 +299,7 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 
 	if result == nil || !result.Applied {
 		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
-		return false, nil
+		return true, nil
 	}
 
 	if result.APIKeyQuotaExhausted {
@@ -316,6 +315,11 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {
 	if p == nil || p.Cost == nil || deps == nil {
 		return
+	}
+	if result != nil && result.Applied && p.Cost.ActualCost > 0 && p.User != nil && deps.billingCacheService != nil {
+		if err := deps.billingCacheService.InvalidateAvailableCredit(ctx, p.User.ID); err != nil {
+			slog.Warn("invalidate available credit after committed usage billing failed", "user_id", p.User.ID, "error", err)
+		}
 	}
 
 	if p.IsSubscriptionBill {
@@ -376,6 +380,19 @@ func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingPara
 	if p == nil || p.Cost == nil || p.User == nil || deps == nil || deps.billingCacheService == nil {
 		return
 	}
+	permanentBalanceDeduction, known := permanentBalanceCacheDeduction(result)
+	if !known {
+		if err := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); err != nil {
+			slog.Error("invalidate balance cache without permanent balance deduction result failed",
+				"user_id", p.User.ID,
+				"error", err,
+			)
+		}
+		return
+	}
+	if permanentBalanceDeduction <= 0 {
+		return
+	}
 	if result != nil && result.NewBalance != nil && deps.billingCacheService.balanceBelowEligibilityThreshold(*result.NewBalance) {
 		if err := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); err != nil {
 			slog.Warn("invalidate balance cache after exhausted deduction failed",
@@ -387,7 +404,7 @@ func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingPara
 		}
 		return
 	}
-	deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
+	deps.billingCacheService.QueueDeductBalance(p.User.ID, permanentBalanceDeduction)
 }
 
 // notifyBalanceLow sends balance low notification after deduction.
@@ -399,36 +416,29 @@ func notifyBalanceLow(p *postUsageBillingParams, deps *billingDeps, result *Usag
 			slog.Error("panic in notifyBalanceLow", "recover", r)
 		}
 	}()
-	if p.IsSubscriptionBill || p.Cost.ActualCost <= 0 || p.User == nil || deps.balanceNotifyService == nil {
+	if p == nil || p.Cost == nil || p.IsSubscriptionBill || p.Cost.ActualCost <= 0 || p.User == nil || deps == nil || deps.balanceNotifyService == nil {
 		slog.Debug("notifyBalanceLow: skipped",
-			"is_subscription", p.IsSubscriptionBill,
-			"actual_cost", p.Cost.ActualCost,
-			"user_nil", p.User == nil,
-			"service_nil", deps.balanceNotifyService == nil,
+			"params_nil", p == nil || p.Cost == nil,
 		)
 		return
 	}
 
-	oldBalance := resolveOldBalance(p, result)
+	oldBalance, permanentBalanceDeduction, shouldNotify := permanentBalanceNotificationInputs(result, p.User.Balance)
+	if !shouldNotify {
+		slog.Debug("notifyBalanceLow: skipped without permanent balance deduction",
+			"user_id", p.User.ID,
+		)
+		return
+	}
 	slog.Debug("notifyBalanceLow: calling CheckBalanceAfterDeduction",
 		"user_id", p.User.ID,
 		"old_balance", oldBalance,
-		"cost", p.Cost.ActualCost,
+		"cost", permanentBalanceDeduction,
 		"notify_enabled", p.User.BalanceNotifyEnabled,
 		"threshold", p.User.BalanceNotifyThreshold,
 		"result_has_new_balance", result != nil && result.NewBalance != nil,
 	)
-	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, p.Cost.ActualCost)
-}
-
-// resolveOldBalance returns the pre-deduction balance.
-// Prefers the DB transaction result (newBalance + cost) over snapshot.
-func resolveOldBalance(p *postUsageBillingParams, result *UsageBillingApplyResult) float64 {
-	if result != nil && result.NewBalance != nil {
-		return *result.NewBalance + p.Cost.ActualCost
-	}
-	// Legacy fallback: snapshot balance from request context
-	return p.User.Balance
+	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, permanentBalanceDeduction)
 }
 
 // notifyAccountQuota sends account quota threshold notification after increment.
@@ -735,7 +745,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		quotaPlatform = PlatformFromAPIKey(apiKey)
 	}
 	requestID := usageLog.RequestID
-	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
+	usedUnifiedBilling, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
 		Cost:                  cost,
 		User:                  user,
 		APIKey:                apiKey,
@@ -751,7 +761,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if billingErr != nil {
 		return billingErr
 	}
-	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+	if !usedUnifiedBilling {
+		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+	}
 
 	return nil
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditconsumption"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -634,6 +635,21 @@ func (_c *UsageLogCreate) SetSubscription(v *UserSubscription) *UsageLogCreate {
 	return _c.SetSubscriptionID(v.ID)
 }
 
+// AddTemporaryCreditConsumptionIDs adds the "temporary_credit_consumptions" edge to the TemporaryCreditConsumption entity by IDs.
+func (_c *UsageLogCreate) AddTemporaryCreditConsumptionIDs(ids ...int64) *UsageLogCreate {
+	_c.mutation.AddTemporaryCreditConsumptionIDs(ids...)
+	return _c
+}
+
+// AddTemporaryCreditConsumptions adds the "temporary_credit_consumptions" edges to the TemporaryCreditConsumption entity.
+func (_c *UsageLogCreate) AddTemporaryCreditConsumptions(v ...*TemporaryCreditConsumption) *UsageLogCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddTemporaryCreditConsumptionIDs(ids...)
+}
+
 // Mutation returns the UsageLogMutation object of the builder.
 func (_c *UsageLogCreate) Mutation() *UsageLogMutation {
 	return _c.mutation
@@ -1177,6 +1193,22 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.SubscriptionID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.TemporaryCreditConsumptionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.TemporaryCreditConsumptionsTable,
+			Columns: []string{usagelog.TemporaryCreditConsumptionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(temporarycreditconsumption.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

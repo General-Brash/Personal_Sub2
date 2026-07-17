@@ -793,6 +793,48 @@ var (
 			},
 		},
 	}
+	// DailyCheckinsColumns holds the columns for the "daily_checkins" table.
+	DailyCheckinsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "checkin_date", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "streak_day", Type: field.TypeInt},
+		{Name: "reward_day", Type: field.TypeInt},
+		{Name: "reward_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// DailyCheckinsTable holds the schema information for the "daily_checkins" table.
+	DailyCheckinsTable = &schema.Table{
+		Name:       "daily_checkins",
+		Columns:    DailyCheckinsColumns,
+		PrimaryKey: []*schema.Column{DailyCheckinsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "daily_checkins_users_daily_checkins",
+				Columns:    []*schema.Column{DailyCheckinsColumns[7]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "dailycheckin_user_id_checkin_date_desc",
+				Unique:  false,
+				Columns: []*schema.Column{DailyCheckinsColumns[7], DailyCheckinsColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						DailyCheckinsColumns[3].Name: true,
+					},
+				},
+			},
+			{
+				Name:    "dailycheckin_user_id_checkin_date",
+				Unique:  true,
+				Columns: []*schema.Column{DailyCheckinsColumns[7], DailyCheckinsColumns[3]},
+			},
+		},
+	}
 	// ErrorPassthroughRulesColumns holds the columns for the "error_passthrough_rules" table.
 	ErrorPassthroughRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -934,7 +976,8 @@ var (
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "scope", Type: field.TypeString, Size: 128},
+		{Name: "operation_scope", Type: field.TypeString, Size: 128},
+		{Name: "actor_scope", Type: field.TypeString, Size: 128},
 		{Name: "idempotency_key_hash", Type: field.TypeString, Size: 64},
 		{Name: "request_fingerprint", Type: field.TypeString, Size: 64},
 		{Name: "status", Type: field.TypeString, Size: 32},
@@ -951,19 +994,19 @@ var (
 		PrimaryKey: []*schema.Column{IdempotencyRecordsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "idempotencyrecord_scope_idempotency_key_hash",
+				Name:    "idempotencyrecord_operation_scope_actor_scope_idempotency_key_hash",
 				Unique:  true,
-				Columns: []*schema.Column{IdempotencyRecordsColumns[3], IdempotencyRecordsColumns[4]},
+				Columns: []*schema.Column{IdempotencyRecordsColumns[3], IdempotencyRecordsColumns[4], IdempotencyRecordsColumns[5]},
 			},
 			{
 				Name:    "idempotencyrecord_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{IdempotencyRecordsColumns[11]},
+				Columns: []*schema.Column{IdempotencyRecordsColumns[12]},
 			},
 			{
 				Name:    "idempotencyrecord_status_locked_until",
 				Unique:  false,
-				Columns: []*schema.Column{IdempotencyRecordsColumns[6], IdempotencyRecordsColumns[10]},
+				Columns: []*schema.Column{IdempotencyRecordsColumns[7], IdempotencyRecordsColumns[11]},
 			},
 		},
 	}
@@ -1508,6 +1551,116 @@ var (
 		Columns:    TLSFingerprintProfilesColumns,
 		PrimaryKey: []*schema.Column{TLSFingerprintProfilesColumns[0]},
 	}
+	// TemporaryCreditConsumptionsColumns holds the columns for the "temporary_credit_consumptions" table.
+	TemporaryCreditConsumptionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "request_id", Type: field.TypeString, Nullable: true, Size: 255},
+		{Name: "amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "grant_id", Type: field.TypeInt64},
+		{Name: "usage_log_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// TemporaryCreditConsumptionsTable holds the schema information for the "temporary_credit_consumptions" table.
+	TemporaryCreditConsumptionsTable = &schema.Table{
+		Name:       "temporary_credit_consumptions",
+		Columns:    TemporaryCreditConsumptionsColumns,
+		PrimaryKey: []*schema.Column{TemporaryCreditConsumptionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "temporary_credit_consumptions_temporary_credit_grants_consumptions",
+				Columns:    []*schema.Column{TemporaryCreditConsumptionsColumns[4]},
+				RefColumns: []*schema.Column{TemporaryCreditGrantsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "temporary_credit_consumptions_usage_logs_temporary_credit_consumptions",
+				Columns:    []*schema.Column{TemporaryCreditConsumptionsColumns[5]},
+				RefColumns: []*schema.Column{UsageLogsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "temporarycreditconsumption_grant_id_usage_log_id",
+				Unique:  true,
+				Columns: []*schema.Column{TemporaryCreditConsumptionsColumns[4], TemporaryCreditConsumptionsColumns[5]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "usage_log_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "temporarycreditconsumption_grant_id_request_id",
+				Unique:  true,
+				Columns: []*schema.Column{TemporaryCreditConsumptionsColumns[4], TemporaryCreditConsumptionsColumns[1]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "request_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "temporarycreditconsumption_grant_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{TemporaryCreditConsumptionsColumns[4], TemporaryCreditConsumptionsColumns[3]},
+			},
+		},
+	}
+	// TemporaryCreditGrantsColumns holds the columns for the "temporary_credit_grants" table.
+	TemporaryCreditGrantsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "source", Type: field.TypeEnum, Enums: []string{"checkin", "admin_grant"}},
+		{Name: "amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "remaining_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "notes", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "checkin_id", Type: field.TypeInt64, Unique: true, Nullable: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "granted_by", Type: field.TypeInt64, Nullable: true},
+	}
+	// TemporaryCreditGrantsTable holds the schema information for the "temporary_credit_grants" table.
+	TemporaryCreditGrantsTable = &schema.Table{
+		Name:       "temporary_credit_grants",
+		Columns:    TemporaryCreditGrantsColumns,
+		PrimaryKey: []*schema.Column{TemporaryCreditGrantsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "temporary_credit_grants_daily_checkins_temporary_credit_grant",
+				Columns:    []*schema.Column{TemporaryCreditGrantsColumns[8]},
+				RefColumns: []*schema.Column{DailyCheckinsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "temporary_credit_grants_users_temporary_credit_grants",
+				Columns:    []*schema.Column{TemporaryCreditGrantsColumns[9]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "temporary_credit_grants_users_granted_temporary_credit_grants",
+				Columns:    []*schema.Column{TemporaryCreditGrantsColumns[10]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "temporarycreditgrant_checkin_id",
+				Unique:  true,
+				Columns: []*schema.Column{TemporaryCreditGrantsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "checkin_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "temporarycreditgrant_user_id_expires_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{TemporaryCreditGrantsColumns[9], TemporaryCreditGrantsColumns[6], TemporaryCreditGrantsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "remaining_amount > 0",
+				},
+			},
+		},
+	}
 	// UsageCleanupTasksColumns holds the columns for the "usage_cleanup_tasks" table.
 	UsageCleanupTasksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2012,6 +2165,7 @@ var (
 		ChannelMonitorDailyRollupsTable,
 		ChannelMonitorHistoriesTable,
 		ChannelMonitorRequestTemplatesTable,
+		DailyCheckinsTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
 		IdempotencyRecordsTable,
@@ -2028,6 +2182,8 @@ var (
 		SettingsTable,
 		SubscriptionPlansTable,
 		TLSFingerprintProfilesTable,
+		TemporaryCreditConsumptionsTable,
+		TemporaryCreditGrantsTable,
 		UsageCleanupTasksTable,
 		UsageLogsTable,
 		UsersTable,
@@ -2095,6 +2251,10 @@ func init() {
 	ChannelMonitorRequestTemplatesTable.Annotation = &entsql.Annotation{
 		Table: "channel_monitor_request_templates",
 	}
+	DailyCheckinsTable.ForeignKeys[0].RefTable = UsersTable
+	DailyCheckinsTable.Annotation = &entsql.Annotation{
+		Table: "daily_checkins",
+	}
 	ErrorPassthroughRulesTable.Annotation = &entsql.Annotation{
 		Table: "error_passthrough_rules",
 	}
@@ -2151,6 +2311,17 @@ func init() {
 	}
 	TLSFingerprintProfilesTable.Annotation = &entsql.Annotation{
 		Table: "tls_fingerprint_profiles",
+	}
+	TemporaryCreditConsumptionsTable.ForeignKeys[0].RefTable = TemporaryCreditGrantsTable
+	TemporaryCreditConsumptionsTable.ForeignKeys[1].RefTable = UsageLogsTable
+	TemporaryCreditConsumptionsTable.Annotation = &entsql.Annotation{
+		Table: "temporary_credit_consumptions",
+	}
+	TemporaryCreditGrantsTable.ForeignKeys[0].RefTable = DailyCheckinsTable
+	TemporaryCreditGrantsTable.ForeignKeys[1].RefTable = UsersTable
+	TemporaryCreditGrantsTable.ForeignKeys[2].RefTable = UsersTable
+	TemporaryCreditGrantsTable.Annotation = &entsql.Annotation{
+		Table: "temporary_credit_grants",
 	}
 	UsageCleanupTasksTable.Annotation = &entsql.Annotation{
 		Table: "usage_cleanup_tasks",

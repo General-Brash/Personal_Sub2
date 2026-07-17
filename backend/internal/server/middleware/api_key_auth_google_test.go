@@ -215,7 +215,7 @@ type googleErrorResponse struct {
 }
 
 func newTestAPIKeyService(repo service.APIKeyRepository) *service.APIKeyService {
-	return service.NewAPIKeyService(
+	svc := service.NewAPIKeyService(
 		repo,
 		nil, // userRepo (unused in GetByKey)
 		nil, // groupRepo
@@ -224,6 +224,8 @@ func newTestAPIKeyService(repo service.APIKeyRepository) *service.APIKeyService 
 		nil, // cache
 		&config.Config{},
 	)
+	svc.SetAvailableCreditEligibilityChecker(&availableCreditEligibilityCheckerStub{})
+	return svc
 }
 
 func TestApiKeyAuthWithSubscriptionGoogle_MissingKey(t *testing.T) {
@@ -530,6 +532,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_InsufficientBalance(t *testing.T) {
 			}, nil
 		},
 	})
+	apiKeyService.SetAvailableCreditEligibilityChecker(&availableCreditEligibilityCheckerStub{err: service.ErrInsufficientBalance})
 	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{}))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
@@ -597,6 +600,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_RejectsExhaustedBalance(t *testing.T) 
 			}, nil
 		},
 	})
+	apiKeyService.SetAvailableCreditEligibilityChecker(&availableCreditEligibilityCheckerStub{err: service.ErrInsufficientBalance})
 	cfg := &config.Config{}
 	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })

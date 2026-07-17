@@ -55,6 +55,10 @@ describe('TokenUsageTrend', () => {
     )
     // Hit rate = 1500 / (500 + 1500 + 0) * 100 = 75%
     expect(hitRateDataset.data[0]).toBe(75)
+
+    const options = (wrapper.vm as any).$?.setupState.lineOptions
+    const footer = options.plugins.tooltip.callbacks.footer([{ dataIndex: 0 }])
+    expect(footer).toBe('Actual: $0.01 | Standard: $0.01')
   })
 
   it('returns 0 hit rate when all prompt tokens are zero', () => {

@@ -1,3 +1,5 @@
+import { formatMoneyDisplay } from '@/utils/format'
+
 export const TOKENS_PER_MILLION = 1_000_000
 
 interface TokenPriceFormatOptions {
@@ -43,7 +45,9 @@ export function formatTokenPricePerMillion(
     return options.emptyValue ?? '-'
   }
 
-  const fractionDigits = options.fractionDigits ?? 4
-  const formatted = pricePerMillion.toFixed(fractionDigits)
+  const fractionDigits = options.fractionDigits ?? 2
+  const formatted = fractionDigits === 2
+    ? formatMoneyDisplay(pricePerMillion)
+    : pricePerMillion.toFixed(fractionDigits)
   return options.withCurrencySymbol == false ? formatted : `$${formatted}`
 }

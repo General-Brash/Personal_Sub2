@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
@@ -78,6 +79,116 @@ func TestUsageBillingRepositoryApply_DeduplicatesBalanceBilling(t *testing.T) {
 	var dedupCount int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_billing_dedup WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&dedupCount))
 	require.Equal(t, 1, dedupCount)
+}
+
+func TestUsageBillingRepositoryApply_PersistsUsageLogAndTemporaryCreditAtomically(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-atomic-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-atomic-" + uuid.NewString(),
+		Name:   "billing-atomic",
+	})
+	account := mustCreateAccount(t, client, &service.Account{
+		Name: "usage-billing-atomic-account-" + uuid.NewString(),
+		Type: service.AccountTypeAPIKey,
+	})
+	adminID := user.ID
+	grant, err := service.NewTemporaryCreditService(NewTemporaryCreditRepository(integrationDB)).CreateGrant(ctx, service.CreateTemporaryCreditGrantInput{
+		UserID:    user.ID,
+		Source:    service.TemporaryCreditSourceAdminGrant,
+		Amount:    0.25,
+		GrantedBy: &adminID,
+	})
+	require.NoError(t, err)
+
+	requestID := uuid.NewString()
+	usageLog := &service.UsageLog{
+		UserID:    user.ID,
+		APIKeyID:  apiKey.ID,
+		AccountID: account.ID,
+		RequestID: requestID,
+		Model:     "gpt-5",
+	}
+	cmd := &service.UsageBillingCommand{
+		RequestID:   requestID,
+		APIKeyID:    apiKey.ID,
+		UserID:      user.ID,
+		AccountID:   account.ID,
+		AccountType: service.AccountTypeAPIKey,
+		BalanceCost: 1,
+		UsageLog:    usageLog,
+	}
+	result, err := repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Applied)
+	require.NotZero(t, usageLog.ID)
+	require.NotNil(t, result.PermanentBalanceDeduction)
+	require.InDelta(t, 0.75, *result.PermanentBalanceDeduction, 1e-12)
+
+	var persistedUsageLogID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT id FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID,
+	).Scan(&persistedUsageLogID))
+	require.Equal(t, usageLog.ID, persistedUsageLogID)
+
+	var consumptionUsageLogID sql.NullInt64
+	var consumptionRequestID sql.NullString
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT usage_log_id, request_id FROM temporary_credit_consumptions WHERE grant_id = $1", grant.ID,
+	).Scan(&consumptionUsageLogID, &consumptionRequestID))
+	require.True(t, consumptionUsageLogID.Valid)
+	require.Equal(t, usageLog.ID, consumptionUsageLogID.Int64)
+	require.False(t, consumptionRequestID.Valid)
+
+	var remainingGrant float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT remaining_amount FROM temporary_credit_grants WHERE id = $1", grant.ID,
+	).Scan(&remainingGrant))
+	require.InDelta(t, 0, remainingGrant, 1e-12)
+
+	var remainingBalance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT balance FROM users WHERE id = $1", user.ID,
+	).Scan(&remainingBalance))
+	require.InDelta(t, 99.25, remainingBalance, 0.000001)
+
+	result2, err := repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.NotNil(t, result2)
+	require.False(t, result2.Applied)
+
+	var usageLogCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID,
+	).Scan(&usageLogCount))
+	require.Equal(t, 1, usageLogCount)
+
+	var consumptionCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM temporary_credit_consumptions WHERE grant_id = $1", grant.ID,
+	).Scan(&consumptionCount))
+	require.Equal(t, 1, consumptionCount)
+
+	var remainingGrantAfterRepeat float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT remaining_amount FROM temporary_credit_grants WHERE id = $1", grant.ID,
+	).Scan(&remainingGrantAfterRepeat))
+	require.InDelta(t, remainingGrant, remainingGrantAfterRepeat, 1e-12)
+
+	var remainingBalanceAfterRepeat float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT balance FROM users WHERE id = $1", user.ID,
+	).Scan(&remainingBalanceAfterRepeat))
+	require.InDelta(t, remainingBalance, remainingBalanceAfterRepeat, 0.000001)
 }
 
 func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.T) {
@@ -157,7 +268,7 @@ func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 		RequestID:   requestID,
 		APIKeyID:    apiKey.ID,
 		UserID:      user.ID,
-		BalanceCost: 2.50,
+		BalanceCost: 2.5,
 	})
 	require.ErrorIs(t, err, service.ErrUsageBillingRequestConflict)
 }

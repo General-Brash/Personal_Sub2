@@ -467,6 +467,10 @@ const baseSettingsResponse = {
   subscription_expiry_notify_enabled: true,
   account_quota_notify_enabled: false,
   account_quota_notify_emails: [],
+  user_channel_status_enabled: true,
+  user_subscriptions_enabled: true,
+  admin_promo_codes_enabled: true,
+  admin_channel_management_enabled: true,
   // 平台限额嵌套字段（新后端契约）
   default_platform_quotas: {
     anthropic:   { daily: null, weekly: null, monthly: null },
@@ -492,6 +496,8 @@ function mountView() {
         ProxySelector: true,
         ImageUpload: ImageUploadStub,
         BackupSettings: true,
+        CheckinSettingsCard: true,
+        PageVisibilitySettingsSection: true,
       },
     },
   });
@@ -505,6 +511,16 @@ async function openPaymentTab(wrapper: ReturnType<typeof mountView>) {
   expect(paymentTabButton).toBeDefined();
   await paymentTabButton?.trigger("click");
   await flushPromises();
+}
+
+async function openFeaturesTab(wrapper: ReturnType<typeof mountView>) {
+  const featuresTabButton = wrapper
+    .findAll('button')
+    .find((node) => node.text().includes('admin.settings.tabs.features'))
+
+  expect(featuresTabButton).toBeDefined()
+  await featuresTabButton?.trigger('click')
+  await flushPromises()
 }
 
 async function openSecurityTab(wrapper: ReturnType<typeof mountView>) {
@@ -615,6 +631,38 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(wrapper.text()).not.toContain("可见方式");
     expect(wrapper.text()).not.toContain("支付来源");
   });
+
+  it('connects daily check-in settings to the existing features tab', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await openFeaturesTab(wrapper)
+
+    expect(wrapper.find('checkin-settings-card-stub').exists()).toBe(true)
+  })
+
+  it('connects page visibility settings to the features tab', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await openFeaturesTab(wrapper)
+
+    expect(wrapper.find('page-visibility-settings-section-stub').exists()).toBe(true)
+  })
+
+  it('submits all page visibility switches', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_channel_status_enabled: true,
+        user_subscriptions_enabled: true,
+        admin_promo_codes_enabled: true,
+        admin_channel_management_enabled: true,
+      }),
+    )
+  })
 
   it("links payment guidance to README sections instead of removed payment docs", async () => {
     const wrapper = mountView();
@@ -823,6 +871,7 @@ describe("admin SettingsView payment visible method controls", () => {
           ProxySelector: true,
           ImageUpload: ImageUploadStub,
           BackupSettings: true,
+          CheckinSettingsCard: true,
         },
       },
     });
@@ -976,6 +1025,7 @@ describe("admin SettingsView payment visible method controls", () => {
           ProxySelector: true,
           ImageUpload: ImageUploadStub,
           BackupSettings: true,
+          CheckinSettingsCard: true,
         },
       },
     });

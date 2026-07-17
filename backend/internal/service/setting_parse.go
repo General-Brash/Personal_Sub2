@@ -63,6 +63,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyTablePageSizeOptions:                      "[10,20,50,100]",
 		SettingKeyCustomMenuItems:                           "[]",
 		SettingKeyCustomEndpoints:                           "[]",
+		SettingKeyUserChannelStatusEnabled:                  "true",
+		SettingKeyUserSubscriptionsEnabled:                  "true",
+		SettingKeyAdminPromoCodesEnabled:                    "true",
+		SettingKeyAdminChannelManagementEnabled:             "true",
 		SettingKeyWeChatConnectEnabled:                      "false",
 		SettingKeyWeChatConnectAppID:                        "",
 		SettingKeyWeChatConnectAppSecret:                    "",
@@ -721,6 +725,12 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// Available channels feature (default: disabled; strict true)
 	result.AvailableChannelsEnabled = settings[SettingKeyAvailableChannelsEnabled] == "true"
 
+	// Page visibility defaults to enabled so existing installations keep all pages visible.
+	result.UserChannelStatusEnabled = !isFalseSettingValue(settings[SettingKeyUserChannelStatusEnabled])
+	result.UserSubscriptionsEnabled = !isFalseSettingValue(settings[SettingKeyUserSubscriptionsEnabled])
+	result.AdminPromoCodesEnabled = !isFalseSettingValue(settings[SettingKeyAdminPromoCodesEnabled])
+	result.AdminChannelManagementEnabled = !isFalseSettingValue(settings[SettingKeyAdminChannelManagementEnabled])
+
 	// Affiliate (邀请返利) feature (default: disabled; strict true)
 	result.AffiliateEnabled = settings[SettingKeyAffiliateEnabled] == "true"
 
@@ -851,7 +861,6 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 
 	result.AllowUserViewErrorRequests = settings[SettingKeyAllowUserViewErrorRequests] == "true" // default false
-
 	return result
 }
 

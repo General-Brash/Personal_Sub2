@@ -164,14 +164,14 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		}
 		imageRateMultiplier = *input.ImageRateMultiplier
 	}
-	batchImageDiscountMultiplier := defaultBatchImageDiscountMultiplier
+	batchImageDiscountMultiplier := 0.5
 	if input.BatchImageDiscountMultiplier != nil {
 		if *input.BatchImageDiscountMultiplier < 0 {
 			return nil, errors.New("batch_image_discount_multiplier must be >= 0")
 		}
 		batchImageDiscountMultiplier = *input.BatchImageDiscountMultiplier
 	}
-	batchImageHoldMultiplier := defaultBatchImageHoldMultiplier
+	batchImageHoldMultiplier := 0.6
 	if input.BatchImageHoldMultiplier != nil {
 		if *input.BatchImageHoldMultiplier < 0 {
 			return nil, errors.New("batch_image_hold_multiplier must be >= 0")

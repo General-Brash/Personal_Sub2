@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -52,14 +53,14 @@ func TestSystemOperationLockService_RenewLease(t *testing.T) {
 	}()
 
 	keyHash := HashIdempotencyKey(systemOperationLockKey)
-	initial, _ := repo.GetByScopeAndKeyHash(context.Background(), systemOperationLockScope, keyHash)
+	initial, _ := repo.GetByScopeActorScopeAndKeyHash(context.Background(), systemOperationLockScope, systemOperationLockActorScope, keyHash)
 	require.NotNil(t, initial)
 	require.NotNil(t, initial.LockedUntil)
 	initialLockedUntil := *initial.LockedUntil
 
 	time.Sleep(1500 * time.Millisecond)
 
-	updated, _ := repo.GetByScopeAndKeyHash(context.Background(), systemOperationLockScope, keyHash)
+	updated, _ := repo.GetByScopeActorScopeAndKeyHash(context.Background(), systemOperationLockScope, systemOperationLockActorScope, keyHash)
 	require.NotNil(t, updated)
 	require.NotNil(t, updated.LockedUntil)
 	require.True(t, updated.LockedUntil.After(initialLockedUntil), "locked_until should be renewed while lock is held")
@@ -93,14 +94,14 @@ func TestSystemOperationLockService_RenewLeaseContinuesAfterTransientFailure(t *
 	}()
 
 	keyHash := HashIdempotencyKey(systemOperationLockKey)
-	initial, _ := repo.GetByScopeAndKeyHash(context.Background(), systemOperationLockScope, keyHash)
+	initial, _ := repo.GetByScopeActorScopeAndKeyHash(context.Background(), systemOperationLockScope, systemOperationLockActorScope, keyHash)
 	require.NotNil(t, initial)
 	require.NotNil(t, initial.LockedUntil)
 	initialLockedUntil := *initial.LockedUntil
 
 	// 首次续租失败后，下一轮应继续尝试并成功更新锁过期时间。
 	require.Eventually(t, func() bool {
-		updated, _ := repo.GetByScopeAndKeyHash(context.Background(), systemOperationLockScope, keyHash)
+		updated, _ := repo.GetByScopeActorScopeAndKeyHash(context.Background(), systemOperationLockScope, systemOperationLockActorScope, keyHash)
 		if updated == nil || updated.LockedUntil == nil {
 			return false
 		}
@@ -175,7 +176,7 @@ func (s *systemLockRepoStub) CreateProcessing(context.Context, *IdempotencyRecor
 	return s.createOwner, nil
 }
 
-func (s *systemLockRepoStub) GetByScopeAndKeyHash(context.Context, string, string) (*IdempotencyRecord, error) {
+func (s *systemLockRepoStub) GetByScopeActorScopeAndKeyHash(context.Context, string, string, string) (*IdempotencyRecord, error) {
 	if s.getErr != nil {
 		return nil, s.getErr
 	}
@@ -281,7 +282,7 @@ func TestSystemOperationLockService_ReleaseBranchesAndOperationID(t *testing.T) 
 	require.NotNil(t, lock)
 
 	require.NoError(t, svc.Release(context.Background(), lock, false, ""))
-	require.NoError(t, svc.Release(context.Background(), lock, true, ""))
+	require.ErrorIs(t, svc.Release(context.Background(), lock, true, ""), sql.ErrNoRows)
 
 	repo := &systemLockRepoStub{
 		createOwner: true,

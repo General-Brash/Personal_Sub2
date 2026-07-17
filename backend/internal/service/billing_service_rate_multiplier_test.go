@@ -8,6 +8,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestResolveVideoRateMultiplier_Float64(t *testing.T) {
+	const base = 1.25
+
+	var _ func(*APIKey, float64) float64 = resolveVideoRateMultiplier
+
+	tests := []struct {
+		name   string
+		apiKey *APIKey
+		want   float64
+	}{
+		{"default keeps base", nil, base},
+		{"independent uses group value", &APIKey{Group: &Group{VideoRateIndependent: true, VideoRateMultiplier: 0.5}}, 0.5},
+		{"negative independent clamps to zero", &APIKey{Group: &Group{VideoRateIndependent: true, VideoRateMultiplier: -0.5}}, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, resolveVideoRateMultiplier(tt.apiKey, base))
+		})
+	}
+}
+
 // TestCalculateCost_RateMultiplier_NegativeClampedToZero 锁定负数倍率被
 // 钳制为 0（而非历史上的 1.0），避免配置异常导致静默按标准价扣费。
 func TestCalculateCost_RateMultiplier_NegativeClampedToZero(t *testing.T) {

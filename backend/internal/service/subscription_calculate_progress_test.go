@@ -14,7 +14,11 @@ func newTestSubscriptionService() *SubscriptionService {
 	return &SubscriptionService{}
 }
 
-func ptrFloat64(v float64) *float64  { return &v }
+func ptrFloat64(v float64) *float64 {
+	value := v
+	return &value
+}
+
 func ptrTime(t time.Time) *time.Time { return &t }
 
 func TestCalculateProgress_BasicFields(t *testing.T) {

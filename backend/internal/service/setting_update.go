@@ -20,7 +20,6 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	if err != nil {
 		return err
 	}
-
 	err = s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil {
 		s.refreshCachedSettings(settings)
@@ -34,7 +33,6 @@ func (s *SettingService) UpdateSettingsWithAuthSourceDefaults(ctx context.Contex
 	if err != nil {
 		return err
 	}
-
 	authSourceUpdates, err := s.buildAuthSourceDefaultUpdates(ctx, authDefaults)
 	if err != nil {
 		return err
@@ -334,6 +332,10 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 
 	// Available channels feature switch
 	updates[SettingKeyAvailableChannelsEnabled] = strconv.FormatBool(settings.AvailableChannelsEnabled)
+	updates[SettingKeyUserChannelStatusEnabled] = strconv.FormatBool(settings.UserChannelStatusEnabled)
+	updates[SettingKeyUserSubscriptionsEnabled] = strconv.FormatBool(settings.UserSubscriptionsEnabled)
+	updates[SettingKeyAdminPromoCodesEnabled] = strconv.FormatBool(settings.AdminPromoCodesEnabled)
+	updates[SettingKeyAdminChannelManagementEnabled] = strconv.FormatBool(settings.AdminChannelManagementEnabled)
 
 	// Affiliate (邀请返利) feature switch
 	updates[SettingKeyAffiliateEnabled] = strconv.FormatBool(settings.AffiliateEnabled)

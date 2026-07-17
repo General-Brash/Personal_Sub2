@@ -3,10 +3,19 @@
 package service
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func quotaTestFloat(value string) float64 {
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		panic(err)
+	}
+	return parsed
+}
 
 // ---------- resolveBalanceThreshold ----------
 
@@ -39,55 +48,55 @@ func TestResolveBalanceThreshold_EmptyType(t *testing.T) {
 
 func TestResolvedThreshold_FixedNormal(t *testing.T) {
 	// threshold=400 remaining, limit=1000 → usage trigger at 600
-	d := quotaDim{threshold: 400, thresholdType: thresholdTypeFixed, limit: 1000}
-	require.Equal(t, 600.0, d.resolvedThreshold())
+	d := quotaDim{threshold: quotaTestFloat("400"), thresholdType: thresholdTypeFixed, limit: quotaTestFloat("1000")}
+	require.Equal(t, quotaTestFloat("600"), d.resolvedThreshold())
 }
 
 func TestResolvedThreshold_FixedThresholdExceedsLimit(t *testing.T) {
 	// threshold=1200, limit=1000 → returns negative, callers must skip
-	d := quotaDim{threshold: 1200, thresholdType: thresholdTypeFixed, limit: 1000}
-	require.Equal(t, -200.0, d.resolvedThreshold())
+	d := quotaDim{threshold: quotaTestFloat("1200"), thresholdType: thresholdTypeFixed, limit: quotaTestFloat("1000")}
+	require.Equal(t, quotaTestFloat("-200"), d.resolvedThreshold())
 }
 
 func TestResolvedThreshold_FixedThresholdEqualsLimit(t *testing.T) {
 	// threshold=1000, limit=1000 → returns 0 (alert fires at 0 usage)
-	d := quotaDim{threshold: 1000, thresholdType: thresholdTypeFixed, limit: 1000}
+	d := quotaDim{threshold: quotaTestFloat("1000"), thresholdType: thresholdTypeFixed, limit: quotaTestFloat("1000")}
 	require.Equal(t, 0.0, d.resolvedThreshold())
 }
 
 func TestResolvedThreshold_PercentageNormal(t *testing.T) {
 	// threshold=30%, limit=1000 → usage trigger at 700 (remaining drops to 30%)
-	d := quotaDim{threshold: 30, thresholdType: thresholdTypePercentage, limit: 1000}
-	require.InDelta(t, 700.0, d.resolvedThreshold(), 0.001)
+	d := quotaDim{threshold: quotaTestFloat("30"), thresholdType: thresholdTypePercentage, limit: quotaTestFloat("1000")}
+	require.Equal(t, quotaTestFloat("700"), d.resolvedThreshold())
 }
 
 func TestResolvedThreshold_PercentageZeroPercent(t *testing.T) {
 	// threshold=0%, limit=1000 → fires when remaining drops to 0 (usage=1000)
-	d := quotaDim{threshold: 0, thresholdType: thresholdTypePercentage, limit: 1000}
-	require.InDelta(t, 1000.0, d.resolvedThreshold(), 0.001)
+	d := quotaDim{threshold: 0, thresholdType: thresholdTypePercentage, limit: quotaTestFloat("1000")}
+	require.Equal(t, quotaTestFloat("1000"), d.resolvedThreshold())
 }
 
 func TestResolvedThreshold_PercentageHundredPercent(t *testing.T) {
 	// threshold=100%, limit=1000 → fires immediately (remaining drops to 100% i.e. nothing used yet)
-	d := quotaDim{threshold: 100, thresholdType: thresholdTypePercentage, limit: 1000}
-	require.InDelta(t, 0.0, d.resolvedThreshold(), 0.001)
+	d := quotaDim{threshold: quotaTestFloat("100"), thresholdType: thresholdTypePercentage, limit: quotaTestFloat("1000")}
+	require.Equal(t, 0.0, d.resolvedThreshold())
 }
 
 func TestResolvedThreshold_PercentageOverHundred(t *testing.T) {
 	// threshold=150%, limit=1000 → returns negative (never triggers; callers skip)
-	d := quotaDim{threshold: 150, thresholdType: thresholdTypePercentage, limit: 1000}
+	d := quotaDim{threshold: quotaTestFloat("150"), thresholdType: thresholdTypePercentage, limit: quotaTestFloat("1000")}
 	require.Less(t, d.resolvedThreshold(), 0.0)
 }
 
 func TestResolvedThreshold_ZeroLimit(t *testing.T) {
 	// limit=0 → returns 0 to avoid division and false alerts on unlimited quotas
-	d := quotaDim{threshold: 100, thresholdType: thresholdTypeFixed, limit: 0}
+	d := quotaDim{threshold: quotaTestFloat("100"), thresholdType: thresholdTypeFixed, limit: 0}
 	require.Equal(t, 0.0, d.resolvedThreshold())
 }
 
 func TestResolvedThreshold_NegativeLimit(t *testing.T) {
 	// Negative limit treated as 0
-	d := quotaDim{threshold: 100, thresholdType: thresholdTypeFixed, limit: -10}
+	d := quotaDim{threshold: quotaTestFloat("100"), thresholdType: thresholdTypeFixed, limit: quotaTestFloat("-10")}
 	require.Equal(t, 0.0, d.resolvedThreshold())
 }
 
@@ -147,23 +156,23 @@ func TestBuildQuotaDims_AllDimensionsReturned(t *testing.T) {
 	// Daily
 	require.Equal(t, quotaDimDaily, dims[0].name)
 	require.True(t, dims[0].enabled)
-	require.Equal(t, 100.0, dims[0].threshold)
+	require.Equal(t, quotaTestFloat("100"), dims[0].threshold)
 	require.Equal(t, thresholdTypeFixed, dims[0].thresholdType)
-	require.Equal(t, 500.0, dims[0].limit)
-	require.Equal(t, 50.0, dims[0].currentUsed)
+	require.Equal(t, quotaTestFloat("500"), dims[0].limit)
+	require.Equal(t, quotaTestFloat("50"), dims[0].currentUsed)
 
 	// Weekly
 	require.Equal(t, quotaDimWeekly, dims[1].name)
 	require.True(t, dims[1].enabled)
-	require.Equal(t, 20.0, dims[1].threshold)
+	require.Equal(t, quotaTestFloat("20"), dims[1].threshold)
 	require.Equal(t, thresholdTypePercentage, dims[1].thresholdType)
-	require.Equal(t, 2000.0, dims[1].limit)
+	require.Equal(t, quotaTestFloat("2000"), dims[1].limit)
 
 	// Total
 	require.Equal(t, quotaDimTotal, dims[2].name)
 	require.False(t, dims[2].enabled)
-	require.Equal(t, 10000.0, dims[2].limit)
-	require.Equal(t, 1000.0, dims[2].currentUsed)
+	require.Equal(t, quotaTestFloat("10000"), dims[2].limit)
+	require.Equal(t, quotaTestFloat("1000"), dims[2].currentUsed)
 }
 
 func TestBuildQuotaDims_EmptyExtra(t *testing.T) {
@@ -197,25 +206,25 @@ func TestBuildQuotaDimsFromState_UsesStateValues(t *testing.T) {
 		},
 	}
 	state := &AccountQuotaState{
-		DailyUsed:   77.0,
-		DailyLimit:  500.0,
-		WeeklyUsed:  88.0,
-		WeeklyLimit: 2000.0,
-		TotalUsed:   99.0,
-		TotalLimit:  10000.0,
+		DailyUsed:   quotaTestFloat("77.00000001"),
+		DailyLimit:  quotaTestFloat("500.00000001"),
+		WeeklyUsed:  quotaTestFloat("88.00000001"),
+		WeeklyLimit: quotaTestFloat("2000.00000001"),
+		TotalUsed:   quotaTestFloat("99.00000001"),
+		TotalLimit:  quotaTestFloat("10000.00000001"),
 	}
 	dims := buildQuotaDimsFromState(a, state)
 	require.Len(t, dims, 3)
 	// Settings from account (enabled, threshold, thresholdType)
 	require.True(t, dims[0].enabled)
-	require.Equal(t, 100.0, dims[0].threshold)
+	require.Equal(t, quotaTestFloat("100"), dims[0].threshold)
 	// Usage from state
-	require.Equal(t, 77.0, dims[0].currentUsed)
-	require.Equal(t, 500.0, dims[0].limit)
-	require.Equal(t, 88.0, dims[1].currentUsed)
-	require.Equal(t, 2000.0, dims[1].limit)
-	require.Equal(t, 99.0, dims[2].currentUsed)
-	require.Equal(t, 10000.0, dims[2].limit)
+	require.Equal(t, quotaTestFloat("77.00000001"), dims[0].currentUsed)
+	require.Equal(t, quotaTestFloat("500.00000001"), dims[0].limit)
+	require.Equal(t, quotaTestFloat("88.00000001"), dims[1].currentUsed)
+	require.Equal(t, quotaTestFloat("2000.00000001"), dims[1].limit)
+	require.Equal(t, quotaTestFloat("99.00000001"), dims[2].currentUsed)
+	require.Equal(t, quotaTestFloat("10000.00000001"), dims[2].limit)
 }
 
 // ---------- collectBalanceNotifyRecipients ----------

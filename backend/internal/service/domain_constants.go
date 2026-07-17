@@ -269,6 +269,12 @@ const (
 	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
 	SettingKeyCustomEndpoints             = "custom_endpoints"              // 自定义端点列表（JSON 数组）
 
+	// 页面可见性设置（仅控制前端入口和页面访问，不改变对应业务能力）
+	SettingKeyUserChannelStatusEnabled      = "user_channel_status_enabled"
+	SettingKeyUserSubscriptionsEnabled      = "user_subscriptions_enabled"
+	SettingKeyAdminPromoCodesEnabled        = "admin_promo_codes_enabled"
+	SettingKeyAdminChannelManagementEnabled = "admin_channel_management_enabled"
+
 	// 默认配置
 	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量
 	SettingKeyDefaultBalance       = "default_balance"        // 新用户默认余额

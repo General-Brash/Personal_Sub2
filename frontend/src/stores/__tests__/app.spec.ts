@@ -54,6 +54,10 @@ function createPublicSettings(overrides: Partial<PublicSettings> = {}): PublicSe
     channel_monitor_enabled: true,
     channel_monitor_default_interval_seconds: 60,
     available_channels_enabled: false,
+    user_channel_status_enabled: true,
+    user_subscriptions_enabled: true,
+    admin_promo_codes_enabled: true,
+    admin_channel_management_enabled: true,
     service_quota_enabled: false,
     affiliate_enabled: false,
     ...overrides,
@@ -321,6 +325,20 @@ describe('useAppStore', () => {
   // --- 公开设置 ---
 
   describe('公开设置加载', () => {
+    it('空缓存回退保持页面可见性开关默认开启', async () => {
+      const store = useAppStore()
+      store.publicSettingsLoaded = true
+      store.cachedPublicSettings = null
+
+      await expect(store.fetchPublicSettings()).resolves.toMatchObject({
+        user_channel_status_enabled: true,
+        user_subscriptions_enabled: true,
+        admin_promo_codes_enabled: true,
+        admin_channel_management_enabled: true,
+      })
+      expect(getPublicSettings).not.toHaveBeenCalled()
+    })
+
     it('并发调用复用并等待同一个请求，包括 force 调用', async () => {
       const deferred = createDeferred<PublicSettings>()
       vi.mocked(getPublicSettings).mockReturnValue(deferred.promise)

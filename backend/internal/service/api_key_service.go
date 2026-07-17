@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html"
 	"sort"
@@ -201,21 +202,28 @@ type RateLimitCacheInvalidator interface {
 	InvalidateAPIKeyRateLimit(ctx context.Context, keyID int64) error
 }
 
+// AvailableCreditEligibilityChecker is the narrow billing precheck used by
+// API-key middleware after authentication succeeds.
+type AvailableCreditEligibilityChecker interface {
+	CheckAvailableCreditEligibility(ctx context.Context, userID int64) error
+}
+
 type APIKeyService struct {
-	apiKeyRepo            APIKeyRepository
-	userRepo              UserRepository
-	groupRepo             GroupRepository
-	userSubRepo           UserSubscriptionRepository
-	userGroupRateRepo     UserGroupRateRepository
-	cache                 APIKeyCache
-	rateLimitCacheInvalid RateLimitCacheInvalidator // optional: invalidate Redis rate limit cache
-	concurrencyService    *ConcurrencyService
-	cfg                   *config.Config
-	authCacheL1           *ristretto.Cache
-	authCfg               apiKeyAuthCacheConfig
-	authGroup             singleflight.Group
-	lastUsedTouchL1       sync.Map // keyID -> nextAllowedAt(time.Time)
-	lastUsedTouchSF       singleflight.Group
+	apiKeyRepo             APIKeyRepository
+	userRepo               UserRepository
+	groupRepo              GroupRepository
+	userSubRepo            UserSubscriptionRepository
+	userGroupRateRepo      UserGroupRateRepository
+	cache                  APIKeyCache
+	rateLimitCacheInvalid  RateLimitCacheInvalidator // optional: invalidate Redis rate limit cache
+	availableCreditChecker AvailableCreditEligibilityChecker
+	concurrencyService     *ConcurrencyService
+	cfg                    *config.Config
+	authCacheL1            *ristretto.Cache
+	authCfg                apiKeyAuthCacheConfig
+	authGroup              singleflight.Group
+	lastUsedTouchL1        sync.Map // keyID -> nextAllowedAt(time.Time)
+	lastUsedTouchSF        singleflight.Group
 }
 
 // NewAPIKeyService 创建API Key服务实例
@@ -245,6 +253,26 @@ func NewAPIKeyService(
 // Called after construction (e.g. in wire) to avoid circular dependencies.
 func (s *APIKeyService) SetRateLimitCacheInvalidator(inv RateLimitCacheInvalidator) {
 	s.rateLimitCacheInvalid = inv
+}
+
+// SetAvailableCreditEligibilityChecker wires the precheck without changing
+// the API-key service constructor used by existing callers.
+func (s *APIKeyService) SetAvailableCreditEligibilityChecker(checker AvailableCreditEligibilityChecker) {
+	s.availableCreditChecker = checker
+}
+
+func (s *APIKeyService) HasAvailableCreditEligibilityChecker() bool {
+	return s != nil && s.availableCreditChecker != nil
+}
+
+// CheckAvailableCreditEligibility fails closed when the billing precheck is
+// not wired. Falling back to users.balance would ignore usable temporary
+// credit and violate the authentication contract.
+func (s *APIKeyService) CheckAvailableCreditEligibility(ctx context.Context, userID int64) error {
+	if s == nil || s.availableCreditChecker == nil {
+		return ErrBillingServiceUnavailable.WithCause(errors.New("available credit eligibility checker is not configured"))
+	}
+	return s.availableCreditChecker.CheckAvailableCreditEligibility(ctx, userID)
 }
 
 func (s *APIKeyService) SetConcurrencyService(concurrencyService *ConcurrencyService) {

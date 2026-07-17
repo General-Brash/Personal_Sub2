@@ -177,6 +177,18 @@ func (f ChannelMonitorRequestTemplateFunc) Mutate(ctx context.Context, m ent.Mut
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ChannelMonitorRequestTemplateMutation", m)
 }
 
+// The DailyCheckinFunc type is an adapter to allow the use of ordinary
+// function as DailyCheckin mutator.
+type DailyCheckinFunc func(context.Context, *ent.DailyCheckinMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DailyCheckinFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DailyCheckinMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DailyCheckinMutation", m)
+}
+
 // The ErrorPassthroughRuleFunc type is an adapter to allow the use of ordinary
 // function as ErrorPassthroughRule mutator.
 type ErrorPassthroughRuleFunc func(context.Context, *ent.ErrorPassthroughRuleMutation) (ent.Value, error)
@@ -367,6 +379,30 @@ func (f TLSFingerprintProfileFunc) Mutate(ctx context.Context, m ent.Mutation) (
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TLSFingerprintProfileMutation", m)
+}
+
+// The TemporaryCreditConsumptionFunc type is an adapter to allow the use of ordinary
+// function as TemporaryCreditConsumption mutator.
+type TemporaryCreditConsumptionFunc func(context.Context, *ent.TemporaryCreditConsumptionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TemporaryCreditConsumptionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TemporaryCreditConsumptionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TemporaryCreditConsumptionMutation", m)
+}
+
+// The TemporaryCreditGrantFunc type is an adapter to allow the use of ordinary
+// function as TemporaryCreditGrant mutator.
+type TemporaryCreditGrantFunc func(context.Context, *ent.TemporaryCreditGrantMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TemporaryCreditGrantFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TemporaryCreditGrantMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TemporaryCreditGrantMutation", m)
 }
 
 // The UsageCleanupTaskFunc type is an adapter to allow the use of ordinary

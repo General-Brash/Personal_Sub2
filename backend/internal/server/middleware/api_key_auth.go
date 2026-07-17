@@ -221,12 +221,18 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 					AbortWithError(c, status, code, validateErr.Error())
 					return
 				}
-			} else {
-				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查
-				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+			} else if apiKeyService.HasAvailableCreditEligibilityChecker() {
+				if err := apiKeyService.CheckAvailableCreditEligibility(c.Request.Context(), apiKey.User.ID); err != nil {
+					if errors.Is(err, service.ErrInsufficientBalance) {
+						AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+						return
+					}
+					AbortWithError(c, 503, "BILLING_SERVICE_ERROR", "Billing service temporarily unavailable. Please retry later.")
 					return
 				}
+			} else if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
+				AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+				return
 			}
 		}
 
@@ -308,9 +314,8 @@ func setGroupContext(c *gin.Context, group *service.Group) {
 	c.Request = c.Request.WithContext(ctx)
 }
 
-// apiKeyBalanceBelowAuthThreshold 保持鉴权层的历史语义：仅在余额耗尽（<=0）时拒绝。
-// MinimumBalanceReserve 只作为 billing-cache 预检的保守下限，不得复用为鉴权硬门槛，
-// 否则已配置该值的存量部署升级后，0 < balance < reserve 的用户会在所有端点被静默 403。
+// apiKeyBalanceBelowAuthThreshold keeps the historical authentication rule:
+// reject only exhausted permanent balances when available-credit is not wired.
 func apiKeyBalanceBelowAuthThreshold(balance float64, _ *config.Config) bool {
 	return balance <= 0
 }

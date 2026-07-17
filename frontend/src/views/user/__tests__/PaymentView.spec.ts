@@ -237,6 +237,20 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
 }
 
 describe('PaymentView subscription confirmation amounts', () => {
+  it('shows subscription quota limits with two decimal places', async () => {
+    const wrapper = await mountSubscriptionConfirm({
+      plan: {
+        daily_limit_usd: 1.234,
+        weekly_limit_usd: 20.005,
+        monthly_limit_usd: 100.999,
+      },
+    })
+
+    expect(wrapper.text()).toContain('$1.23')
+    expect(wrapper.text()).toContain('$20.01')
+    expect(wrapper.text()).toContain('$101.00')
+  })
+
   it('shows converted CNY pay amount using the subscription rate, not the balance multiplier', async () => {
     const wrapper = await mountSubscriptionConfirm({
       checkout: {

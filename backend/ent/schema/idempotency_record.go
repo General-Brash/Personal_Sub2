@@ -29,7 +29,8 @@ func (IdempotencyRecord) Mixin() []ent.Mixin {
 
 func (IdempotencyRecord) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("scope").MaxLen(128),
+		field.String("operation_scope").MaxLen(128),
+		field.String("actor_scope").MaxLen(128),
 		field.String("idempotency_key_hash").MaxLen(64),
 		field.String("request_fingerprint").MaxLen(64),
 		field.String("status").MaxLen(32),
@@ -43,7 +44,7 @@ func (IdempotencyRecord) Fields() []ent.Field {
 
 func (IdempotencyRecord) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("scope", "idempotency_key_hash").Unique(),
+		index.Fields("operation_scope", "actor_scope", "idempotency_key_hash").Unique(),
 		index.Fields("expires_at"),
 		index.Fields("status", "locked_until"),
 	}

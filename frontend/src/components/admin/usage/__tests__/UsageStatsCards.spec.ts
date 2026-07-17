@@ -64,4 +64,27 @@ describe('UsageStatsCards', () => {
     expect(text).toContain('Cache Read')
     expect(text).toContain('22')
   })
+
+  it('formats all displayed costs with two decimal places', () => {
+    const wrapper = mount(UsageStatsCards, {
+      props: {
+        stats: {
+          ...stats,
+          total_actual_cost: 12.345,
+          total_account_cost: 8.765,
+          total_cost: 4.321,
+        },
+      },
+      global: {
+        stubs: {
+          Icon: true,
+        },
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('$12.35')
+    expect(text).toContain('Cost $8.77')
+    expect(text).toContain('Standard $4.32')
+  })
 })

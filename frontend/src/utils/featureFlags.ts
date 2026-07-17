@@ -104,6 +104,26 @@ export const FeatureFlags = {
     mode: 'opt-in',
     label: 'Available Channels',
   }),
+  userChannelStatus: defineFlag({
+    key: 'user_channel_status_enabled',
+    mode: 'opt-out',
+    label: 'User Channel Status',
+  }),
+  userSubscriptions: defineFlag({
+    key: 'user_subscriptions_enabled',
+    mode: 'opt-out',
+    label: 'User Subscriptions',
+  }),
+  adminPromoCodes: defineFlag({
+    key: 'admin_promo_codes_enabled',
+    mode: 'opt-out',
+    label: 'Admin Promo Codes',
+  }),
+  adminChannelManagement: defineFlag({
+    key: 'admin_channel_management_enabled',
+    mode: 'opt-out',
+    label: 'Admin Channel Management',
+  }),
   payment: defineFlag({
     key: 'payment_enabled',
     mode: 'opt-out',

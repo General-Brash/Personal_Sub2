@@ -17,8 +17,10 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
-	// FieldScope holds the string denoting the scope field in the database.
-	FieldScope = "scope"
+	// FieldOperationScope holds the string denoting the operation_scope field in the database.
+	FieldOperationScope = "operation_scope"
+	// FieldActorScope holds the string denoting the actor_scope field in the database.
+	FieldActorScope = "actor_scope"
 	// FieldIdempotencyKeyHash holds the string denoting the idempotency_key_hash field in the database.
 	FieldIdempotencyKeyHash = "idempotency_key_hash"
 	// FieldRequestFingerprint holds the string denoting the request_fingerprint field in the database.
@@ -44,7 +46,8 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
-	FieldScope,
+	FieldOperationScope,
+	FieldActorScope,
 	FieldIdempotencyKeyHash,
 	FieldRequestFingerprint,
 	FieldStatus,
@@ -72,8 +75,10 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
-	// ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
-	ScopeValidator func(string) error
+	// OperationScopeValidator is a validator for the "operation_scope" field. It is called by the builders before save.
+	OperationScopeValidator func(string) error
+	// ActorScopeValidator is a validator for the "actor_scope" field. It is called by the builders before save.
+	ActorScopeValidator func(string) error
 	// IdempotencyKeyHashValidator is a validator for the "idempotency_key_hash" field. It is called by the builders before save.
 	IdempotencyKeyHashValidator func(string) error
 	// RequestFingerprintValidator is a validator for the "request_fingerprint" field. It is called by the builders before save.
@@ -102,9 +107,14 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
-// ByScope orders the results by the scope field.
-func ByScope(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldScope, opts...).ToFunc()
+// ByOperationScope orders the results by the operation_scope field.
+func ByOperationScope(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOperationScope, opts...).ToFunc()
+}
+
+// ByActorScope orders the results by the actor_scope field.
+func ByActorScope(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActorScope, opts...).ToFunc()
 }
 
 // ByIdempotencyKeyHash orders the results by the idempotency_key_hash field.

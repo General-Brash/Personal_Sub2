@@ -204,6 +204,8 @@ func (UsageLog) Edges() []ent.Edge {
 			Ref("usage_logs").
 			Field("subscription_id").
 			Unique(),
+		edge.To("temporary_credit_consumptions", TemporaryCreditConsumption.Type).
+			Annotations(entsql.OnDelete(entsql.Restrict)),
 	}
 }
 

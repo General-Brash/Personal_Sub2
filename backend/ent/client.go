@@ -29,6 +29,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -44,6 +45,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditconsumption"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditgrant"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -90,6 +93,8 @@ type Client struct {
 	ChannelMonitorHistory *ChannelMonitorHistoryClient
 	// ChannelMonitorRequestTemplate is the client for interacting with the ChannelMonitorRequestTemplate builders.
 	ChannelMonitorRequestTemplate *ChannelMonitorRequestTemplateClient
+	// DailyCheckin is the client for interacting with the DailyCheckin builders.
+	DailyCheckin *DailyCheckinClient
 	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
 	ErrorPassthroughRule *ErrorPassthroughRuleClient
 	// Group is the client for interacting with the Group builders.
@@ -122,6 +127,10 @@ type Client struct {
 	SubscriptionPlan *SubscriptionPlanClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
+	// TemporaryCreditConsumption is the client for interacting with the TemporaryCreditConsumption builders.
+	TemporaryCreditConsumption *TemporaryCreditConsumptionClient
+	// TemporaryCreditGrant is the client for interacting with the TemporaryCreditGrant builders.
+	TemporaryCreditGrant *TemporaryCreditGrantClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
 	UsageCleanupTask *UsageCleanupTaskClient
 	// UsageLog is the client for interacting with the UsageLog builders.
@@ -163,6 +172,7 @@ func (c *Client) init() {
 	c.ChannelMonitorDailyRollup = NewChannelMonitorDailyRollupClient(c.config)
 	c.ChannelMonitorHistory = NewChannelMonitorHistoryClient(c.config)
 	c.ChannelMonitorRequestTemplate = NewChannelMonitorRequestTemplateClient(c.config)
+	c.DailyCheckin = NewDailyCheckinClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
@@ -179,6 +189,8 @@ func (c *Client) init() {
 	c.Setting = NewSettingClient(c.config)
 	c.SubscriptionPlan = NewSubscriptionPlanClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
+	c.TemporaryCreditConsumption = NewTemporaryCreditConsumptionClient(c.config)
+	c.TemporaryCreditGrant = NewTemporaryCreditGrantClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
 	c.User = NewUserClient(c.config)
@@ -293,6 +305,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
 		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
+		DailyCheckin:                  NewDailyCheckinClient(cfg),
 		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
@@ -309,6 +322,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Setting:                       NewSettingClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
+		TemporaryCreditConsumption:    NewTemporaryCreditConsumptionClient(cfg),
+		TemporaryCreditGrant:          NewTemporaryCreditGrantClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
 		User:                          NewUserClient(cfg),
@@ -350,6 +365,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
 		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
+		DailyCheckin:                  NewDailyCheckinClient(cfg),
 		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
@@ -366,6 +382,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Setting:                       NewSettingClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
+		TemporaryCreditConsumption:    NewTemporaryCreditConsumptionClient(cfg),
+		TemporaryCreditGrant:          NewTemporaryCreditGrantClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
 		User:                          NewUserClient(cfg),
@@ -406,14 +424,15 @@ func (c *Client) Use(hooks ...Hook) {
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent, c.BatchImageItem,
 		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
-		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
+		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate, c.DailyCheckin,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.TLSFingerprintProfile, c.TemporaryCreditConsumption, c.TemporaryCreditGrant,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -426,14 +445,15 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent, c.BatchImageItem,
 		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
-		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
+		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate, c.DailyCheckin,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.TLSFingerprintProfile, c.TemporaryCreditConsumption, c.TemporaryCreditGrant,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -470,6 +490,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ChannelMonitorHistory.mutate(ctx, m)
 	case *ChannelMonitorRequestTemplateMutation:
 		return c.ChannelMonitorRequestTemplate.mutate(ctx, m)
+	case *DailyCheckinMutation:
+		return c.DailyCheckin.mutate(ctx, m)
 	case *ErrorPassthroughRuleMutation:
 		return c.ErrorPassthroughRule.mutate(ctx, m)
 	case *GroupMutation:
@@ -502,6 +524,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SubscriptionPlan.mutate(ctx, m)
 	case *TLSFingerprintProfileMutation:
 		return c.TLSFingerprintProfile.mutate(ctx, m)
+	case *TemporaryCreditConsumptionMutation:
+		return c.TemporaryCreditConsumption.mutate(ctx, m)
+	case *TemporaryCreditGrantMutation:
+		return c.TemporaryCreditGrant.mutate(ctx, m)
 	case *UsageCleanupTaskMutation:
 		return c.UsageCleanupTask.mutate(ctx, m)
 	case *UsageLogMutation:
@@ -2721,6 +2747,171 @@ func (c *ChannelMonitorRequestTemplateClient) mutate(ctx context.Context, m *Cha
 		return (&ChannelMonitorRequestTemplateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ChannelMonitorRequestTemplate mutation op: %q", m.Op())
+	}
+}
+
+// DailyCheckinClient is a client for the DailyCheckin schema.
+type DailyCheckinClient struct {
+	config
+}
+
+// NewDailyCheckinClient returns a client for the DailyCheckin from the given config.
+func NewDailyCheckinClient(c config) *DailyCheckinClient {
+	return &DailyCheckinClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `dailycheckin.Hooks(f(g(h())))`.
+func (c *DailyCheckinClient) Use(hooks ...Hook) {
+	c.hooks.DailyCheckin = append(c.hooks.DailyCheckin, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `dailycheckin.Intercept(f(g(h())))`.
+func (c *DailyCheckinClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DailyCheckin = append(c.inters.DailyCheckin, interceptors...)
+}
+
+// Create returns a builder for creating a DailyCheckin entity.
+func (c *DailyCheckinClient) Create() *DailyCheckinCreate {
+	mutation := newDailyCheckinMutation(c.config, OpCreate)
+	return &DailyCheckinCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DailyCheckin entities.
+func (c *DailyCheckinClient) CreateBulk(builders ...*DailyCheckinCreate) *DailyCheckinCreateBulk {
+	return &DailyCheckinCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DailyCheckinClient) MapCreateBulk(slice any, setFunc func(*DailyCheckinCreate, int)) *DailyCheckinCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DailyCheckinCreateBulk{err: fmt.Errorf("calling to DailyCheckinClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DailyCheckinCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DailyCheckinCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DailyCheckin.
+func (c *DailyCheckinClient) Update() *DailyCheckinUpdate {
+	mutation := newDailyCheckinMutation(c.config, OpUpdate)
+	return &DailyCheckinUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DailyCheckinClient) UpdateOne(_m *DailyCheckin) *DailyCheckinUpdateOne {
+	mutation := newDailyCheckinMutation(c.config, OpUpdateOne, withDailyCheckin(_m))
+	return &DailyCheckinUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DailyCheckinClient) UpdateOneID(id int64) *DailyCheckinUpdateOne {
+	mutation := newDailyCheckinMutation(c.config, OpUpdateOne, withDailyCheckinID(id))
+	return &DailyCheckinUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DailyCheckin.
+func (c *DailyCheckinClient) Delete() *DailyCheckinDelete {
+	mutation := newDailyCheckinMutation(c.config, OpDelete)
+	return &DailyCheckinDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DailyCheckinClient) DeleteOne(_m *DailyCheckin) *DailyCheckinDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DailyCheckinClient) DeleteOneID(id int64) *DailyCheckinDeleteOne {
+	builder := c.Delete().Where(dailycheckin.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DailyCheckinDeleteOne{builder}
+}
+
+// Query returns a query builder for DailyCheckin.
+func (c *DailyCheckinClient) Query() *DailyCheckinQuery {
+	return &DailyCheckinQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDailyCheckin},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DailyCheckin entity by its id.
+func (c *DailyCheckinClient) Get(ctx context.Context, id int64) (*DailyCheckin, error) {
+	return c.Query().Where(dailycheckin.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DailyCheckinClient) GetX(ctx context.Context, id int64) *DailyCheckin {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a DailyCheckin.
+func (c *DailyCheckinClient) QueryUser(_m *DailyCheckin) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(dailycheckin.Table, dailycheckin.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, dailycheckin.UserTable, dailycheckin.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryTemporaryCreditGrant queries the temporary_credit_grant edge of a DailyCheckin.
+func (c *DailyCheckinClient) QueryTemporaryCreditGrant(_m *DailyCheckin) *TemporaryCreditGrantQuery {
+	query := (&TemporaryCreditGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(dailycheckin.Table, dailycheckin.FieldID, id),
+			sqlgraph.To(temporarycreditgrant.Table, temporarycreditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, dailycheckin.TemporaryCreditGrantTable, dailycheckin.TemporaryCreditGrantColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *DailyCheckinClient) Hooks() []Hook {
+	return c.hooks.DailyCheckin
+}
+
+// Interceptors returns the client interceptors.
+func (c *DailyCheckinClient) Interceptors() []Interceptor {
+	return c.inters.DailyCheckin
+}
+
+func (c *DailyCheckinClient) mutate(ctx context.Context, m *DailyCheckinMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DailyCheckinCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DailyCheckinUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DailyCheckinUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DailyCheckinDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DailyCheckin mutation op: %q", m.Op())
 	}
 }
 
@@ -5176,6 +5367,368 @@ func (c *TLSFingerprintProfileClient) mutate(ctx context.Context, m *TLSFingerpr
 	}
 }
 
+// TemporaryCreditConsumptionClient is a client for the TemporaryCreditConsumption schema.
+type TemporaryCreditConsumptionClient struct {
+	config
+}
+
+// NewTemporaryCreditConsumptionClient returns a client for the TemporaryCreditConsumption from the given config.
+func NewTemporaryCreditConsumptionClient(c config) *TemporaryCreditConsumptionClient {
+	return &TemporaryCreditConsumptionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `temporarycreditconsumption.Hooks(f(g(h())))`.
+func (c *TemporaryCreditConsumptionClient) Use(hooks ...Hook) {
+	c.hooks.TemporaryCreditConsumption = append(c.hooks.TemporaryCreditConsumption, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `temporarycreditconsumption.Intercept(f(g(h())))`.
+func (c *TemporaryCreditConsumptionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TemporaryCreditConsumption = append(c.inters.TemporaryCreditConsumption, interceptors...)
+}
+
+// Create returns a builder for creating a TemporaryCreditConsumption entity.
+func (c *TemporaryCreditConsumptionClient) Create() *TemporaryCreditConsumptionCreate {
+	mutation := newTemporaryCreditConsumptionMutation(c.config, OpCreate)
+	return &TemporaryCreditConsumptionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TemporaryCreditConsumption entities.
+func (c *TemporaryCreditConsumptionClient) CreateBulk(builders ...*TemporaryCreditConsumptionCreate) *TemporaryCreditConsumptionCreateBulk {
+	return &TemporaryCreditConsumptionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TemporaryCreditConsumptionClient) MapCreateBulk(slice any, setFunc func(*TemporaryCreditConsumptionCreate, int)) *TemporaryCreditConsumptionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TemporaryCreditConsumptionCreateBulk{err: fmt.Errorf("calling to TemporaryCreditConsumptionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TemporaryCreditConsumptionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TemporaryCreditConsumptionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TemporaryCreditConsumption.
+func (c *TemporaryCreditConsumptionClient) Update() *TemporaryCreditConsumptionUpdate {
+	mutation := newTemporaryCreditConsumptionMutation(c.config, OpUpdate)
+	return &TemporaryCreditConsumptionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TemporaryCreditConsumptionClient) UpdateOne(_m *TemporaryCreditConsumption) *TemporaryCreditConsumptionUpdateOne {
+	mutation := newTemporaryCreditConsumptionMutation(c.config, OpUpdateOne, withTemporaryCreditConsumption(_m))
+	return &TemporaryCreditConsumptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TemporaryCreditConsumptionClient) UpdateOneID(id int64) *TemporaryCreditConsumptionUpdateOne {
+	mutation := newTemporaryCreditConsumptionMutation(c.config, OpUpdateOne, withTemporaryCreditConsumptionID(id))
+	return &TemporaryCreditConsumptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TemporaryCreditConsumption.
+func (c *TemporaryCreditConsumptionClient) Delete() *TemporaryCreditConsumptionDelete {
+	mutation := newTemporaryCreditConsumptionMutation(c.config, OpDelete)
+	return &TemporaryCreditConsumptionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TemporaryCreditConsumptionClient) DeleteOne(_m *TemporaryCreditConsumption) *TemporaryCreditConsumptionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TemporaryCreditConsumptionClient) DeleteOneID(id int64) *TemporaryCreditConsumptionDeleteOne {
+	builder := c.Delete().Where(temporarycreditconsumption.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TemporaryCreditConsumptionDeleteOne{builder}
+}
+
+// Query returns a query builder for TemporaryCreditConsumption.
+func (c *TemporaryCreditConsumptionClient) Query() *TemporaryCreditConsumptionQuery {
+	return &TemporaryCreditConsumptionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTemporaryCreditConsumption},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TemporaryCreditConsumption entity by its id.
+func (c *TemporaryCreditConsumptionClient) Get(ctx context.Context, id int64) (*TemporaryCreditConsumption, error) {
+	return c.Query().Where(temporarycreditconsumption.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TemporaryCreditConsumptionClient) GetX(ctx context.Context, id int64) *TemporaryCreditConsumption {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryGrant queries the grant edge of a TemporaryCreditConsumption.
+func (c *TemporaryCreditConsumptionClient) QueryGrant(_m *TemporaryCreditConsumption) *TemporaryCreditGrantQuery {
+	query := (&TemporaryCreditGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(temporarycreditconsumption.Table, temporarycreditconsumption.FieldID, id),
+			sqlgraph.To(temporarycreditgrant.Table, temporarycreditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, temporarycreditconsumption.GrantTable, temporarycreditconsumption.GrantColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUsageLog queries the usage_log edge of a TemporaryCreditConsumption.
+func (c *TemporaryCreditConsumptionClient) QueryUsageLog(_m *TemporaryCreditConsumption) *UsageLogQuery {
+	query := (&UsageLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(temporarycreditconsumption.Table, temporarycreditconsumption.FieldID, id),
+			sqlgraph.To(usagelog.Table, usagelog.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, temporarycreditconsumption.UsageLogTable, temporarycreditconsumption.UsageLogColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *TemporaryCreditConsumptionClient) Hooks() []Hook {
+	return c.hooks.TemporaryCreditConsumption
+}
+
+// Interceptors returns the client interceptors.
+func (c *TemporaryCreditConsumptionClient) Interceptors() []Interceptor {
+	return c.inters.TemporaryCreditConsumption
+}
+
+func (c *TemporaryCreditConsumptionClient) mutate(ctx context.Context, m *TemporaryCreditConsumptionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TemporaryCreditConsumptionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TemporaryCreditConsumptionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TemporaryCreditConsumptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TemporaryCreditConsumptionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TemporaryCreditConsumption mutation op: %q", m.Op())
+	}
+}
+
+// TemporaryCreditGrantClient is a client for the TemporaryCreditGrant schema.
+type TemporaryCreditGrantClient struct {
+	config
+}
+
+// NewTemporaryCreditGrantClient returns a client for the TemporaryCreditGrant from the given config.
+func NewTemporaryCreditGrantClient(c config) *TemporaryCreditGrantClient {
+	return &TemporaryCreditGrantClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `temporarycreditgrant.Hooks(f(g(h())))`.
+func (c *TemporaryCreditGrantClient) Use(hooks ...Hook) {
+	c.hooks.TemporaryCreditGrant = append(c.hooks.TemporaryCreditGrant, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `temporarycreditgrant.Intercept(f(g(h())))`.
+func (c *TemporaryCreditGrantClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TemporaryCreditGrant = append(c.inters.TemporaryCreditGrant, interceptors...)
+}
+
+// Create returns a builder for creating a TemporaryCreditGrant entity.
+func (c *TemporaryCreditGrantClient) Create() *TemporaryCreditGrantCreate {
+	mutation := newTemporaryCreditGrantMutation(c.config, OpCreate)
+	return &TemporaryCreditGrantCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TemporaryCreditGrant entities.
+func (c *TemporaryCreditGrantClient) CreateBulk(builders ...*TemporaryCreditGrantCreate) *TemporaryCreditGrantCreateBulk {
+	return &TemporaryCreditGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TemporaryCreditGrantClient) MapCreateBulk(slice any, setFunc func(*TemporaryCreditGrantCreate, int)) *TemporaryCreditGrantCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TemporaryCreditGrantCreateBulk{err: fmt.Errorf("calling to TemporaryCreditGrantClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TemporaryCreditGrantCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TemporaryCreditGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TemporaryCreditGrant.
+func (c *TemporaryCreditGrantClient) Update() *TemporaryCreditGrantUpdate {
+	mutation := newTemporaryCreditGrantMutation(c.config, OpUpdate)
+	return &TemporaryCreditGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TemporaryCreditGrantClient) UpdateOne(_m *TemporaryCreditGrant) *TemporaryCreditGrantUpdateOne {
+	mutation := newTemporaryCreditGrantMutation(c.config, OpUpdateOne, withTemporaryCreditGrant(_m))
+	return &TemporaryCreditGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TemporaryCreditGrantClient) UpdateOneID(id int64) *TemporaryCreditGrantUpdateOne {
+	mutation := newTemporaryCreditGrantMutation(c.config, OpUpdateOne, withTemporaryCreditGrantID(id))
+	return &TemporaryCreditGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TemporaryCreditGrant.
+func (c *TemporaryCreditGrantClient) Delete() *TemporaryCreditGrantDelete {
+	mutation := newTemporaryCreditGrantMutation(c.config, OpDelete)
+	return &TemporaryCreditGrantDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TemporaryCreditGrantClient) DeleteOne(_m *TemporaryCreditGrant) *TemporaryCreditGrantDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TemporaryCreditGrantClient) DeleteOneID(id int64) *TemporaryCreditGrantDeleteOne {
+	builder := c.Delete().Where(temporarycreditgrant.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TemporaryCreditGrantDeleteOne{builder}
+}
+
+// Query returns a query builder for TemporaryCreditGrant.
+func (c *TemporaryCreditGrantClient) Query() *TemporaryCreditGrantQuery {
+	return &TemporaryCreditGrantQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTemporaryCreditGrant},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TemporaryCreditGrant entity by its id.
+func (c *TemporaryCreditGrantClient) Get(ctx context.Context, id int64) (*TemporaryCreditGrant, error) {
+	return c.Query().Where(temporarycreditgrant.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TemporaryCreditGrantClient) GetX(ctx context.Context, id int64) *TemporaryCreditGrant {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a TemporaryCreditGrant.
+func (c *TemporaryCreditGrantClient) QueryUser(_m *TemporaryCreditGrant) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(temporarycreditgrant.Table, temporarycreditgrant.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, temporarycreditgrant.UserTable, temporarycreditgrant.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCheckin queries the checkin edge of a TemporaryCreditGrant.
+func (c *TemporaryCreditGrantClient) QueryCheckin(_m *TemporaryCreditGrant) *DailyCheckinQuery {
+	query := (&DailyCheckinClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(temporarycreditgrant.Table, temporarycreditgrant.FieldID, id),
+			sqlgraph.To(dailycheckin.Table, dailycheckin.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, temporarycreditgrant.CheckinTable, temporarycreditgrant.CheckinColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGrantedByUser queries the granted_by_user edge of a TemporaryCreditGrant.
+func (c *TemporaryCreditGrantClient) QueryGrantedByUser(_m *TemporaryCreditGrant) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(temporarycreditgrant.Table, temporarycreditgrant.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, temporarycreditgrant.GrantedByUserTable, temporarycreditgrant.GrantedByUserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryConsumptions queries the consumptions edge of a TemporaryCreditGrant.
+func (c *TemporaryCreditGrantClient) QueryConsumptions(_m *TemporaryCreditGrant) *TemporaryCreditConsumptionQuery {
+	query := (&TemporaryCreditConsumptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(temporarycreditgrant.Table, temporarycreditgrant.FieldID, id),
+			sqlgraph.To(temporarycreditconsumption.Table, temporarycreditconsumption.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, temporarycreditgrant.ConsumptionsTable, temporarycreditgrant.ConsumptionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *TemporaryCreditGrantClient) Hooks() []Hook {
+	return c.hooks.TemporaryCreditGrant
+}
+
+// Interceptors returns the client interceptors.
+func (c *TemporaryCreditGrantClient) Interceptors() []Interceptor {
+	return c.inters.TemporaryCreditGrant
+}
+
+func (c *TemporaryCreditGrantClient) mutate(ctx context.Context, m *TemporaryCreditGrantMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TemporaryCreditGrantCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TemporaryCreditGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TemporaryCreditGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TemporaryCreditGrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TemporaryCreditGrant mutation op: %q", m.Op())
+	}
+}
+
 // UsageCleanupTaskClient is a client for the UsageCleanupTask schema.
 type UsageCleanupTaskClient struct {
 	config
@@ -5490,6 +6043,22 @@ func (c *UsageLogClient) QuerySubscription(_m *UsageLog) *UserSubscriptionQuery 
 			sqlgraph.From(usagelog.Table, usagelog.FieldID, id),
 			sqlgraph.To(usersubscription.Table, usersubscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, usagelog.SubscriptionTable, usagelog.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryTemporaryCreditConsumptions queries the temporary_credit_consumptions edge of a UsageLog.
+func (c *UsageLogClient) QueryTemporaryCreditConsumptions(_m *UsageLog) *TemporaryCreditConsumptionQuery {
+	query := (&TemporaryCreditConsumptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usagelog.Table, usagelog.FieldID, id),
+			sqlgraph.To(temporarycreditconsumption.Table, temporarycreditconsumption.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usagelog.TemporaryCreditConsumptionsTable, usagelog.TemporaryCreditConsumptionsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -5831,6 +6400,54 @@ func (c *UserClient) QueryPlatformQuotas(_m *User) *UserPlatformQuotaQuery {
 			sqlgraph.From(user.Table, user.FieldID, id),
 			sqlgraph.To(userplatformquota.Table, userplatformquota.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.PlatformQuotasTable, user.PlatformQuotasColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryDailyCheckins queries the daily_checkins edge of a User.
+func (c *UserClient) QueryDailyCheckins(_m *User) *DailyCheckinQuery {
+	query := (&DailyCheckinClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(dailycheckin.Table, dailycheckin.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.DailyCheckinsTable, user.DailyCheckinsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryTemporaryCreditGrants queries the temporary_credit_grants edge of a User.
+func (c *UserClient) QueryTemporaryCreditGrants(_m *User) *TemporaryCreditGrantQuery {
+	query := (&TemporaryCreditGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(temporarycreditgrant.Table, temporarycreditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.TemporaryCreditGrantsTable, user.TemporaryCreditGrantsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGrantedTemporaryCreditGrants queries the granted_temporary_credit_grants edge of a User.
+func (c *UserClient) QueryGrantedTemporaryCreditGrants(_m *User) *TemporaryCreditGrantQuery {
+	query := (&TemporaryCreditGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(temporarycreditgrant.Table, temporarycreditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.GrantedTemporaryCreditGrantsTable, user.GrantedTemporaryCreditGrantsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -6669,23 +7286,25 @@ type (
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
-		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
+		ChannelMonitorRequestTemplate, DailyCheckin, ErrorPassthroughRule, Group,
+		IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
 		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Hook
+		TemporaryCreditConsumption, TemporaryCreditGrant, UsageCleanupTask, UsageLog,
+		User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
-		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
+		ChannelMonitorRequestTemplate, DailyCheckin, ErrorPassthroughRule, Group,
+		IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
 		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Interceptor
+		TemporaryCreditConsumption, TemporaryCreditGrant, UsageCleanupTask, UsageLog,
+		User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

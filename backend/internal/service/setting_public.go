@@ -220,6 +220,10 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyChannelMonitorEnabled,
 		SettingKeyChannelMonitorDefaultIntervalSeconds,
 		SettingKeyAvailableChannelsEnabled,
+		SettingKeyUserChannelStatusEnabled,
+		SettingKeyUserSubscriptionsEnabled,
+		SettingKeyAdminPromoCodesEnabled,
+		SettingKeyAdminChannelManagementEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeyAllowUserViewErrorRequests,
@@ -331,6 +335,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		ChannelMonitorDefaultIntervalSeconds: parseChannelMonitorInterval(settings[SettingKeyChannelMonitorDefaultIntervalSeconds]),
 
 		AvailableChannelsEnabled: settings[SettingKeyAvailableChannelsEnabled] == "true",
+
+		UserChannelStatusEnabled:      !isFalseSettingValue(settings[SettingKeyUserChannelStatusEnabled]),
+		UserSubscriptionsEnabled:      !isFalseSettingValue(settings[SettingKeyUserSubscriptionsEnabled]),
+		AdminPromoCodesEnabled:        !isFalseSettingValue(settings[SettingKeyAdminPromoCodesEnabled]),
+		AdminChannelManagementEnabled: !isFalseSettingValue(settings[SettingKeyAdminChannelManagementEnabled]),
 
 		AffiliateEnabled: settings[SettingKeyAffiliateEnabled] == "true",
 
@@ -494,6 +503,10 @@ type PublicSettingsInjectionPayload struct {
 	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
 	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
 	AvailableChannelsEnabled             bool `json:"available_channels_enabled"`
+	UserChannelStatusEnabled             bool `json:"user_channel_status_enabled"`
+	UserSubscriptionsEnabled             bool `json:"user_subscriptions_enabled"`
+	AdminPromoCodesEnabled               bool `json:"admin_promo_codes_enabled"`
+	AdminChannelManagementEnabled        bool `json:"admin_channel_management_enabled"`
 	AffiliateEnabled                     bool `json:"affiliate_enabled"`
 	RiskControlEnabled                   bool `json:"risk_control_enabled"`
 	AllowUserViewErrorRequests           bool `json:"allow_user_view_error_requests"`
@@ -559,6 +572,10 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
+		UserChannelStatusEnabled:             settings.UserChannelStatusEnabled,
+		UserSubscriptionsEnabled:             settings.UserSubscriptionsEnabled,
+		AdminPromoCodesEnabled:               settings.AdminPromoCodesEnabled,
+		AdminChannelManagementEnabled:        settings.AdminChannelManagementEnabled,
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,
 		AllowUserViewErrorRequests:           settings.AllowUserViewErrorRequests,

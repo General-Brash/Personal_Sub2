@@ -16,6 +16,15 @@ type billingCacheWorkerStub struct {
 	subscriptionUpdates int64
 }
 
+type subscriptionLimitCacheStub struct {
+	billingCacheWorkerStub
+	data *SubscriptionCacheData
+}
+
+func (s *subscriptionLimitCacheStub) GetSubscriptionCache(context.Context, int64, int64) (*SubscriptionCacheData, error) {
+	return s.data, nil
+}
+
 func (b *billingCacheWorkerStub) GetUserBalance(ctx context.Context, userID int64) (float64, error) {
 	return 0, errors.New("not implemented")
 }
@@ -129,4 +138,29 @@ func TestBillingCacheServiceEnqueueAfterStopReturnsFalse(t *testing.T) {
 		amount: 1,
 	})
 	require.False(t, enqueued)
+}
+
+func TestEvaluateRateLimitsComparesFloatCacheUsageWithAPIKeyLimit(t *testing.T) {
+	svc := &BillingCacheService{}
+	apiKey := &APIKey{RateLimit5h: 0.5}
+	windowStart := time.Now()
+
+	err := svc.evaluateRateLimits(context.Background(), apiKey, 0.5, 0, 0, &windowStart, nil, nil)
+
+	require.ErrorIs(t, err, ErrAPIKeyRateLimit5hExceeded)
+}
+
+func TestCheckSubscriptionEligibilityComparesFloatCacheUsageWithGroupLimit(t *testing.T) {
+	dailyLimit := 0.5
+	cache := &subscriptionLimitCacheStub{data: &SubscriptionCacheData{
+		Status:     SubscriptionStatusActive,
+		ExpiresAt:  time.Now().Add(time.Hour),
+		DailyUsage: 0.5,
+	}}
+	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{}, nil)
+	t.Cleanup(svc.Stop)
+
+	err := svc.checkSubscriptionEligibility(context.Background(), 1, &Group{ID: 1, DailyLimitUSD: &dailyLimit}, &UserSubscription{})
+
+	require.ErrorIs(t, err, ErrDailyLimitExceeded)
 }

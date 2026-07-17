@@ -109,8 +109,8 @@ func TestFlusher_PopSnapshotUpsert(t *testing.T) {
 	cache := &mockQuotaDirtyCache{
 		popSequence: [][]UserPlatformQuotaKey{keys}, // 第 1 次返回 keys，之后空
 		getEntries: []*UserPlatformQuotaCacheEntry{
-			makeEntry(1.0, 2.0, 3.0),
-			makeEntry(4.0, 5.0, 6.0),
+			makeEntry(1, 2, 3),
+			makeEntry(4, 5, 6),
 		},
 	}
 	writer := &mockQuotaSnapshotWriter{}
@@ -120,6 +120,11 @@ func TestFlusher_PopSnapshotUpsert(t *testing.T) {
 
 	if len(writer.receivedSnaps) != 2 {
 		t.Fatalf("expected 2 snaps, got %d", len(writer.receivedSnaps))
+	}
+	if writer.receivedSnaps[0].DailyUsageUSD != 1 ||
+		writer.receivedSnaps[0].WeeklyUsageUSD != 2 ||
+		writer.receivedSnaps[0].MonthlyUsageUSD != 3 {
+		t.Fatalf("first snapshot amounts = %+v, want float 1/2/3", writer.receivedSnaps[0])
 	}
 	if f.metrics.FlushBatchSizeTotal.Load() != 2 {
 		t.Errorf("FlushBatchSizeTotal = %d, want 2", f.metrics.FlushBatchSizeTotal.Load())
@@ -144,7 +149,7 @@ func TestFlusher_MissKeySkipped(t *testing.T) {
 	cache := &mockQuotaDirtyCache{
 		popSequence: [][]UserPlatformQuotaKey{keys},
 		getEntries: []*UserPlatformQuotaCacheEntry{
-			makeEntry(1.0, 2.0, 3.0),
+			makeEntry(1, 2, 3),
 			nil, // MISS
 		},
 	}
@@ -179,8 +184,8 @@ func TestFlusher_UpsertFailReadds(t *testing.T) {
 	cache := &mockQuotaDirtyCache{
 		popSequence: [][]UserPlatformQuotaKey{keys},
 		getEntries: []*UserPlatformQuotaCacheEntry{
-			makeEntry(1.0, 2.0, 3.0),
-			makeEntry(4.0, 5.0, 6.0),
+			makeEntry(1, 2, 3),
+			makeEntry(4, 5, 6),
 		},
 	}
 	writeErr := errors.New("db connection timeout")
@@ -221,7 +226,7 @@ func TestFlusher_FKViolationDropsNoReadd(t *testing.T) {
 	cache := &mockQuotaDirtyCache{
 		popSequence: [][]UserPlatformQuotaKey{keys},
 		getEntries: []*UserPlatformQuotaCacheEntry{
-			makeEntry(1.0, 2.0, 3.0),
+			makeEntry(1, 2, 3),
 		},
 	}
 	writer := &mockQuotaSnapshotWriter{returnErr: ErrUserPlatformQuotaFKViolation}
@@ -265,7 +270,7 @@ func TestFlusher_StopPreventsFlush(t *testing.T) {
 	cache := &mockQuotaDirtyCache{
 		popSequence: [][]UserPlatformQuotaKey{keys},
 		getEntries: []*UserPlatformQuotaCacheEntry{
-			makeEntry(1.0, 2.0, 3.0),
+			makeEntry(1, 2, 3),
 		},
 	}
 	writer := &mockQuotaSnapshotWriter{}
@@ -459,8 +464,8 @@ func TestScenario_NinetyPercentCompany(t *testing.T) {
 		makeEntry(1.1, 2.2, 3.3),
 		makeEntry(4.4, 5.5, 6.6),
 		makeEntry(7.7, 8.8, 9.9),
-		makeEntry(0.5, 1.0, 1.5),
-		makeEntry(10.0, 20.0, 30.0),
+		makeEntry(0.5, 1, 1.5),
+		makeEntry(10, 20, 30),
 	}
 	cache := &mockQuotaDirtyCache{
 		// 第 1 次 Pop 返回 5 keys，之后返回空集（防止 flush 无限循环）

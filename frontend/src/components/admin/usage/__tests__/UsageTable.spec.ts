@@ -196,10 +196,10 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('Account rate')
     expect(text).toContain('User billed')
     expect(text).toContain('Account billed')
-    expect(text).toContain('$0.092883')
-    expect(text).toContain('$5.0000 / 1M tokens')
-    expect(text).toContain('$30.0000 / 1M tokens')
-    expect(text).toContain('$0.069568')
+    expect(text).toContain('$0.09')
+    expect(text).toContain('$5.00 / 1M tokens')
+    expect(text).toContain('$30.00 / 1M tokens')
+    expect(text).toContain('$0.07')
   })
 
   it('shows requested and upstream models separately for admin rows', () => {
@@ -318,6 +318,8 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('Output size')
     expect(text).toContain('Per-image price')
     expect(text).toContain('Image total price')
+    expect(text).toContain('$0.20')
+    expect(text).toContain('$0.40')
     for (const value of expected) {
       expect(text).toContain(value)
     }

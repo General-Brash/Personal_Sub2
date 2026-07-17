@@ -131,9 +131,11 @@ type UsageLogEdges struct {
 	Group *Group `json:"group,omitempty"`
 	// Subscription holds the value of the subscription edge.
 	Subscription *UserSubscription `json:"subscription,omitempty"`
+	// TemporaryCreditConsumptions holds the value of the temporary_credit_consumptions edge.
+	TemporaryCreditConsumptions []*TemporaryCreditConsumption `json:"temporary_credit_consumptions,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [5]bool
+	loadedTypes [6]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -189,6 +191,15 @@ func (e UsageLogEdges) SubscriptionOrErr() (*UserSubscription, error) {
 		return nil, &NotFoundError{label: usersubscription.Label}
 	}
 	return nil, &NotLoadedError{edge: "subscription"}
+}
+
+// TemporaryCreditConsumptionsOrErr returns the TemporaryCreditConsumptions value or an error if the edge
+// was not loaded in eager-loading.
+func (e UsageLogEdges) TemporaryCreditConsumptionsOrErr() ([]*TemporaryCreditConsumption, error) {
+	if e.loadedTypes[5] {
+		return e.TemporaryCreditConsumptions, nil
+	}
+	return nil, &NotLoadedError{edge: "temporary_credit_consumptions"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -556,6 +567,11 @@ func (_m *UsageLog) QueryGroup() *GroupQuery {
 // QuerySubscription queries the "subscription" edge of the UsageLog entity.
 func (_m *UsageLog) QuerySubscription() *UserSubscriptionQuery {
 	return NewUsageLogClient(_m.config).QuerySubscription(_m)
+}
+
+// QueryTemporaryCreditConsumptions queries the "temporary_credit_consumptions" edge of the UsageLog entity.
+func (_m *UsageLog) QueryTemporaryCreditConsumptions() *TemporaryCreditConsumptionQuery {
+	return NewUsageLogClient(_m.config).QueryTemporaryCreditConsumptions(_m)
 }
 
 // Update returns a builder for updating this UsageLog.

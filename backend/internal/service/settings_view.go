@@ -182,6 +182,12 @@ type SystemSettings struct {
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 
+	// Page visibility (UI only)
+	UserChannelStatusEnabled      bool `json:"user_channel_status_enabled"`
+	UserSubscriptionsEnabled      bool `json:"user_subscriptions_enabled"`
+	AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
+	AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
+
 	// Claude Code version check
 	MinClaudeCodeVersion string
 	MaxClaudeCodeVersion string
@@ -330,6 +336,12 @@ type PublicSettings struct {
 
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+
+	// Page visibility (UI only)
+	UserChannelStatusEnabled      bool `json:"user_channel_status_enabled"`
+	UserSubscriptionsEnabled      bool `json:"user_subscriptions_enabled"`
+	AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
+	AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
 
 	// Affiliate (邀请返利) feature toggle
 	AffiliateEnabled bool `json:"affiliate_enabled"`

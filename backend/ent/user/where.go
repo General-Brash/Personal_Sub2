@@ -1684,6 +1684,75 @@ func HasPlatformQuotasWith(preds ...predicate.UserPlatformQuota) predicate.User 
 	})
 }
 
+// HasDailyCheckins applies the HasEdge predicate on the "daily_checkins" edge.
+func HasDailyCheckins() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, DailyCheckinsTable, DailyCheckinsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasDailyCheckinsWith applies the HasEdge predicate on the "daily_checkins" edge with a given conditions (other predicates).
+func HasDailyCheckinsWith(preds ...predicate.DailyCheckin) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newDailyCheckinsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasTemporaryCreditGrants applies the HasEdge predicate on the "temporary_credit_grants" edge.
+func HasTemporaryCreditGrants() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, TemporaryCreditGrantsTable, TemporaryCreditGrantsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasTemporaryCreditGrantsWith applies the HasEdge predicate on the "temporary_credit_grants" edge with a given conditions (other predicates).
+func HasTemporaryCreditGrantsWith(preds ...predicate.TemporaryCreditGrant) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newTemporaryCreditGrantsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasGrantedTemporaryCreditGrants applies the HasEdge predicate on the "granted_temporary_credit_grants" edge.
+func HasGrantedTemporaryCreditGrants() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, GrantedTemporaryCreditGrantsTable, GrantedTemporaryCreditGrantsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasGrantedTemporaryCreditGrantsWith applies the HasEdge predicate on the "granted_temporary_credit_grants" edge with a given conditions (other predicates).
+func HasGrantedTemporaryCreditGrantsWith(preds ...predicate.TemporaryCreditGrant) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newGrantedTemporaryCreditGrantsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasUserAllowedGroups applies the HasEdge predicate on the "user_allowed_groups" edge.
 func HasUserAllowedGroups() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

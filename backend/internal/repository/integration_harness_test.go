@@ -5,6 +5,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -40,6 +41,8 @@ var (
 	integrationRedis     *redisclient.Client
 
 	redisNamespaceSeq uint64
+
+	integrationSkipReason string
 )
 
 func TestMain(m *testing.M) {
@@ -56,8 +59,25 @@ func TestMain(m *testing.M) {
 			log.Printf("docker is not available (CI=true); failing integration tests")
 			os.Exit(1)
 		}
-		log.Printf("docker is not available; skipping integration tests (start Docker to enable)")
-		os.Exit(0)
+		integrationSkipReason = "Docker is not available; start Docker to run repository integration tests"
+		if !flag.Parsed() {
+			flag.Parse()
+		}
+		if err := flag.Set("test.run", "^TestIntegrationEnvironment$"); err != nil {
+			log.Printf("failed to select explicit integration skip test: %v", err)
+			os.Exit(1)
+		}
+		if err := flag.Set("test.v", "true"); err != nil {
+			log.Printf("failed to enable explicit integration skip output: %v", err)
+			os.Exit(1)
+		}
+		log.Printf("INTEGRATION_TESTS_SKIPPED: %s", integrationSkipReason)
+		code := m.Run()
+		if code == 0 {
+			log.Printf("repository integration suite did not execute; failing to prevent a false green result")
+			code = 1
+		}
+		os.Exit(code)
 	}
 
 	postgresImage := selectDockerImage(ctx, postgresImageTag)
@@ -132,6 +152,12 @@ func TestMain(m *testing.M) {
 	_ = integrationDB.Close()
 
 	os.Exit(code)
+}
+
+func TestIntegrationEnvironment(t *testing.T) {
+	if integrationSkipReason != "" {
+		t.Skip(integrationSkipReason)
+	}
 }
 
 func dockerIsAvailable(ctx context.Context) bool {

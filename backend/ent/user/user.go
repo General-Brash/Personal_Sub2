@@ -89,6 +89,12 @@ const (
 	EdgePendingAuthSessions = "pending_auth_sessions"
 	// EdgePlatformQuotas holds the string denoting the platform_quotas edge name in mutations.
 	EdgePlatformQuotas = "platform_quotas"
+	// EdgeDailyCheckins holds the string denoting the daily_checkins edge name in mutations.
+	EdgeDailyCheckins = "daily_checkins"
+	// EdgeTemporaryCreditGrants holds the string denoting the temporary_credit_grants edge name in mutations.
+	EdgeTemporaryCreditGrants = "temporary_credit_grants"
+	// EdgeGrantedTemporaryCreditGrants holds the string denoting the granted_temporary_credit_grants edge name in mutations.
+	EdgeGrantedTemporaryCreditGrants = "granted_temporary_credit_grants"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -182,6 +188,27 @@ const (
 	PlatformQuotasInverseTable = "user_platform_quotas"
 	// PlatformQuotasColumn is the table column denoting the platform_quotas relation/edge.
 	PlatformQuotasColumn = "user_id"
+	// DailyCheckinsTable is the table that holds the daily_checkins relation/edge.
+	DailyCheckinsTable = "daily_checkins"
+	// DailyCheckinsInverseTable is the table name for the DailyCheckin entity.
+	// It exists in this package in order to avoid circular dependency with the "dailycheckin" package.
+	DailyCheckinsInverseTable = "daily_checkins"
+	// DailyCheckinsColumn is the table column denoting the daily_checkins relation/edge.
+	DailyCheckinsColumn = "user_id"
+	// TemporaryCreditGrantsTable is the table that holds the temporary_credit_grants relation/edge.
+	TemporaryCreditGrantsTable = "temporary_credit_grants"
+	// TemporaryCreditGrantsInverseTable is the table name for the TemporaryCreditGrant entity.
+	// It exists in this package in order to avoid circular dependency with the "temporarycreditgrant" package.
+	TemporaryCreditGrantsInverseTable = "temporary_credit_grants"
+	// TemporaryCreditGrantsColumn is the table column denoting the temporary_credit_grants relation/edge.
+	TemporaryCreditGrantsColumn = "user_id"
+	// GrantedTemporaryCreditGrantsTable is the table that holds the granted_temporary_credit_grants relation/edge.
+	GrantedTemporaryCreditGrantsTable = "temporary_credit_grants"
+	// GrantedTemporaryCreditGrantsInverseTable is the table name for the TemporaryCreditGrant entity.
+	// It exists in this package in order to avoid circular dependency with the "temporarycreditgrant" package.
+	GrantedTemporaryCreditGrantsInverseTable = "temporary_credit_grants"
+	// GrantedTemporaryCreditGrantsColumn is the table column denoting the granted_temporary_credit_grants relation/edge.
+	GrantedTemporaryCreditGrantsColumn = "granted_by"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -602,6 +629,48 @@ func ByPlatformQuotas(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByDailyCheckinsCount orders the results by daily_checkins count.
+func ByDailyCheckinsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newDailyCheckinsStep(), opts...)
+	}
+}
+
+// ByDailyCheckins orders the results by daily_checkins terms.
+func ByDailyCheckins(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newDailyCheckinsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByTemporaryCreditGrantsCount orders the results by temporary_credit_grants count.
+func ByTemporaryCreditGrantsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newTemporaryCreditGrantsStep(), opts...)
+	}
+}
+
+// ByTemporaryCreditGrants orders the results by temporary_credit_grants terms.
+func ByTemporaryCreditGrants(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newTemporaryCreditGrantsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByGrantedTemporaryCreditGrantsCount orders the results by granted_temporary_credit_grants count.
+func ByGrantedTemporaryCreditGrantsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newGrantedTemporaryCreditGrantsStep(), opts...)
+	}
+}
+
+// ByGrantedTemporaryCreditGrants orders the results by granted_temporary_credit_grants terms.
+func ByGrantedTemporaryCreditGrants(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newGrantedTemporaryCreditGrantsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -704,6 +773,27 @@ func newPlatformQuotasStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PlatformQuotasInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PlatformQuotasTable, PlatformQuotasColumn),
+	)
+}
+func newDailyCheckinsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(DailyCheckinsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, DailyCheckinsTable, DailyCheckinsColumn),
+	)
+}
+func newTemporaryCreditGrantsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(TemporaryCreditGrantsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, TemporaryCreditGrantsTable, TemporaryCreditGrantsColumn),
+	)
+}
+func newGrantedTemporaryCreditGrantsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(GrantedTemporaryCreditGrantsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, GrantedTemporaryCreditGrantsTable, GrantedTemporaryCreditGrantsColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

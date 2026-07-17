@@ -22,6 +22,10 @@ var (
 		"DEFAULT_SUBSCRIPTION_GROUP_DUPLICATE",
 		"default subscription group cannot be duplicated",
 	)
+	ErrDailyCheckinPolicyInvalid = infraerrors.BadRequest(
+		"INVALID_DAILY_CHECKIN_POLICY",
+		"daily checkin policy is invalid",
+	)
 )
 
 type SettingRepository interface {
@@ -241,6 +245,32 @@ func (s *SettingService) GetAllSettings(ctx context.Context) (*SystemSettings, e
 	}
 
 	return s.parseSettings(settings), nil
+}
+
+func (s *SettingService) GetDailyCheckinPolicy(ctx context.Context) (*DailyCheckinPolicy, error) {
+	settings, err := s.settingRepo.GetMultiple(ctx, []string{
+		SettingKeyDailyCheckinEnabled,
+		SettingKeyDailyCheckinMaxRewardDay,
+		SettingKeyDailyCheckinRewardTiers,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get daily checkin policy: %w", err)
+	}
+	return parseDailyCheckinPolicySettings(settings)
+}
+
+func (s *SettingService) UpdateDailyCheckinPolicy(ctx context.Context, policy *DailyCheckinPolicy) error {
+	if policy == nil {
+		return ErrDailyCheckinPolicyInvalid
+	}
+	updates, err := policy.settingValues()
+	if err != nil {
+		return err
+	}
+	if err := s.settingRepo.SetMultiple(ctx, updates); err != nil {
+		return fmt.Errorf("update daily checkin policy: %w", err)
+	}
+	return nil
 }
 
 // SetOnUpdateCallback sets a callback function to be called when settings are updated

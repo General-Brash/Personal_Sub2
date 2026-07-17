@@ -73,7 +73,7 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 			groupID: {
 				ID:                           groupID,
 				Platform:                     PlatformGemini,
-				RateMultiplier:               2.0,
+				RateMultiplier:               2,
 				AllowImageGeneration:         true,
 				AllowBatchImageGeneration:    true,
 				ImageRateIndependent:         false,
@@ -109,7 +109,7 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 			groupID: {
 				ID:                           groupID,
 				Platform:                     PlatformGemini,
-				RateMultiplier:               1.0,
+				RateMultiplier:               1,
 				AllowImageGeneration:         true,
 				AllowBatchImageGeneration:    true,
 				ImagePrice1K:                 &imagePrice,
@@ -424,6 +424,26 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 		require.NoError(t, err)
 		requireBatchImagePublicJSONHasNoInternals(t, string(body))
 	})
+}
+
+func TestBatchImageJobToPublicPreservesLegacyFloatAmounts(t *testing.T) {
+	actualCost := 0.125
+	holdAmount := 1.25
+	batch := BatchImageJobToPublic(&BatchImageJob{
+		BatchID:       "batch-legacy-float",
+		EstimatedCost: 1.2,
+		HoldAmount:    &holdAmount,
+		ActualCost:    &actualCost,
+	})
+
+	body, err := json.Marshal(batch)
+
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.Equal(t, 1.2, payload["estimated_cost"])
+	require.Equal(t, 1.25, payload["hold_amount"])
+	require.Equal(t, 0.125, payload["actual_cost"])
 }
 
 func TestBatchImagePublicService_List(t *testing.T) {

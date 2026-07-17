@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -78,6 +79,7 @@ const (
 	cacheWriteTimeout         = 2 * time.Second // 单个写入操作超时
 	cacheWriteDropLogInterval = 5 * time.Second // 丢弃日志节流间隔
 	balanceLoadTimeout        = 3 * time.Second
+	availableCreditCacheTTL   = 5 * time.Minute
 )
 
 // cacheWriteTask 缓存写入任务
@@ -229,10 +231,8 @@ func (s *BillingCacheService) cacheWriteWorker(ch <-chan cacheWriteTask) {
 				}
 			}
 		case cacheWriteDeductBalance:
-			if s.cache != nil {
-				if err := s.cache.DeductUserBalance(ctx, task.userID, task.amount); err != nil {
-					logger.LegacyPrintf("service.billing_cache", "Warning: deduct balance cache failed for user %d: %v", task.userID, err)
-				}
+			if err := s.DeductBalanceCache(ctx, task.userID, task.amount); err != nil {
+				logger.LegacyPrintf("service.billing_cache", "Warning: deduct balance cache failed for user %d: %v", task.userID, err)
 			}
 		case cacheWriteUpdateRateLimitUsage:
 			if s.cache != nil {
@@ -349,6 +349,74 @@ func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) 
 }
 
 // getUserBalanceFromDB 从数据库获取用户余额
+func (s *BillingCacheService) availableCreditSnapshot(ctx context.Context, userID int64) (AvailableCreditSnapshot, error) {
+	reader, ok := s.userRepo.(AvailableCreditSnapshotReader)
+	if !ok {
+		balance, err := s.GetUserBalance(ctx, userID)
+		if err != nil {
+			return AvailableCreditSnapshot{}, err
+		}
+		return AvailableCreditSnapshot{PermanentBalance: balance}, nil
+	}
+	return reader.GetAvailableCreditSnapshot(ctx, userID)
+}
+
+func availableCreditCacheTTLFor(snapshot AvailableCreditSnapshot) time.Duration {
+	if snapshot.TemporaryCredit > 0 && snapshot.EarliestTemporaryCreditExpiry == nil {
+		return 0
+	}
+	if snapshot.EarliestTemporaryCreditExpiry == nil {
+		return availableCreditCacheTTL
+	}
+	ttl := time.Until(*snapshot.EarliestTemporaryCreditExpiry)
+	if ttl <= 0 {
+		return 0
+	}
+	if ttl < availableCreditCacheTTL {
+		return ttl
+	}
+	return availableCreditCacheTTL
+}
+
+func (s *BillingCacheService) setAvailableCreditCache(ctx context.Context, userID int64, snapshot AvailableCreditSnapshot) {
+	cache, ok := s.cache.(AvailableCreditCache)
+	if !ok {
+		return
+	}
+	if err := cache.SetAvailableCredit(ctx, userID, snapshot.Total(), availableCreditCacheTTLFor(snapshot)); err != nil {
+		logger.LegacyPrintf("service.billing_cache", "Warning: set available credit cache failed for user %d: %v", userID, err)
+	}
+}
+
+// GetAvailableCredit returns the temporary-plus-permanent amount used only as
+// an authorization precheck. Actual billing remains the transaction's source
+// of truth.
+func (s *BillingCacheService) GetAvailableCredit(ctx context.Context, userID int64) (float64, error) {
+	cache, hasCache := s.cache.(AvailableCreditCache)
+	if hasCache {
+		cached, err := cache.GetAvailableCredit(ctx, userID)
+		if err == nil {
+			cached, err = normalizeDerivedLedgerAmount(cached)
+		}
+		if err == nil {
+			return cached, nil
+		}
+	}
+
+	snapshot, err := s.availableCreditSnapshot(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	s.setAvailableCreditCache(ctx, userID, snapshot)
+	return snapshot.Total(), nil
+}
+
+// CheckAvailableCreditEligibility is the narrow precheck used by API-key
+// authentication before a request reaches an upstream provider.
+func (s *BillingCacheService) CheckAvailableCreditEligibility(ctx context.Context, userID int64) error {
+	return s.checkBalanceEligibility(ctx, userID)
+}
+
 func (s *BillingCacheService) getUserBalanceFromDB(ctx context.Context, userID int64) (float64, error) {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -372,7 +440,10 @@ func (s *BillingCacheService) DeductBalanceCache(ctx context.Context, userID int
 	if s.cache == nil {
 		return nil
 	}
-	return s.cache.DeductUserBalance(ctx, userID, amount)
+	if err := s.cache.DeductUserBalance(ctx, userID, amount); err != nil {
+		return err
+	}
+	return s.InvalidateAvailableCredit(ctx, userID)
 }
 
 // QueueDeductBalance 异步扣减余额缓存
@@ -402,6 +473,20 @@ func (s *BillingCacheService) InvalidateUserBalance(ctx context.Context, userID 
 	}
 	if err := s.cache.InvalidateUserBalance(ctx, userID); err != nil {
 		logger.LegacyPrintf("service.billing_cache", "Warning: invalidate balance cache failed for user %d: %v", userID, err)
+		return err
+	}
+	return s.InvalidateAvailableCredit(ctx, userID)
+}
+
+// InvalidateAvailableCredit removes the temporary-plus-permanent precheck
+// cache after a committed credit grant or a completed billing transaction.
+func (s *BillingCacheService) InvalidateAvailableCredit(ctx context.Context, userID int64) error {
+	cache, ok := s.cache.(AvailableCreditCache)
+	if !ok {
+		return nil
+	}
+	if err := cache.InvalidateAvailableCredit(ctx, userID); err != nil {
+		logger.LegacyPrintf("service.billing_cache", "Warning: invalidate available credit cache failed for user %d: %v", userID, err)
 		return err
 	}
 	return nil
@@ -868,7 +953,7 @@ func (s *BillingCacheService) minimumBalanceReserve() float64 {
 }
 
 func (s *BillingCacheService) balanceBelowEligibilityThreshold(balance float64) bool {
-	if balance <= 0 {
+	if math.IsNaN(balance) || math.IsInf(balance, 0) || balance <= 0 {
 		return true
 	}
 	minimumReserve := s.minimumBalanceReserve()
@@ -877,7 +962,7 @@ func (s *BillingCacheService) balanceBelowEligibilityThreshold(balance float64) 
 
 // checkBalanceEligibility 检查余额模式资格
 func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userID int64) error {
-	balance, err := s.GetUserBalance(ctx, userID)
+	balance, err := s.GetAvailableCredit(ctx, userID)
 	if err != nil {
 		if s.circuitBreaker != nil {
 			s.circuitBreaker.OnFailure(err)
@@ -889,6 +974,10 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 		s.circuitBreaker.OnSuccess()
 	}
 
+	// Available credit is temporary credit plus permanent balance. Because
+	// actual settlement consumes temporary credit first, applying the legacy
+	// reserve threshold here leaves only its uncovered remainder to permanent
+	// balance instead of requiring the full reserve from permanent balance.
 	if s.balanceBelowEligibilityThreshold(balance) {
 		return ErrInsufficientBalance
 	}

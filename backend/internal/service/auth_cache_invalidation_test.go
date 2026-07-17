@@ -13,10 +13,10 @@ func TestUsageService_InvalidateUsageCaches(t *testing.T) {
 	invalidator := &authCacheInvalidatorStub{}
 	svc := &UsageService{authCacheInvalidator: invalidator}
 
-	svc.invalidateUsageCaches(context.Background(), 7, false)
+	svc.invalidateUsageCaches(context.Background(), 7, false, false)
 	require.Empty(t, invalidator.userIDs)
 
-	svc.invalidateUsageCaches(context.Background(), 7, true)
+	svc.invalidateUsageCaches(context.Background(), 7, true, false)
 	require.Equal(t, []int64{7}, invalidator.userIDs)
 }
 

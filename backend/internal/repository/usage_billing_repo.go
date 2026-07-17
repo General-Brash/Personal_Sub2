@@ -27,9 +27,14 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		return nil, errors.New("usage billing repository db is nil")
 	}
 
-	cmd.Normalize()
+	if err := cmd.Normalize(); err != nil {
+		return nil, err
+	}
 	if cmd.RequestID == "" {
 		return nil, service.ErrUsageBillingRequestIDRequired
+	}
+	if err := validateUsageBillingUsageLog(cmd); err != nil {
+		return nil, err
 	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -41,6 +46,10 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 			_ = tx.Rollback()
 		}
 	}()
+
+	if err := insertUsageBillingUsageLog(ctx, tx, cmd); err != nil {
+		return nil, err
+	}
 
 	applied, err := r.claimUsageBillingKey(ctx, tx, cmd)
 	if err != nil {
@@ -60,6 +69,30 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	}
 	tx = nil
 	return result, nil
+}
+
+func validateUsageBillingUsageLog(cmd *service.UsageBillingCommand) error {
+	if cmd == nil || cmd.UsageLog == nil {
+		return nil
+	}
+	if cmd.UsageLog.UserID != cmd.UserID {
+		return errors.New("usage billing usage log user_id mismatch")
+	}
+	if cmd.UsageLog.APIKeyID != cmd.APIKeyID {
+		return errors.New("usage billing usage log api_key_id mismatch")
+	}
+	if strings.TrimSpace(cmd.UsageLog.RequestID) != cmd.RequestID {
+		return errors.New("usage billing usage log request_id mismatch")
+	}
+	return nil
+}
+
+func insertUsageBillingUsageLog(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) error {
+	if cmd == nil || cmd.UsageLog == nil {
+		return nil
+	}
+	_, err := (&usageLogRepository{sql: tx}).createSingle(ctx, tx, cmd.UsageLog)
+	return err
 }
 
 func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {
@@ -179,12 +212,29 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	if cmd.BalanceCost > 0 {
-		newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
+		reference, err := temporaryCreditReferenceForUsageBilling(cmd)
 		if err != nil {
 			return err
 		}
-		result.NewBalance = &newBalance
-		result.BalanceOverdrafted = !sufficient
+		permanentBalanceCost, err := service.NewTemporaryCreditAllocationExecutor().Allocate(
+			ctx,
+			tx,
+			cmd.UserID,
+			cmd.BalanceCost,
+			reference,
+		)
+		if err != nil {
+			return err
+		}
+		result.PermanentBalanceDeduction = &permanentBalanceCost
+		if permanentBalanceCost > 0 {
+			newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, permanentBalanceCost)
+			if err != nil {
+				return err
+			}
+			result.NewBalance = &newBalance
+			result.BalanceOverdrafted = !sufficient
+		}
 	}
 
 	if cmd.APIKeyQuotaCost > 0 {
@@ -210,6 +260,20 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	return nil
+}
+
+func temporaryCreditReferenceForUsageBilling(cmd *service.UsageBillingCommand) (service.TemporaryCreditConsumptionReference, error) {
+	if cmd == nil {
+		return service.TemporaryCreditConsumptionReference{}, errors.New("usage billing command is required")
+	}
+	if cmd.UsageLog == nil {
+		return service.TemporaryCreditConsumptionReference{RequestID: cmd.RequestID}, nil
+	}
+	if cmd.UsageLog.ID <= 0 {
+		return service.TemporaryCreditConsumptionReference{}, errors.New("usage billing usage log id is required")
+	}
+	usageLogID := cmd.UsageLog.ID
+	return service.TemporaryCreditConsumptionReference{UsageLogID: &usageLogID}, nil
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {

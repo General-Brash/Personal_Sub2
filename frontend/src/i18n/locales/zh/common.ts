@@ -39,6 +39,7 @@ export default {
     error: '错误',
     critical: '严重',
     warning: '警告',
+    pageDisabledByAdmin: '该页面已由管理员关闭',
     info: '提示',
     active: '启用',
     inactive: '禁用',
@@ -147,6 +148,7 @@ export default {
 
   // Navigation
   nav: {
+    checkIn: '每日签到',
     dashboard: '仪表盘',
     announcements: '公告',
     apiKeys: 'API 密钥',

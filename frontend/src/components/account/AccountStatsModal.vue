@@ -505,6 +505,7 @@ import EndpointDistributionChart from '@/components/charts/EndpointDistributionC
 import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api/admin'
 import type { Account, AccountUsageStatsResponse } from '@/types'
+import { formatMoneyDisplay } from '@/utils/format'
 
 ChartJS.register(
   CategoryScale,
@@ -709,16 +710,7 @@ const handleClose = () => {
 }
 
 // Format helpers
-const formatCost = (value: number): string => {
-  if (value >= 1000) {
-    return (value / 1000).toFixed(2) + 'K'
-  } else if (value >= 1) {
-    return value.toFixed(2)
-  } else if (value >= 0.01) {
-    return value.toFixed(3)
-  }
-  return value.toFixed(4)
-}
+const formatCost = formatMoneyDisplay
 
 const formatNumber = (value: number): string => {
   if (value >= 1_000_000) {

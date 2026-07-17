@@ -135,6 +135,12 @@ func (User) Edges() []ent.Edge {
 			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("pending_auth_sessions", PendingAuthSession.Type),
 		edge.To("platform_quotas", UserPlatformQuota.Type),
+		edge.To("daily_checkins", DailyCheckin.Type).
+			Annotations(entsql.OnDelete(entsql.Restrict)),
+		edge.To("temporary_credit_grants", TemporaryCreditGrant.Type).
+			Annotations(entsql.OnDelete(entsql.Restrict)),
+		edge.To("granted_temporary_credit_grants", TemporaryCreditGrant.Type).
+			Annotations(entsql.OnDelete(entsql.Restrict)),
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
+var ErrUsageBillingAmountInvalid = errors.New("usage billing amount is invalid")
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
@@ -18,6 +19,7 @@ type UsageBillingCommand struct {
 	APIKeyID           int64
 	RequestFingerprint string
 	RequestPayloadHash string
+	UsageLog           *UsageLog
 
 	UserID              int64
 	AccountID           int64
@@ -41,14 +43,47 @@ type UsageBillingCommand struct {
 	AccountQuotaCost    float64
 }
 
-func (c *UsageBillingCommand) Normalize() {
+func (c *UsageBillingCommand) Normalize() error {
 	if c == nil {
-		return
+		return nil
 	}
 	c.RequestID = strings.TrimSpace(c.RequestID)
+	amounts := []*float64{
+		&c.BalanceCost,
+		&c.SubscriptionCost,
+		&c.APIKeyQuotaCost,
+		&c.APIKeyRateLimitCost,
+		&c.AccountQuotaCost,
+	}
+	for _, amount := range amounts {
+		normalized, err := normalizeUsageBillingAmount(*amount)
+		if err != nil {
+			return err
+		}
+		*amount = normalized
+	}
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildUsageBillingFingerprint(c)
 	}
+	return nil
+}
+
+func normalizeUsageBillingAmount(amount float64) (float64, error) {
+	normalized, err := normalizeLedgerAmount(amount)
+	if err != nil || normalized < 0 {
+		return 0, ErrUsageBillingAmountInvalid
+	}
+	return normalized, nil
+}
+
+// usageBillingLedgerAmountFromFloat64 normalizes legacy cost calculations once
+// before temporary and permanent credit are split.
+func usageBillingLedgerAmountFromFloat64(amount float64) float64 {
+	normalized, err := normalizeLedgerAmount(amount)
+	if err != nil {
+		return amount
+	}
+	return normalized
 }
 
 func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
@@ -56,7 +91,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%s|%s|%s|%s|%s",
 		c.UserID,
 		c.AccountID,
 		c.APIKeyID,
@@ -72,11 +107,11 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.ImageCount,
 		strings.TrimSpace(c.MediaType),
 		valueOrZero(c.SubscriptionID),
-		c.BalanceCost,
-		c.SubscriptionCost,
-		c.APIKeyQuotaCost,
-		c.APIKeyRateLimitCost,
-		c.AccountQuotaCost,
+		formatLedgerAmount(c.BalanceCost),
+		formatLedgerAmount(c.SubscriptionCost),
+		formatLedgerAmount(c.APIKeyQuotaCost),
+		formatLedgerAmount(c.APIKeyRateLimitCost),
+		formatLedgerAmount(c.AccountQuotaCost),
 	)
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
@@ -112,11 +147,30 @@ type AccountQuotaState struct {
 }
 
 type UsageBillingApplyResult struct {
-	Applied              bool
-	APIKeyQuotaExhausted bool
-	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)
-	BalanceOverdrafted   bool               // true when the sufficient-balance guard missed and debt was still recorded
-	QuotaState           *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	Applied                   bool
+	APIKeyQuotaExhausted      bool
+	NewBalance                *float64           // post-deduction balance (nil = no balance deduction)
+	PermanentBalanceDeduction *float64           // amount not covered by temporary credit and deducted from permanent balance
+	BalanceOverdrafted        bool               // true when the sufficient-balance guard missed and debt was still recorded
+	QuotaState                *AccountQuotaState // post-increment quota state (nil = no quota increment)
+}
+
+func permanentBalanceCacheDeduction(result *UsageBillingApplyResult) (float64, bool) {
+	if result == nil || result.PermanentBalanceDeduction == nil {
+		return 0, false
+	}
+	return *result.PermanentBalanceDeduction, true
+}
+
+func permanentBalanceNotificationInputs(result *UsageBillingApplyResult, fallbackBalance float64) (float64, float64, bool) {
+	deduction, known := permanentBalanceCacheDeduction(result)
+	if !known || deduction <= 0 {
+		return 0, 0, false
+	}
+	if result.NewBalance != nil {
+		return *result.NewBalance + deduction, deduction, true
+	}
+	return fallbackBalance, deduction, true
 }
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.

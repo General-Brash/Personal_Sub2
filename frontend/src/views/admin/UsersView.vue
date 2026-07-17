@@ -432,7 +432,7 @@
                 </button>
                 <!-- Instant tooltip -->
                 <div class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity duration-75 group-hover:opacity-100 dark:bg-dark-600">
-                  {{ t('admin.users.balanceHistoryTip') }}
+                  {{ t('checkin.admin.audit') }}
                   <div class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-dark-600"></div>
                 </div>
               </div>
@@ -721,13 +721,13 @@
                 {{ t('admin.users.platformQuota.menuItem') }}
               </button>
 
-              <!-- Balance History -->
+              <!-- User history and temporary credit audit -->
               <button
                 @click="handleBalanceHistory(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
                 <Icon name="dollar" size="sm" class="text-gray-400" :stroke-width="2" />
-                {{ t('admin.users.balanceHistory') }}
+                {{ t('checkin.admin.audit') }}
               </button>
 
               <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>

@@ -1211,7 +1211,10 @@ func usesOpenAILegacyLongContextPricing(normalized string) bool {
 
 // CalculateCostWithConfig 使用配置中的默认倍率计算费用
 func (s *BillingService) CalculateCostWithConfig(model string, tokens UsageTokens) (*CostBreakdown, error) {
-	multiplier := s.cfg.Default.RateMultiplier
+	multiplier := 1.0
+	if s.cfg != nil {
+		multiplier = s.cfg.Default.RateMultiplier
+	}
 	if multiplier <= 0 {
 		multiplier = 1.0
 	}

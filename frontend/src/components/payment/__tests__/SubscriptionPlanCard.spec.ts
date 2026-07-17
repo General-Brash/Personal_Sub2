@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
 import SubscriptionPlanCard from "../SubscriptionPlanCard.vue";
+import type { SubscriptionPlan } from "@/types/payment";
 
 const i18n = createI18n({
   legacy: false,
@@ -25,7 +26,7 @@ const i18n = createI18n({
   },
 });
 
-const mountPlanCard = (groupPlatform: string) =>
+const mountPlanCard = (groupPlatform: string, planOverrides: Partial<SubscriptionPlan> = {}) =>
   mount(SubscriptionPlanCard, {
     props: {
       plan: {
@@ -41,6 +42,7 @@ const mountPlanCard = (groupPlatform: string) =>
         validity_unit: "day",
         supported_model_scopes: ["claude", "gemini_text", "gemini_image"],
         is_active: true,
+        ...planOverrides,
       },
     },
     global: { plugins: [i18n, createPinia()] },
@@ -61,5 +63,21 @@ describe("SubscriptionPlanCard", () => {
     expect(text).toContain("Claude");
     expect(text).toContain("Gemini");
     expect(text).toContain("Imagen");
+  });
+
+  it("shows plan prices and quota amounts with two decimal places", () => {
+    const text = mountPlanCard("openai", {
+      price: 10.126,
+      original_price: 12.345,
+      daily_limit_usd: 1.234,
+      weekly_limit_usd: 20.005,
+      monthly_limit_usd: 100.999,
+    }).text();
+
+    expect(text).toContain("$10.13");
+    expect(text).toContain("$12.35");
+    expect(text).toContain("$1.23");
+    expect(text).toContain("$20.01");
+    expect(text).toContain("$101.00");
   });
 });

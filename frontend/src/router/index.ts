@@ -11,6 +11,8 @@ import { useAdminComplianceStore } from '@/stores/adminCompliance'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
+import { i18n } from '@/i18n'
+import { FeatureFlags } from '@/utils/featureFlags'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
 
@@ -194,6 +196,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/check-in',
+    name: 'CheckIn',
+    component: () => import('@/views/user/CheckInView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Daily Check-in',
+      titleKey: 'checkin.title',
+      descriptionKey: 'checkin.description'
+    }
+  },
+  {
     path: '/keys',
     name: 'Keys',
     component: () => import('@/views/user/KeysView.vue'),
@@ -287,7 +301,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: false,
       title: 'My Subscriptions',
       titleKey: 'userSubscriptions.title',
-      descriptionKey: 'userSubscriptions.description'
+      descriptionKey: 'userSubscriptions.description',
+      requiredFeatureFlag: FeatureFlags.userSubscriptions
     }
   },
   {
@@ -453,7 +468,10 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/admin/channels',
-    redirect: '/admin/channels/pricing'
+    redirect: '/admin/channels/pricing',
+    meta: {
+      requiredFeatureFlag: FeatureFlags.adminChannelManagement
+    }
   },
   {
     path: '/admin/channels/pricing',
@@ -464,7 +482,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Channel Management',
       titleKey: 'admin.channels.title',
-      descriptionKey: 'admin.channels.description'
+      descriptionKey: 'admin.channels.description',
+      requiredFeatureFlag: FeatureFlags.adminChannelManagement
     }
   },
   {
@@ -476,7 +495,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Channel Monitor',
       titleKey: 'admin.channelMonitor.title',
-      descriptionKey: 'admin.channelMonitor.description'
+      descriptionKey: 'admin.channelMonitor.description',
+      requiredFeatureFlag: FeatureFlags.adminChannelManagement
     }
   },
   {
@@ -487,7 +507,8 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       requiresAdmin: false,
       title: 'Channel Status',
-      titleKey: 'nav.channelStatus'
+      titleKey: 'nav.channelStatus',
+      requiredFeatureFlag: FeatureFlags.userChannelStatus
     }
   },
   {
@@ -559,7 +580,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Promo Code Management',
       titleKey: 'admin.promo.title',
-      descriptionKey: 'admin.promo.description'
+      descriptionKey: 'admin.promo.description',
+      requiredFeatureFlag: FeatureFlags.adminPromoCodes
     }
   },
   {
@@ -854,7 +876,10 @@ router.beforeEach(async (to, _from, next) => {
   // 公共设置可能尚未加载（App.vue 的 onMounted 异步拉取晚于首次导航，且纯静态部署
   // 无 __APP_CONFIG__ 注入）。此时 cachedPublicSettings 为空会把 payment/risk_control
   // 误判为“未启用”而错误拦截，故这里先确保设置加载完成。
-  if ((to.meta.requiresPayment || to.meta.requiresRiskControl) && !appStore.publicSettingsLoaded) {
+  if (
+    (to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiredFeatureFlag) &&
+    !appStore.publicSettingsLoaded
+  ) {
     try {
       await appStore.fetchPublicSettings()
     } catch (error) {
@@ -879,6 +904,16 @@ router.beforeEach(async (to, _from, next) => {
     appStore.cachedPublicSettings?.risk_control_enabled === false
   ) {
     next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
+    return
+  }
+
+  if (
+    to.meta.requiredFeatureFlag &&
+    appStore.publicSettingsLoaded &&
+    appStore.cachedPublicSettings?.[to.meta.requiredFeatureFlag.key] === false
+  ) {
+    appStore.showWarning(i18n.global.t('common.pageDisabledByAdmin'))
+    next(requiresAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 

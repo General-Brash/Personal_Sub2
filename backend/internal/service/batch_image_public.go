@@ -25,12 +25,15 @@ const (
 	defaultBatchImageMaxPromptChars     = 8000
 	defaultBatchImageResponseMime       = "image/png"
 	defaultBatchImageImageSize          = "1K"
-	defaultBatchImageDiscountMultiplier = 0.5
-	defaultBatchImageHoldMultiplier     = 0.6
 	maxBatchImagePublicErrorChars       = 500
 	maxBatchImageReferenceImageBytes    = 10 * 1024 * 1024
 	defaultBatchImageMaxReferenceImages = 1000
 	defaultBatchImageMaxReferenceBytes  = 128 * 1024 * 1024
+)
+
+var (
+	defaultBatchImageDiscountMultiplier = 0.5
+	defaultBatchImageHoldMultiplier     = 0.6
 )
 
 type BatchImageAccountSelectionRepository interface {
@@ -1072,6 +1075,8 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 	standardUnitPrice := unit * groupMultiplier * accountMultiplier
 	billableUnitPrice := standardUnitPrice * discountMultiplier
 	holdUnitPrice := standardUnitPrice * holdMultiplier
+	estimatedCost := billableUnitPrice * float64(len(req.Items))
+	holdAmount := holdUnitPrice * float64(len(req.Items))
 	return &BatchImagePricingSnapshot{
 		BaseUnitPrice:           unit,
 		GroupRateMultiplier:     groupMultiplier,
@@ -1080,8 +1085,8 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 		HoldMultiplier:          holdMultiplier,
 		BillableUnitPrice:       billableUnitPrice,
 		HoldUnitPrice:           holdUnitPrice,
-		EstimatedCost:           billableUnitPrice * float64(len(req.Items)),
-		HoldAmount:              holdUnitPrice * float64(len(req.Items)),
+		EstimatedCost:           estimatedCost,
+		HoldAmount:              holdAmount,
 	}, nil
 }
 

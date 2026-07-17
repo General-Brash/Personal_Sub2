@@ -14,11 +14,13 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
+	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditgrant"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
@@ -549,6 +551,51 @@ func (_c *UserCreate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserCreate {
 	return _c.AddPlatformQuotaIDs(ids...)
 }
 
+// AddDailyCheckinIDs adds the "daily_checkins" edge to the DailyCheckin entity by IDs.
+func (_c *UserCreate) AddDailyCheckinIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddDailyCheckinIDs(ids...)
+	return _c
+}
+
+// AddDailyCheckins adds the "daily_checkins" edges to the DailyCheckin entity.
+func (_c *UserCreate) AddDailyCheckins(v ...*DailyCheckin) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddDailyCheckinIDs(ids...)
+}
+
+// AddTemporaryCreditGrantIDs adds the "temporary_credit_grants" edge to the TemporaryCreditGrant entity by IDs.
+func (_c *UserCreate) AddTemporaryCreditGrantIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddTemporaryCreditGrantIDs(ids...)
+	return _c
+}
+
+// AddTemporaryCreditGrants adds the "temporary_credit_grants" edges to the TemporaryCreditGrant entity.
+func (_c *UserCreate) AddTemporaryCreditGrants(v ...*TemporaryCreditGrant) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddTemporaryCreditGrantIDs(ids...)
+}
+
+// AddGrantedTemporaryCreditGrantIDs adds the "granted_temporary_credit_grants" edge to the TemporaryCreditGrant entity by IDs.
+func (_c *UserCreate) AddGrantedTemporaryCreditGrantIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddGrantedTemporaryCreditGrantIDs(ids...)
+	return _c
+}
+
+// AddGrantedTemporaryCreditGrants adds the "granted_temporary_credit_grants" edges to the TemporaryCreditGrant entity.
+func (_c *UserCreate) AddGrantedTemporaryCreditGrants(v ...*TemporaryCreditGrant) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddGrantedTemporaryCreditGrantIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -1073,6 +1120,54 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.DailyCheckinsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.DailyCheckinsTable,
+			Columns: []string{user.DailyCheckinsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(dailycheckin.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.TemporaryCreditGrantsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.TemporaryCreditGrantsTable,
+			Columns: []string{user.TemporaryCreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(temporarycreditgrant.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.GrantedTemporaryCreditGrantsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GrantedTemporaryCreditGrantsTable,
+			Columns: []string{user.GrantedTemporaryCreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(temporarycreditgrant.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

@@ -282,6 +282,12 @@ type SystemSettings struct {
 	// Available Channels feature switch (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 
+	// Page visibility (UI only)
+	UserChannelStatusEnabled      bool `json:"user_channel_status_enabled"`
+	UserSubscriptionsEnabled      bool `json:"user_subscriptions_enabled"`
+	AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
+	AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
+
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
@@ -364,6 +370,11 @@ type PublicSettings struct {
 	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
 
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+
+	UserChannelStatusEnabled      bool `json:"user_channel_status_enabled"`
+	UserSubscriptionsEnabled      bool `json:"user_subscriptions_enabled"`
+	AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
+	AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
 
 	AffiliateEnabled bool `json:"affiliate_enabled"`
 

@@ -50,9 +50,15 @@ func (_c *IdempotencyRecordCreate) SetNillableUpdatedAt(v *time.Time) *Idempoten
 	return _c
 }
 
-// SetScope sets the "scope" field.
-func (_c *IdempotencyRecordCreate) SetScope(v string) *IdempotencyRecordCreate {
-	_c.mutation.SetScope(v)
+// SetOperationScope sets the "operation_scope" field.
+func (_c *IdempotencyRecordCreate) SetOperationScope(v string) *IdempotencyRecordCreate {
+	_c.mutation.SetOperationScope(v)
+	return _c
+}
+
+// SetActorScope sets the "actor_scope" field.
+func (_c *IdempotencyRecordCreate) SetActorScope(v string) *IdempotencyRecordCreate {
+	_c.mutation.SetActorScope(v)
 	return _c
 }
 
@@ -189,12 +195,20 @@ func (_c *IdempotencyRecordCreate) check() error {
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "IdempotencyRecord.updated_at"`)}
 	}
-	if _, ok := _c.mutation.Scope(); !ok {
-		return &ValidationError{Name: "scope", err: errors.New(`ent: missing required field "IdempotencyRecord.scope"`)}
+	if _, ok := _c.mutation.OperationScope(); !ok {
+		return &ValidationError{Name: "operation_scope", err: errors.New(`ent: missing required field "IdempotencyRecord.operation_scope"`)}
 	}
-	if v, ok := _c.mutation.Scope(); ok {
-		if err := idempotencyrecord.ScopeValidator(v); err != nil {
-			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "IdempotencyRecord.scope": %w`, err)}
+	if v, ok := _c.mutation.OperationScope(); ok {
+		if err := idempotencyrecord.OperationScopeValidator(v); err != nil {
+			return &ValidationError{Name: "operation_scope", err: fmt.Errorf(`ent: validator failed for field "IdempotencyRecord.operation_scope": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ActorScope(); !ok {
+		return &ValidationError{Name: "actor_scope", err: errors.New(`ent: missing required field "IdempotencyRecord.actor_scope"`)}
+	}
+	if v, ok := _c.mutation.ActorScope(); ok {
+		if err := idempotencyrecord.ActorScopeValidator(v); err != nil {
+			return &ValidationError{Name: "actor_scope", err: fmt.Errorf(`ent: validator failed for field "IdempotencyRecord.actor_scope": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.IdempotencyKeyHash(); !ok {
@@ -264,9 +278,13 @@ func (_c *IdempotencyRecordCreate) createSpec() (*IdempotencyRecord, *sqlgraph.C
 		_spec.SetField(idempotencyrecord.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := _c.mutation.Scope(); ok {
-		_spec.SetField(idempotencyrecord.FieldScope, field.TypeString, value)
-		_node.Scope = value
+	if value, ok := _c.mutation.OperationScope(); ok {
+		_spec.SetField(idempotencyrecord.FieldOperationScope, field.TypeString, value)
+		_node.OperationScope = value
+	}
+	if value, ok := _c.mutation.ActorScope(); ok {
+		_spec.SetField(idempotencyrecord.FieldActorScope, field.TypeString, value)
+		_node.ActorScope = value
 	}
 	if value, ok := _c.mutation.IdempotencyKeyHash(); ok {
 		_spec.SetField(idempotencyrecord.FieldIdempotencyKeyHash, field.TypeString, value)
@@ -364,15 +382,27 @@ func (u *IdempotencyRecordUpsert) UpdateUpdatedAt() *IdempotencyRecordUpsert {
 	return u
 }
 
-// SetScope sets the "scope" field.
-func (u *IdempotencyRecordUpsert) SetScope(v string) *IdempotencyRecordUpsert {
-	u.Set(idempotencyrecord.FieldScope, v)
+// SetOperationScope sets the "operation_scope" field.
+func (u *IdempotencyRecordUpsert) SetOperationScope(v string) *IdempotencyRecordUpsert {
+	u.Set(idempotencyrecord.FieldOperationScope, v)
 	return u
 }
 
-// UpdateScope sets the "scope" field to the value that was provided on create.
-func (u *IdempotencyRecordUpsert) UpdateScope() *IdempotencyRecordUpsert {
-	u.SetExcluded(idempotencyrecord.FieldScope)
+// UpdateOperationScope sets the "operation_scope" field to the value that was provided on create.
+func (u *IdempotencyRecordUpsert) UpdateOperationScope() *IdempotencyRecordUpsert {
+	u.SetExcluded(idempotencyrecord.FieldOperationScope)
+	return u
+}
+
+// SetActorScope sets the "actor_scope" field.
+func (u *IdempotencyRecordUpsert) SetActorScope(v string) *IdempotencyRecordUpsert {
+	u.Set(idempotencyrecord.FieldActorScope, v)
+	return u
+}
+
+// UpdateActorScope sets the "actor_scope" field to the value that was provided on create.
+func (u *IdempotencyRecordUpsert) UpdateActorScope() *IdempotencyRecordUpsert {
+	u.SetExcluded(idempotencyrecord.FieldActorScope)
 	return u
 }
 
@@ -561,17 +591,31 @@ func (u *IdempotencyRecordUpsertOne) UpdateUpdatedAt() *IdempotencyRecordUpsertO
 	})
 }
 
-// SetScope sets the "scope" field.
-func (u *IdempotencyRecordUpsertOne) SetScope(v string) *IdempotencyRecordUpsertOne {
+// SetOperationScope sets the "operation_scope" field.
+func (u *IdempotencyRecordUpsertOne) SetOperationScope(v string) *IdempotencyRecordUpsertOne {
 	return u.Update(func(s *IdempotencyRecordUpsert) {
-		s.SetScope(v)
+		s.SetOperationScope(v)
 	})
 }
 
-// UpdateScope sets the "scope" field to the value that was provided on create.
-func (u *IdempotencyRecordUpsertOne) UpdateScope() *IdempotencyRecordUpsertOne {
+// UpdateOperationScope sets the "operation_scope" field to the value that was provided on create.
+func (u *IdempotencyRecordUpsertOne) UpdateOperationScope() *IdempotencyRecordUpsertOne {
 	return u.Update(func(s *IdempotencyRecordUpsert) {
-		s.UpdateScope()
+		s.UpdateOperationScope()
+	})
+}
+
+// SetActorScope sets the "actor_scope" field.
+func (u *IdempotencyRecordUpsertOne) SetActorScope(v string) *IdempotencyRecordUpsertOne {
+	return u.Update(func(s *IdempotencyRecordUpsert) {
+		s.SetActorScope(v)
+	})
+}
+
+// UpdateActorScope sets the "actor_scope" field to the value that was provided on create.
+func (u *IdempotencyRecordUpsertOne) UpdateActorScope() *IdempotencyRecordUpsertOne {
+	return u.Update(func(s *IdempotencyRecordUpsert) {
+		s.UpdateActorScope()
 	})
 }
 
@@ -947,17 +991,31 @@ func (u *IdempotencyRecordUpsertBulk) UpdateUpdatedAt() *IdempotencyRecordUpsert
 	})
 }
 
-// SetScope sets the "scope" field.
-func (u *IdempotencyRecordUpsertBulk) SetScope(v string) *IdempotencyRecordUpsertBulk {
+// SetOperationScope sets the "operation_scope" field.
+func (u *IdempotencyRecordUpsertBulk) SetOperationScope(v string) *IdempotencyRecordUpsertBulk {
 	return u.Update(func(s *IdempotencyRecordUpsert) {
-		s.SetScope(v)
+		s.SetOperationScope(v)
 	})
 }
 
-// UpdateScope sets the "scope" field to the value that was provided on create.
-func (u *IdempotencyRecordUpsertBulk) UpdateScope() *IdempotencyRecordUpsertBulk {
+// UpdateOperationScope sets the "operation_scope" field to the value that was provided on create.
+func (u *IdempotencyRecordUpsertBulk) UpdateOperationScope() *IdempotencyRecordUpsertBulk {
 	return u.Update(func(s *IdempotencyRecordUpsert) {
-		s.UpdateScope()
+		s.UpdateOperationScope()
+	})
+}
+
+// SetActorScope sets the "actor_scope" field.
+func (u *IdempotencyRecordUpsertBulk) SetActorScope(v string) *IdempotencyRecordUpsertBulk {
+	return u.Update(func(s *IdempotencyRecordUpsert) {
+		s.SetActorScope(v)
+	})
+}
+
+// UpdateActorScope sets the "actor_scope" field to the value that was provided on create.
+func (u *IdempotencyRecordUpsertBulk) UpdateActorScope() *IdempotencyRecordUpsertBulk {
+	return u.Update(func(s *IdempotencyRecordUpsert) {
+		s.UpdateActorScope()
 	})
 }
 

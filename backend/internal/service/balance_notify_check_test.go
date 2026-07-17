@@ -27,7 +27,7 @@ func newBalanceNotifyServiceForTest() (*BalanceNotifyService, *mockSettingRepo) 
 func TestCheckBalanceAfterDeduction_NilUser(t *testing.T) {
 	s, _ := newBalanceNotifyServiceForTest()
 	// Should not panic.
-	s.CheckBalanceAfterDeduction(context.Background(), nil, 100, 50)
+	s.CheckBalanceAfterDeduction(context.Background(), nil, quotaTestFloat("100"), quotaTestFloat("50"))
 }
 
 func TestCheckBalanceAfterDeduction_UserNotifyDisabled(t *testing.T) {
@@ -36,14 +36,14 @@ func TestCheckBalanceAfterDeduction_UserNotifyDisabled(t *testing.T) {
 	repo.data[SettingKeyBalanceLowNotifyThreshold] = "10"
 	u := &User{ID: 1, BalanceNotifyEnabled: false}
 	// Even with a crossing, disabled flag short-circuits.
-	s.CheckBalanceAfterDeduction(context.Background(), u, 20, 15)
+	s.CheckBalanceAfterDeduction(context.Background(), u, quotaTestFloat("20"), quotaTestFloat("15"))
 }
 
 func TestCheckBalanceAfterDeduction_GlobalDisabled(t *testing.T) {
 	s, repo := newBalanceNotifyServiceForTest()
 	repo.data[SettingKeyBalanceLowNotifyEnabled] = "false"
 	u := &User{ID: 1, BalanceNotifyEnabled: true}
-	s.CheckBalanceAfterDeduction(context.Background(), u, 20, 15)
+	s.CheckBalanceAfterDeduction(context.Background(), u, quotaTestFloat("20"), quotaTestFloat("15"))
 }
 
 func TestCheckBalanceAfterDeduction_ThresholdZero(t *testing.T) {
@@ -51,14 +51,14 @@ func TestCheckBalanceAfterDeduction_ThresholdZero(t *testing.T) {
 	repo.data[SettingKeyBalanceLowNotifyEnabled] = "true"
 	repo.data[SettingKeyBalanceLowNotifyThreshold] = "0"
 	u := &User{ID: 1, BalanceNotifyEnabled: true}
-	s.CheckBalanceAfterDeduction(context.Background(), u, 20, 15)
+	s.CheckBalanceAfterDeduction(context.Background(), u, quotaTestFloat("20"), quotaTestFloat("15"))
 }
 
 func TestCheckBalanceAfterDeduction_UserThresholdOverride(t *testing.T) {
 	s, repo := newBalanceNotifyServiceForTest()
 	repo.data[SettingKeyBalanceLowNotifyEnabled] = "true"
 	repo.data[SettingKeyBalanceLowNotifyThreshold] = "100" // global default
-	customThreshold := 5.0
+	customThreshold := quotaTestFloat("5")
 	u := &User{
 		ID:                     1,
 		BalanceNotifyEnabled:   true,
@@ -66,7 +66,7 @@ func TestCheckBalanceAfterDeduction_UserThresholdOverride(t *testing.T) {
 	}
 	// User's 5.0 threshold takes precedence over global 100. 20 -> 15 does not
 	// cross 5, so nothing fires (verified by absence of panic).
-	s.CheckBalanceAfterDeduction(context.Background(), u, 20, 15)
+	s.CheckBalanceAfterDeduction(context.Background(), u, quotaTestFloat("20"), quotaTestFloat("15"))
 }
 
 func TestCheckBalanceAfterDeduction_NoCrossingNotFired(t *testing.T) {
@@ -76,10 +76,10 @@ func TestCheckBalanceAfterDeduction_NoCrossingNotFired(t *testing.T) {
 	u := &User{ID: 1, BalanceNotifyEnabled: true}
 
 	// 100 -> 95, both remain above threshold=10, no crossing.
-	s.CheckBalanceAfterDeduction(context.Background(), u, 100, 5)
+	s.CheckBalanceAfterDeduction(context.Background(), u, quotaTestFloat("100"), quotaTestFloat("5"))
 	// 5 -> 3, both already below threshold, no crossing (only fires on first
 	// cross from above-to-below).
-	s.CheckBalanceAfterDeduction(context.Background(), u, 5, 2)
+	s.CheckBalanceAfterDeduction(context.Background(), u, quotaTestFloat("5"), quotaTestFloat("2"))
 }
 
 // ---------- nil-service guards on CheckAccountQuotaAfterIncrement ----------
@@ -87,19 +87,19 @@ func TestCheckBalanceAfterDeduction_NoCrossingNotFired(t *testing.T) {
 func TestCheckAccountQuotaAfterIncrement_NilAccount(t *testing.T) {
 	s, _ := newBalanceNotifyServiceForTest()
 	// Should not panic.
-	s.CheckAccountQuotaAfterIncrement(context.Background(), nil, 10, nil)
+	s.CheckAccountQuotaAfterIncrement(context.Background(), nil, quotaTestFloat("10"), nil)
 }
 
 func TestCheckAccountQuotaAfterIncrement_ZeroCost(t *testing.T) {
 	s, _ := newBalanceNotifyServiceForTest()
 	a := &Account{ID: 1, Platform: PlatformAnthropic, Type: AccountTypeAPIKey}
-	s.CheckAccountQuotaAfterIncrement(context.Background(), a, 0, nil)
+	s.CheckAccountQuotaAfterIncrement(context.Background(), a, quotaTestFloat("0"), nil)
 }
 
 func TestCheckAccountQuotaAfterIncrement_NegativeCost(t *testing.T) {
 	s, _ := newBalanceNotifyServiceForTest()
 	a := &Account{ID: 1, Platform: PlatformAnthropic, Type: AccountTypeAPIKey}
-	s.CheckAccountQuotaAfterIncrement(context.Background(), a, -5, nil)
+	s.CheckAccountQuotaAfterIncrement(context.Background(), a, quotaTestFloat("-5"), nil)
 }
 
 func TestCheckAccountQuotaAfterIncrement_GlobalDisabled(t *testing.T) {
@@ -117,7 +117,7 @@ func TestCheckAccountQuotaAfterIncrement_GlobalDisabled(t *testing.T) {
 		},
 	}
 	// Global disabled → no processing even if a dim would cross.
-	s.CheckAccountQuotaAfterIncrement(context.Background(), a, 100, nil)
+	s.CheckAccountQuotaAfterIncrement(context.Background(), a, quotaTestFloat("100"), nil)
 }
 
 // ---------- sanity: internal helpers still work ----------
@@ -130,7 +130,7 @@ func TestGetBalanceNotifyConfig_AllFields(t *testing.T) {
 
 	enabled, threshold, url := s.getBalanceNotifyConfig(context.Background())
 	require.True(t, enabled)
-	require.Equal(t, 12.5, threshold)
+	require.Equal(t, quotaTestFloat("12.5"), threshold)
 	require.Equal(t, "https://example.com/pay", url)
 }
 
@@ -149,7 +149,7 @@ func TestGetBalanceNotifyConfig_InvalidThreshold(t *testing.T) {
 
 	enabled, threshold, _ := s.getBalanceNotifyConfig(context.Background())
 	require.True(t, enabled)
-	require.Equal(t, 0.0, threshold)
+	require.Equal(t, quotaTestFloat("0"), threshold)
 }
 
 func TestIsAccountQuotaNotifyEnabled(t *testing.T) {
@@ -183,55 +183,59 @@ func TestGetSiteName_Configured(t *testing.T) {
 
 func TestCrossedDownward_CrossesBelow(t *testing.T) {
 	// oldBalance > threshold, newBalance < threshold → true
-	require.True(t, crossedDownward(100, 5, 10))
+	require.True(t, crossedDownward(quotaTestFloat("100"), quotaTestFloat("5"), quotaTestFloat("10")))
 }
 
 func TestCrossedDownward_ExactlyAtThreshold(t *testing.T) {
 	// oldBalance > threshold, newBalance == threshold → false (not below)
-	require.False(t, crossedDownward(100, 10, 10))
+	require.False(t, crossedDownward(quotaTestFloat("100"), quotaTestFloat("10"), quotaTestFloat("10")))
 }
 
 func TestCrossedDownward_OldExactlyAtThreshold_NewBelow(t *testing.T) {
 	// oldBalance == threshold, newBalance < threshold → true
 	// (at-or-above → below counts as a crossing)
-	require.True(t, crossedDownward(10, 5, 10))
+	require.True(t, crossedDownward(quotaTestFloat("10"), quotaTestFloat("5"), quotaTestFloat("10")))
 }
 
 func TestCrossedDownward_AlreadyBelow(t *testing.T) {
 	// oldBalance < threshold → false (already below, no new crossing)
-	require.False(t, crossedDownward(5, 3, 10))
+	require.False(t, crossedDownward(quotaTestFloat("5"), quotaTestFloat("3"), quotaTestFloat("10")))
 }
 
 func TestCrossedDownward_BothAbove(t *testing.T) {
 	// oldBalance > threshold, newBalance > threshold → false (no crossing)
-	require.False(t, crossedDownward(100, 50, 10))
+	require.False(t, crossedDownward(quotaTestFloat("100"), quotaTestFloat("50"), quotaTestFloat("10")))
 }
 
 func TestCrossedDownward_ZeroThreshold(t *testing.T) {
 	// threshold == 0 → oldV >= 0 is always true, but newV < 0 only for negatives
 	// Typical case: positive balances should not fire when threshold is 0.
-	require.False(t, crossedDownward(10, 5, 0))
-	require.False(t, crossedDownward(0, 0, 0))
+	require.False(t, crossedDownward(quotaTestFloat("10"), quotaTestFloat("5"), quotaTestFloat("0")))
+	require.False(t, crossedDownward(quotaTestFloat("0"), quotaTestFloat("0"), quotaTestFloat("0")))
 }
 
 func TestCrossedDownward_ZeroThreshold_NegativeNew(t *testing.T) {
 	// Edge case: newBalance goes negative with threshold=0.
-	require.True(t, crossedDownward(5, -1, 0))
+	require.True(t, crossedDownward(quotaTestFloat("5"), quotaTestFloat("-1"), quotaTestFloat("0")))
 }
 
 func TestCrossedDownward_NegativeValues(t *testing.T) {
 	// Both already negative, threshold is positive → no crossing (already below).
-	require.False(t, crossedDownward(-5, -10, 10))
+	require.False(t, crossedDownward(quotaTestFloat("-5"), quotaTestFloat("-10"), quotaTestFloat("10")))
 }
 
 func TestCrossedDownward_LargeDecrement(t *testing.T) {
 	// A single large deduction crosses the threshold.
-	require.True(t, crossedDownward(1000, 0.5, 100))
+	require.True(t, crossedDownward(quotaTestFloat("1000"), quotaTestFloat("0.5"), quotaTestFloat("100")))
 }
 
 func TestCrossedDownward_SmallDecrement_NoCrossing(t *testing.T) {
 	// A tiny deduction stays above threshold.
-	require.False(t, crossedDownward(100, 99.99, 10))
+	require.False(t, crossedDownward(quotaTestFloat("100"), quotaTestFloat("99.99"), quotaTestFloat("10")))
+}
+
+func TestCrossedDownward_PreservesExactDecimalBoundary(t *testing.T) {
+	require.True(t, crossedDownward(quotaTestFloat("0.30000000"), quotaTestFloat("0.29999999"), quotaTestFloat("0.3")))
 }
 
 // ---------- checkQuotaDimCrossings ----------
@@ -240,8 +244,8 @@ func TestCheckQuotaDimCrossings_NoDimensions(t *testing.T) {
 	s, _ := newBalanceNotifyServiceForTest()
 	account := &Account{ID: 1, Name: "test", Platform: PlatformAnthropic}
 	// Empty dims → no crossing, no panic.
-	s.checkQuotaDimCrossings(account, nil, 10, []string{"admin@example.com"}, "TestSite")
-	s.checkQuotaDimCrossings(account, []quotaDim{}, 10, []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, nil, quotaTestFloat("10"), []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, []quotaDim{}, quotaTestFloat("10"), []string{"admin@example.com"}, "TestSite")
 }
 
 func TestCheckQuotaDimCrossings_DisabledDimension(t *testing.T) {
@@ -251,14 +255,14 @@ func TestCheckQuotaDimCrossings_DisabledDimension(t *testing.T) {
 		{
 			name:          quotaDimDaily,
 			enabled:       false, // disabled
-			threshold:     100,
+			threshold:     quotaTestFloat("100"),
 			thresholdType: thresholdTypeFixed,
-			currentUsed:   950,
-			limit:         1000,
+			currentUsed:   quotaTestFloat("950"),
+			limit:         quotaTestFloat("1000"),
 		},
 	}
 	// Disabled dimension should be skipped even if crossing would occur.
-	s.checkQuotaDimCrossings(account, dims, 50, []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, dims, quotaTestFloat("50"), []string{"admin@example.com"}, "TestSite")
 }
 
 func TestCheckQuotaDimCrossings_ZeroThresholdSkipped(t *testing.T) {
@@ -268,14 +272,14 @@ func TestCheckQuotaDimCrossings_ZeroThresholdSkipped(t *testing.T) {
 		{
 			name:          quotaDimDaily,
 			enabled:       true,
-			threshold:     0, // zero threshold
+			threshold:     quotaTestFloat("0"), // zero threshold
 			thresholdType: thresholdTypeFixed,
-			currentUsed:   950,
-			limit:         1000,
+			currentUsed:   quotaTestFloat("950"),
+			limit:         quotaTestFloat("1000"),
 		},
 	}
 	// Zero threshold → skipped.
-	s.checkQuotaDimCrossings(account, dims, 50, []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, dims, quotaTestFloat("50"), []string{"admin@example.com"}, "TestSite")
 }
 
 func TestCheckQuotaDimCrossings_NoCrossing_BothBelowThreshold(t *testing.T) {
@@ -287,13 +291,13 @@ func TestCheckQuotaDimCrossings_NoCrossing_BothBelowThreshold(t *testing.T) {
 		{
 			name:          quotaDimDaily,
 			enabled:       true,
-			threshold:     400,
+			threshold:     quotaTestFloat("400"),
 			thresholdType: thresholdTypeFixed,
-			currentUsed:   300,
-			limit:         1000,
+			currentUsed:   quotaTestFloat("300"),
+			limit:         quotaTestFloat("1000"),
 		},
 	}
-	s.checkQuotaDimCrossings(account, dims, 50, []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, dims, quotaTestFloat("50"), []string{"admin@example.com"}, "TestSite")
 }
 
 func TestCheckQuotaDimCrossings_NoCrossing_BothAboveThreshold(t *testing.T) {
@@ -305,13 +309,13 @@ func TestCheckQuotaDimCrossings_NoCrossing_BothAboveThreshold(t *testing.T) {
 		{
 			name:          quotaDimDaily,
 			enabled:       true,
-			threshold:     400,
+			threshold:     quotaTestFloat("400"),
 			thresholdType: thresholdTypeFixed,
-			currentUsed:   800,
-			limit:         1000,
+			currentUsed:   quotaTestFloat("800"),
+			limit:         quotaTestFloat("1000"),
 		},
 	}
-	s.checkQuotaDimCrossings(account, dims, 50, []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, dims, quotaTestFloat("50"), []string{"admin@example.com"}, "TestSite")
 }
 
 func TestCheckQuotaDimCrossings_NegativeResolvedThreshold_Skipped(t *testing.T) {
@@ -323,13 +327,13 @@ func TestCheckQuotaDimCrossings_NegativeResolvedThreshold_Skipped(t *testing.T) 
 		{
 			name:          quotaDimDaily,
 			enabled:       true,
-			threshold:     1200,
+			threshold:     quotaTestFloat("1200"),
 			thresholdType: thresholdTypeFixed,
-			currentUsed:   950,
-			limit:         1000,
+			currentUsed:   quotaTestFloat("950"),
+			limit:         quotaTestFloat("1000"),
 		},
 	}
-	s.checkQuotaDimCrossings(account, dims, 50, []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, dims, quotaTestFloat("50"), []string{"admin@example.com"}, "TestSite")
 }
 
 func TestCheckQuotaDimCrossings_PercentageThreshold_NoCrossing(t *testing.T) {
@@ -341,13 +345,13 @@ func TestCheckQuotaDimCrossings_PercentageThreshold_NoCrossing(t *testing.T) {
 		{
 			name:          quotaDimWeekly,
 			enabled:       true,
-			threshold:     30,
+			threshold:     quotaTestFloat("30"),
 			thresholdType: thresholdTypePercentage,
-			currentUsed:   500,
-			limit:         1000,
+			currentUsed:   quotaTestFloat("500"),
+			limit:         quotaTestFloat("1000"),
 		},
 	}
-	s.checkQuotaDimCrossings(account, dims, 50, []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, dims, quotaTestFloat("50"), []string{"admin@example.com"}, "TestSite")
 }
 
 func TestCheckQuotaDimCrossings_ZeroLimit_Skipped(t *testing.T) {
@@ -358,13 +362,13 @@ func TestCheckQuotaDimCrossings_ZeroLimit_Skipped(t *testing.T) {
 		{
 			name:          quotaDimTotal,
 			enabled:       true,
-			threshold:     100,
+			threshold:     quotaTestFloat("100"),
 			thresholdType: thresholdTypeFixed,
-			currentUsed:   50,
-			limit:         0,
+			currentUsed:   quotaTestFloat("50"),
+			limit:         quotaTestFloat("0"),
 		},
 	}
-	s.checkQuotaDimCrossings(account, dims, 50, []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, dims, quotaTestFloat("50"), []string{"admin@example.com"}, "TestSite")
 }
 
 func TestCheckQuotaDimCrossings_MultipleDims_MixedResults(t *testing.T) {
@@ -377,28 +381,28 @@ func TestCheckQuotaDimCrossings_MultipleDims_MixedResults(t *testing.T) {
 		{
 			name:          quotaDimDaily,
 			enabled:       true,
-			threshold:     400,
+			threshold:     quotaTestFloat("400"),
 			thresholdType: thresholdTypeFixed,
-			currentUsed:   300, // oldUsed=250, effectiveThreshold=600, both below
-			limit:         1000,
+			currentUsed:   quotaTestFloat("300"), // oldUsed=250, effectiveThreshold=600, both below
+			limit:         quotaTestFloat("1000"),
 		},
 		{
 			name:          quotaDimWeekly,
 			enabled:       false,
-			threshold:     100,
+			threshold:     quotaTestFloat("100"),
 			thresholdType: thresholdTypeFixed,
-			currentUsed:   900,
-			limit:         1000,
+			currentUsed:   quotaTestFloat("900"),
+			limit:         quotaTestFloat("1000"),
 		},
 		{
 			name:          quotaDimTotal,
 			enabled:       true,
-			threshold:     0,
+			threshold:     quotaTestFloat("0"),
 			thresholdType: thresholdTypeFixed,
-			currentUsed:   500,
-			limit:         1000,
+			currentUsed:   quotaTestFloat("500"),
+			limit:         quotaTestFloat("1000"),
 		},
 	}
 	// None should trigger. No panic expected.
-	s.checkQuotaDimCrossings(account, dims, 50, []string{"admin@example.com"}, "TestSite")
+	s.checkQuotaDimCrossings(account, dims, quotaTestFloat("50"), []string{"admin@example.com"}, "TestSite")
 }

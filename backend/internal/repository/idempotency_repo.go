@@ -24,15 +24,16 @@ func (r *idempotencyRepository) CreateProcessing(ctx context.Context, record *se
 	}
 	query := `
 		INSERT INTO idempotency_records (
-			scope, idempotency_key_hash, request_fingerprint, status, locked_until, expires_at
-		) VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (scope, idempotency_key_hash) DO NOTHING
+			operation_scope, actor_scope, idempotency_key_hash, request_fingerprint, status, locked_until, expires_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (operation_scope, actor_scope, idempotency_key_hash) DO NOTHING
 		RETURNING id, created_at, updated_at
 	`
 	var createdAt time.Time
 	var updatedAt time.Time
 	err := scanSingleRow(ctx, r.sql, query, []any{
 		record.Scope,
+		record.ActorScope,
 		record.IdempotencyKeyHash,
 		record.RequestFingerprint,
 		record.Status,
@@ -50,22 +51,23 @@ func (r *idempotencyRepository) CreateProcessing(ctx context.Context, record *se
 	return true, nil
 }
 
-func (r *idempotencyRepository) GetByScopeAndKeyHash(ctx context.Context, scope, keyHash string) (*service.IdempotencyRecord, error) {
+func (r *idempotencyRepository) GetByScopeActorScopeAndKeyHash(ctx context.Context, scope, actorScope, keyHash string) (*service.IdempotencyRecord, error) {
 	query := `
 		SELECT
-			id, scope, idempotency_key_hash, request_fingerprint, status, response_status,
+			id, operation_scope, actor_scope, idempotency_key_hash, request_fingerprint, status, response_status,
 			response_body, error_reason, locked_until, expires_at, created_at, updated_at
 		FROM idempotency_records
-		WHERE scope = $1 AND idempotency_key_hash = $2
+		WHERE operation_scope = $1 AND actor_scope = $2 AND idempotency_key_hash = $3
 	`
 	record := &service.IdempotencyRecord{}
 	var responseStatus sql.NullInt64
 	var responseBody sql.NullString
 	var errorReason sql.NullString
 	var lockedUntil sql.NullTime
-	err := scanSingleRow(ctx, r.sql, query, []any{scope, keyHash},
+	err := scanSingleRow(ctx, r.sql, query, []any{scope, actorScope, keyHash},
 		&record.ID,
 		&record.Scope,
+		&record.ActorScope,
 		&record.IdempotencyKeyHash,
 		&record.RequestFingerprint,
 		&record.Status,
@@ -137,6 +139,52 @@ func (r *idempotencyRepository) TryReclaim(
 	return affected > 0, nil
 }
 
+func (r *idempotencyRepository) TryReclaimOwned(
+	ctx context.Context,
+	id int64,
+	fromStatus, actorScope, requestFingerprint string,
+	expectedLockedUntil *time.Time,
+	now, newLockedUntil, newExpiresAt time.Time,
+) (bool, error) {
+	query := `
+		UPDATE idempotency_records
+		SET status = $2,
+			locked_until = $3,
+			error_reason = NULL,
+			updated_at = NOW(),
+			expires_at = $4
+		WHERE id = $1
+			AND status = $5
+			AND actor_scope = $6
+			AND request_fingerprint = $7
+			AND locked_until IS NOT DISTINCT FROM $8
+			AND (locked_until IS NULL OR locked_until <= $9)
+	`
+	var expectedLock any
+	if expectedLockedUntil != nil {
+		expectedLock = *expectedLockedUntil
+	}
+	res, err := r.sql.ExecContext(ctx, query,
+		id,
+		service.IdempotencyStatusProcessing,
+		newLockedUntil,
+		newExpiresAt,
+		fromStatus,
+		actorScope,
+		requestFingerprint,
+		expectedLock,
+		now,
+	)
+	if err != nil {
+		return false, err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected == 1, nil
+}
+
 func (r *idempotencyRepository) ExtendProcessingLock(
 	ctx context.Context,
 	id int64,
@@ -183,15 +231,27 @@ func (r *idempotencyRepository) MarkSucceeded(ctx context.Context, id int64, res
 			expires_at = $5,
 			updated_at = NOW()
 		WHERE id = $1
+			AND status = $6
 	`
-	_, err := r.sql.ExecContext(ctx, query,
+	res, err := r.sql.ExecContext(ctx, query,
 		id,
 		service.IdempotencyStatusSucceeded,
 		responseStatus,
 		responseBody,
 		expiresAt,
+		service.IdempotencyStatusProcessing,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r *idempotencyRepository) MarkFailedRetryable(ctx context.Context, id int64, errorReason string, lockedUntil, expiresAt time.Time) error {
@@ -203,15 +263,69 @@ func (r *idempotencyRepository) MarkFailedRetryable(ctx context.Context, id int6
 			expires_at = $5,
 			updated_at = NOW()
 		WHERE id = $1
+			AND status = $6
 	`
-	_, err := r.sql.ExecContext(ctx, query,
+	res, err := r.sql.ExecContext(ctx, query,
 		id,
 		service.IdempotencyStatusFailedRetryable,
 		errorReason,
 		lockedUntil,
 		expiresAt,
+		service.IdempotencyStatusProcessing,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *idempotencyRepository) MarkFailedRetryableOwned(
+	ctx context.Context,
+	id int64,
+	actorScope, requestFingerprint string,
+	expectedLockedUntil time.Time,
+	errorReason string,
+	lockedUntil, expiresAt time.Time,
+) (bool, error) {
+	query := `
+		UPDATE idempotency_records
+		SET status = $2,
+			error_reason = $3,
+			locked_until = $4,
+			expires_at = $5,
+			updated_at = NOW()
+		WHERE id = $1
+			AND status = $6
+			AND actor_scope = $7
+			AND request_fingerprint = $8
+			AND locked_until IS NOT DISTINCT FROM $9
+	`
+	res, err := r.sql.ExecContext(ctx, query,
+		id,
+		service.IdempotencyStatusFailedRetryable,
+		errorReason,
+		lockedUntil,
+		expiresAt,
+		service.IdempotencyStatusProcessing,
+		actorScope,
+		requestFingerprint,
+		expectedLockedUntil,
+	)
+	if err != nil {
+		return false, err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected == 1, nil
 }
 
 func (r *idempotencyRepository) DeleteExpired(ctx context.Context, now time.Time, limit int) (int64, error) {

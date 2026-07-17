@@ -305,6 +305,12 @@ type UpdateSettingsRequest struct {
 	// Available Channels feature switch (user-facing)
 	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
 
+	// Page visibility (UI only)
+	UserChannelStatusEnabled      *bool `json:"user_channel_status_enabled"`
+	UserSubscriptionsEnabled      *bool `json:"user_subscriptions_enabled"`
+	AdminPromoCodesEnabled        *bool `json:"admin_promo_codes_enabled"`
+	AdminChannelManagementEnabled *bool `json:"admin_channel_management_enabled"`
+
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled *bool `json:"affiliate_enabled"`
 
@@ -1531,6 +1537,30 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.AvailableChannelsEnabled
 		}(),
+		UserChannelStatusEnabled: func() bool {
+			if req.UserChannelStatusEnabled != nil {
+				return *req.UserChannelStatusEnabled
+			}
+			return previousSettings.UserChannelStatusEnabled
+		}(),
+		UserSubscriptionsEnabled: func() bool {
+			if req.UserSubscriptionsEnabled != nil {
+				return *req.UserSubscriptionsEnabled
+			}
+			return previousSettings.UserSubscriptionsEnabled
+		}(),
+		AdminPromoCodesEnabled: func() bool {
+			if req.AdminPromoCodesEnabled != nil {
+				return *req.AdminPromoCodesEnabled
+			}
+			return previousSettings.AdminPromoCodesEnabled
+		}(),
+		AdminChannelManagementEnabled: func() bool {
+			if req.AdminChannelManagementEnabled != nil {
+				return *req.AdminChannelManagementEnabled
+			}
+			return previousSettings.AdminChannelManagementEnabled
+		}(),
 		AffiliateEnabled: func() bool {
 			if req.AffiliateEnabled != nil {
 				return *req.AffiliateEnabled
@@ -1913,6 +1943,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		ChannelMonitorDefaultIntervalSeconds: updatedSettings.ChannelMonitorDefaultIntervalSeconds,
 
 		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
+
+		UserChannelStatusEnabled:      updatedSettings.UserChannelStatusEnabled,
+		UserSubscriptionsEnabled:      updatedSettings.UserSubscriptionsEnabled,
+		AdminPromoCodesEnabled:        updatedSettings.AdminPromoCodesEnabled,
+		AdminChannelManagementEnabled: updatedSettings.AdminChannelManagementEnabled,
 
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
 

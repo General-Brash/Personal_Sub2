@@ -64,9 +64,14 @@ func UpdatedAt(v time.Time) predicate.IdempotencyRecord {
 	return predicate.IdempotencyRecord(sql.FieldEQ(FieldUpdatedAt, v))
 }
 
-// Scope applies equality check predicate on the "scope" field. It's identical to ScopeEQ.
-func Scope(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldEQ(FieldScope, v))
+// OperationScope applies equality check predicate on the "operation_scope" field. It's identical to OperationScopeEQ.
+func OperationScope(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldEQ(FieldOperationScope, v))
+}
+
+// ActorScope applies equality check predicate on the "actor_scope" field. It's identical to ActorScopeEQ.
+func ActorScope(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldEQ(FieldActorScope, v))
 }
 
 // IdempotencyKeyHash applies equality check predicate on the "idempotency_key_hash" field. It's identical to IdempotencyKeyHashEQ.
@@ -189,69 +194,134 @@ func UpdatedAtLTE(v time.Time) predicate.IdempotencyRecord {
 	return predicate.IdempotencyRecord(sql.FieldLTE(FieldUpdatedAt, v))
 }
 
-// ScopeEQ applies the EQ predicate on the "scope" field.
-func ScopeEQ(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldEQ(FieldScope, v))
+// OperationScopeEQ applies the EQ predicate on the "operation_scope" field.
+func OperationScopeEQ(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldEQ(FieldOperationScope, v))
 }
 
-// ScopeNEQ applies the NEQ predicate on the "scope" field.
-func ScopeNEQ(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldNEQ(FieldScope, v))
+// OperationScopeNEQ applies the NEQ predicate on the "operation_scope" field.
+func OperationScopeNEQ(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldNEQ(FieldOperationScope, v))
 }
 
-// ScopeIn applies the In predicate on the "scope" field.
-func ScopeIn(vs ...string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldIn(FieldScope, vs...))
+// OperationScopeIn applies the In predicate on the "operation_scope" field.
+func OperationScopeIn(vs ...string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldIn(FieldOperationScope, vs...))
 }
 
-// ScopeNotIn applies the NotIn predicate on the "scope" field.
-func ScopeNotIn(vs ...string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldNotIn(FieldScope, vs...))
+// OperationScopeNotIn applies the NotIn predicate on the "operation_scope" field.
+func OperationScopeNotIn(vs ...string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldNotIn(FieldOperationScope, vs...))
 }
 
-// ScopeGT applies the GT predicate on the "scope" field.
-func ScopeGT(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldGT(FieldScope, v))
+// OperationScopeGT applies the GT predicate on the "operation_scope" field.
+func OperationScopeGT(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldGT(FieldOperationScope, v))
 }
 
-// ScopeGTE applies the GTE predicate on the "scope" field.
-func ScopeGTE(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldGTE(FieldScope, v))
+// OperationScopeGTE applies the GTE predicate on the "operation_scope" field.
+func OperationScopeGTE(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldGTE(FieldOperationScope, v))
 }
 
-// ScopeLT applies the LT predicate on the "scope" field.
-func ScopeLT(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldLT(FieldScope, v))
+// OperationScopeLT applies the LT predicate on the "operation_scope" field.
+func OperationScopeLT(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldLT(FieldOperationScope, v))
 }
 
-// ScopeLTE applies the LTE predicate on the "scope" field.
-func ScopeLTE(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldLTE(FieldScope, v))
+// OperationScopeLTE applies the LTE predicate on the "operation_scope" field.
+func OperationScopeLTE(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldLTE(FieldOperationScope, v))
 }
 
-// ScopeContains applies the Contains predicate on the "scope" field.
-func ScopeContains(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldContains(FieldScope, v))
+// OperationScopeContains applies the Contains predicate on the "operation_scope" field.
+func OperationScopeContains(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldContains(FieldOperationScope, v))
 }
 
-// ScopeHasPrefix applies the HasPrefix predicate on the "scope" field.
-func ScopeHasPrefix(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldHasPrefix(FieldScope, v))
+// OperationScopeHasPrefix applies the HasPrefix predicate on the "operation_scope" field.
+func OperationScopeHasPrefix(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldHasPrefix(FieldOperationScope, v))
 }
 
-// ScopeHasSuffix applies the HasSuffix predicate on the "scope" field.
-func ScopeHasSuffix(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldHasSuffix(FieldScope, v))
+// OperationScopeHasSuffix applies the HasSuffix predicate on the "operation_scope" field.
+func OperationScopeHasSuffix(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldHasSuffix(FieldOperationScope, v))
 }
 
-// ScopeEqualFold applies the EqualFold predicate on the "scope" field.
-func ScopeEqualFold(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldEqualFold(FieldScope, v))
+// OperationScopeEqualFold applies the EqualFold predicate on the "operation_scope" field.
+func OperationScopeEqualFold(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldEqualFold(FieldOperationScope, v))
 }
 
-// ScopeContainsFold applies the ContainsFold predicate on the "scope" field.
-func ScopeContainsFold(v string) predicate.IdempotencyRecord {
-	return predicate.IdempotencyRecord(sql.FieldContainsFold(FieldScope, v))
+// OperationScopeContainsFold applies the ContainsFold predicate on the "operation_scope" field.
+func OperationScopeContainsFold(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldContainsFold(FieldOperationScope, v))
+}
+
+// ActorScopeEQ applies the EQ predicate on the "actor_scope" field.
+func ActorScopeEQ(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldEQ(FieldActorScope, v))
+}
+
+// ActorScopeNEQ applies the NEQ predicate on the "actor_scope" field.
+func ActorScopeNEQ(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldNEQ(FieldActorScope, v))
+}
+
+// ActorScopeIn applies the In predicate on the "actor_scope" field.
+func ActorScopeIn(vs ...string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldIn(FieldActorScope, vs...))
+}
+
+// ActorScopeNotIn applies the NotIn predicate on the "actor_scope" field.
+func ActorScopeNotIn(vs ...string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldNotIn(FieldActorScope, vs...))
+}
+
+// ActorScopeGT applies the GT predicate on the "actor_scope" field.
+func ActorScopeGT(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldGT(FieldActorScope, v))
+}
+
+// ActorScopeGTE applies the GTE predicate on the "actor_scope" field.
+func ActorScopeGTE(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldGTE(FieldActorScope, v))
+}
+
+// ActorScopeLT applies the LT predicate on the "actor_scope" field.
+func ActorScopeLT(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldLT(FieldActorScope, v))
+}
+
+// ActorScopeLTE applies the LTE predicate on the "actor_scope" field.
+func ActorScopeLTE(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldLTE(FieldActorScope, v))
+}
+
+// ActorScopeContains applies the Contains predicate on the "actor_scope" field.
+func ActorScopeContains(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldContains(FieldActorScope, v))
+}
+
+// ActorScopeHasPrefix applies the HasPrefix predicate on the "actor_scope" field.
+func ActorScopeHasPrefix(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldHasPrefix(FieldActorScope, v))
+}
+
+// ActorScopeHasSuffix applies the HasSuffix predicate on the "actor_scope" field.
+func ActorScopeHasSuffix(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldHasSuffix(FieldActorScope, v))
+}
+
+// ActorScopeEqualFold applies the EqualFold predicate on the "actor_scope" field.
+func ActorScopeEqualFold(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldEqualFold(FieldActorScope, v))
+}
+
+// ActorScopeContainsFold applies the ContainsFold predicate on the "actor_scope" field.
+func ActorScopeContainsFold(v string) predicate.IdempotencyRecord {
+	return predicate.IdempotencyRecord(sql.FieldContainsFold(FieldActorScope, v))
 }
 
 // IdempotencyKeyHashEQ applies the EQ predicate on the "idempotency_key_hash" field.

@@ -61,7 +61,6 @@ func newSettingServiceForPlatformQuotaTest(seed map[string]string) *SettingServi
 }
 
 func TestGetDefaultPlatformQuotas_ReturnsAllowedPlatforms(t *testing.T) {
-	zero := 0.0
 	svc := newSettingServiceForPlatformQuotaTest(map[string]string{
 		// 新 JSON 格式：anthropic daily=10.5, openai monthly=0, 其他平台无配置
 		SettingKeyDefaultPlatformQuotas: `{"anthropic":{"daily":10.5},"openai":{"monthly":0}}`,
@@ -81,7 +80,7 @@ func TestGetDefaultPlatformQuotas_ReturnsAllowedPlatforms(t *testing.T) {
 		t.Errorf("anthropic daily want 10.5, got %v", v)
 	}
 	// openai monthly = 0（显式禁用）
-	if v := got["openai"].MonthlyLimitUSD; v == nil || *v != zero {
+	if v := got["openai"].MonthlyLimitUSD; v == nil || *v != 0 {
 		t.Errorf("openai monthly want 0 (explicit disable), got %v", v)
 	}
 	// gemini 无配置 → weekly = nil

@@ -15,13 +15,14 @@ import (
 )
 
 const (
-	billingBalanceKeyPrefix   = "billing:balance:"
-	billingSubKeyPrefix       = "billing:sub:"
-	billingRateLimitKeyPrefix = "apikey:rate:"
-	subCacheInvalidateChannel = "subscription:cache:invalidate"
-	billingCacheTTL           = 5 * time.Minute
-	billingCacheJitter        = 30 * time.Second
-	rateLimitCacheTTL         = 7 * 24 * time.Hour // 7 days matches the longest window
+	billingBalanceKeyPrefix         = "billing:balance:"
+	billingAvailableCreditKeyPrefix = "billing:available-credit:"
+	billingSubKeyPrefix             = "billing:sub:"
+	billingRateLimitKeyPrefix       = "apikey:rate:"
+	subCacheInvalidateChannel       = "subscription:cache:invalidate"
+	billingCacheTTL                 = 5 * time.Minute
+	billingCacheJitter              = 30 * time.Second
+	rateLimitCacheTTL               = 7 * 24 * time.Hour // 7 days matches the longest window
 
 	// Rate limit window durations — must match service.RateLimitWindow* constants.
 	rateLimitWindow5h = 5 * time.Hour
@@ -42,6 +43,10 @@ func jitteredTTL() time.Duration {
 // billingBalanceKey generates the Redis key for user balance cache.
 func billingBalanceKey(userID int64) string {
 	return fmt.Sprintf("%s%d", billingBalanceKeyPrefix, userID)
+}
+
+func billingAvailableCreditKey(userID int64) string {
+	return fmt.Sprintf("%s%d", billingAvailableCreditKeyPrefix, userID)
 }
 
 // billingSubKey generates the Redis key for subscription cache.
@@ -171,6 +176,33 @@ func (c *billingCache) DeductUserBalance(ctx context.Context, userID int64, amou
 func (c *billingCache) InvalidateUserBalance(ctx context.Context, userID int64) error {
 	key := billingBalanceKey(userID)
 	return c.rdb.Del(ctx, key).Err()
+}
+
+func (c *billingCache) GetAvailableCredit(ctx context.Context, userID int64) (float64, error) {
+	val, err := c.rdb.Get(ctx, billingAvailableCreditKey(userID)).Result()
+	if err != nil {
+		return 0, err
+	}
+	return parseAvailableCreditCacheValue(val)
+}
+
+func (c *billingCache) SetAvailableCredit(ctx context.Context, userID int64, amount float64, ttl time.Duration) error {
+	key := billingAvailableCreditKey(userID)
+	if ttl <= 0 {
+		return c.rdb.Del(ctx, key).Err()
+	}
+	value, err := formatAvailableCreditCacheValue(amount)
+	if err != nil {
+		return err
+	}
+	if normalTTL := jitteredTTL(); ttl > normalTTL {
+		ttl = normalTTL
+	}
+	return c.rdb.Set(ctx, key, value, ttl).Err()
+}
+
+func (c *billingCache) InvalidateAvailableCredit(ctx context.Context, userID int64) error {
+	return c.rdb.Del(ctx, billingAvailableCreditKey(userID)).Err()
 }
 
 func (c *billingCache) GetSubscriptionCache(ctx context.Context, userID, groupID int64) (*service.SubscriptionCacheData, error) {

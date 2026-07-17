@@ -83,7 +83,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getUserBreakdown, type UserBreakdownParams } from '@/api/admin/dashboard'
-import { formatCompactNumber, formatCostFixed } from '@/utils/format'
+import { formatCompactNumber, formatMoneyDisplay } from '@/utils/format'
 import type { UserBreakdownItem } from '@/types'
 import Select from '@/components/common/Select.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -130,7 +130,7 @@ const limit = ref(50)
 let reqSeq = 0
 
 const fmtTokens = (v: number) => formatCompactNumber(v)
-const fmtCost = (v: number) => formatCostFixed(v, 4)
+const fmtCost = (v: number) => formatMoneyDisplay(v)
 
 const setSort = (key: SortKey) => {
   if (sortBy.value === key) return

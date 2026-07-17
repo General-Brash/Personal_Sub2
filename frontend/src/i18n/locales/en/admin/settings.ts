@@ -14,6 +14,28 @@ export default {
         payment: 'Payment',
       },
       features: {
+        pageVisibility: {
+          title: 'Page Visibility',
+          description: 'Control whether selected pages appear in the sidebar and block direct access when hidden.',
+          userPages: 'User Pages',
+          adminPages: 'Administrator Pages',
+          userChannelStatus: {
+            label: 'Channel Status',
+            hint: 'Controls the user Channel Status page. The entry also stays hidden when Channel Monitor is disabled.',
+          },
+          userSubscriptions: {
+            label: 'My Subscriptions',
+            hint: 'Controls the My Subscriptions page in the user sidebar.',
+          },
+          adminPromoCodes: {
+            label: 'Promo Code Management',
+            hint: 'Controls the Promo Codes page in the administrator sidebar.',
+          },
+          adminChannelManagement: {
+            label: 'Channel Management',
+            hint: 'Controls both Channel Pricing and Channel Monitor administrator pages.',
+          },
+        },
         channelMonitor: {
           title: 'Channel Monitor',
           description: 'Periodically probe configured channels and surface availability / latency to users. Turning it off stops the scheduler and returns an empty list on the user page.',
