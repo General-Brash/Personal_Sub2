@@ -5,6 +5,18 @@ import (
 	"time"
 )
 
+func requireLegacyGroupPeakMultiplier(func(*Group, time.Time) float64) {}
+
+func requireLegacyGroupPeakRateValidator(func(string, bool, string, string, float64) error) {}
+
+func requireLegacyGroupPeakRateNormalizer(func(string, bool, string, string, float64) (bool, string, string, float64)) {
+}
+
+func requireLegacyGroupPeakAwareMultipliers(func(*APIKey, float64, time.Time) (float64, float64)) {
+}
+
+func requireLegacyGroupFloat64(float64) {}
+
 func TestLegacyGroupAmountContractsRemainFloat64(t *testing.T) {
 	amount := 1.25
 	group := Group{
@@ -71,10 +83,10 @@ func TestLegacyGroupAmountContractsRemainFloat64(t *testing.T) {
 		t.Fatal("available group rate multipliers changed")
 	}
 
-	var _ func(*Group, time.Time) float64 = (*Group).PeakMultiplierAt
-	var _ func(string, bool, string, string, float64) error = ValidatePeakRateConfig
-	var _ func(string, bool, string, string, float64) (bool, string, string, float64) = NormalizePeakRateConfig
-	var _ func(*APIKey, float64, time.Time) (float64, float64) = computePeakAwareMultipliers
-	var _ float64 = availableGroup.RateMultiplier
-	var _ float64 = availableGroup.PeakRateMultiplier
+	requireLegacyGroupPeakMultiplier((*Group).PeakMultiplierAt)
+	requireLegacyGroupPeakRateValidator(ValidatePeakRateConfig)
+	requireLegacyGroupPeakRateNormalizer(NormalizePeakRateConfig)
+	requireLegacyGroupPeakAwareMultipliers(computePeakAwareMultipliers)
+	requireLegacyGroupFloat64(availableGroup.RateMultiplier)
+	requireLegacyGroupFloat64(availableGroup.PeakRateMultiplier)
 }

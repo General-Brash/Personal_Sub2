@@ -296,7 +296,7 @@ FROM (
 	if err != nil {
 		return batchImageHoldDedupRecord{}, fmt.Errorf("load usage billing dedup record: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var record batchImageHoldDedupRecord
 	for rows.Next() {
@@ -606,7 +606,7 @@ FOR UPDATE`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("lock batch image temporary credit candidates: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	candidates := make([]batchImageTemporaryCreditCandidate, 0)
 	remaining := holdAmount
@@ -791,11 +791,12 @@ WHERE id = $2
 				if rowsErr != nil {
 					return nil, rowsErr
 				}
-				if affected == 1 {
+				switch affected {
+				case 1:
 					refunded = unused
-				} else if affected == 0 {
+				case 0:
 					expired = unused
-				} else {
+				default:
 					return nil, fmt.Errorf("temporary credit grant %d refund affected %d rows", allocation.GrantID, affected)
 				}
 			} else {
@@ -973,7 +974,7 @@ FOR UPDATE OF allocation, credit_grant`, holdID, batchID)
 	if err != nil {
 		return nil, fmt.Errorf("lock batch image temporary credit allocations: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	allocations := make([]batchImageTemporaryCreditAllocation, 0)
 	for rows.Next() {

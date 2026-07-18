@@ -7,6 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func requireLegacyCostCalculator(func(*BillingService, string, UsageTokens, float64) (*CostBreakdown, error)) {
+}
+
+func requireLegacyTieredCostCalculator(func(*BillingService, string, UsageTokens, float64, string) (*CostBreakdown, error)) {
+}
+
+func requireLegacyLongContextCostCalculator(func(*BillingService, string, UsageTokens, float64, int, float64) (*CostBreakdown, error)) {
+}
+
 func TestLegacyPricingCostCoreUsesFloat64(t *testing.T) {
 	floatType := reflect.TypeOf(float64(0))
 	floatPtrType := reflect.TypeOf((*float64)(nil))
@@ -59,9 +68,9 @@ func TestLegacyPricingCostCoreUsesFloat64(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, floatType, defaultPerRequestPrice.Type)
 
-	var _ func(*BillingService, string, UsageTokens, float64) (*CostBreakdown, error) = (*BillingService).CalculateCost
-	var _ func(*BillingService, string, UsageTokens, float64, string) (*CostBreakdown, error) = (*BillingService).CalculateCostWithServiceTier
-	var _ func(*BillingService, string, UsageTokens, float64, int, float64) (*CostBreakdown, error) = (*BillingService).CalculateCostWithLongContext
+	requireLegacyCostCalculator((*BillingService).CalculateCost)
+	requireLegacyTieredCostCalculator((*BillingService).CalculateCostWithServiceTier)
+	requireLegacyLongContextCostCalculator((*BillingService).CalculateCostWithLongContext)
 }
 
 func TestLegacyPricingCostCoreCalculatesWithFloat64(t *testing.T) {

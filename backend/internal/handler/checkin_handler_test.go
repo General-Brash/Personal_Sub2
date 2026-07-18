@@ -38,10 +38,22 @@ func (s *checkinAtomicSuccessStore) ExecContext(ctx context.Context, _ string, a
 	if s.err != nil {
 		return nil, s.err
 	}
-	id := args[0].(int64)
-	status := args[2].(int)
-	body := args[3].(string)
-	expiresAt := args[4].(time.Time)
+	id, ok := args[0].(int64)
+	if !ok {
+		panic("checkin atomic success store: args[0] must be int64")
+	}
+	status, ok := args[2].(int)
+	if !ok {
+		panic("checkin atomic success store: args[2] must be int")
+	}
+	body, ok := args[3].(string)
+	if !ok {
+		panic("checkin atomic success store: args[3] must be string")
+	}
+	expiresAt, ok := args[4].(time.Time)
+	if !ok {
+		panic("checkin atomic success store: args[4] must be time.Time")
+	}
 	if err := s.repo.MarkSucceeded(ctx, id, status, body, expiresAt); err != nil {
 		return nil, err
 	}

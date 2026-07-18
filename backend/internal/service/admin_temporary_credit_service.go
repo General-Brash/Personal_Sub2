@@ -147,7 +147,7 @@ FOR UPDATE`, userID, adminID)
 	if err != nil {
 		return fmt.Errorf("lock temporary credit users: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	foundUser := false
 	foundAdmin := false

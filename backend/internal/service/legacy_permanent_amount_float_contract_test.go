@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+func requireLegacyAPIKeyQuotaUpdater(func(*APIKeyService, context.Context, int64, float64) error) {
+}
+
 func TestLegacyPermanentAmountServiceContractsRemainFloat64(t *testing.T) {
 	threshold := 3.75
 	user := User{
@@ -63,8 +66,8 @@ func TestLegacyPermanentAmountServiceContractsRemainFloat64(t *testing.T) {
 	assertLegacyServiceFloat64(t, rateLimitData.EffectiveUsage5h())
 	assertLegacyServiceFloat64(t, quotaState.QuotaUsed)
 
-	var _ func(*APIKeyService, context.Context, int64, float64) error = (*APIKeyService).UpdateQuotaUsed
-	var _ func(*APIKeyService, context.Context, int64, float64) error = (*APIKeyService).UpdateRateLimitUsage
+	requireLegacyAPIKeyQuotaUpdater((*APIKeyService).UpdateQuotaUsed)
+	requireLegacyAPIKeyQuotaUpdater((*APIKeyService).UpdateRateLimitUsage)
 	var _ APIKeyQuotaUpdater = (*legacyAPIKeyQuotaUpdaterStub)(nil)
 
 	postBilling := postUsageBillingParams{AccountRateMultiplier: 1.25}

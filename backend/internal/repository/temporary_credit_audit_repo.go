@@ -41,7 +41,7 @@ LIMIT $2 OFFSET $3`, userID, pageSize, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list temporary credit audit items: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := make([]service.TemporaryCreditAuditItem, 0)
 	for rows.Next() {

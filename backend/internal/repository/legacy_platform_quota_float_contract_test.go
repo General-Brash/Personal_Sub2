@@ -10,6 +10,10 @@ type legacyPlatformQuotaUsagePort interface {
 	IncrementUsageWithReset(context.Context, int64, string, float64, time.Time) error
 }
 
+func requireLegacyPlatformQuotaFloat64(float64) {}
+
+func requireLegacyPlatformQuotaFloat64Pointer(*float64) {}
+
 func TestLegacyPlatformQuotaRecordsAndUsagePortRemainFloat64(t *testing.T) {
 	limit := 10.25
 	record := UserPlatformQuotaRecord{
@@ -19,7 +23,7 @@ func TestLegacyPlatformQuotaRecordsAndUsagePortRemainFloat64(t *testing.T) {
 		MonthlyUsageUSD: 3.75,
 	}
 
-	var _ float64 = record.DailyUsageUSD
-	var _ *float64 = record.DailyLimitUSD
+	requireLegacyPlatformQuotaFloat64(record.DailyUsageUSD)
+	requireLegacyPlatformQuotaFloat64Pointer(record.DailyLimitUSD)
 	var _ legacyPlatformQuotaUsagePort = (UserPlatformQuotaRepository)(nil)
 }

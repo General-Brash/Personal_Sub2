@@ -5,31 +5,36 @@ import (
 	"testing"
 )
 
-func TestLegacyAccountStatsFloatInputsRemainFloat64(_ *testing.T) {
-	var _ func(
-		context.Context,
-		*ChannelService,
-		*BillingService,
-		int64,
-		int64,
-		string,
-		UsageTokens,
-		int,
-		float64,
-	) *float64 = resolveAccountStatsCost
+func requireLegacyAccountStatsCostResolver(func(
+	context.Context,
+	*ChannelService,
+	*BillingService,
+	int64,
+	int64,
+	string,
+	UsageTokens,
+	int,
+	float64,
+) *float64) {
+}
 
-	var _ func(
-		context.Context,
-		*UsageLog,
-		*ChannelService,
-		*BillingService,
-		int64,
-		int64,
-		string,
-		string,
-		UsageTokens,
-		float64,
-	) = applyAccountStatsCost
+func requireLegacyAccountStatsCostApplier(func(
+	context.Context,
+	*UsageLog,
+	*ChannelService,
+	*BillingService,
+	int64,
+	int64,
+	string,
+	string,
+	UsageTokens,
+	float64,
+)) {
+}
+
+func TestLegacyAccountStatsFloatInputsRemainFloat64(_ *testing.T) {
+	requireLegacyAccountStatsCostResolver(resolveAccountStatsCost)
+	requireLegacyAccountStatsCostApplier(applyAccountStatsCost)
 }
 
 func TestLegacyAccountStatsFloatModelPricingCalculation(t *testing.T) {

@@ -158,7 +158,7 @@ GROUP BY u.id, u.balance`, userID)
 	if err != nil {
 		return service.AvailableCreditSnapshot{}, fmt.Errorf("query available credit snapshot: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {

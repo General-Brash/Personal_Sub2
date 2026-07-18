@@ -8,10 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testDefaultImageGenerationPrice = 0.134
+
 func newImageBillingServiceForTest() *BillingService {
 	return &BillingService{pricingService: &PricingService{pricingData: map[string]*LiteLLMModelPricing{
 		"gemini-3-pro-image": {
-			OutputCostPerImage:        defaultImageGenerationPrice,
+			OutputCostPerImage:        testDefaultImageGenerationPrice,
 			OutputCostPerImagePresent: true,
 		},
 	}}}

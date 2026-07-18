@@ -31,24 +31,55 @@ func (e *atomicIdempotencySuccessExecutor) ExecContext(ctx context.Context, _ st
 	e.repo.mu.Lock()
 	defer e.repo.mu.Unlock()
 	for _, rec := range e.repo.data {
-		if rec.ID != args[0].(int64) {
+		recordID, ok := args[0].(int64)
+		if !ok {
+			panic("atomic idempotency executor: args[0] must be int64")
+		}
+		if rec.ID != recordID {
 			continue
 		}
-		if rec.Status != IdempotencyStatusProcessing ||
-			rec.RequestFingerprint != args[6].(string) ||
-			rec.ActorScope != args[7].(string) ||
-			rec.LockedUntil == nil ||
-			!rec.LockedUntil.Equal(args[8].(time.Time)) {
+		if rec.Status != IdempotencyStatusProcessing {
 			return atomicIdempotencySQLResult(0), nil
 		}
-		status := args[2].(int)
-		body := args[3].(string)
+		requestFingerprint, ok := args[6].(string)
+		if !ok {
+			panic("atomic idempotency executor: args[6] must be string")
+		}
+		if rec.RequestFingerprint != requestFingerprint {
+			return atomicIdempotencySQLResult(0), nil
+		}
+		actorScope, ok := args[7].(string)
+		if !ok {
+			panic("atomic idempotency executor: args[7] must be string")
+		}
+		if rec.ActorScope != actorScope || rec.LockedUntil == nil {
+			return atomicIdempotencySQLResult(0), nil
+		}
+		lockedUntil, ok := args[8].(time.Time)
+		if !ok {
+			panic("atomic idempotency executor: args[8] must be time.Time")
+		}
+		if !rec.LockedUntil.Equal(lockedUntil) {
+			return atomicIdempotencySQLResult(0), nil
+		}
+		status, ok := args[2].(int)
+		if !ok {
+			panic("atomic idempotency executor: args[2] must be int")
+		}
+		body, ok := args[3].(string)
+		if !ok {
+			panic("atomic idempotency executor: args[3] must be string")
+		}
 		rec.Status = IdempotencyStatusSucceeded
 		rec.ResponseStatus = &status
 		rec.ResponseBody = &body
 		rec.ErrorReason = nil
 		rec.LockedUntil = nil
-		rec.ExpiresAt = args[4].(time.Time)
+		expiresAt, ok := args[4].(time.Time)
+		if !ok {
+			panic("atomic idempotency executor: args[4] must be time.Time")
+		}
+		rec.ExpiresAt = expiresAt
 		rec.UpdatedAt = time.Now()
 		return atomicIdempotencySQLResult(1), nil
 	}
@@ -131,7 +162,8 @@ func TestIdempotencyExecuteAtomicConcurrentRequestAndReplay(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.True(t, replayed.Replayed)
-	replayedData := replayed.Data.(map[string]any)
+	replayedData, ok := replayed.Data.(map[string]any)
+	require.True(t, ok)
 	require.Equal(t, json.Number("9007199254740993"), replayedData["temporary_credit_grant_id"])
 	require.Equal(t, int32(1), calls.Load())
 }

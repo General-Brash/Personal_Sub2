@@ -8,13 +8,27 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 )
 
+func requireLegacyWebSearchCostCalculator(func(*BillingService, int, *float64, float64) *CostBreakdown) {
+}
+
+func requireLegacyImageCostCalculator(func(*BillingService, string, string, int, *ImagePriceConfig, float64) *CostBreakdown) {
+}
+
+func requireLegacyVideoCostCalculator(func(*BillingService, string, string, int, int, *VideoPriceConfig, float64) *CostBreakdown) {
+}
+
+func requireLegacyUserGroupRateResolver(func(*userGroupRateResolver, context.Context, int64, int64, float64) float64) {
+}
+
+func requireLegacyMediaRateMultiplierResolver(func(*APIKey, float64) float64) {}
+
 func TestLegacyMediaAndRateContractsUseFloat64(t *testing.T) {
-	var _ func(*BillingService, int, *float64, float64) *CostBreakdown = (*BillingService).CalculateWebSearchCost
-	var _ func(*BillingService, string, string, int, *ImagePriceConfig, float64) *CostBreakdown = (*BillingService).CalculateImageCost
-	var _ func(*BillingService, string, string, int, int, *VideoPriceConfig, float64) *CostBreakdown = (*BillingService).CalculateVideoCost
-	var _ func(*userGroupRateResolver, context.Context, int64, int64, float64) float64 = (*userGroupRateResolver).Resolve
-	var _ func(*APIKey, float64) float64 = resolveImageRateMultiplier
-	var _ func(*APIKey, float64) float64 = resolveVideoRateMultiplier
+	requireLegacyWebSearchCostCalculator((*BillingService).CalculateWebSearchCost)
+	requireLegacyImageCostCalculator((*BillingService).CalculateImageCost)
+	requireLegacyVideoCostCalculator((*BillingService).CalculateVideoCost)
+	requireLegacyUserGroupRateResolver((*userGroupRateResolver).Resolve)
+	requireLegacyMediaRateMultiplierResolver(resolveImageRateMultiplier)
+	requireLegacyMediaRateMultiplierResolver(resolveVideoRateMultiplier)
 
 	price := 0.02
 	cost := (&BillingService{}).CalculateWebSearchCost(1, &price, 2.5)

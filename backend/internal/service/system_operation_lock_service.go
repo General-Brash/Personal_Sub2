@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	systemOperationLockScope = "admin.system.operations.global_lock"
+	systemOperationLockScope      = "admin.system.operations.global_lock"
 	systemOperationLockActorScope = "system:global"
-	systemOperationLockKey   = "global-system-operation-lock"
+	systemOperationLockKey        = "global-system-operation-lock"
 )
 
 var (

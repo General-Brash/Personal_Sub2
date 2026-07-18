@@ -396,7 +396,7 @@ ORDER BY checkin_date ASC`, userID, monthStart, monthEnd)
 	if err != nil {
 		return nil, 0, fmt.Errorf("load daily checkin calendar: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	calendar := make([]DailyCheckinCalendarEntry, 0)
 	for rows.Next() {

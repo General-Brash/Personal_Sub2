@@ -783,7 +783,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 		// 仅有图片价、无 token 价的条目（如 LiteLLM 的 imagen 类模型）不能用于
 		// token 计费：直接返回会把 token 流量按 $0 计费。跳过后走 fallback，
 		// 无 fallback 则 fail-closed（ErrModelPricingUnavailable）。
-		// 图片计费路径（getDefaultImagePrice / getImageUnitPrice）直接读
+		// 图片计费路径（getDefaultImagePriceChecked / getImageUnitPriceChecked）直接读
 		// PricingService，不受影响。
 		if litellmPricing != nil && litellmPricing.TokenPricingAbsent {
 			litellmPricing = nil
@@ -1387,8 +1387,6 @@ type VideoPriceConfig struct {
 }
 
 const (
-	defaultImageGenerationPrice = 0.134
-
 	defaultGrokImagineImagePrice1K        = 0.02
 	defaultGrokImagineImagePrice2K        = 0.02
 	defaultGrokImagineImageQualityPrice1K = 0.05
@@ -1511,12 +1509,6 @@ func (s *BillingService) CalculateVideoCostChecked(model string, resolution stri
 	}, nil
 }
 
-// getImageUnitPrice 获取图片单价
-func (s *BillingService) getImageUnitPrice(model string, imageSize string, groupConfig *ImagePriceConfig) float64 {
-	price, _ := s.getImageUnitPriceChecked(model, imageSize, groupConfig)
-	return price
-}
-
 func (s *BillingService) getImageUnitPriceChecked(model string, imageSize string, groupConfig *ImagePriceConfig) (float64, error) {
 	// 优先使用分组配置的价格
 	if configured := selectedImageGroupPrice(groupConfig, imageSize); configured != nil {
@@ -1529,11 +1521,6 @@ func (s *BillingService) getImageUnitPriceChecked(model string, imageSize string
 	return s.getDefaultImagePriceChecked(model, imageSize)
 }
 
-func (s *BillingService) getVideoUnitPrice(model string, resolution string, groupConfig *VideoPriceConfig) float64 {
-	price, _ := s.getVideoUnitPriceChecked(model, resolution, groupConfig)
-	return price
-}
-
 func (s *BillingService) getVideoUnitPriceChecked(model string, resolution string, groupConfig *VideoPriceConfig) (float64, error) {
 	if configured := selectedVideoGroupPrice(groupConfig, resolution); configured != nil {
 		if err := validateBillingPriceFor(model, "video", "group_video_price", *configured); err != nil {
@@ -1543,17 +1530,6 @@ func (s *BillingService) getVideoUnitPriceChecked(model string, resolution strin
 	}
 
 	return s.getDefaultVideoPriceChecked(model, resolution)
-}
-
-// getDefaultImagePrice 获取 LiteLLM 默认图片价格
-func (s *BillingService) getDefaultImagePrice(model string, imageSize string) float64 {
-	price, _ := s.getDefaultImagePriceChecked(model, imageSize)
-	return price
-}
-
-func (s *BillingService) getDefaultVideoPrice(model string, resolution string) float64 {
-	price, _ := s.getDefaultVideoPriceChecked(model, resolution)
-	return price
 }
 
 func getDefaultGrokImagineImagePrice(model string, imageSize string) (float64, bool) {
