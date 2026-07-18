@@ -496,7 +496,8 @@ const routes: RouteRecordRaw[] = [
       title: 'Channel Monitor',
       titleKey: 'admin.channelMonitor.title',
       descriptionKey: 'admin.channelMonitor.description',
-      requiredFeatureFlag: FeatureFlags.adminChannelManagement
+      requiredFeatureFlag: FeatureFlags.adminChannelManagement,
+      requiredFeatureFlags: [FeatureFlags.channelMonitor]
     }
   },
   {
@@ -508,7 +509,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: false,
       title: 'Channel Status',
       titleKey: 'nav.channelStatus',
-      requiredFeatureFlag: FeatureFlags.userChannelStatus
+      requiredFeatureFlag: FeatureFlags.userChannelStatus,
+      requiredFeatureFlags: [FeatureFlags.channelMonitor]
     }
   },
   {
@@ -876,8 +878,13 @@ router.beforeEach(async (to, _from, next) => {
   // 公共设置可能尚未加载（App.vue 的 onMounted 异步拉取晚于首次导航，且纯静态部署
   // 无 __APP_CONFIG__ 注入）。此时 cachedPublicSettings 为空会把 payment/risk_control
   // 误判为“未启用”而错误拦截，故这里先确保设置加载完成。
+  const requiredFeatureFlags = [
+    ...(to.meta.requiredFeatureFlag ? [to.meta.requiredFeatureFlag] : []),
+    ...(to.meta.requiredFeatureFlags ?? [])
+  ]
+
   if (
-    (to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiredFeatureFlag) &&
+    (to.meta.requiresPayment || to.meta.requiresRiskControl || requiredFeatureFlags.length > 0) &&
     !appStore.publicSettingsLoaded
   ) {
     try {
@@ -908,9 +915,11 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (
-    to.meta.requiredFeatureFlag &&
+    requiredFeatureFlags.length > 0 &&
     appStore.publicSettingsLoaded &&
-    appStore.cachedPublicSettings?.[to.meta.requiredFeatureFlag.key] === false
+    requiredFeatureFlags.some(
+      (featureFlag) => appStore.cachedPublicSettings?.[featureFlag.key] === false
+    )
   ) {
     appStore.showWarning(i18n.global.t('common.pageDisabledByAdmin'))
     next(requiresAdmin ? '/admin/dashboard' : '/dashboard')

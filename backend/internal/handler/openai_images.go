@@ -216,6 +216,18 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		if !acquired {
 			return
 		}
+		if pricingErr := h.gatewayService.PreflightImageRequestPricing(requestCtx, apiKey, account, requestModel, channelMapping, parsed.SizeTier); pricingErr != nil {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			reqLog.Error("openai.images.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+			if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+				h.handleStreamingAwareError(c, status, code, message, streamStarted)
+			} else {
+				h.handleStreamingAwareError(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error(), streamStarted)
+			}
+			return
+		}
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		if !parsed.Stream && !jsonKeepaliveStarted {

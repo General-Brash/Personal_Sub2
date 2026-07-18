@@ -10,11 +10,14 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/affiliaterebatejob"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecreditholdallocation"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageevent"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageitem"
 	"github.com/Wei-Shaw/sub2api/ent/batchimagejob"
@@ -189,6 +192,33 @@ func (f TraverseAccountGroup) Traverse(ctx context.Context, q ent.Query) error {
 	return fmt.Errorf("unexpected query type %T. expect *ent.AccountGroupQuery", q)
 }
 
+// The AffiliateRebateJobFunc type is an adapter to allow the use of ordinary function as a Querier.
+type AffiliateRebateJobFunc func(context.Context, *ent.AffiliateRebateJobQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f AffiliateRebateJobFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.AffiliateRebateJobQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.AffiliateRebateJobQuery", q)
+}
+
+// The TraverseAffiliateRebateJob type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseAffiliateRebateJob func(context.Context, *ent.AffiliateRebateJobQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseAffiliateRebateJob) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseAffiliateRebateJob) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.AffiliateRebateJobQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.AffiliateRebateJobQuery", q)
+}
+
 // The AnnouncementFunc type is an adapter to allow the use of ordinary function as a Querier.
 type AnnouncementFunc func(context.Context, *ent.AnnouncementQuery) (ent.Value, error)
 
@@ -295,6 +325,60 @@ func (f TraverseAuthIdentityChannel) Traverse(ctx context.Context, q ent.Query) 
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.AuthIdentityChannelQuery", q)
+}
+
+// The BatchImageCreditHoldFunc type is an adapter to allow the use of ordinary function as a Querier.
+type BatchImageCreditHoldFunc func(context.Context, *ent.BatchImageCreditHoldQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f BatchImageCreditHoldFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.BatchImageCreditHoldQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.BatchImageCreditHoldQuery", q)
+}
+
+// The TraverseBatchImageCreditHold type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseBatchImageCreditHold func(context.Context, *ent.BatchImageCreditHoldQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseBatchImageCreditHold) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseBatchImageCreditHold) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.BatchImageCreditHoldQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.BatchImageCreditHoldQuery", q)
+}
+
+// The BatchImageCreditHoldAllocationFunc type is an adapter to allow the use of ordinary function as a Querier.
+type BatchImageCreditHoldAllocationFunc func(context.Context, *ent.BatchImageCreditHoldAllocationQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f BatchImageCreditHoldAllocationFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.BatchImageCreditHoldAllocationQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.BatchImageCreditHoldAllocationQuery", q)
+}
+
+// The TraverseBatchImageCreditHoldAllocation type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseBatchImageCreditHoldAllocation func(context.Context, *ent.BatchImageCreditHoldAllocationQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseBatchImageCreditHoldAllocation) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseBatchImageCreditHoldAllocation) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.BatchImageCreditHoldAllocationQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.BatchImageCreditHoldAllocationQuery", q)
 }
 
 // The BatchImageEventFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1224,6 +1308,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AccountQuery, predicate.Account, account.OrderOption]{typ: ent.TypeAccount, tq: q}, nil
 	case *ent.AccountGroupQuery:
 		return &query[*ent.AccountGroupQuery, predicate.AccountGroup, accountgroup.OrderOption]{typ: ent.TypeAccountGroup, tq: q}, nil
+	case *ent.AffiliateRebateJobQuery:
+		return &query[*ent.AffiliateRebateJobQuery, predicate.AffiliateRebateJob, affiliaterebatejob.OrderOption]{typ: ent.TypeAffiliateRebateJob, tq: q}, nil
 	case *ent.AnnouncementQuery:
 		return &query[*ent.AnnouncementQuery, predicate.Announcement, announcement.OrderOption]{typ: ent.TypeAnnouncement, tq: q}, nil
 	case *ent.AnnouncementReadQuery:
@@ -1232,6 +1318,10 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AuthIdentityQuery, predicate.AuthIdentity, authidentity.OrderOption]{typ: ent.TypeAuthIdentity, tq: q}, nil
 	case *ent.AuthIdentityChannelQuery:
 		return &query[*ent.AuthIdentityChannelQuery, predicate.AuthIdentityChannel, authidentitychannel.OrderOption]{typ: ent.TypeAuthIdentityChannel, tq: q}, nil
+	case *ent.BatchImageCreditHoldQuery:
+		return &query[*ent.BatchImageCreditHoldQuery, predicate.BatchImageCreditHold, batchimagecredithold.OrderOption]{typ: ent.TypeBatchImageCreditHold, tq: q}, nil
+	case *ent.BatchImageCreditHoldAllocationQuery:
+		return &query[*ent.BatchImageCreditHoldAllocationQuery, predicate.BatchImageCreditHoldAllocation, batchimagecreditholdallocation.OrderOption]{typ: ent.TypeBatchImageCreditHoldAllocation, tq: q}, nil
 	case *ent.BatchImageEventQuery:
 		return &query[*ent.BatchImageEventQuery, predicate.BatchImageEvent, batchimageevent.OrderOption]{typ: ent.TypeBatchImageEvent, tq: q}, nil
 	case *ent.BatchImageItemQuery:

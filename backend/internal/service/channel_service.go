@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -650,8 +651,37 @@ func checkPricesNotNegative(p ChannelModelPricing) error {
 		{"per_request_price", p.PerRequestPrice},
 	}
 	for _, c := range checks {
-		if c.val != nil && *c.val < 0 {
-			return infraerrors.BadRequest("NEGATIVE_PRICE", fmt.Sprintf("%s must be >= 0", c.field))
+		if c.val == nil {
+			continue
+		}
+		if *c.val < 0 {
+			return infraerrors.BadRequest("INVALID_PRICE", fmt.Sprintf("%s must be >= 0", c.field))
+		}
+		if math.IsNaN(*c.val) || math.IsInf(*c.val, 0) || *c.val > maxBillingUnitPriceUSD {
+			return infraerrors.BadRequest("INVALID_PRICE", fmt.Sprintf("%s must be finite and between 0 and %g", c.field, float64(maxBillingUnitPriceUSD)))
+		}
+	}
+	for _, iv := range p.Intervals {
+		intervalChecks := []struct {
+			field string
+			val   *float64
+		}{
+			{"interval.input_price", iv.InputPrice},
+			{"interval.output_price", iv.OutputPrice},
+			{"interval.cache_write_price", iv.CacheWritePrice},
+			{"interval.cache_read_price", iv.CacheReadPrice},
+			{"interval.per_request_price", iv.PerRequestPrice},
+		}
+		for _, c := range intervalChecks {
+			if c.val == nil {
+				continue
+			}
+			if *c.val < 0 {
+				return infraerrors.BadRequest("INVALID_PRICE", fmt.Sprintf("%s must be >= 0", c.field))
+			}
+			if math.IsNaN(*c.val) || math.IsInf(*c.val, 0) || *c.val > maxBillingUnitPriceUSD {
+				return infraerrors.BadRequest("INVALID_PRICE", fmt.Sprintf("%s must be finite and between 0 and %g", c.field, float64(maxBillingUnitPriceUSD)))
+			}
 		}
 	}
 	return nil

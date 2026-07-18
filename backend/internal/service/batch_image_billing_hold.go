@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"strings"
-
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"go.uber.org/zap"
 )
 
 const (
@@ -38,13 +35,7 @@ func buildBatchImageHoldCommand(job *BatchImageJob, requestID string, actualAmou
 	if job.HoldAmount != nil {
 		holdAmount = *job.HoldAmount
 	}
-	if holdAmount < 0 {
-		holdAmount = 0
-	}
-	if actualAmount < 0 {
-		actualAmount = 0
-	}
-	return &BatchImageBalanceHoldCommand{
+	cmd := &BatchImageBalanceHoldCommand{
 		RequestID:          requestID,
 		APIKeyID:           *job.APIKeyID,
 		UserID:             job.UserID,
@@ -52,7 +43,11 @@ func buildBatchImageHoldCommand(job *BatchImageJob, requestID string, actualAmou
 		HoldAmount:         holdAmount,
 		ActualAmount:       actualAmount,
 		RequestPayloadHash: strings.TrimSpace(payloadHash),
-	}, nil
+	}
+	if err := cmd.Normalize(); err != nil {
+		return nil, err
+	}
+	return cmd, nil
 }
 
 func reserveBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, payloadHash string) error {
@@ -83,6 +78,12 @@ func captureBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 	if err != nil {
 		return err
 	}
+	if cmd.HoldAmount <= 0 {
+		if cmd.ActualAmount <= 0 {
+			return nil
+		}
+		return ErrBatchImageSettlementCostExceedsHold
+	}
 	if _, err := repo.CaptureBatchImageBalance(ctx, cmd); err != nil {
 		return ErrBatchImageSettlementBillingFailed.WithCause(err)
 	}
@@ -101,15 +102,6 @@ func releaseBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 		return nil
 	}
 	if _, err := repo.ReleaseBatchImageBalance(ctx, cmd); err != nil {
-		// 同一 release request id 出现指纹冲突，说明此前已有一次携带不同
-		// payloadHash 的释放成功提交（资金已归还）。视为幂等成功，
-		// 避免历史指纹不一致的 job 永远卡在释放失败的毒消息循环里。
-		if errors.Is(err, ErrUsageBillingRequestConflict) {
-			logger.L().Warn("batch_image.release_fingerprint_conflict_treated_as_released",
-				zap.String("batch_id", job.BatchID),
-			)
-			return nil
-		}
 		return ErrBatchImageBillingHoldFailed.WithCause(err)
 	}
 	return nil

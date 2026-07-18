@@ -557,6 +557,29 @@ func HasConsumptionsWith(preds ...predicate.TemporaryCreditConsumption) predicat
 	})
 }
 
+// HasBatchImageCreditHoldAllocations applies the HasEdge predicate on the "batch_image_credit_hold_allocations" edge.
+func HasBatchImageCreditHoldAllocations() predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, BatchImageCreditHoldAllocationsTable, BatchImageCreditHoldAllocationsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasBatchImageCreditHoldAllocationsWith applies the HasEdge predicate on the "batch_image_credit_hold_allocations" edge with a given conditions (other predicates).
+func HasBatchImageCreditHoldAllocationsWith(preds ...predicate.BatchImageCreditHoldAllocation) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(func(s *sql.Selector) {
+		step := newBatchImageCreditHoldAllocationsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.TemporaryCreditGrant) predicate.TemporaryCreditGrant {
 	return predicate.TemporaryCreditGrant(sql.AndPredicates(predicates...))

@@ -92,6 +92,14 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 	if !h.checkSecurityAuditBeforeSubmit(c, apiKey, platform, body) {
 		return
 	}
+	if pricingErr := h.preflightPricing(c, apiKey, platform, body); pricingErr != nil {
+		if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+			imageTaskJSONError(c, status, code, message)
+		} else {
+			imageTaskJSONError(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error())
+		}
+		return
+	}
 
 	taskCtx, recorder, cancel := newAsyncImageContext(c, body, h.tasks.ExecutionTimeout())
 	task, err := h.tasks.Create(c.Request.Context(), service.ImageTaskOwner{UserID: apiKey.UserID, APIKeyID: apiKey.ID})
@@ -116,6 +124,24 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 	})
 
 	go h.run(task.ID, platform, taskCtx, recorder, cancel)
+}
+
+func (h *AsyncImageHandler) preflightPricing(c *gin.Context, apiKey *service.APIKey, platform string, body []byte) error {
+	if h == nil || h.openAI == nil || h.openAI.gatewayService == nil {
+		return service.ErrBillingPricingUnavailable
+	}
+	gateway := h.openAI.gatewayService
+	if platform == service.PlatformGrok {
+		info := service.ParseGrokMediaRequest(c.GetHeader("Content-Type"), body)
+		mapping := service.ChannelMappingResult{MappedModel: info.Model}
+		return gateway.PreflightImageRequestPricing(c.Request.Context(), apiKey, nil, info.Model, mapping, info.SizeTier)
+	}
+	parsed, err := gateway.ParseOpenAIImagesRequest(c, body)
+	if err != nil {
+		return err
+	}
+	mapping, _ := gateway.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, parsed.Model)
+	return gateway.PreflightImageRequestPricing(c.Request.Context(), apiKey, nil, parsed.Model, mapping, parsed.SizeTier)
 }
 
 func (h *AsyncImageHandler) checkSecurityAuditBeforeSubmit(c *gin.Context, apiKey *service.APIKey, platform string, body []byte) bool {

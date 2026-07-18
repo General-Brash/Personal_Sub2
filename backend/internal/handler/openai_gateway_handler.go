@@ -353,6 +353,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	var lastPricingErr error
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
 
 	// 生图意图的 /v1/responses 请求必须调度到确实支持 Responses API 的账号，否则
@@ -412,12 +413,26 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			}
 			if lastFailoverErr != nil {
 				h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
+			} else if lastPricingErr != nil {
+				if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+					h.handleStreamingAwareError(c, status, code, message, streamStarted)
+				} else {
+					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error(), streamStarted)
+				}
 			} else {
 				h.handleFailoverExhaustedSimple(c, 502, streamStarted)
 			}
 			return
 		}
 		if selection == nil || selection.Account == nil {
+			if lastPricingErr != nil && lastFailoverErr == nil {
+				if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+					h.handleStreamingAwareError(c, status, code, message, streamStarted)
+				} else {
+					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error(), streamStarted)
+				}
+				return
+			}
 			cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel)
 			if !cls.ModelNotFound {
 				markOpsRoutingCapacityLimited(c)
@@ -444,6 +459,28 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 		accountReleaseFunc, acquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
 		if !acquired {
+			return
+		}
+		if pricingErr := h.gatewayService.PreflightResponsesRequestPricing(c.Request.Context(), apiKey, account, reqModel, channelMapping, body); pricingErr != nil {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			if errors.Is(pricingErr, service.ErrBillingPricingUnavailable) {
+				lastPricingErr = pricingErr
+				switch advancePricingFailover(c.Request.Context(), account.ID, failedAccountIDs, &switchCount, maxAccountSwitches) {
+				case FailoverContinue:
+					continue
+				case FailoverCanceled:
+					failoverClientGone(c)
+					return
+				}
+			}
+			reqLog.Error("openai.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+			if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+				h.handleStreamingAwareError(c, status, code, message, streamStarted)
+			} else {
+				h.handleStreamingAwareError(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error(), streamStarted)
+			}
 			return
 		}
 
@@ -906,6 +943,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	var lastPricingErr error
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
 	effectiveMappedModel := preferredMappedModel
 
@@ -953,6 +991,12 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			} else {
 				if lastFailoverErr != nil {
 					h.handleAnthropicFailoverExhausted(c, lastFailoverErr, streamStarted)
+				} else if lastPricingErr != nil {
+					if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+						h.anthropicStreamingAwareError(c, status, code, message, streamStarted)
+					} else {
+						h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error(), streamStarted)
+					}
 				} else {
 					h.anthropicStreamingAwareError(c, http.StatusBadGateway, "api_error", "Upstream request failed", streamStarted)
 				}
@@ -960,6 +1004,14 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			}
 		}
 		if selection == nil || selection.Account == nil {
+			if lastPricingErr != nil && lastFailoverErr == nil {
+				if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+					h.anthropicStreamingAwareError(c, status, code, message, streamStarted)
+				} else {
+					h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error(), streamStarted)
+				}
+				return
+			}
 			cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, currentRoutingModel, reqModel)
 			if !cls.ModelNotFound {
 				markOpsRoutingCapacityLimited(c)
@@ -977,11 +1029,33 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		if !acquired {
 			return
 		}
+		defaultMappedModel := strings.TrimSpace(effectiveMappedModel)
+		if pricingErr := h.gatewayService.PreflightMessagesRequestPricing(c.Request.Context(), apiKey, account, reqModel, defaultMappedModel, channelMappingMsg); pricingErr != nil {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			if errors.Is(pricingErr, service.ErrBillingPricingUnavailable) {
+				lastPricingErr = pricingErr
+				switch advancePricingFailover(c.Request.Context(), account.ID, failedAccountIDs, &switchCount, maxAccountSwitches) {
+				case FailoverContinue:
+					continue
+				case FailoverCanceled:
+					failoverClientGone(c)
+					return
+				}
+			}
+			reqLog.Error("openai_messages.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+			if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+				h.anthropicStreamingAwareError(c, status, code, message, streamStarted)
+			} else {
+				h.anthropicStreamingAwareError(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error(), streamStarted)
+			}
+			return
+		}
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
 
-		defaultMappedModel := strings.TrimSpace(effectiveMappedModel)
 		// 应用渠道模型映射到请求体
 		forwardBody := mappedBodyForMessages(channelMappingMsg.Mapped, channelMappingMsg.MappedModel)
 		writerSizeBeforeForward := c.Writer.Size()
@@ -1690,6 +1764,16 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			accountReleaseFunc = fastReleaseFunc
 		}
 		currentAccountRelease = wrapReleaseOnDone(ctx, accountReleaseFunc)
+		if pricingErr := h.gatewayService.PreflightResponsesRequestPricing(ctx, apiKey, account, reqModel, channelMappingWS, firstMessage); pricingErr != nil {
+			releaseAccountSlot()
+			reqLog.Error("openai.websocket_billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+			if code, _, ok := writeBillingPricingWSError(ctx, wsConn, pricingErr); ok {
+				closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, code)
+			} else {
+				closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "invalid pricing request")
+			}
+			return
+		}
 		if err := h.gatewayService.BindStickySession(ctx, apiKey.GroupID, sessionHash, account.ID); err != nil {
 			reqLog.Warn("openai.websocket_bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		}
@@ -1738,6 +1822,19 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				if decision := h.checkSecurityAuditStage(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIResponses, model, payload, "subsequent_turn"); decision != nil && !decision.AllowNextStage {
 					writeSecurityAuditWSError(ctx, wsConn, decision)
 					return service.NewOpenAIWSClientCloseError(securityAuditWSCloseStatus(decision), securityAuditWSCloseReason(decision), nil)
+				}
+				turnChannelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(ctx, apiKey.GroupID, model)
+				if pricingErr := h.gatewayService.PreflightResponsesRequestPricing(ctx, apiKey, account, model, turnChannelMapping, payload); pricingErr != nil {
+					reqLog.Error("openai.websocket_turn_billing_pricing_preflight_failed",
+						zap.Int("turn", turn),
+						zap.Int64("account_id", account.ID),
+						zap.String("model", model),
+						zap.Error(pricingErr),
+					)
+					if code, _, ok := writeBillingPricingWSError(ctx, wsConn, pricingErr); ok {
+						return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, code, pricingErr)
+					}
+					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid pricing request", pricingErr)
 				}
 				return nil
 			},

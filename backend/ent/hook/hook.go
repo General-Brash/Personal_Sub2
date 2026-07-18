@@ -45,6 +45,18 @@ func (f AccountGroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AccountGroupMutation", m)
 }
 
+// The AffiliateRebateJobFunc type is an adapter to allow the use of ordinary
+// function as AffiliateRebateJob mutator.
+type AffiliateRebateJobFunc func(context.Context, *ent.AffiliateRebateJobMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AffiliateRebateJobFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AffiliateRebateJobMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AffiliateRebateJobMutation", m)
+}
+
 // The AnnouncementFunc type is an adapter to allow the use of ordinary
 // function as Announcement mutator.
 type AnnouncementFunc func(context.Context, *ent.AnnouncementMutation) (ent.Value, error)
@@ -91,6 +103,30 @@ func (f AuthIdentityChannelFunc) Mutate(ctx context.Context, m ent.Mutation) (en
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthIdentityChannelMutation", m)
+}
+
+// The BatchImageCreditHoldFunc type is an adapter to allow the use of ordinary
+// function as BatchImageCreditHold mutator.
+type BatchImageCreditHoldFunc func(context.Context, *ent.BatchImageCreditHoldMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BatchImageCreditHoldFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BatchImageCreditHoldMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BatchImageCreditHoldMutation", m)
+}
+
+// The BatchImageCreditHoldAllocationFunc type is an adapter to allow the use of ordinary
+// function as BatchImageCreditHoldAllocation mutator.
+type BatchImageCreditHoldAllocationFunc func(context.Context, *ent.BatchImageCreditHoldAllocationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BatchImageCreditHoldAllocationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BatchImageCreditHoldAllocationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BatchImageCreditHoldAllocationMutation", m)
 }
 
 // The BatchImageEventFunc type is an adapter to allow the use of ordinary

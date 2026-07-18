@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -16,6 +17,13 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+)
+
+const adminBalanceCacheInvalidationTimeout = 5 * time.Second
+
+var (
+	ErrAdminBalanceInsufficient      = infraerrors.Conflict("INSUFFICIENT_BALANCE", "insufficient permanent balance")
+	ErrInvalidAdminBalanceAdjustment = infraerrors.BadRequest("INVALID_BALANCE_ADJUSTMENT", "invalid balance adjustment")
 )
 
 // User management implementations
@@ -493,86 +501,157 @@ func (s *adminServiceImpl) BatchUpdateLimits(ctx context.Context, userIDs []int6
 }
 
 func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error) {
-	user, err := s.userRepo.GetByID(ctx, userID)
+	adjustment, err := newAdminBalanceAdjustment(balance, operation, notes)
 	if err != nil {
 		return nil, err
 	}
-
-	oldBalance := user.Balance
-
-	switch operation {
-	case "set":
-		user.Balance = balance
-	case "add":
-		user.Balance += balance
-	case "subtract":
-		user.Balance -= balance
+	repo, ok := s.userRepo.(AdminBalanceAdjustmentRepository)
+	if !ok || repo == nil {
+		return nil, errors.New("admin balance adjustment repository is not configured")
 	}
-
-	if user.Balance < 0 {
-		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, user.Balance)
-	}
-
-	if err := s.userRepo.Update(ctx, user); err != nil {
+	result, err := repo.ApplyAdminBalanceAdjustment(ctx, userID, adjustment)
+	if err != nil {
 		return nil, err
 	}
-	balanceDiff := user.Balance - oldBalance
-	if s.authCacheInvalidator != nil && balanceDiff != 0 {
-		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
+	if err := s.afterAdminBalanceAdjustment(ctx, userID, adjustment, result); err != nil {
+		return nil, err
 	}
-	s.tryAccrueAffiliateRebateForAdminRecharge(ctx, userID, operation, balance)
-
-	if s.billingCacheService != nil {
-		go func() {
-			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := s.billingCacheService.InvalidateUserBalance(cacheCtx, userID); err != nil {
-				logger.LegacyPrintf("service.admin", "invalidate user balance cache failed: user_id=%d err=%v", userID, err)
-			}
-		}()
-	}
-
-	if balanceDiff != 0 {
-		code, err := GenerateRedeemCode()
-		if err != nil {
-			logger.LegacyPrintf("service.admin", "failed to generate adjustment redeem code: %v", err)
-			return user, nil
-		}
-
-		adjustmentRecord := &RedeemCode{
-			Code:   code,
-			Type:   AdjustmentTypeAdminBalance,
-			Value:  balanceDiff,
-			Status: StatusUsed,
-			UsedBy: &user.ID,
-			Notes:  notes,
-		}
-		now := time.Now()
-		adjustmentRecord.UsedAt = &now
-
-		if err := s.redeemCodeRepo.Create(ctx, adjustmentRecord); err != nil {
-			logger.LegacyPrintf("service.admin", "failed to create balance adjustment redeem code: %v", err)
-		}
-	}
-
-	return user, nil
+	return result.User, nil
 }
 
-func (s *adminServiceImpl) tryAccrueAffiliateRebateForAdminRecharge(ctx context.Context, userID int64, operation string, amount float64) {
-	if operation != "add" || amount <= 0 || s.settingService == nil || s.affiliateService == nil {
-		return
+func newAdminBalanceAdjustment(balance float64, operation string, notes string) (AdminBalanceAdjustment, error) {
+	normalized, err := normalizeLedgerAmount(balance)
+	if err != nil || normalized <= 0 {
+		return AdminBalanceAdjustment{}, ErrInvalidAdminBalanceAdjustment.WithMetadata(map[string]string{
+			"field":      "balance",
+			"constraint": "positive_finite_eight_decimal_amount",
+		})
 	}
-	if !s.settingService.IsAffiliateAdminRechargeEnabled(ctx) {
-		return
+	switch operation {
+	case "set", "add", "subtract":
+	default:
+		return AdminBalanceAdjustment{}, ErrInvalidAdminBalanceAdjustment.WithMetadata(map[string]string{
+			"field": "operation",
+		})
+	}
+	return AdminBalanceAdjustment{
+		Amount:    normalized,
+		Operation: operation,
+		Notes:     notes,
+	}, nil
+}
+
+// ApplyTo calculates the new permanent balance at the frozen eight-decimal
+// ledger precision. It never permits an administrator adjustment to create a
+// negative balance.
+func (a AdminBalanceAdjustment) ApplyTo(oldBalance float64) (float64, float64, error) {
+	amount, err := normalizeLedgerAmount(a.Amount)
+	if err != nil || amount <= 0 {
+		return 0, 0, ErrInvalidAdminBalanceAdjustment.WithMetadata(map[string]string{
+			"field":      "balance",
+			"constraint": "positive_finite_eight_decimal_amount",
+		})
+	}
+	oldBalance, err = normalizeDerivedLedgerAmount(oldBalance)
+	if err != nil {
+		return 0, 0, err
 	}
 
-	rebate, err := s.affiliateService.AccrueInviteRebate(ctx, userID, amount)
-	if err != nil {
-		logger.LegacyPrintf("service.admin", "affiliate rebate failed for admin recharge: user_id=%d amount=%.8f err=%v", userID, amount, err)
-		return
+	var nextBalance float64
+	switch a.Operation {
+	case "set":
+		nextBalance = amount
+	case "add":
+		nextBalance = oldBalance + amount
+	case "subtract":
+		nextBalance = oldBalance - amount
+	default:
+		return 0, 0, ErrInvalidAdminBalanceAdjustment.WithMetadata(map[string]string{
+			"field": "operation",
+		})
 	}
-	if rebate > 0 {
-		logger.LegacyPrintf("service.admin", "affiliate rebate accrued for admin recharge: user_id=%d amount=%.8f rebate=%.8f", userID, amount, rebate)
+	nextBalance, err = normalizeLedgerAmount(nextBalance)
+	if err != nil {
+		return 0, 0, ErrInvalidAdminBalanceAdjustment.WithMetadata(map[string]string{
+			"field":      "resulting_balance",
+			"constraint": "finite_ledger_range",
+		})
+	}
+	if nextBalance < 0 {
+		return 0, 0, ErrAdminBalanceInsufficient.WithMetadata(map[string]string{
+			"current_balance":   formatLedgerAmount(oldBalance),
+			"requested_amount":  formatLedgerAmount(amount),
+			"resulting_balance": formatLedgerAmount(nextBalance),
+			"operation":         a.Operation,
+		})
+	}
+	delta, err := normalizeDerivedLedgerAmount(nextBalance - oldBalance)
+	if err != nil {
+		return 0, 0, err
+	}
+	return nextBalance, delta, nil
+}
+
+func (s *adminServiceImpl) UpdateUserBalanceAtomic(
+	ctx context.Context,
+	userID int64,
+	balance float64,
+	operation string,
+	notes string,
+	claim *IdempotencyAtomicClaim,
+	responseFactory AdminBalanceAdjustmentResponseFactory,
+) (any, error) {
+	adjustment, err := newAdminBalanceAdjustment(balance, operation, notes)
+	if err != nil {
+		return nil, err
+	}
+	repo, ok := s.userRepo.(AdminBalanceAdjustmentRepository)
+	if !ok || repo == nil {
+		return nil, errors.New("admin balance adjustment repository is not configured")
+	}
+	result, err := repo.ApplyAdminBalanceAdjustmentAtomic(ctx, userID, adjustment, claim, responseFactory)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.afterAdminBalanceAdjustment(ctx, userID, adjustment, result); err != nil {
+		return nil, err
+	}
+	return result.Response, nil
+}
+
+func (s *adminServiceImpl) afterAdminBalanceAdjustment(ctx context.Context, userID int64, adjustment AdminBalanceAdjustment, result *AdminBalanceAdjustmentResult) error {
+	if result == nil || result.User == nil {
+		return errors.New("admin balance adjustment returned no user")
+	}
+	if result.BalanceDelta == 0 {
+		return nil
+	}
+	s.invalidateAdminBalanceCaches(userID)
+	return nil
+}
+
+func (s *adminServiceImpl) invalidateAdminBalanceCaches(userID int64) {
+	cacheCtx, cancel := context.WithTimeout(context.Background(), adminBalanceCacheInvalidationTimeout)
+	defer cancel()
+
+	if s.billingCacheService != nil {
+		if err := s.billingCacheService.InvalidateUserBalance(cacheCtx, userID); err != nil {
+			slog.Error("admin_balance.cache_invalidation_failed",
+				"cache", "balance_or_available_credit",
+				"user_id", userID,
+				"error", err)
+			// InvalidateUserBalance stops at the first Redis error. Still attempt
+			// the authorization precheck cache without repeating the balance delete.
+			if availableErr := s.billingCacheService.InvalidateAvailableCredit(cacheCtx, userID); availableErr != nil {
+				slog.Error("admin_balance.cache_invalidation_failed",
+					"cache", "available_credit",
+					"user_id", userID,
+					"error", availableErr)
+			}
+		}
+	}
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(cacheCtx, userID)
 	}
 }
 

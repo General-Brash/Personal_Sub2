@@ -400,12 +400,16 @@ func (h *UserHandler) UpdateBalance(c *gin.Context) {
 		UserID: userID,
 		Body:   req,
 	}
-	executeAdminIdempotentJSON(c, "admin.users.balance.update", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
-		user, execErr := h.adminService.UpdateUserBalance(ctx, userID, req.Balance, req.Operation, req.Notes)
-		if execErr != nil {
-			return nil, execErr
-		}
-		return dto.UserFromServiceAdmin(user), nil
+	executeAdminAtomicIdempotentJSON(c, "admin.users.balance.update", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context, claim *service.IdempotencyAtomicClaim) (any, error) {
+		return h.adminService.UpdateUserBalanceAtomic(
+			ctx,
+			userID,
+			req.Balance,
+			req.Operation,
+			req.Notes,
+			claim,
+			func(user *service.User) any { return dto.UserFromServiceAdmin(user) },
+		)
 	})
 }
 

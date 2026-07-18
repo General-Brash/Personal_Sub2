@@ -19,6 +19,7 @@ type AdminService interface {
 	UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error)
 	DeleteUser(ctx context.Context, id int64) error
 	UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error)
+	UpdateUserBalanceAtomic(ctx context.Context, userID int64, balance float64, operation string, notes string, claim *IdempotencyAtomicClaim, responseFactory AdminBalanceAdjustmentResponseFactory) (any, error)
 	BatchUpdateConcurrency(ctx context.Context, userIDs []int64, value int, mode string) (int, error)
 	BatchUpdateLimits(ctx context.Context, userIDs []int64, concurrency, rpmLimit *int) (int, error)
 	GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int, sortBy, sortOrder string) ([]APIKey, int64, error)
@@ -130,6 +131,40 @@ type AdminService interface {
 	BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error)
 	ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
 	ResetAccountQuota(ctx context.Context, id int64) error
+}
+
+// AdminBalanceAdjustment describes one administrator-issued permanent balance
+// change after the requested amount has been normalized to ledger precision.
+type AdminBalanceAdjustment struct {
+	Amount    float64
+	Operation string
+	Notes     string
+	AuditCode string
+}
+
+type AdminBalanceAdjustmentResponseFactory func(*User) any
+
+type AdminBalanceAdjustmentResult struct {
+	User         *User
+	BalanceDelta float64
+	Response     any
+}
+
+// AdminBalanceAdjustmentRepository owns the transaction that locks the user,
+// changes permanent balance, records the audit row, and persists idempotency.
+type AdminBalanceAdjustmentRepository interface {
+	ApplyAdminBalanceAdjustment(
+		ctx context.Context,
+		userID int64,
+		adjustment AdminBalanceAdjustment,
+	) (*AdminBalanceAdjustmentResult, error)
+	ApplyAdminBalanceAdjustmentAtomic(
+		ctx context.Context,
+		userID int64,
+		adjustment AdminBalanceAdjustment,
+		claim *IdempotencyAtomicClaim,
+		responseFactory AdminBalanceAdjustmentResponseFactory,
+	) (*AdminBalanceAdjustmentResult, error)
 }
 
 // CreateUserInput represents input for creating a new user via admin operations.

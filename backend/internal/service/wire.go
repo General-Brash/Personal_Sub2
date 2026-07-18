@@ -19,6 +19,16 @@ func ProvideTemporaryCreditService(repo TemporaryCreditRepository, availableCred
 	return NewTemporaryCreditServiceWithAvailableCreditInvalidator(repo, availableCreditInvalidator)
 }
 
+func ProvideAffiliateRebateWorker(
+	client *dbent.Client,
+	affiliateService *AffiliateService,
+	settingService *SettingService,
+) *AffiliateRebateWorker {
+	worker := NewAffiliateRebateWorker(client, affiliateService, settingService)
+	worker.Start()
+	return worker
+}
+
 // ProvideUsageService wires the post-commit available-credit invalidation hook
 // while preserving the existing API-key authentication cache dependency.
 func ProvideUsageService(
@@ -767,6 +777,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewContentModerationService,
 	NewAffiliateService,
+	ProvideAffiliateRebateWorker,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,

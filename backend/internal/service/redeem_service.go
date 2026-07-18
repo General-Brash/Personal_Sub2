@@ -11,7 +11,6 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
@@ -467,6 +466,16 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		} else if err := s.userRepo.UpdateBalance(txCtx, userID, amount); err != nil {
 			return nil, fmt.Errorf("update user balance: %w", err)
 		}
+		if amount > 0 && s.affiliateService != nil && ctx.Value(ctxKeySkipRedeemAffiliate{}) == nil {
+			if err := s.affiliateService.EnqueueAffiliateRebateJob(txCtx, AffiliateRebateJobInput{
+				InviteeUserID:      userID,
+				SourceRedeemCodeID: redeemCode.ID,
+				SourceKind:         AffiliateRebateSourceRedeem,
+				BaseAmount:         amount,
+			}); err != nil {
+				return nil, fmt.Errorf("enqueue affiliate rebate job: %w", err)
+			}
+		}
 
 	case RedeemTypeConcurrency:
 		delta := int(redeemCode.Value)
@@ -516,11 +525,6 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	// 事务提交成功后失效缓存
 	s.invalidateRedeemCaches(ctx, userID, redeemCode)
 
-	// 余额类正数兑换码触发邀请返利（best-effort，失败不影响兑换结果）
-	if redeemCode.Type == RedeemTypeBalance && redeemCode.Value > 0 {
-		s.tryAccrueAffiliateRebateForRedeem(ctx, userID, redeemCode.Value)
-	}
-
 	// 重新获取更新后的兑换码
 	redeemCode, err = s.redeemRepo.GetByID(ctx, redeemCode.ID)
 	if err != nil {
@@ -567,26 +571,6 @@ func (s *RedeemService) invalidateRedeemCaches(ctx context.Context, userID int64
 				_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
 			}()
 		}
-	}
-}
-
-func (s *RedeemService) tryAccrueAffiliateRebateForRedeem(ctx context.Context, userID int64, amount float64) {
-	if ctx.Value(ctxKeySkipRedeemAffiliate{}) != nil {
-		return
-	}
-	if s.affiliateService == nil {
-		return
-	}
-	if !s.affiliateService.IsEnabled(ctx) {
-		return
-	}
-	rebate, err := s.affiliateService.AccrueInviteRebate(ctx, userID, amount)
-	if err != nil {
-		logger.LegacyPrintf("service.redeem", "[Redeem] affiliate rebate failed for user %d amount %.2f: %v", userID, amount, err)
-		return
-	}
-	if rebate > 0 {
-		logger.LegacyPrintf("service.redeem", "[Redeem] affiliate rebate accrued %.8f for inviter of user %d", rebate, userID)
 	}
 }
 

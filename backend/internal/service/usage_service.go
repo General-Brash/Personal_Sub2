@@ -141,7 +141,8 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 	// Consume temporary credit and only deduct the permanent-balance remainder
 	// in this same Ent transaction after the usage log has its immutable ID.
 	balanceUpdated := false
-	if inserted && req.ActualCost > 0 {
+	ledgerActualCost := usageBillingLedgerAmountFromFloat64(req.ActualCost)
+	if inserted && ledgerActualCost > 0 {
 		activeTx := tx
 		if activeTx == nil {
 			activeTx = dbent.TxFromContext(txCtx)
@@ -157,7 +158,6 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 			return nil, errors.New("created usage log id is required for temporary credit consumption")
 		}
 		usageLogID := usageLog.ID
-		ledgerActualCost := usageBillingLedgerAmountFromFloat64(req.ActualCost)
 		permanentBalanceCost, err := NewTemporaryCreditAllocationExecutor().Allocate(
 			txCtx,
 			executor,

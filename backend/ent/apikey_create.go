@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -332,6 +333,21 @@ func (_c *APIKeyCreate) AddUsageLogs(v ...*UsageLog) *APIKeyCreate {
 	return _c.AddUsageLogIDs(ids...)
 }
 
+// AddBatchImageCreditHoldIDs adds the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by IDs.
+func (_c *APIKeyCreate) AddBatchImageCreditHoldIDs(ids ...int64) *APIKeyCreate {
+	_c.mutation.AddBatchImageCreditHoldIDs(ids...)
+	return _c
+}
+
+// AddBatchImageCreditHolds adds the "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_c *APIKeyCreate) AddBatchImageCreditHolds(v ...*BatchImageCreditHold) *APIKeyCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddBatchImageCreditHoldIDs(ids...)
+}
+
 // Mutation returns the APIKeyMutation object of the builder.
 func (_c *APIKeyCreate) Mutation() *APIKeyMutation {
 	return _c.mutation
@@ -638,6 +654,22 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.BatchImageCreditHoldsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.BatchImageCreditHoldsTable,
+			Columns: []string{apikey.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

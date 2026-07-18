@@ -168,20 +168,30 @@ export async function deleteUser(id: number): Promise<{ message: string }> {
  * @param id - User ID
  * @param balance - New balance
  * @param operation - Operation type ('set', 'add', 'subtract')
+ * @param idempotencyKey - Stable key for safe retries of the same adjustment
  * @param notes - Optional notes for the balance adjustment
  * @returns Updated user
  */
 export async function updateBalance(
   id: number,
   balance: number,
-  operation: 'set' | 'add' | 'subtract' = 'set',
+  operation: 'set' | 'add' | 'subtract',
+  idempotencyKey: string,
   notes?: string
 ): Promise<AdminUser> {
-  const { data } = await apiClient.post<AdminUser>(`/admin/users/${id}/balance`, {
-    balance,
-    operation,
-    notes: notes || ''
-  })
+  const normalizedKey = idempotencyKey.trim()
+  if (!normalizedKey) {
+    throw new Error('Idempotency-Key is required for balance updates')
+  }
+  const { data } = await apiClient.post<AdminUser>(
+    `/admin/users/${id}/balance`,
+    {
+      balance,
+      operation,
+      notes: notes || ''
+    },
+    { headers: { 'Idempotency-Key': normalizedKey } }
+  )
   return data
 }
 

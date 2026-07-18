@@ -454,6 +454,26 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		}
 		// 账号槽位/等待计数需要在超时或断开时安全回收
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+		if action != "countTokens" {
+			var pricingErr error
+			if service.IsGeminiImageGenerationModel(modelName) {
+				pricingErr = h.gatewayService.PreflightImageRequestPricing(c.Request.Context(), apiKey, account, reqModel, channelMapping, service.ExtractGeminiImageSize(body))
+			} else {
+				pricingErr = h.gatewayService.PreflightTokenRequestPricing(c.Request.Context(), apiKey, account, reqModel, channelMapping)
+			}
+			if pricingErr != nil {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				reqLog.Error("gemini.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+				if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+					googleError(c, status, code+": "+message)
+				} else {
+					googleError(c, http.StatusBadRequest, pricingErr.Error())
+				}
+				return
+			}
+		}
 
 		// 5) forward (根据平台分流)
 		var result *service.ForwardResult

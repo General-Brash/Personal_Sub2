@@ -16,7 +16,6 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"go.uber.org/zap"
 )
@@ -127,9 +126,18 @@ type LiteLLMModelPricing struct {
 	OutputCostPerImageToken             float64 `json:"output_cost_per_image_token"` // 图片输出 token 价格
 	InputCostPerImageToken              float64 `json:"input_cost_per_image_token"`  // 图片输入 token 价格（如 gpt-image-2 图片编辑）
 
-	// TokenPricingAbsent 表示源数据中 input/output token 价格均缺失（仅有图片价）。
-	// 此类条目只可用于图片计费，token 计费必须回退到 fallback 或 fail-closed，
-	// 否则 token 流量会被按 $0 计费。零值（false）表示条目具备 token 价格。
+	// Presence flags preserve the difference between an omitted price and an
+	// explicitly configured free price. They are populated while parsing the
+	// pointer-based LiteLLM source schema.
+	InputCostPerTokenPresent       bool `json:"-"`
+	OutputCostPerTokenPresent      bool `json:"-"`
+	OutputCostPerImagePresent      bool `json:"-"`
+	OutputCostPerImageTokenPresent bool `json:"-"`
+	InputCostPerImageTokenPresent  bool `json:"-"`
+
+	// TokenPricingAbsent is retained for callers that only need to distinguish
+	// media-only entries. A token entry is priceable only when both token prices
+	// are present; see BillingService.PreflightTokenPricing.
 	TokenPricingAbsent bool `json:"-"`
 }
 
@@ -435,6 +443,14 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 			skipped++
 			continue
 		}
+		if err := validateLiteLLMRawEntry(modelName, &entry); err != nil {
+			logger.L().Warn("pricing.invalid_remote_entry_skipped",
+				zap.String("model", modelName),
+				zap.Error(err),
+			)
+			skipped++
+			continue
+		}
 
 		// 只保留有有效价格的条目
 		if entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil && entry.OutputCostPerImage == nil && entry.OutputCostPerImageToken == nil && entry.InputCostPerImageToken == nil {
@@ -442,11 +458,16 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		}
 
 		pricing := &LiteLLMModelPricing{
-			LiteLLMProvider:       entry.LiteLLMProvider,
-			Mode:                  entry.Mode,
-			SupportsPromptCaching: entry.SupportsPromptCaching,
-			SupportsServiceTier:   entry.SupportsServiceTier,
-			TokenPricingAbsent:    entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil,
+			LiteLLMProvider:                entry.LiteLLMProvider,
+			Mode:                           entry.Mode,
+			SupportsPromptCaching:          entry.SupportsPromptCaching,
+			SupportsServiceTier:            entry.SupportsServiceTier,
+			InputCostPerTokenPresent:       entry.InputCostPerToken != nil,
+			OutputCostPerTokenPresent:      entry.OutputCostPerToken != nil,
+			OutputCostPerImagePresent:      entry.OutputCostPerImage != nil,
+			OutputCostPerImageTokenPresent: entry.OutputCostPerImageToken != nil,
+			InputCostPerImageTokenPresent:  entry.InputCostPerImageToken != nil,
+			TokenPricingAbsent:             entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil,
 		}
 
 		if entry.InputCostPerToken != nil {
@@ -965,13 +986,6 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 			}
 		}
 		return nil
-	}
-
-	// 最终回退到 DefaultTestModel
-	defaultModel := strings.ToLower(openai.DefaultTestModel)
-	if pricing, ok := s.pricingData[defaultModel]; ok {
-		logger.LegacyPrintf("service.pricing", "[Pricing] OpenAI fallback to default model %s -> %s", model, defaultModel)
-		return pricing
 	}
 
 	return nil

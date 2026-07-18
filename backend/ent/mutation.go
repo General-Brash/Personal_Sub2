@@ -14,11 +14,14 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/affiliaterebatejob"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecreditholdallocation"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageevent"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageitem"
 	"github.com/Wei-Shaw/sub2api/ent/batchimagejob"
@@ -26,6 +29,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -42,6 +46,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditconsumption"
+	"github.com/Wei-Shaw/sub2api/ent/temporarycreditgrant"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -63,94 +69,103 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeAPIKey                        = "APIKey"
-	TypeAccount                       = "Account"
-	TypeAccountGroup                  = "AccountGroup"
-	TypeAnnouncement                  = "Announcement"
-	TypeAnnouncementRead              = "AnnouncementRead"
-	TypeAuthIdentity                  = "AuthIdentity"
-	TypeAuthIdentityChannel           = "AuthIdentityChannel"
-	TypeBatchImageEvent               = "BatchImageEvent"
-	TypeBatchImageItem                = "BatchImageItem"
-	TypeBatchImageJob                 = "BatchImageJob"
-	TypeChannelMonitor                = "ChannelMonitor"
-	TypeChannelMonitorDailyRollup     = "ChannelMonitorDailyRollup"
-	TypeChannelMonitorHistory         = "ChannelMonitorHistory"
-	TypeChannelMonitorRequestTemplate = "ChannelMonitorRequestTemplate"
-	TypeErrorPassthroughRule          = "ErrorPassthroughRule"
-	TypeGroup                         = "Group"
-	TypeIdempotencyRecord             = "IdempotencyRecord"
-	TypeIdentityAdoptionDecision      = "IdentityAdoptionDecision"
-	TypePaymentAuditLog               = "PaymentAuditLog"
-	TypePaymentOrder                  = "PaymentOrder"
-	TypePaymentProviderInstance       = "PaymentProviderInstance"
-	TypePendingAuthSession            = "PendingAuthSession"
-	TypePromoCode                     = "PromoCode"
-	TypePromoCodeUsage                = "PromoCodeUsage"
-	TypeProxy                         = "Proxy"
-	TypeRedeemCode                    = "RedeemCode"
-	TypeSecuritySecret                = "SecuritySecret"
-	TypeSetting                       = "Setting"
-	TypeSubscriptionPlan              = "SubscriptionPlan"
-	TypeTLSFingerprintProfile         = "TLSFingerprintProfile"
-	TypeUsageCleanupTask              = "UsageCleanupTask"
-	TypeUsageLog                      = "UsageLog"
-	TypeUser                          = "User"
-	TypeUserAllowedGroup              = "UserAllowedGroup"
-	TypeUserAttributeDefinition       = "UserAttributeDefinition"
-	TypeUserAttributeValue            = "UserAttributeValue"
-	TypeUserPlatformQuota             = "UserPlatformQuota"
-	TypeUserSubscription              = "UserSubscription"
+	TypeAPIKey                         = "APIKey"
+	TypeAccount                        = "Account"
+	TypeAccountGroup                   = "AccountGroup"
+	TypeAffiliateRebateJob             = "AffiliateRebateJob"
+	TypeAnnouncement                   = "Announcement"
+	TypeAnnouncementRead               = "AnnouncementRead"
+	TypeAuthIdentity                   = "AuthIdentity"
+	TypeAuthIdentityChannel            = "AuthIdentityChannel"
+	TypeBatchImageCreditHold           = "BatchImageCreditHold"
+	TypeBatchImageCreditHoldAllocation = "BatchImageCreditHoldAllocation"
+	TypeBatchImageEvent                = "BatchImageEvent"
+	TypeBatchImageItem                 = "BatchImageItem"
+	TypeBatchImageJob                  = "BatchImageJob"
+	TypeChannelMonitor                 = "ChannelMonitor"
+	TypeChannelMonitorDailyRollup      = "ChannelMonitorDailyRollup"
+	TypeChannelMonitorHistory          = "ChannelMonitorHistory"
+	TypeChannelMonitorRequestTemplate  = "ChannelMonitorRequestTemplate"
+	TypeDailyCheckin                   = "DailyCheckin"
+	TypeErrorPassthroughRule           = "ErrorPassthroughRule"
+	TypeGroup                          = "Group"
+	TypeIdempotencyRecord              = "IdempotencyRecord"
+	TypeIdentityAdoptionDecision       = "IdentityAdoptionDecision"
+	TypePaymentAuditLog                = "PaymentAuditLog"
+	TypePaymentOrder                   = "PaymentOrder"
+	TypePaymentProviderInstance        = "PaymentProviderInstance"
+	TypePendingAuthSession             = "PendingAuthSession"
+	TypePromoCode                      = "PromoCode"
+	TypePromoCodeUsage                 = "PromoCodeUsage"
+	TypeProxy                          = "Proxy"
+	TypeRedeemCode                     = "RedeemCode"
+	TypeSecuritySecret                 = "SecuritySecret"
+	TypeSetting                        = "Setting"
+	TypeSubscriptionPlan               = "SubscriptionPlan"
+	TypeTLSFingerprintProfile          = "TLSFingerprintProfile"
+	TypeTemporaryCreditConsumption     = "TemporaryCreditConsumption"
+	TypeTemporaryCreditGrant           = "TemporaryCreditGrant"
+	TypeUsageCleanupTask               = "UsageCleanupTask"
+	TypeUsageLog                       = "UsageLog"
+	TypeUser                           = "User"
+	TypeUserAllowedGroup               = "UserAllowedGroup"
+	TypeUserAttributeDefinition        = "UserAttributeDefinition"
+	TypeUserAttributeValue             = "UserAttributeValue"
+	TypeUserPlatformQuota              = "UserPlatformQuota"
+	TypeUserSubscription               = "UserSubscription"
 )
 
 // APIKeyMutation represents an operation that mutates the APIKey nodes in the graph.
 type APIKeyMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	created_at         *time.Time
-	updated_at         *time.Time
-	deleted_at         *time.Time
-	key                *string
-	name               *string
-	status             *string
-	last_used_at       *time.Time
-	ip_whitelist       *[]string
-	appendip_whitelist []string
-	ip_blacklist       *[]string
-	appendip_blacklist []string
-	quota              *float64
-	addquota           *float64
-	quota_used         *float64
-	addquota_used      *float64
-	expires_at         *time.Time
-	rate_limit_5h      *float64
-	addrate_limit_5h   *float64
-	rate_limit_1d      *float64
-	addrate_limit_1d   *float64
-	rate_limit_7d      *float64
-	addrate_limit_7d   *float64
-	usage_5h           *float64
-	addusage_5h        *float64
-	usage_1d           *float64
-	addusage_1d        *float64
-	usage_7d           *float64
-	addusage_7d        *float64
-	window_5h_start    *time.Time
-	window_1d_start    *time.Time
-	window_7d_start    *time.Time
-	clearedFields      map[string]struct{}
-	user               *int64
-	cleareduser        bool
-	group              *int64
-	clearedgroup       bool
-	usage_logs         map[int64]struct{}
-	removedusage_logs  map[int64]struct{}
-	clearedusage_logs  bool
-	done               bool
-	oldValue           func(context.Context) (*APIKey, error)
-	predicates         []predicate.APIKey
+	op                              Op
+	typ                             string
+	id                              *int64
+	created_at                      *time.Time
+	updated_at                      *time.Time
+	deleted_at                      *time.Time
+	key                             *string
+	name                            *string
+	status                          *string
+	last_used_at                    *time.Time
+	ip_whitelist                    *[]string
+	appendip_whitelist              []string
+	ip_blacklist                    *[]string
+	appendip_blacklist              []string
+	quota                           *float64
+	addquota                        *float64
+	quota_used                      *float64
+	addquota_used                   *float64
+	expires_at                      *time.Time
+	rate_limit_5h                   *float64
+	addrate_limit_5h                *float64
+	rate_limit_1d                   *float64
+	addrate_limit_1d                *float64
+	rate_limit_7d                   *float64
+	addrate_limit_7d                *float64
+	usage_5h                        *float64
+	addusage_5h                     *float64
+	usage_1d                        *float64
+	addusage_1d                     *float64
+	usage_7d                        *float64
+	addusage_7d                     *float64
+	window_5h_start                 *time.Time
+	window_1d_start                 *time.Time
+	window_7d_start                 *time.Time
+	clearedFields                   map[string]struct{}
+	user                            *int64
+	cleareduser                     bool
+	group                           *int64
+	clearedgroup                    bool
+	usage_logs                      map[int64]struct{}
+	removedusage_logs               map[int64]struct{}
+	clearedusage_logs               bool
+	batch_image_credit_holds        map[int64]struct{}
+	removedbatch_image_credit_holds map[int64]struct{}
+	clearedbatch_image_credit_holds bool
+	done                            bool
+	oldValue                        func(context.Context) (*APIKey, error)
+	predicates                      []predicate.APIKey
 }
 
 var _ ent.Mutation = (*APIKeyMutation)(nil)
@@ -1496,6 +1511,60 @@ func (m *APIKeyMutation) ResetUsageLogs() {
 	m.removedusage_logs = nil
 }
 
+// AddBatchImageCreditHoldIDs adds the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by ids.
+func (m *APIKeyMutation) AddBatchImageCreditHoldIDs(ids ...int64) {
+	if m.batch_image_credit_holds == nil {
+		m.batch_image_credit_holds = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.batch_image_credit_holds[ids[i]] = struct{}{}
+	}
+}
+
+// ClearBatchImageCreditHolds clears the "batch_image_credit_holds" edge to the BatchImageCreditHold entity.
+func (m *APIKeyMutation) ClearBatchImageCreditHolds() {
+	m.clearedbatch_image_credit_holds = true
+}
+
+// BatchImageCreditHoldsCleared reports if the "batch_image_credit_holds" edge to the BatchImageCreditHold entity was cleared.
+func (m *APIKeyMutation) BatchImageCreditHoldsCleared() bool {
+	return m.clearedbatch_image_credit_holds
+}
+
+// RemoveBatchImageCreditHoldIDs removes the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by IDs.
+func (m *APIKeyMutation) RemoveBatchImageCreditHoldIDs(ids ...int64) {
+	if m.removedbatch_image_credit_holds == nil {
+		m.removedbatch_image_credit_holds = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.batch_image_credit_holds, ids[i])
+		m.removedbatch_image_credit_holds[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedBatchImageCreditHolds returns the removed IDs of the "batch_image_credit_holds" edge to the BatchImageCreditHold entity.
+func (m *APIKeyMutation) RemovedBatchImageCreditHoldsIDs() (ids []int64) {
+	for id := range m.removedbatch_image_credit_holds {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// BatchImageCreditHoldsIDs returns the "batch_image_credit_holds" edge IDs in the mutation.
+func (m *APIKeyMutation) BatchImageCreditHoldsIDs() (ids []int64) {
+	for id := range m.batch_image_credit_holds {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetBatchImageCreditHolds resets all changes to the "batch_image_credit_holds" edge.
+func (m *APIKeyMutation) ResetBatchImageCreditHolds() {
+	m.batch_image_credit_holds = nil
+	m.clearedbatch_image_credit_holds = false
+	m.removedbatch_image_credit_holds = nil
+}
+
 // Where appends a list predicates to the APIKeyMutation builder.
 func (m *APIKeyMutation) Where(ps ...predicate.APIKey) {
 	m.predicates = append(m.predicates, ps...)
@@ -2159,7 +2228,7 @@ func (m *APIKeyMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *APIKeyMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.user != nil {
 		edges = append(edges, apikey.EdgeUser)
 	}
@@ -2168,6 +2237,9 @@ func (m *APIKeyMutation) AddedEdges() []string {
 	}
 	if m.usage_logs != nil {
 		edges = append(edges, apikey.EdgeUsageLogs)
+	}
+	if m.batch_image_credit_holds != nil {
+		edges = append(edges, apikey.EdgeBatchImageCreditHolds)
 	}
 	return edges
 }
@@ -2190,15 +2262,24 @@ func (m *APIKeyMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case apikey.EdgeBatchImageCreditHolds:
+		ids := make([]ent.Value, 0, len(m.batch_image_credit_holds))
+		for id := range m.batch_image_credit_holds {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *APIKeyMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedusage_logs != nil {
 		edges = append(edges, apikey.EdgeUsageLogs)
+	}
+	if m.removedbatch_image_credit_holds != nil {
+		edges = append(edges, apikey.EdgeBatchImageCreditHolds)
 	}
 	return edges
 }
@@ -2213,13 +2294,19 @@ func (m *APIKeyMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case apikey.EdgeBatchImageCreditHolds:
+		ids := make([]ent.Value, 0, len(m.removedbatch_image_credit_holds))
+		for id := range m.removedbatch_image_credit_holds {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *APIKeyMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.cleareduser {
 		edges = append(edges, apikey.EdgeUser)
 	}
@@ -2228,6 +2315,9 @@ func (m *APIKeyMutation) ClearedEdges() []string {
 	}
 	if m.clearedusage_logs {
 		edges = append(edges, apikey.EdgeUsageLogs)
+	}
+	if m.clearedbatch_image_credit_holds {
+		edges = append(edges, apikey.EdgeBatchImageCreditHolds)
 	}
 	return edges
 }
@@ -2242,6 +2332,8 @@ func (m *APIKeyMutation) EdgeCleared(name string) bool {
 		return m.clearedgroup
 	case apikey.EdgeUsageLogs:
 		return m.clearedusage_logs
+	case apikey.EdgeBatchImageCreditHolds:
+		return m.clearedbatch_image_credit_holds
 	}
 	return false
 }
@@ -2272,6 +2364,9 @@ func (m *APIKeyMutation) ResetEdge(name string) error {
 		return nil
 	case apikey.EdgeUsageLogs:
 		m.ResetUsageLogs()
+		return nil
+	case apikey.EdgeBatchImageCreditHolds:
+		m.ResetBatchImageCreditHolds()
 		return nil
 	}
 	return fmt.Errorf("unknown APIKey edge %s", name)
@@ -5566,6 +5661,1340 @@ func (m *AccountGroupMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown AccountGroup edge %s", name)
+}
+
+// AffiliateRebateJobMutation represents an operation that mutates the AffiliateRebateJob nodes in the graph.
+type AffiliateRebateJobMutation struct {
+	config
+	op                       Op
+	typ                      string
+	id                       *int64
+	invitee_user_id          *int64
+	addinvitee_user_id       *int64
+	source_redeem_code_id    *int64
+	addsource_redeem_code_id *int64
+	source_kind              *affiliaterebatejob.SourceKind
+	base_amount              *float64
+	addbase_amount           *float64
+	status                   *affiliaterebatejob.Status
+	attempts                 *int
+	addattempts              *int
+	next_retry_at            *time.Time
+	last_error               *string
+	last_error_at            *time.Time
+	processing_started_at    *time.Time
+	succeeded_at             *time.Time
+	skipped_at               *time.Time
+	failed_at                *time.Time
+	created_at               *time.Time
+	updated_at               *time.Time
+	clearedFields            map[string]struct{}
+	done                     bool
+	oldValue                 func(context.Context) (*AffiliateRebateJob, error)
+	predicates               []predicate.AffiliateRebateJob
+}
+
+var _ ent.Mutation = (*AffiliateRebateJobMutation)(nil)
+
+// affiliaterebatejobOption allows management of the mutation configuration using functional options.
+type affiliaterebatejobOption func(*AffiliateRebateJobMutation)
+
+// newAffiliateRebateJobMutation creates new mutation for the AffiliateRebateJob entity.
+func newAffiliateRebateJobMutation(c config, op Op, opts ...affiliaterebatejobOption) *AffiliateRebateJobMutation {
+	m := &AffiliateRebateJobMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAffiliateRebateJob,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAffiliateRebateJobID sets the ID field of the mutation.
+func withAffiliateRebateJobID(id int64) affiliaterebatejobOption {
+	return func(m *AffiliateRebateJobMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AffiliateRebateJob
+		)
+		m.oldValue = func(ctx context.Context) (*AffiliateRebateJob, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AffiliateRebateJob.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAffiliateRebateJob sets the old AffiliateRebateJob of the mutation.
+func withAffiliateRebateJob(node *AffiliateRebateJob) affiliaterebatejobOption {
+	return func(m *AffiliateRebateJobMutation) {
+		m.oldValue = func(context.Context) (*AffiliateRebateJob, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AffiliateRebateJobMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AffiliateRebateJobMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AffiliateRebateJobMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AffiliateRebateJobMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AffiliateRebateJob.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetInviteeUserID sets the "invitee_user_id" field.
+func (m *AffiliateRebateJobMutation) SetInviteeUserID(i int64) {
+	m.invitee_user_id = &i
+	m.addinvitee_user_id = nil
+}
+
+// InviteeUserID returns the value of the "invitee_user_id" field in the mutation.
+func (m *AffiliateRebateJobMutation) InviteeUserID() (r int64, exists bool) {
+	v := m.invitee_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInviteeUserID returns the old "invitee_user_id" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldInviteeUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInviteeUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInviteeUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInviteeUserID: %w", err)
+	}
+	return oldValue.InviteeUserID, nil
+}
+
+// AddInviteeUserID adds i to the "invitee_user_id" field.
+func (m *AffiliateRebateJobMutation) AddInviteeUserID(i int64) {
+	if m.addinvitee_user_id != nil {
+		*m.addinvitee_user_id += i
+	} else {
+		m.addinvitee_user_id = &i
+	}
+}
+
+// AddedInviteeUserID returns the value that was added to the "invitee_user_id" field in this mutation.
+func (m *AffiliateRebateJobMutation) AddedInviteeUserID() (r int64, exists bool) {
+	v := m.addinvitee_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetInviteeUserID resets all changes to the "invitee_user_id" field.
+func (m *AffiliateRebateJobMutation) ResetInviteeUserID() {
+	m.invitee_user_id = nil
+	m.addinvitee_user_id = nil
+}
+
+// SetSourceRedeemCodeID sets the "source_redeem_code_id" field.
+func (m *AffiliateRebateJobMutation) SetSourceRedeemCodeID(i int64) {
+	m.source_redeem_code_id = &i
+	m.addsource_redeem_code_id = nil
+}
+
+// SourceRedeemCodeID returns the value of the "source_redeem_code_id" field in the mutation.
+func (m *AffiliateRebateJobMutation) SourceRedeemCodeID() (r int64, exists bool) {
+	v := m.source_redeem_code_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceRedeemCodeID returns the old "source_redeem_code_id" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldSourceRedeemCodeID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceRedeemCodeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceRedeemCodeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceRedeemCodeID: %w", err)
+	}
+	return oldValue.SourceRedeemCodeID, nil
+}
+
+// AddSourceRedeemCodeID adds i to the "source_redeem_code_id" field.
+func (m *AffiliateRebateJobMutation) AddSourceRedeemCodeID(i int64) {
+	if m.addsource_redeem_code_id != nil {
+		*m.addsource_redeem_code_id += i
+	} else {
+		m.addsource_redeem_code_id = &i
+	}
+}
+
+// AddedSourceRedeemCodeID returns the value that was added to the "source_redeem_code_id" field in this mutation.
+func (m *AffiliateRebateJobMutation) AddedSourceRedeemCodeID() (r int64, exists bool) {
+	v := m.addsource_redeem_code_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSourceRedeemCodeID resets all changes to the "source_redeem_code_id" field.
+func (m *AffiliateRebateJobMutation) ResetSourceRedeemCodeID() {
+	m.source_redeem_code_id = nil
+	m.addsource_redeem_code_id = nil
+}
+
+// SetSourceKind sets the "source_kind" field.
+func (m *AffiliateRebateJobMutation) SetSourceKind(ak affiliaterebatejob.SourceKind) {
+	m.source_kind = &ak
+}
+
+// SourceKind returns the value of the "source_kind" field in the mutation.
+func (m *AffiliateRebateJobMutation) SourceKind() (r affiliaterebatejob.SourceKind, exists bool) {
+	v := m.source_kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceKind returns the old "source_kind" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldSourceKind(ctx context.Context) (v affiliaterebatejob.SourceKind, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceKind: %w", err)
+	}
+	return oldValue.SourceKind, nil
+}
+
+// ResetSourceKind resets all changes to the "source_kind" field.
+func (m *AffiliateRebateJobMutation) ResetSourceKind() {
+	m.source_kind = nil
+}
+
+// SetBaseAmount sets the "base_amount" field.
+func (m *AffiliateRebateJobMutation) SetBaseAmount(f float64) {
+	m.base_amount = &f
+	m.addbase_amount = nil
+}
+
+// BaseAmount returns the value of the "base_amount" field in the mutation.
+func (m *AffiliateRebateJobMutation) BaseAmount() (r float64, exists bool) {
+	v := m.base_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseAmount returns the old "base_amount" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldBaseAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseAmount: %w", err)
+	}
+	return oldValue.BaseAmount, nil
+}
+
+// AddBaseAmount adds f to the "base_amount" field.
+func (m *AffiliateRebateJobMutation) AddBaseAmount(f float64) {
+	if m.addbase_amount != nil {
+		*m.addbase_amount += f
+	} else {
+		m.addbase_amount = &f
+	}
+}
+
+// AddedBaseAmount returns the value that was added to the "base_amount" field in this mutation.
+func (m *AffiliateRebateJobMutation) AddedBaseAmount() (r float64, exists bool) {
+	v := m.addbase_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBaseAmount resets all changes to the "base_amount" field.
+func (m *AffiliateRebateJobMutation) ResetBaseAmount() {
+	m.base_amount = nil
+	m.addbase_amount = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *AffiliateRebateJobMutation) SetStatus(a affiliaterebatejob.Status) {
+	m.status = &a
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *AffiliateRebateJobMutation) Status() (r affiliaterebatejob.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldStatus(ctx context.Context) (v affiliaterebatejob.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *AffiliateRebateJobMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetAttempts sets the "attempts" field.
+func (m *AffiliateRebateJobMutation) SetAttempts(i int) {
+	m.attempts = &i
+	m.addattempts = nil
+}
+
+// Attempts returns the value of the "attempts" field in the mutation.
+func (m *AffiliateRebateJobMutation) Attempts() (r int, exists bool) {
+	v := m.attempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttempts returns the old "attempts" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldAttempts(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttempts is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttempts requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttempts: %w", err)
+	}
+	return oldValue.Attempts, nil
+}
+
+// AddAttempts adds i to the "attempts" field.
+func (m *AffiliateRebateJobMutation) AddAttempts(i int) {
+	if m.addattempts != nil {
+		*m.addattempts += i
+	} else {
+		m.addattempts = &i
+	}
+}
+
+// AddedAttempts returns the value that was added to the "attempts" field in this mutation.
+func (m *AffiliateRebateJobMutation) AddedAttempts() (r int, exists bool) {
+	v := m.addattempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttempts resets all changes to the "attempts" field.
+func (m *AffiliateRebateJobMutation) ResetAttempts() {
+	m.attempts = nil
+	m.addattempts = nil
+}
+
+// SetNextRetryAt sets the "next_retry_at" field.
+func (m *AffiliateRebateJobMutation) SetNextRetryAt(t time.Time) {
+	m.next_retry_at = &t
+}
+
+// NextRetryAt returns the value of the "next_retry_at" field in the mutation.
+func (m *AffiliateRebateJobMutation) NextRetryAt() (r time.Time, exists bool) {
+	v := m.next_retry_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNextRetryAt returns the old "next_retry_at" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldNextRetryAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNextRetryAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNextRetryAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNextRetryAt: %w", err)
+	}
+	return oldValue.NextRetryAt, nil
+}
+
+// ResetNextRetryAt resets all changes to the "next_retry_at" field.
+func (m *AffiliateRebateJobMutation) ResetNextRetryAt() {
+	m.next_retry_at = nil
+}
+
+// SetLastError sets the "last_error" field.
+func (m *AffiliateRebateJobMutation) SetLastError(s string) {
+	m.last_error = &s
+}
+
+// LastError returns the value of the "last_error" field in the mutation.
+func (m *AffiliateRebateJobMutation) LastError() (r string, exists bool) {
+	v := m.last_error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastError returns the old "last_error" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldLastError(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastError: %w", err)
+	}
+	return oldValue.LastError, nil
+}
+
+// ClearLastError clears the value of the "last_error" field.
+func (m *AffiliateRebateJobMutation) ClearLastError() {
+	m.last_error = nil
+	m.clearedFields[affiliaterebatejob.FieldLastError] = struct{}{}
+}
+
+// LastErrorCleared returns if the "last_error" field was cleared in this mutation.
+func (m *AffiliateRebateJobMutation) LastErrorCleared() bool {
+	_, ok := m.clearedFields[affiliaterebatejob.FieldLastError]
+	return ok
+}
+
+// ResetLastError resets all changes to the "last_error" field.
+func (m *AffiliateRebateJobMutation) ResetLastError() {
+	m.last_error = nil
+	delete(m.clearedFields, affiliaterebatejob.FieldLastError)
+}
+
+// SetLastErrorAt sets the "last_error_at" field.
+func (m *AffiliateRebateJobMutation) SetLastErrorAt(t time.Time) {
+	m.last_error_at = &t
+}
+
+// LastErrorAt returns the value of the "last_error_at" field in the mutation.
+func (m *AffiliateRebateJobMutation) LastErrorAt() (r time.Time, exists bool) {
+	v := m.last_error_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastErrorAt returns the old "last_error_at" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldLastErrorAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastErrorAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastErrorAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastErrorAt: %w", err)
+	}
+	return oldValue.LastErrorAt, nil
+}
+
+// ClearLastErrorAt clears the value of the "last_error_at" field.
+func (m *AffiliateRebateJobMutation) ClearLastErrorAt() {
+	m.last_error_at = nil
+	m.clearedFields[affiliaterebatejob.FieldLastErrorAt] = struct{}{}
+}
+
+// LastErrorAtCleared returns if the "last_error_at" field was cleared in this mutation.
+func (m *AffiliateRebateJobMutation) LastErrorAtCleared() bool {
+	_, ok := m.clearedFields[affiliaterebatejob.FieldLastErrorAt]
+	return ok
+}
+
+// ResetLastErrorAt resets all changes to the "last_error_at" field.
+func (m *AffiliateRebateJobMutation) ResetLastErrorAt() {
+	m.last_error_at = nil
+	delete(m.clearedFields, affiliaterebatejob.FieldLastErrorAt)
+}
+
+// SetProcessingStartedAt sets the "processing_started_at" field.
+func (m *AffiliateRebateJobMutation) SetProcessingStartedAt(t time.Time) {
+	m.processing_started_at = &t
+}
+
+// ProcessingStartedAt returns the value of the "processing_started_at" field in the mutation.
+func (m *AffiliateRebateJobMutation) ProcessingStartedAt() (r time.Time, exists bool) {
+	v := m.processing_started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessingStartedAt returns the old "processing_started_at" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldProcessingStartedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessingStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessingStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessingStartedAt: %w", err)
+	}
+	return oldValue.ProcessingStartedAt, nil
+}
+
+// ClearProcessingStartedAt clears the value of the "processing_started_at" field.
+func (m *AffiliateRebateJobMutation) ClearProcessingStartedAt() {
+	m.processing_started_at = nil
+	m.clearedFields[affiliaterebatejob.FieldProcessingStartedAt] = struct{}{}
+}
+
+// ProcessingStartedAtCleared returns if the "processing_started_at" field was cleared in this mutation.
+func (m *AffiliateRebateJobMutation) ProcessingStartedAtCleared() bool {
+	_, ok := m.clearedFields[affiliaterebatejob.FieldProcessingStartedAt]
+	return ok
+}
+
+// ResetProcessingStartedAt resets all changes to the "processing_started_at" field.
+func (m *AffiliateRebateJobMutation) ResetProcessingStartedAt() {
+	m.processing_started_at = nil
+	delete(m.clearedFields, affiliaterebatejob.FieldProcessingStartedAt)
+}
+
+// SetSucceededAt sets the "succeeded_at" field.
+func (m *AffiliateRebateJobMutation) SetSucceededAt(t time.Time) {
+	m.succeeded_at = &t
+}
+
+// SucceededAt returns the value of the "succeeded_at" field in the mutation.
+func (m *AffiliateRebateJobMutation) SucceededAt() (r time.Time, exists bool) {
+	v := m.succeeded_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSucceededAt returns the old "succeeded_at" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldSucceededAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSucceededAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSucceededAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSucceededAt: %w", err)
+	}
+	return oldValue.SucceededAt, nil
+}
+
+// ClearSucceededAt clears the value of the "succeeded_at" field.
+func (m *AffiliateRebateJobMutation) ClearSucceededAt() {
+	m.succeeded_at = nil
+	m.clearedFields[affiliaterebatejob.FieldSucceededAt] = struct{}{}
+}
+
+// SucceededAtCleared returns if the "succeeded_at" field was cleared in this mutation.
+func (m *AffiliateRebateJobMutation) SucceededAtCleared() bool {
+	_, ok := m.clearedFields[affiliaterebatejob.FieldSucceededAt]
+	return ok
+}
+
+// ResetSucceededAt resets all changes to the "succeeded_at" field.
+func (m *AffiliateRebateJobMutation) ResetSucceededAt() {
+	m.succeeded_at = nil
+	delete(m.clearedFields, affiliaterebatejob.FieldSucceededAt)
+}
+
+// SetSkippedAt sets the "skipped_at" field.
+func (m *AffiliateRebateJobMutation) SetSkippedAt(t time.Time) {
+	m.skipped_at = &t
+}
+
+// SkippedAt returns the value of the "skipped_at" field in the mutation.
+func (m *AffiliateRebateJobMutation) SkippedAt() (r time.Time, exists bool) {
+	v := m.skipped_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSkippedAt returns the old "skipped_at" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldSkippedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSkippedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSkippedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSkippedAt: %w", err)
+	}
+	return oldValue.SkippedAt, nil
+}
+
+// ClearSkippedAt clears the value of the "skipped_at" field.
+func (m *AffiliateRebateJobMutation) ClearSkippedAt() {
+	m.skipped_at = nil
+	m.clearedFields[affiliaterebatejob.FieldSkippedAt] = struct{}{}
+}
+
+// SkippedAtCleared returns if the "skipped_at" field was cleared in this mutation.
+func (m *AffiliateRebateJobMutation) SkippedAtCleared() bool {
+	_, ok := m.clearedFields[affiliaterebatejob.FieldSkippedAt]
+	return ok
+}
+
+// ResetSkippedAt resets all changes to the "skipped_at" field.
+func (m *AffiliateRebateJobMutation) ResetSkippedAt() {
+	m.skipped_at = nil
+	delete(m.clearedFields, affiliaterebatejob.FieldSkippedAt)
+}
+
+// SetFailedAt sets the "failed_at" field.
+func (m *AffiliateRebateJobMutation) SetFailedAt(t time.Time) {
+	m.failed_at = &t
+}
+
+// FailedAt returns the value of the "failed_at" field in the mutation.
+func (m *AffiliateRebateJobMutation) FailedAt() (r time.Time, exists bool) {
+	v := m.failed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFailedAt returns the old "failed_at" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldFailedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFailedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFailedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFailedAt: %w", err)
+	}
+	return oldValue.FailedAt, nil
+}
+
+// ClearFailedAt clears the value of the "failed_at" field.
+func (m *AffiliateRebateJobMutation) ClearFailedAt() {
+	m.failed_at = nil
+	m.clearedFields[affiliaterebatejob.FieldFailedAt] = struct{}{}
+}
+
+// FailedAtCleared returns if the "failed_at" field was cleared in this mutation.
+func (m *AffiliateRebateJobMutation) FailedAtCleared() bool {
+	_, ok := m.clearedFields[affiliaterebatejob.FieldFailedAt]
+	return ok
+}
+
+// ResetFailedAt resets all changes to the "failed_at" field.
+func (m *AffiliateRebateJobMutation) ResetFailedAt() {
+	m.failed_at = nil
+	delete(m.clearedFields, affiliaterebatejob.FieldFailedAt)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *AffiliateRebateJobMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *AffiliateRebateJobMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *AffiliateRebateJobMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *AffiliateRebateJobMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *AffiliateRebateJobMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the AffiliateRebateJob entity.
+// If the AffiliateRebateJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AffiliateRebateJobMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *AffiliateRebateJobMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the AffiliateRebateJobMutation builder.
+func (m *AffiliateRebateJobMutation) Where(ps ...predicate.AffiliateRebateJob) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AffiliateRebateJobMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AffiliateRebateJobMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AffiliateRebateJob, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AffiliateRebateJobMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AffiliateRebateJobMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AffiliateRebateJob).
+func (m *AffiliateRebateJobMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AffiliateRebateJobMutation) Fields() []string {
+	fields := make([]string, 0, 15)
+	if m.invitee_user_id != nil {
+		fields = append(fields, affiliaterebatejob.FieldInviteeUserID)
+	}
+	if m.source_redeem_code_id != nil {
+		fields = append(fields, affiliaterebatejob.FieldSourceRedeemCodeID)
+	}
+	if m.source_kind != nil {
+		fields = append(fields, affiliaterebatejob.FieldSourceKind)
+	}
+	if m.base_amount != nil {
+		fields = append(fields, affiliaterebatejob.FieldBaseAmount)
+	}
+	if m.status != nil {
+		fields = append(fields, affiliaterebatejob.FieldStatus)
+	}
+	if m.attempts != nil {
+		fields = append(fields, affiliaterebatejob.FieldAttempts)
+	}
+	if m.next_retry_at != nil {
+		fields = append(fields, affiliaterebatejob.FieldNextRetryAt)
+	}
+	if m.last_error != nil {
+		fields = append(fields, affiliaterebatejob.FieldLastError)
+	}
+	if m.last_error_at != nil {
+		fields = append(fields, affiliaterebatejob.FieldLastErrorAt)
+	}
+	if m.processing_started_at != nil {
+		fields = append(fields, affiliaterebatejob.FieldProcessingStartedAt)
+	}
+	if m.succeeded_at != nil {
+		fields = append(fields, affiliaterebatejob.FieldSucceededAt)
+	}
+	if m.skipped_at != nil {
+		fields = append(fields, affiliaterebatejob.FieldSkippedAt)
+	}
+	if m.failed_at != nil {
+		fields = append(fields, affiliaterebatejob.FieldFailedAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, affiliaterebatejob.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, affiliaterebatejob.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AffiliateRebateJobMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case affiliaterebatejob.FieldInviteeUserID:
+		return m.InviteeUserID()
+	case affiliaterebatejob.FieldSourceRedeemCodeID:
+		return m.SourceRedeemCodeID()
+	case affiliaterebatejob.FieldSourceKind:
+		return m.SourceKind()
+	case affiliaterebatejob.FieldBaseAmount:
+		return m.BaseAmount()
+	case affiliaterebatejob.FieldStatus:
+		return m.Status()
+	case affiliaterebatejob.FieldAttempts:
+		return m.Attempts()
+	case affiliaterebatejob.FieldNextRetryAt:
+		return m.NextRetryAt()
+	case affiliaterebatejob.FieldLastError:
+		return m.LastError()
+	case affiliaterebatejob.FieldLastErrorAt:
+		return m.LastErrorAt()
+	case affiliaterebatejob.FieldProcessingStartedAt:
+		return m.ProcessingStartedAt()
+	case affiliaterebatejob.FieldSucceededAt:
+		return m.SucceededAt()
+	case affiliaterebatejob.FieldSkippedAt:
+		return m.SkippedAt()
+	case affiliaterebatejob.FieldFailedAt:
+		return m.FailedAt()
+	case affiliaterebatejob.FieldCreatedAt:
+		return m.CreatedAt()
+	case affiliaterebatejob.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AffiliateRebateJobMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case affiliaterebatejob.FieldInviteeUserID:
+		return m.OldInviteeUserID(ctx)
+	case affiliaterebatejob.FieldSourceRedeemCodeID:
+		return m.OldSourceRedeemCodeID(ctx)
+	case affiliaterebatejob.FieldSourceKind:
+		return m.OldSourceKind(ctx)
+	case affiliaterebatejob.FieldBaseAmount:
+		return m.OldBaseAmount(ctx)
+	case affiliaterebatejob.FieldStatus:
+		return m.OldStatus(ctx)
+	case affiliaterebatejob.FieldAttempts:
+		return m.OldAttempts(ctx)
+	case affiliaterebatejob.FieldNextRetryAt:
+		return m.OldNextRetryAt(ctx)
+	case affiliaterebatejob.FieldLastError:
+		return m.OldLastError(ctx)
+	case affiliaterebatejob.FieldLastErrorAt:
+		return m.OldLastErrorAt(ctx)
+	case affiliaterebatejob.FieldProcessingStartedAt:
+		return m.OldProcessingStartedAt(ctx)
+	case affiliaterebatejob.FieldSucceededAt:
+		return m.OldSucceededAt(ctx)
+	case affiliaterebatejob.FieldSkippedAt:
+		return m.OldSkippedAt(ctx)
+	case affiliaterebatejob.FieldFailedAt:
+		return m.OldFailedAt(ctx)
+	case affiliaterebatejob.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case affiliaterebatejob.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown AffiliateRebateJob field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AffiliateRebateJobMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case affiliaterebatejob.FieldInviteeUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInviteeUserID(v)
+		return nil
+	case affiliaterebatejob.FieldSourceRedeemCodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceRedeemCodeID(v)
+		return nil
+	case affiliaterebatejob.FieldSourceKind:
+		v, ok := value.(affiliaterebatejob.SourceKind)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceKind(v)
+		return nil
+	case affiliaterebatejob.FieldBaseAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseAmount(v)
+		return nil
+	case affiliaterebatejob.FieldStatus:
+		v, ok := value.(affiliaterebatejob.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case affiliaterebatejob.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttempts(v)
+		return nil
+	case affiliaterebatejob.FieldNextRetryAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNextRetryAt(v)
+		return nil
+	case affiliaterebatejob.FieldLastError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastError(v)
+		return nil
+	case affiliaterebatejob.FieldLastErrorAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastErrorAt(v)
+		return nil
+	case affiliaterebatejob.FieldProcessingStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessingStartedAt(v)
+		return nil
+	case affiliaterebatejob.FieldSucceededAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSucceededAt(v)
+		return nil
+	case affiliaterebatejob.FieldSkippedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSkippedAt(v)
+		return nil
+	case affiliaterebatejob.FieldFailedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFailedAt(v)
+		return nil
+	case affiliaterebatejob.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case affiliaterebatejob.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AffiliateRebateJob field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AffiliateRebateJobMutation) AddedFields() []string {
+	var fields []string
+	if m.addinvitee_user_id != nil {
+		fields = append(fields, affiliaterebatejob.FieldInviteeUserID)
+	}
+	if m.addsource_redeem_code_id != nil {
+		fields = append(fields, affiliaterebatejob.FieldSourceRedeemCodeID)
+	}
+	if m.addbase_amount != nil {
+		fields = append(fields, affiliaterebatejob.FieldBaseAmount)
+	}
+	if m.addattempts != nil {
+		fields = append(fields, affiliaterebatejob.FieldAttempts)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AffiliateRebateJobMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case affiliaterebatejob.FieldInviteeUserID:
+		return m.AddedInviteeUserID()
+	case affiliaterebatejob.FieldSourceRedeemCodeID:
+		return m.AddedSourceRedeemCodeID()
+	case affiliaterebatejob.FieldBaseAmount:
+		return m.AddedBaseAmount()
+	case affiliaterebatejob.FieldAttempts:
+		return m.AddedAttempts()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AffiliateRebateJobMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case affiliaterebatejob.FieldInviteeUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInviteeUserID(v)
+		return nil
+	case affiliaterebatejob.FieldSourceRedeemCodeID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSourceRedeemCodeID(v)
+		return nil
+	case affiliaterebatejob.FieldBaseAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBaseAmount(v)
+		return nil
+	case affiliaterebatejob.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttempts(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AffiliateRebateJob numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AffiliateRebateJobMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(affiliaterebatejob.FieldLastError) {
+		fields = append(fields, affiliaterebatejob.FieldLastError)
+	}
+	if m.FieldCleared(affiliaterebatejob.FieldLastErrorAt) {
+		fields = append(fields, affiliaterebatejob.FieldLastErrorAt)
+	}
+	if m.FieldCleared(affiliaterebatejob.FieldProcessingStartedAt) {
+		fields = append(fields, affiliaterebatejob.FieldProcessingStartedAt)
+	}
+	if m.FieldCleared(affiliaterebatejob.FieldSucceededAt) {
+		fields = append(fields, affiliaterebatejob.FieldSucceededAt)
+	}
+	if m.FieldCleared(affiliaterebatejob.FieldSkippedAt) {
+		fields = append(fields, affiliaterebatejob.FieldSkippedAt)
+	}
+	if m.FieldCleared(affiliaterebatejob.FieldFailedAt) {
+		fields = append(fields, affiliaterebatejob.FieldFailedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AffiliateRebateJobMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AffiliateRebateJobMutation) ClearField(name string) error {
+	switch name {
+	case affiliaterebatejob.FieldLastError:
+		m.ClearLastError()
+		return nil
+	case affiliaterebatejob.FieldLastErrorAt:
+		m.ClearLastErrorAt()
+		return nil
+	case affiliaterebatejob.FieldProcessingStartedAt:
+		m.ClearProcessingStartedAt()
+		return nil
+	case affiliaterebatejob.FieldSucceededAt:
+		m.ClearSucceededAt()
+		return nil
+	case affiliaterebatejob.FieldSkippedAt:
+		m.ClearSkippedAt()
+		return nil
+	case affiliaterebatejob.FieldFailedAt:
+		m.ClearFailedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AffiliateRebateJob nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AffiliateRebateJobMutation) ResetField(name string) error {
+	switch name {
+	case affiliaterebatejob.FieldInviteeUserID:
+		m.ResetInviteeUserID()
+		return nil
+	case affiliaterebatejob.FieldSourceRedeemCodeID:
+		m.ResetSourceRedeemCodeID()
+		return nil
+	case affiliaterebatejob.FieldSourceKind:
+		m.ResetSourceKind()
+		return nil
+	case affiliaterebatejob.FieldBaseAmount:
+		m.ResetBaseAmount()
+		return nil
+	case affiliaterebatejob.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case affiliaterebatejob.FieldAttempts:
+		m.ResetAttempts()
+		return nil
+	case affiliaterebatejob.FieldNextRetryAt:
+		m.ResetNextRetryAt()
+		return nil
+	case affiliaterebatejob.FieldLastError:
+		m.ResetLastError()
+		return nil
+	case affiliaterebatejob.FieldLastErrorAt:
+		m.ResetLastErrorAt()
+		return nil
+	case affiliaterebatejob.FieldProcessingStartedAt:
+		m.ResetProcessingStartedAt()
+		return nil
+	case affiliaterebatejob.FieldSucceededAt:
+		m.ResetSucceededAt()
+		return nil
+	case affiliaterebatejob.FieldSkippedAt:
+		m.ResetSkippedAt()
+		return nil
+	case affiliaterebatejob.FieldFailedAt:
+		m.ResetFailedAt()
+		return nil
+	case affiliaterebatejob.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case affiliaterebatejob.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AffiliateRebateJob field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AffiliateRebateJobMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AffiliateRebateJobMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AffiliateRebateJobMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AffiliateRebateJobMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AffiliateRebateJobMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AffiliateRebateJobMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AffiliateRebateJobMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AffiliateRebateJob unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AffiliateRebateJobMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AffiliateRebateJob edge %s", name)
 }
 
 // AnnouncementMutation represents an operation that mutates the Announcement nodes in the graph.
@@ -9124,6 +10553,2768 @@ func (m *AuthIdentityChannelMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown AuthIdentityChannel edge %s", name)
+}
+
+// BatchImageCreditHoldMutation represents an operation that mutates the BatchImageCreditHold nodes in the graph.
+type BatchImageCreditHoldMutation struct {
+	config
+	op                           Op
+	typ                          string
+	id                           *int64
+	batch_id                     *string
+	status                       *batchimagecredithold.Status
+	hold_amount                  *float64
+	addhold_amount               *float64
+	temporary_reserved_amount    *float64
+	addtemporary_reserved_amount *float64
+	permanent_reserved_amount    *float64
+	addpermanent_reserved_amount *float64
+	captured_amount              *float64
+	addcaptured_amount           *float64
+	temporary_captured_amount    *float64
+	addtemporary_captured_amount *float64
+	permanent_captured_amount    *float64
+	addpermanent_captured_amount *float64
+	expired_unrestored_amount    *float64
+	addexpired_unrestored_amount *float64
+	reserve_fingerprint          *string
+	terminal_fingerprint         *string
+	reserved_at                  *time.Time
+	settled_at                   *time.Time
+	updated_at                   *time.Time
+	clearedFields                map[string]struct{}
+	user                         *int64
+	cleareduser                  bool
+	api_key                      *int64
+	clearedapi_key               bool
+	group                        *int64
+	clearedgroup                 bool
+	allocations                  map[int64]struct{}
+	removedallocations           map[int64]struct{}
+	clearedallocations           bool
+	done                         bool
+	oldValue                     func(context.Context) (*BatchImageCreditHold, error)
+	predicates                   []predicate.BatchImageCreditHold
+}
+
+var _ ent.Mutation = (*BatchImageCreditHoldMutation)(nil)
+
+// batchimagecreditholdOption allows management of the mutation configuration using functional options.
+type batchimagecreditholdOption func(*BatchImageCreditHoldMutation)
+
+// newBatchImageCreditHoldMutation creates new mutation for the BatchImageCreditHold entity.
+func newBatchImageCreditHoldMutation(c config, op Op, opts ...batchimagecreditholdOption) *BatchImageCreditHoldMutation {
+	m := &BatchImageCreditHoldMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBatchImageCreditHold,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBatchImageCreditHoldID sets the ID field of the mutation.
+func withBatchImageCreditHoldID(id int64) batchimagecreditholdOption {
+	return func(m *BatchImageCreditHoldMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BatchImageCreditHold
+		)
+		m.oldValue = func(ctx context.Context) (*BatchImageCreditHold, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BatchImageCreditHold.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBatchImageCreditHold sets the old BatchImageCreditHold of the mutation.
+func withBatchImageCreditHold(node *BatchImageCreditHold) batchimagecreditholdOption {
+	return func(m *BatchImageCreditHoldMutation) {
+		m.oldValue = func(context.Context) (*BatchImageCreditHold, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BatchImageCreditHoldMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BatchImageCreditHoldMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BatchImageCreditHoldMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BatchImageCreditHoldMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BatchImageCreditHold.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetBatchID sets the "batch_id" field.
+func (m *BatchImageCreditHoldMutation) SetBatchID(s string) {
+	m.batch_id = &s
+}
+
+// BatchID returns the value of the "batch_id" field in the mutation.
+func (m *BatchImageCreditHoldMutation) BatchID() (r string, exists bool) {
+	v := m.batch_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBatchID returns the old "batch_id" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldBatchID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBatchID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBatchID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBatchID: %w", err)
+	}
+	return oldValue.BatchID, nil
+}
+
+// ResetBatchID resets all changes to the "batch_id" field.
+func (m *BatchImageCreditHoldMutation) ResetBatchID() {
+	m.batch_id = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *BatchImageCreditHoldMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *BatchImageCreditHoldMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *BatchImageCreditHoldMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetAPIKeyID sets the "api_key_id" field.
+func (m *BatchImageCreditHoldMutation) SetAPIKeyID(i int64) {
+	m.api_key = &i
+}
+
+// APIKeyID returns the value of the "api_key_id" field in the mutation.
+func (m *BatchImageCreditHoldMutation) APIKeyID() (r int64, exists bool) {
+	v := m.api_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyID returns the old "api_key_id" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldAPIKeyID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyID: %w", err)
+	}
+	return oldValue.APIKeyID, nil
+}
+
+// ResetAPIKeyID resets all changes to the "api_key_id" field.
+func (m *BatchImageCreditHoldMutation) ResetAPIKeyID() {
+	m.api_key = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *BatchImageCreditHoldMutation) SetGroupID(i int64) {
+	m.group = &i
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *BatchImageCreditHoldMutation) GroupID() (r int64, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (m *BatchImageCreditHoldMutation) ClearGroupID() {
+	m.group = nil
+	m.clearedFields[batchimagecredithold.FieldGroupID] = struct{}{}
+}
+
+// GroupIDCleared returns if the "group_id" field was cleared in this mutation.
+func (m *BatchImageCreditHoldMutation) GroupIDCleared() bool {
+	_, ok := m.clearedFields[batchimagecredithold.FieldGroupID]
+	return ok
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *BatchImageCreditHoldMutation) ResetGroupID() {
+	m.group = nil
+	delete(m.clearedFields, batchimagecredithold.FieldGroupID)
+}
+
+// SetStatus sets the "status" field.
+func (m *BatchImageCreditHoldMutation) SetStatus(b batchimagecredithold.Status) {
+	m.status = &b
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *BatchImageCreditHoldMutation) Status() (r batchimagecredithold.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldStatus(ctx context.Context) (v batchimagecredithold.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *BatchImageCreditHoldMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetHoldAmount sets the "hold_amount" field.
+func (m *BatchImageCreditHoldMutation) SetHoldAmount(f float64) {
+	m.hold_amount = &f
+	m.addhold_amount = nil
+}
+
+// HoldAmount returns the value of the "hold_amount" field in the mutation.
+func (m *BatchImageCreditHoldMutation) HoldAmount() (r float64, exists bool) {
+	v := m.hold_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHoldAmount returns the old "hold_amount" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldHoldAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHoldAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHoldAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHoldAmount: %w", err)
+	}
+	return oldValue.HoldAmount, nil
+}
+
+// AddHoldAmount adds f to the "hold_amount" field.
+func (m *BatchImageCreditHoldMutation) AddHoldAmount(f float64) {
+	if m.addhold_amount != nil {
+		*m.addhold_amount += f
+	} else {
+		m.addhold_amount = &f
+	}
+}
+
+// AddedHoldAmount returns the value that was added to the "hold_amount" field in this mutation.
+func (m *BatchImageCreditHoldMutation) AddedHoldAmount() (r float64, exists bool) {
+	v := m.addhold_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetHoldAmount resets all changes to the "hold_amount" field.
+func (m *BatchImageCreditHoldMutation) ResetHoldAmount() {
+	m.hold_amount = nil
+	m.addhold_amount = nil
+}
+
+// SetTemporaryReservedAmount sets the "temporary_reserved_amount" field.
+func (m *BatchImageCreditHoldMutation) SetTemporaryReservedAmount(f float64) {
+	m.temporary_reserved_amount = &f
+	m.addtemporary_reserved_amount = nil
+}
+
+// TemporaryReservedAmount returns the value of the "temporary_reserved_amount" field in the mutation.
+func (m *BatchImageCreditHoldMutation) TemporaryReservedAmount() (r float64, exists bool) {
+	v := m.temporary_reserved_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemporaryReservedAmount returns the old "temporary_reserved_amount" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldTemporaryReservedAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemporaryReservedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemporaryReservedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemporaryReservedAmount: %w", err)
+	}
+	return oldValue.TemporaryReservedAmount, nil
+}
+
+// AddTemporaryReservedAmount adds f to the "temporary_reserved_amount" field.
+func (m *BatchImageCreditHoldMutation) AddTemporaryReservedAmount(f float64) {
+	if m.addtemporary_reserved_amount != nil {
+		*m.addtemporary_reserved_amount += f
+	} else {
+		m.addtemporary_reserved_amount = &f
+	}
+}
+
+// AddedTemporaryReservedAmount returns the value that was added to the "temporary_reserved_amount" field in this mutation.
+func (m *BatchImageCreditHoldMutation) AddedTemporaryReservedAmount() (r float64, exists bool) {
+	v := m.addtemporary_reserved_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTemporaryReservedAmount resets all changes to the "temporary_reserved_amount" field.
+func (m *BatchImageCreditHoldMutation) ResetTemporaryReservedAmount() {
+	m.temporary_reserved_amount = nil
+	m.addtemporary_reserved_amount = nil
+}
+
+// SetPermanentReservedAmount sets the "permanent_reserved_amount" field.
+func (m *BatchImageCreditHoldMutation) SetPermanentReservedAmount(f float64) {
+	m.permanent_reserved_amount = &f
+	m.addpermanent_reserved_amount = nil
+}
+
+// PermanentReservedAmount returns the value of the "permanent_reserved_amount" field in the mutation.
+func (m *BatchImageCreditHoldMutation) PermanentReservedAmount() (r float64, exists bool) {
+	v := m.permanent_reserved_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPermanentReservedAmount returns the old "permanent_reserved_amount" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldPermanentReservedAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPermanentReservedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPermanentReservedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPermanentReservedAmount: %w", err)
+	}
+	return oldValue.PermanentReservedAmount, nil
+}
+
+// AddPermanentReservedAmount adds f to the "permanent_reserved_amount" field.
+func (m *BatchImageCreditHoldMutation) AddPermanentReservedAmount(f float64) {
+	if m.addpermanent_reserved_amount != nil {
+		*m.addpermanent_reserved_amount += f
+	} else {
+		m.addpermanent_reserved_amount = &f
+	}
+}
+
+// AddedPermanentReservedAmount returns the value that was added to the "permanent_reserved_amount" field in this mutation.
+func (m *BatchImageCreditHoldMutation) AddedPermanentReservedAmount() (r float64, exists bool) {
+	v := m.addpermanent_reserved_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPermanentReservedAmount resets all changes to the "permanent_reserved_amount" field.
+func (m *BatchImageCreditHoldMutation) ResetPermanentReservedAmount() {
+	m.permanent_reserved_amount = nil
+	m.addpermanent_reserved_amount = nil
+}
+
+// SetCapturedAmount sets the "captured_amount" field.
+func (m *BatchImageCreditHoldMutation) SetCapturedAmount(f float64) {
+	m.captured_amount = &f
+	m.addcaptured_amount = nil
+}
+
+// CapturedAmount returns the value of the "captured_amount" field in the mutation.
+func (m *BatchImageCreditHoldMutation) CapturedAmount() (r float64, exists bool) {
+	v := m.captured_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCapturedAmount returns the old "captured_amount" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldCapturedAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCapturedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCapturedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCapturedAmount: %w", err)
+	}
+	return oldValue.CapturedAmount, nil
+}
+
+// AddCapturedAmount adds f to the "captured_amount" field.
+func (m *BatchImageCreditHoldMutation) AddCapturedAmount(f float64) {
+	if m.addcaptured_amount != nil {
+		*m.addcaptured_amount += f
+	} else {
+		m.addcaptured_amount = &f
+	}
+}
+
+// AddedCapturedAmount returns the value that was added to the "captured_amount" field in this mutation.
+func (m *BatchImageCreditHoldMutation) AddedCapturedAmount() (r float64, exists bool) {
+	v := m.addcaptured_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCapturedAmount resets all changes to the "captured_amount" field.
+func (m *BatchImageCreditHoldMutation) ResetCapturedAmount() {
+	m.captured_amount = nil
+	m.addcaptured_amount = nil
+}
+
+// SetTemporaryCapturedAmount sets the "temporary_captured_amount" field.
+func (m *BatchImageCreditHoldMutation) SetTemporaryCapturedAmount(f float64) {
+	m.temporary_captured_amount = &f
+	m.addtemporary_captured_amount = nil
+}
+
+// TemporaryCapturedAmount returns the value of the "temporary_captured_amount" field in the mutation.
+func (m *BatchImageCreditHoldMutation) TemporaryCapturedAmount() (r float64, exists bool) {
+	v := m.temporary_captured_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemporaryCapturedAmount returns the old "temporary_captured_amount" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldTemporaryCapturedAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemporaryCapturedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemporaryCapturedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemporaryCapturedAmount: %w", err)
+	}
+	return oldValue.TemporaryCapturedAmount, nil
+}
+
+// AddTemporaryCapturedAmount adds f to the "temporary_captured_amount" field.
+func (m *BatchImageCreditHoldMutation) AddTemporaryCapturedAmount(f float64) {
+	if m.addtemporary_captured_amount != nil {
+		*m.addtemporary_captured_amount += f
+	} else {
+		m.addtemporary_captured_amount = &f
+	}
+}
+
+// AddedTemporaryCapturedAmount returns the value that was added to the "temporary_captured_amount" field in this mutation.
+func (m *BatchImageCreditHoldMutation) AddedTemporaryCapturedAmount() (r float64, exists bool) {
+	v := m.addtemporary_captured_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTemporaryCapturedAmount resets all changes to the "temporary_captured_amount" field.
+func (m *BatchImageCreditHoldMutation) ResetTemporaryCapturedAmount() {
+	m.temporary_captured_amount = nil
+	m.addtemporary_captured_amount = nil
+}
+
+// SetPermanentCapturedAmount sets the "permanent_captured_amount" field.
+func (m *BatchImageCreditHoldMutation) SetPermanentCapturedAmount(f float64) {
+	m.permanent_captured_amount = &f
+	m.addpermanent_captured_amount = nil
+}
+
+// PermanentCapturedAmount returns the value of the "permanent_captured_amount" field in the mutation.
+func (m *BatchImageCreditHoldMutation) PermanentCapturedAmount() (r float64, exists bool) {
+	v := m.permanent_captured_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPermanentCapturedAmount returns the old "permanent_captured_amount" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldPermanentCapturedAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPermanentCapturedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPermanentCapturedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPermanentCapturedAmount: %w", err)
+	}
+	return oldValue.PermanentCapturedAmount, nil
+}
+
+// AddPermanentCapturedAmount adds f to the "permanent_captured_amount" field.
+func (m *BatchImageCreditHoldMutation) AddPermanentCapturedAmount(f float64) {
+	if m.addpermanent_captured_amount != nil {
+		*m.addpermanent_captured_amount += f
+	} else {
+		m.addpermanent_captured_amount = &f
+	}
+}
+
+// AddedPermanentCapturedAmount returns the value that was added to the "permanent_captured_amount" field in this mutation.
+func (m *BatchImageCreditHoldMutation) AddedPermanentCapturedAmount() (r float64, exists bool) {
+	v := m.addpermanent_captured_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPermanentCapturedAmount resets all changes to the "permanent_captured_amount" field.
+func (m *BatchImageCreditHoldMutation) ResetPermanentCapturedAmount() {
+	m.permanent_captured_amount = nil
+	m.addpermanent_captured_amount = nil
+}
+
+// SetExpiredUnrestoredAmount sets the "expired_unrestored_amount" field.
+func (m *BatchImageCreditHoldMutation) SetExpiredUnrestoredAmount(f float64) {
+	m.expired_unrestored_amount = &f
+	m.addexpired_unrestored_amount = nil
+}
+
+// ExpiredUnrestoredAmount returns the value of the "expired_unrestored_amount" field in the mutation.
+func (m *BatchImageCreditHoldMutation) ExpiredUnrestoredAmount() (r float64, exists bool) {
+	v := m.expired_unrestored_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiredUnrestoredAmount returns the old "expired_unrestored_amount" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldExpiredUnrestoredAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiredUnrestoredAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiredUnrestoredAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiredUnrestoredAmount: %w", err)
+	}
+	return oldValue.ExpiredUnrestoredAmount, nil
+}
+
+// AddExpiredUnrestoredAmount adds f to the "expired_unrestored_amount" field.
+func (m *BatchImageCreditHoldMutation) AddExpiredUnrestoredAmount(f float64) {
+	if m.addexpired_unrestored_amount != nil {
+		*m.addexpired_unrestored_amount += f
+	} else {
+		m.addexpired_unrestored_amount = &f
+	}
+}
+
+// AddedExpiredUnrestoredAmount returns the value that was added to the "expired_unrestored_amount" field in this mutation.
+func (m *BatchImageCreditHoldMutation) AddedExpiredUnrestoredAmount() (r float64, exists bool) {
+	v := m.addexpired_unrestored_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetExpiredUnrestoredAmount resets all changes to the "expired_unrestored_amount" field.
+func (m *BatchImageCreditHoldMutation) ResetExpiredUnrestoredAmount() {
+	m.expired_unrestored_amount = nil
+	m.addexpired_unrestored_amount = nil
+}
+
+// SetReserveFingerprint sets the "reserve_fingerprint" field.
+func (m *BatchImageCreditHoldMutation) SetReserveFingerprint(s string) {
+	m.reserve_fingerprint = &s
+}
+
+// ReserveFingerprint returns the value of the "reserve_fingerprint" field in the mutation.
+func (m *BatchImageCreditHoldMutation) ReserveFingerprint() (r string, exists bool) {
+	v := m.reserve_fingerprint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReserveFingerprint returns the old "reserve_fingerprint" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldReserveFingerprint(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReserveFingerprint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReserveFingerprint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReserveFingerprint: %w", err)
+	}
+	return oldValue.ReserveFingerprint, nil
+}
+
+// ResetReserveFingerprint resets all changes to the "reserve_fingerprint" field.
+func (m *BatchImageCreditHoldMutation) ResetReserveFingerprint() {
+	m.reserve_fingerprint = nil
+}
+
+// SetTerminalFingerprint sets the "terminal_fingerprint" field.
+func (m *BatchImageCreditHoldMutation) SetTerminalFingerprint(s string) {
+	m.terminal_fingerprint = &s
+}
+
+// TerminalFingerprint returns the value of the "terminal_fingerprint" field in the mutation.
+func (m *BatchImageCreditHoldMutation) TerminalFingerprint() (r string, exists bool) {
+	v := m.terminal_fingerprint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTerminalFingerprint returns the old "terminal_fingerprint" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldTerminalFingerprint(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTerminalFingerprint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTerminalFingerprint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTerminalFingerprint: %w", err)
+	}
+	return oldValue.TerminalFingerprint, nil
+}
+
+// ClearTerminalFingerprint clears the value of the "terminal_fingerprint" field.
+func (m *BatchImageCreditHoldMutation) ClearTerminalFingerprint() {
+	m.terminal_fingerprint = nil
+	m.clearedFields[batchimagecredithold.FieldTerminalFingerprint] = struct{}{}
+}
+
+// TerminalFingerprintCleared returns if the "terminal_fingerprint" field was cleared in this mutation.
+func (m *BatchImageCreditHoldMutation) TerminalFingerprintCleared() bool {
+	_, ok := m.clearedFields[batchimagecredithold.FieldTerminalFingerprint]
+	return ok
+}
+
+// ResetTerminalFingerprint resets all changes to the "terminal_fingerprint" field.
+func (m *BatchImageCreditHoldMutation) ResetTerminalFingerprint() {
+	m.terminal_fingerprint = nil
+	delete(m.clearedFields, batchimagecredithold.FieldTerminalFingerprint)
+}
+
+// SetReservedAt sets the "reserved_at" field.
+func (m *BatchImageCreditHoldMutation) SetReservedAt(t time.Time) {
+	m.reserved_at = &t
+}
+
+// ReservedAt returns the value of the "reserved_at" field in the mutation.
+func (m *BatchImageCreditHoldMutation) ReservedAt() (r time.Time, exists bool) {
+	v := m.reserved_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReservedAt returns the old "reserved_at" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldReservedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReservedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReservedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReservedAt: %w", err)
+	}
+	return oldValue.ReservedAt, nil
+}
+
+// ResetReservedAt resets all changes to the "reserved_at" field.
+func (m *BatchImageCreditHoldMutation) ResetReservedAt() {
+	m.reserved_at = nil
+}
+
+// SetSettledAt sets the "settled_at" field.
+func (m *BatchImageCreditHoldMutation) SetSettledAt(t time.Time) {
+	m.settled_at = &t
+}
+
+// SettledAt returns the value of the "settled_at" field in the mutation.
+func (m *BatchImageCreditHoldMutation) SettledAt() (r time.Time, exists bool) {
+	v := m.settled_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSettledAt returns the old "settled_at" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldSettledAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSettledAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSettledAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSettledAt: %w", err)
+	}
+	return oldValue.SettledAt, nil
+}
+
+// ClearSettledAt clears the value of the "settled_at" field.
+func (m *BatchImageCreditHoldMutation) ClearSettledAt() {
+	m.settled_at = nil
+	m.clearedFields[batchimagecredithold.FieldSettledAt] = struct{}{}
+}
+
+// SettledAtCleared returns if the "settled_at" field was cleared in this mutation.
+func (m *BatchImageCreditHoldMutation) SettledAtCleared() bool {
+	_, ok := m.clearedFields[batchimagecredithold.FieldSettledAt]
+	return ok
+}
+
+// ResetSettledAt resets all changes to the "settled_at" field.
+func (m *BatchImageCreditHoldMutation) ResetSettledAt() {
+	m.settled_at = nil
+	delete(m.clearedFields, batchimagecredithold.FieldSettledAt)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *BatchImageCreditHoldMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *BatchImageCreditHoldMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the BatchImageCreditHold entity.
+// If the BatchImageCreditHold object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *BatchImageCreditHoldMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *BatchImageCreditHoldMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[batchimagecredithold.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *BatchImageCreditHoldMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *BatchImageCreditHoldMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *BatchImageCreditHoldMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// ClearAPIKey clears the "api_key" edge to the APIKey entity.
+func (m *BatchImageCreditHoldMutation) ClearAPIKey() {
+	m.clearedapi_key = true
+	m.clearedFields[batchimagecredithold.FieldAPIKeyID] = struct{}{}
+}
+
+// APIKeyCleared reports if the "api_key" edge to the APIKey entity was cleared.
+func (m *BatchImageCreditHoldMutation) APIKeyCleared() bool {
+	return m.clearedapi_key
+}
+
+// APIKeyIDs returns the "api_key" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// APIKeyID instead. It exists only for internal usage by the builders.
+func (m *BatchImageCreditHoldMutation) APIKeyIDs() (ids []int64) {
+	if id := m.api_key; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAPIKey resets all changes to the "api_key" edge.
+func (m *BatchImageCreditHoldMutation) ResetAPIKey() {
+	m.api_key = nil
+	m.clearedapi_key = false
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *BatchImageCreditHoldMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[batchimagecredithold.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *BatchImageCreditHoldMutation) GroupCleared() bool {
+	return m.GroupIDCleared() || m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *BatchImageCreditHoldMutation) GroupIDs() (ids []int64) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *BatchImageCreditHoldMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// AddAllocationIDs adds the "allocations" edge to the BatchImageCreditHoldAllocation entity by ids.
+func (m *BatchImageCreditHoldMutation) AddAllocationIDs(ids ...int64) {
+	if m.allocations == nil {
+		m.allocations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.allocations[ids[i]] = struct{}{}
+	}
+}
+
+// ClearAllocations clears the "allocations" edge to the BatchImageCreditHoldAllocation entity.
+func (m *BatchImageCreditHoldMutation) ClearAllocations() {
+	m.clearedallocations = true
+}
+
+// AllocationsCleared reports if the "allocations" edge to the BatchImageCreditHoldAllocation entity was cleared.
+func (m *BatchImageCreditHoldMutation) AllocationsCleared() bool {
+	return m.clearedallocations
+}
+
+// RemoveAllocationIDs removes the "allocations" edge to the BatchImageCreditHoldAllocation entity by IDs.
+func (m *BatchImageCreditHoldMutation) RemoveAllocationIDs(ids ...int64) {
+	if m.removedallocations == nil {
+		m.removedallocations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.allocations, ids[i])
+		m.removedallocations[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedAllocations returns the removed IDs of the "allocations" edge to the BatchImageCreditHoldAllocation entity.
+func (m *BatchImageCreditHoldMutation) RemovedAllocationsIDs() (ids []int64) {
+	for id := range m.removedallocations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// AllocationsIDs returns the "allocations" edge IDs in the mutation.
+func (m *BatchImageCreditHoldMutation) AllocationsIDs() (ids []int64) {
+	for id := range m.allocations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetAllocations resets all changes to the "allocations" edge.
+func (m *BatchImageCreditHoldMutation) ResetAllocations() {
+	m.allocations = nil
+	m.clearedallocations = false
+	m.removedallocations = nil
+}
+
+// Where appends a list predicates to the BatchImageCreditHoldMutation builder.
+func (m *BatchImageCreditHoldMutation) Where(ps ...predicate.BatchImageCreditHold) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BatchImageCreditHoldMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BatchImageCreditHoldMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BatchImageCreditHold, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BatchImageCreditHoldMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BatchImageCreditHoldMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BatchImageCreditHold).
+func (m *BatchImageCreditHoldMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BatchImageCreditHoldMutation) Fields() []string {
+	fields := make([]string, 0, 17)
+	if m.batch_id != nil {
+		fields = append(fields, batchimagecredithold.FieldBatchID)
+	}
+	if m.user != nil {
+		fields = append(fields, batchimagecredithold.FieldUserID)
+	}
+	if m.api_key != nil {
+		fields = append(fields, batchimagecredithold.FieldAPIKeyID)
+	}
+	if m.group != nil {
+		fields = append(fields, batchimagecredithold.FieldGroupID)
+	}
+	if m.status != nil {
+		fields = append(fields, batchimagecredithold.FieldStatus)
+	}
+	if m.hold_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldHoldAmount)
+	}
+	if m.temporary_reserved_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldTemporaryReservedAmount)
+	}
+	if m.permanent_reserved_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldPermanentReservedAmount)
+	}
+	if m.captured_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldCapturedAmount)
+	}
+	if m.temporary_captured_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldTemporaryCapturedAmount)
+	}
+	if m.permanent_captured_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldPermanentCapturedAmount)
+	}
+	if m.expired_unrestored_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldExpiredUnrestoredAmount)
+	}
+	if m.reserve_fingerprint != nil {
+		fields = append(fields, batchimagecredithold.FieldReserveFingerprint)
+	}
+	if m.terminal_fingerprint != nil {
+		fields = append(fields, batchimagecredithold.FieldTerminalFingerprint)
+	}
+	if m.reserved_at != nil {
+		fields = append(fields, batchimagecredithold.FieldReservedAt)
+	}
+	if m.settled_at != nil {
+		fields = append(fields, batchimagecredithold.FieldSettledAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, batchimagecredithold.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BatchImageCreditHoldMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case batchimagecredithold.FieldBatchID:
+		return m.BatchID()
+	case batchimagecredithold.FieldUserID:
+		return m.UserID()
+	case batchimagecredithold.FieldAPIKeyID:
+		return m.APIKeyID()
+	case batchimagecredithold.FieldGroupID:
+		return m.GroupID()
+	case batchimagecredithold.FieldStatus:
+		return m.Status()
+	case batchimagecredithold.FieldHoldAmount:
+		return m.HoldAmount()
+	case batchimagecredithold.FieldTemporaryReservedAmount:
+		return m.TemporaryReservedAmount()
+	case batchimagecredithold.FieldPermanentReservedAmount:
+		return m.PermanentReservedAmount()
+	case batchimagecredithold.FieldCapturedAmount:
+		return m.CapturedAmount()
+	case batchimagecredithold.FieldTemporaryCapturedAmount:
+		return m.TemporaryCapturedAmount()
+	case batchimagecredithold.FieldPermanentCapturedAmount:
+		return m.PermanentCapturedAmount()
+	case batchimagecredithold.FieldExpiredUnrestoredAmount:
+		return m.ExpiredUnrestoredAmount()
+	case batchimagecredithold.FieldReserveFingerprint:
+		return m.ReserveFingerprint()
+	case batchimagecredithold.FieldTerminalFingerprint:
+		return m.TerminalFingerprint()
+	case batchimagecredithold.FieldReservedAt:
+		return m.ReservedAt()
+	case batchimagecredithold.FieldSettledAt:
+		return m.SettledAt()
+	case batchimagecredithold.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BatchImageCreditHoldMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case batchimagecredithold.FieldBatchID:
+		return m.OldBatchID(ctx)
+	case batchimagecredithold.FieldUserID:
+		return m.OldUserID(ctx)
+	case batchimagecredithold.FieldAPIKeyID:
+		return m.OldAPIKeyID(ctx)
+	case batchimagecredithold.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case batchimagecredithold.FieldStatus:
+		return m.OldStatus(ctx)
+	case batchimagecredithold.FieldHoldAmount:
+		return m.OldHoldAmount(ctx)
+	case batchimagecredithold.FieldTemporaryReservedAmount:
+		return m.OldTemporaryReservedAmount(ctx)
+	case batchimagecredithold.FieldPermanentReservedAmount:
+		return m.OldPermanentReservedAmount(ctx)
+	case batchimagecredithold.FieldCapturedAmount:
+		return m.OldCapturedAmount(ctx)
+	case batchimagecredithold.FieldTemporaryCapturedAmount:
+		return m.OldTemporaryCapturedAmount(ctx)
+	case batchimagecredithold.FieldPermanentCapturedAmount:
+		return m.OldPermanentCapturedAmount(ctx)
+	case batchimagecredithold.FieldExpiredUnrestoredAmount:
+		return m.OldExpiredUnrestoredAmount(ctx)
+	case batchimagecredithold.FieldReserveFingerprint:
+		return m.OldReserveFingerprint(ctx)
+	case batchimagecredithold.FieldTerminalFingerprint:
+		return m.OldTerminalFingerprint(ctx)
+	case batchimagecredithold.FieldReservedAt:
+		return m.OldReservedAt(ctx)
+	case batchimagecredithold.FieldSettledAt:
+		return m.OldSettledAt(ctx)
+	case batchimagecredithold.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown BatchImageCreditHold field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BatchImageCreditHoldMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case batchimagecredithold.FieldBatchID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBatchID(v)
+		return nil
+	case batchimagecredithold.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case batchimagecredithold.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyID(v)
+		return nil
+	case batchimagecredithold.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case batchimagecredithold.FieldStatus:
+		v, ok := value.(batchimagecredithold.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case batchimagecredithold.FieldHoldAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHoldAmount(v)
+		return nil
+	case batchimagecredithold.FieldTemporaryReservedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemporaryReservedAmount(v)
+		return nil
+	case batchimagecredithold.FieldPermanentReservedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPermanentReservedAmount(v)
+		return nil
+	case batchimagecredithold.FieldCapturedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCapturedAmount(v)
+		return nil
+	case batchimagecredithold.FieldTemporaryCapturedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemporaryCapturedAmount(v)
+		return nil
+	case batchimagecredithold.FieldPermanentCapturedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPermanentCapturedAmount(v)
+		return nil
+	case batchimagecredithold.FieldExpiredUnrestoredAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiredUnrestoredAmount(v)
+		return nil
+	case batchimagecredithold.FieldReserveFingerprint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReserveFingerprint(v)
+		return nil
+	case batchimagecredithold.FieldTerminalFingerprint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTerminalFingerprint(v)
+		return nil
+	case batchimagecredithold.FieldReservedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReservedAt(v)
+		return nil
+	case batchimagecredithold.FieldSettledAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSettledAt(v)
+		return nil
+	case batchimagecredithold.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHold field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BatchImageCreditHoldMutation) AddedFields() []string {
+	var fields []string
+	if m.addhold_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldHoldAmount)
+	}
+	if m.addtemporary_reserved_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldTemporaryReservedAmount)
+	}
+	if m.addpermanent_reserved_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldPermanentReservedAmount)
+	}
+	if m.addcaptured_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldCapturedAmount)
+	}
+	if m.addtemporary_captured_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldTemporaryCapturedAmount)
+	}
+	if m.addpermanent_captured_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldPermanentCapturedAmount)
+	}
+	if m.addexpired_unrestored_amount != nil {
+		fields = append(fields, batchimagecredithold.FieldExpiredUnrestoredAmount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BatchImageCreditHoldMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case batchimagecredithold.FieldHoldAmount:
+		return m.AddedHoldAmount()
+	case batchimagecredithold.FieldTemporaryReservedAmount:
+		return m.AddedTemporaryReservedAmount()
+	case batchimagecredithold.FieldPermanentReservedAmount:
+		return m.AddedPermanentReservedAmount()
+	case batchimagecredithold.FieldCapturedAmount:
+		return m.AddedCapturedAmount()
+	case batchimagecredithold.FieldTemporaryCapturedAmount:
+		return m.AddedTemporaryCapturedAmount()
+	case batchimagecredithold.FieldPermanentCapturedAmount:
+		return m.AddedPermanentCapturedAmount()
+	case batchimagecredithold.FieldExpiredUnrestoredAmount:
+		return m.AddedExpiredUnrestoredAmount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BatchImageCreditHoldMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case batchimagecredithold.FieldHoldAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddHoldAmount(v)
+		return nil
+	case batchimagecredithold.FieldTemporaryReservedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTemporaryReservedAmount(v)
+		return nil
+	case batchimagecredithold.FieldPermanentReservedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPermanentReservedAmount(v)
+		return nil
+	case batchimagecredithold.FieldCapturedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCapturedAmount(v)
+		return nil
+	case batchimagecredithold.FieldTemporaryCapturedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTemporaryCapturedAmount(v)
+		return nil
+	case batchimagecredithold.FieldPermanentCapturedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPermanentCapturedAmount(v)
+		return nil
+	case batchimagecredithold.FieldExpiredUnrestoredAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddExpiredUnrestoredAmount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHold numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BatchImageCreditHoldMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(batchimagecredithold.FieldGroupID) {
+		fields = append(fields, batchimagecredithold.FieldGroupID)
+	}
+	if m.FieldCleared(batchimagecredithold.FieldTerminalFingerprint) {
+		fields = append(fields, batchimagecredithold.FieldTerminalFingerprint)
+	}
+	if m.FieldCleared(batchimagecredithold.FieldSettledAt) {
+		fields = append(fields, batchimagecredithold.FieldSettledAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BatchImageCreditHoldMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BatchImageCreditHoldMutation) ClearField(name string) error {
+	switch name {
+	case batchimagecredithold.FieldGroupID:
+		m.ClearGroupID()
+		return nil
+	case batchimagecredithold.FieldTerminalFingerprint:
+		m.ClearTerminalFingerprint()
+		return nil
+	case batchimagecredithold.FieldSettledAt:
+		m.ClearSettledAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHold nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BatchImageCreditHoldMutation) ResetField(name string) error {
+	switch name {
+	case batchimagecredithold.FieldBatchID:
+		m.ResetBatchID()
+		return nil
+	case batchimagecredithold.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case batchimagecredithold.FieldAPIKeyID:
+		m.ResetAPIKeyID()
+		return nil
+	case batchimagecredithold.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case batchimagecredithold.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case batchimagecredithold.FieldHoldAmount:
+		m.ResetHoldAmount()
+		return nil
+	case batchimagecredithold.FieldTemporaryReservedAmount:
+		m.ResetTemporaryReservedAmount()
+		return nil
+	case batchimagecredithold.FieldPermanentReservedAmount:
+		m.ResetPermanentReservedAmount()
+		return nil
+	case batchimagecredithold.FieldCapturedAmount:
+		m.ResetCapturedAmount()
+		return nil
+	case batchimagecredithold.FieldTemporaryCapturedAmount:
+		m.ResetTemporaryCapturedAmount()
+		return nil
+	case batchimagecredithold.FieldPermanentCapturedAmount:
+		m.ResetPermanentCapturedAmount()
+		return nil
+	case batchimagecredithold.FieldExpiredUnrestoredAmount:
+		m.ResetExpiredUnrestoredAmount()
+		return nil
+	case batchimagecredithold.FieldReserveFingerprint:
+		m.ResetReserveFingerprint()
+		return nil
+	case batchimagecredithold.FieldTerminalFingerprint:
+		m.ResetTerminalFingerprint()
+		return nil
+	case batchimagecredithold.FieldReservedAt:
+		m.ResetReservedAt()
+		return nil
+	case batchimagecredithold.FieldSettledAt:
+		m.ResetSettledAt()
+		return nil
+	case batchimagecredithold.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHold field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BatchImageCreditHoldMutation) AddedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.user != nil {
+		edges = append(edges, batchimagecredithold.EdgeUser)
+	}
+	if m.api_key != nil {
+		edges = append(edges, batchimagecredithold.EdgeAPIKey)
+	}
+	if m.group != nil {
+		edges = append(edges, batchimagecredithold.EdgeGroup)
+	}
+	if m.allocations != nil {
+		edges = append(edges, batchimagecredithold.EdgeAllocations)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BatchImageCreditHoldMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case batchimagecredithold.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	case batchimagecredithold.EdgeAPIKey:
+		if id := m.api_key; id != nil {
+			return []ent.Value{*id}
+		}
+	case batchimagecredithold.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	case batchimagecredithold.EdgeAllocations:
+		ids := make([]ent.Value, 0, len(m.allocations))
+		for id := range m.allocations {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BatchImageCreditHoldMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.removedallocations != nil {
+		edges = append(edges, batchimagecredithold.EdgeAllocations)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BatchImageCreditHoldMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case batchimagecredithold.EdgeAllocations:
+		ids := make([]ent.Value, 0, len(m.removedallocations))
+		for id := range m.removedallocations {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BatchImageCreditHoldMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.cleareduser {
+		edges = append(edges, batchimagecredithold.EdgeUser)
+	}
+	if m.clearedapi_key {
+		edges = append(edges, batchimagecredithold.EdgeAPIKey)
+	}
+	if m.clearedgroup {
+		edges = append(edges, batchimagecredithold.EdgeGroup)
+	}
+	if m.clearedallocations {
+		edges = append(edges, batchimagecredithold.EdgeAllocations)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BatchImageCreditHoldMutation) EdgeCleared(name string) bool {
+	switch name {
+	case batchimagecredithold.EdgeUser:
+		return m.cleareduser
+	case batchimagecredithold.EdgeAPIKey:
+		return m.clearedapi_key
+	case batchimagecredithold.EdgeGroup:
+		return m.clearedgroup
+	case batchimagecredithold.EdgeAllocations:
+		return m.clearedallocations
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BatchImageCreditHoldMutation) ClearEdge(name string) error {
+	switch name {
+	case batchimagecredithold.EdgeUser:
+		m.ClearUser()
+		return nil
+	case batchimagecredithold.EdgeAPIKey:
+		m.ClearAPIKey()
+		return nil
+	case batchimagecredithold.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHold unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BatchImageCreditHoldMutation) ResetEdge(name string) error {
+	switch name {
+	case batchimagecredithold.EdgeUser:
+		m.ResetUser()
+		return nil
+	case batchimagecredithold.EdgeAPIKey:
+		m.ResetAPIKey()
+		return nil
+	case batchimagecredithold.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	case batchimagecredithold.EdgeAllocations:
+		m.ResetAllocations()
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHold edge %s", name)
+}
+
+// BatchImageCreditHoldAllocationMutation represents an operation that mutates the BatchImageCreditHoldAllocation nodes in the graph.
+type BatchImageCreditHoldAllocationMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *int64
+	batch_id           *string
+	grant_expires_at   *time.Time
+	reserved_amount    *float64
+	addreserved_amount *float64
+	captured_amount    *float64
+	addcaptured_amount *float64
+	refunded_amount    *float64
+	addrefunded_amount *float64
+	expired_amount     *float64
+	addexpired_amount  *float64
+	created_at         *time.Time
+	updated_at         *time.Time
+	clearedFields      map[string]struct{}
+	hold               *int64
+	clearedhold        bool
+	grant              *int64
+	clearedgrant       bool
+	done               bool
+	oldValue           func(context.Context) (*BatchImageCreditHoldAllocation, error)
+	predicates         []predicate.BatchImageCreditHoldAllocation
+}
+
+var _ ent.Mutation = (*BatchImageCreditHoldAllocationMutation)(nil)
+
+// batchimagecreditholdallocationOption allows management of the mutation configuration using functional options.
+type batchimagecreditholdallocationOption func(*BatchImageCreditHoldAllocationMutation)
+
+// newBatchImageCreditHoldAllocationMutation creates new mutation for the BatchImageCreditHoldAllocation entity.
+func newBatchImageCreditHoldAllocationMutation(c config, op Op, opts ...batchimagecreditholdallocationOption) *BatchImageCreditHoldAllocationMutation {
+	m := &BatchImageCreditHoldAllocationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBatchImageCreditHoldAllocation,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBatchImageCreditHoldAllocationID sets the ID field of the mutation.
+func withBatchImageCreditHoldAllocationID(id int64) batchimagecreditholdallocationOption {
+	return func(m *BatchImageCreditHoldAllocationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BatchImageCreditHoldAllocation
+		)
+		m.oldValue = func(ctx context.Context) (*BatchImageCreditHoldAllocation, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BatchImageCreditHoldAllocation.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBatchImageCreditHoldAllocation sets the old BatchImageCreditHoldAllocation of the mutation.
+func withBatchImageCreditHoldAllocation(node *BatchImageCreditHoldAllocation) batchimagecreditholdallocationOption {
+	return func(m *BatchImageCreditHoldAllocationMutation) {
+		m.oldValue = func(context.Context) (*BatchImageCreditHoldAllocation, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BatchImageCreditHoldAllocationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BatchImageCreditHoldAllocationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BatchImageCreditHoldAllocationMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BatchImageCreditHoldAllocation.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetHoldID sets the "hold_id" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetHoldID(i int64) {
+	m.hold = &i
+}
+
+// HoldID returns the value of the "hold_id" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) HoldID() (r int64, exists bool) {
+	v := m.hold
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHoldID returns the old "hold_id" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldHoldID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHoldID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHoldID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHoldID: %w", err)
+	}
+	return oldValue.HoldID, nil
+}
+
+// ResetHoldID resets all changes to the "hold_id" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetHoldID() {
+	m.hold = nil
+}
+
+// SetBatchID sets the "batch_id" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetBatchID(s string) {
+	m.batch_id = &s
+}
+
+// BatchID returns the value of the "batch_id" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) BatchID() (r string, exists bool) {
+	v := m.batch_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBatchID returns the old "batch_id" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldBatchID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBatchID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBatchID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBatchID: %w", err)
+	}
+	return oldValue.BatchID, nil
+}
+
+// ResetBatchID resets all changes to the "batch_id" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetBatchID() {
+	m.batch_id = nil
+}
+
+// SetGrantID sets the "grant_id" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetGrantID(i int64) {
+	m.grant = &i
+}
+
+// GrantID returns the value of the "grant_id" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) GrantID() (r int64, exists bool) {
+	v := m.grant
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantID returns the old "grant_id" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldGrantID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantID: %w", err)
+	}
+	return oldValue.GrantID, nil
+}
+
+// ResetGrantID resets all changes to the "grant_id" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetGrantID() {
+	m.grant = nil
+}
+
+// SetGrantExpiresAt sets the "grant_expires_at" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetGrantExpiresAt(t time.Time) {
+	m.grant_expires_at = &t
+}
+
+// GrantExpiresAt returns the value of the "grant_expires_at" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) GrantExpiresAt() (r time.Time, exists bool) {
+	v := m.grant_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantExpiresAt returns the old "grant_expires_at" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldGrantExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantExpiresAt: %w", err)
+	}
+	return oldValue.GrantExpiresAt, nil
+}
+
+// ResetGrantExpiresAt resets all changes to the "grant_expires_at" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetGrantExpiresAt() {
+	m.grant_expires_at = nil
+}
+
+// SetReservedAmount sets the "reserved_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetReservedAmount(f float64) {
+	m.reserved_amount = &f
+	m.addreserved_amount = nil
+}
+
+// ReservedAmount returns the value of the "reserved_amount" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) ReservedAmount() (r float64, exists bool) {
+	v := m.reserved_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReservedAmount returns the old "reserved_amount" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldReservedAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReservedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReservedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReservedAmount: %w", err)
+	}
+	return oldValue.ReservedAmount, nil
+}
+
+// AddReservedAmount adds f to the "reserved_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) AddReservedAmount(f float64) {
+	if m.addreserved_amount != nil {
+		*m.addreserved_amount += f
+	} else {
+		m.addreserved_amount = &f
+	}
+}
+
+// AddedReservedAmount returns the value that was added to the "reserved_amount" field in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) AddedReservedAmount() (r float64, exists bool) {
+	v := m.addreserved_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetReservedAmount resets all changes to the "reserved_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetReservedAmount() {
+	m.reserved_amount = nil
+	m.addreserved_amount = nil
+}
+
+// SetCapturedAmount sets the "captured_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetCapturedAmount(f float64) {
+	m.captured_amount = &f
+	m.addcaptured_amount = nil
+}
+
+// CapturedAmount returns the value of the "captured_amount" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) CapturedAmount() (r float64, exists bool) {
+	v := m.captured_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCapturedAmount returns the old "captured_amount" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldCapturedAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCapturedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCapturedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCapturedAmount: %w", err)
+	}
+	return oldValue.CapturedAmount, nil
+}
+
+// AddCapturedAmount adds f to the "captured_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) AddCapturedAmount(f float64) {
+	if m.addcaptured_amount != nil {
+		*m.addcaptured_amount += f
+	} else {
+		m.addcaptured_amount = &f
+	}
+}
+
+// AddedCapturedAmount returns the value that was added to the "captured_amount" field in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) AddedCapturedAmount() (r float64, exists bool) {
+	v := m.addcaptured_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCapturedAmount resets all changes to the "captured_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetCapturedAmount() {
+	m.captured_amount = nil
+	m.addcaptured_amount = nil
+}
+
+// SetRefundedAmount sets the "refunded_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetRefundedAmount(f float64) {
+	m.refunded_amount = &f
+	m.addrefunded_amount = nil
+}
+
+// RefundedAmount returns the value of the "refunded_amount" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) RefundedAmount() (r float64, exists bool) {
+	v := m.refunded_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRefundedAmount returns the old "refunded_amount" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldRefundedAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRefundedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRefundedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRefundedAmount: %w", err)
+	}
+	return oldValue.RefundedAmount, nil
+}
+
+// AddRefundedAmount adds f to the "refunded_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) AddRefundedAmount(f float64) {
+	if m.addrefunded_amount != nil {
+		*m.addrefunded_amount += f
+	} else {
+		m.addrefunded_amount = &f
+	}
+}
+
+// AddedRefundedAmount returns the value that was added to the "refunded_amount" field in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) AddedRefundedAmount() (r float64, exists bool) {
+	v := m.addrefunded_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRefundedAmount resets all changes to the "refunded_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetRefundedAmount() {
+	m.refunded_amount = nil
+	m.addrefunded_amount = nil
+}
+
+// SetExpiredAmount sets the "expired_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetExpiredAmount(f float64) {
+	m.expired_amount = &f
+	m.addexpired_amount = nil
+}
+
+// ExpiredAmount returns the value of the "expired_amount" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) ExpiredAmount() (r float64, exists bool) {
+	v := m.expired_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiredAmount returns the old "expired_amount" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldExpiredAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiredAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiredAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiredAmount: %w", err)
+	}
+	return oldValue.ExpiredAmount, nil
+}
+
+// AddExpiredAmount adds f to the "expired_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) AddExpiredAmount(f float64) {
+	if m.addexpired_amount != nil {
+		*m.addexpired_amount += f
+	} else {
+		m.addexpired_amount = &f
+	}
+}
+
+// AddedExpiredAmount returns the value that was added to the "expired_amount" field in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) AddedExpiredAmount() (r float64, exists bool) {
+	v := m.addexpired_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetExpiredAmount resets all changes to the "expired_amount" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetExpiredAmount() {
+	m.expired_amount = nil
+	m.addexpired_amount = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *BatchImageCreditHoldAllocationMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *BatchImageCreditHoldAllocationMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the BatchImageCreditHoldAllocation entity.
+// If the BatchImageCreditHoldAllocation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BatchImageCreditHoldAllocationMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *BatchImageCreditHoldAllocationMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearHold clears the "hold" edge to the BatchImageCreditHold entity.
+func (m *BatchImageCreditHoldAllocationMutation) ClearHold() {
+	m.clearedhold = true
+	m.clearedFields[batchimagecreditholdallocation.FieldHoldID] = struct{}{}
+}
+
+// HoldCleared reports if the "hold" edge to the BatchImageCreditHold entity was cleared.
+func (m *BatchImageCreditHoldAllocationMutation) HoldCleared() bool {
+	return m.clearedhold
+}
+
+// HoldIDs returns the "hold" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// HoldID instead. It exists only for internal usage by the builders.
+func (m *BatchImageCreditHoldAllocationMutation) HoldIDs() (ids []int64) {
+	if id := m.hold; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetHold resets all changes to the "hold" edge.
+func (m *BatchImageCreditHoldAllocationMutation) ResetHold() {
+	m.hold = nil
+	m.clearedhold = false
+}
+
+// ClearGrant clears the "grant" edge to the TemporaryCreditGrant entity.
+func (m *BatchImageCreditHoldAllocationMutation) ClearGrant() {
+	m.clearedgrant = true
+	m.clearedFields[batchimagecreditholdallocation.FieldGrantID] = struct{}{}
+}
+
+// GrantCleared reports if the "grant" edge to the TemporaryCreditGrant entity was cleared.
+func (m *BatchImageCreditHoldAllocationMutation) GrantCleared() bool {
+	return m.clearedgrant
+}
+
+// GrantIDs returns the "grant" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GrantID instead. It exists only for internal usage by the builders.
+func (m *BatchImageCreditHoldAllocationMutation) GrantIDs() (ids []int64) {
+	if id := m.grant; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGrant resets all changes to the "grant" edge.
+func (m *BatchImageCreditHoldAllocationMutation) ResetGrant() {
+	m.grant = nil
+	m.clearedgrant = false
+}
+
+// Where appends a list predicates to the BatchImageCreditHoldAllocationMutation builder.
+func (m *BatchImageCreditHoldAllocationMutation) Where(ps ...predicate.BatchImageCreditHoldAllocation) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BatchImageCreditHoldAllocationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BatchImageCreditHoldAllocationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BatchImageCreditHoldAllocation, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BatchImageCreditHoldAllocationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BatchImageCreditHoldAllocationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BatchImageCreditHoldAllocation).
+func (m *BatchImageCreditHoldAllocationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BatchImageCreditHoldAllocationMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.hold != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldHoldID)
+	}
+	if m.batch_id != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldBatchID)
+	}
+	if m.grant != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldGrantID)
+	}
+	if m.grant_expires_at != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldGrantExpiresAt)
+	}
+	if m.reserved_amount != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldReservedAmount)
+	}
+	if m.captured_amount != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldCapturedAmount)
+	}
+	if m.refunded_amount != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldRefundedAmount)
+	}
+	if m.expired_amount != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldExpiredAmount)
+	}
+	if m.created_at != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BatchImageCreditHoldAllocationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case batchimagecreditholdallocation.FieldHoldID:
+		return m.HoldID()
+	case batchimagecreditholdallocation.FieldBatchID:
+		return m.BatchID()
+	case batchimagecreditholdallocation.FieldGrantID:
+		return m.GrantID()
+	case batchimagecreditholdallocation.FieldGrantExpiresAt:
+		return m.GrantExpiresAt()
+	case batchimagecreditholdallocation.FieldReservedAmount:
+		return m.ReservedAmount()
+	case batchimagecreditholdallocation.FieldCapturedAmount:
+		return m.CapturedAmount()
+	case batchimagecreditholdallocation.FieldRefundedAmount:
+		return m.RefundedAmount()
+	case batchimagecreditholdallocation.FieldExpiredAmount:
+		return m.ExpiredAmount()
+	case batchimagecreditholdallocation.FieldCreatedAt:
+		return m.CreatedAt()
+	case batchimagecreditholdallocation.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BatchImageCreditHoldAllocationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case batchimagecreditholdallocation.FieldHoldID:
+		return m.OldHoldID(ctx)
+	case batchimagecreditholdallocation.FieldBatchID:
+		return m.OldBatchID(ctx)
+	case batchimagecreditholdallocation.FieldGrantID:
+		return m.OldGrantID(ctx)
+	case batchimagecreditholdallocation.FieldGrantExpiresAt:
+		return m.OldGrantExpiresAt(ctx)
+	case batchimagecreditholdallocation.FieldReservedAmount:
+		return m.OldReservedAmount(ctx)
+	case batchimagecreditholdallocation.FieldCapturedAmount:
+		return m.OldCapturedAmount(ctx)
+	case batchimagecreditholdallocation.FieldRefundedAmount:
+		return m.OldRefundedAmount(ctx)
+	case batchimagecreditholdallocation.FieldExpiredAmount:
+		return m.OldExpiredAmount(ctx)
+	case batchimagecreditholdallocation.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case batchimagecreditholdallocation.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown BatchImageCreditHoldAllocation field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BatchImageCreditHoldAllocationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case batchimagecreditholdallocation.FieldHoldID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHoldID(v)
+		return nil
+	case batchimagecreditholdallocation.FieldBatchID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBatchID(v)
+		return nil
+	case batchimagecreditholdallocation.FieldGrantID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantID(v)
+		return nil
+	case batchimagecreditholdallocation.FieldGrantExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantExpiresAt(v)
+		return nil
+	case batchimagecreditholdallocation.FieldReservedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReservedAmount(v)
+		return nil
+	case batchimagecreditholdallocation.FieldCapturedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCapturedAmount(v)
+		return nil
+	case batchimagecreditholdallocation.FieldRefundedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRefundedAmount(v)
+		return nil
+	case batchimagecreditholdallocation.FieldExpiredAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiredAmount(v)
+		return nil
+	case batchimagecreditholdallocation.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case batchimagecreditholdallocation.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHoldAllocation field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) AddedFields() []string {
+	var fields []string
+	if m.addreserved_amount != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldReservedAmount)
+	}
+	if m.addcaptured_amount != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldCapturedAmount)
+	}
+	if m.addrefunded_amount != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldRefundedAmount)
+	}
+	if m.addexpired_amount != nil {
+		fields = append(fields, batchimagecreditholdallocation.FieldExpiredAmount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BatchImageCreditHoldAllocationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case batchimagecreditholdallocation.FieldReservedAmount:
+		return m.AddedReservedAmount()
+	case batchimagecreditholdallocation.FieldCapturedAmount:
+		return m.AddedCapturedAmount()
+	case batchimagecreditholdallocation.FieldRefundedAmount:
+		return m.AddedRefundedAmount()
+	case batchimagecreditholdallocation.FieldExpiredAmount:
+		return m.AddedExpiredAmount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BatchImageCreditHoldAllocationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case batchimagecreditholdallocation.FieldReservedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReservedAmount(v)
+		return nil
+	case batchimagecreditholdallocation.FieldCapturedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCapturedAmount(v)
+		return nil
+	case batchimagecreditholdallocation.FieldRefundedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRefundedAmount(v)
+		return nil
+	case batchimagecreditholdallocation.FieldExpiredAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddExpiredAmount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHoldAllocation numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BatchImageCreditHoldAllocationMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BatchImageCreditHoldAllocationMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown BatchImageCreditHoldAllocation nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BatchImageCreditHoldAllocationMutation) ResetField(name string) error {
+	switch name {
+	case batchimagecreditholdallocation.FieldHoldID:
+		m.ResetHoldID()
+		return nil
+	case batchimagecreditholdallocation.FieldBatchID:
+		m.ResetBatchID()
+		return nil
+	case batchimagecreditholdallocation.FieldGrantID:
+		m.ResetGrantID()
+		return nil
+	case batchimagecreditholdallocation.FieldGrantExpiresAt:
+		m.ResetGrantExpiresAt()
+		return nil
+	case batchimagecreditholdallocation.FieldReservedAmount:
+		m.ResetReservedAmount()
+		return nil
+	case batchimagecreditholdallocation.FieldCapturedAmount:
+		m.ResetCapturedAmount()
+		return nil
+	case batchimagecreditholdallocation.FieldRefundedAmount:
+		m.ResetRefundedAmount()
+		return nil
+	case batchimagecreditholdallocation.FieldExpiredAmount:
+		m.ResetExpiredAmount()
+		return nil
+	case batchimagecreditholdallocation.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case batchimagecreditholdallocation.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHoldAllocation field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.hold != nil {
+		edges = append(edges, batchimagecreditholdallocation.EdgeHold)
+	}
+	if m.grant != nil {
+		edges = append(edges, batchimagecreditholdallocation.EdgeGrant)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case batchimagecreditholdallocation.EdgeHold:
+		if id := m.hold; id != nil {
+			return []ent.Value{*id}
+		}
+	case batchimagecreditholdallocation.EdgeGrant:
+		if id := m.grant; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedhold {
+		edges = append(edges, batchimagecreditholdallocation.EdgeHold)
+	}
+	if m.clearedgrant {
+		edges = append(edges, batchimagecreditholdallocation.EdgeGrant)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BatchImageCreditHoldAllocationMutation) EdgeCleared(name string) bool {
+	switch name {
+	case batchimagecreditholdallocation.EdgeHold:
+		return m.clearedhold
+	case batchimagecreditholdallocation.EdgeGrant:
+		return m.clearedgrant
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BatchImageCreditHoldAllocationMutation) ClearEdge(name string) error {
+	switch name {
+	case batchimagecreditholdallocation.EdgeHold:
+		m.ClearHold()
+		return nil
+	case batchimagecreditholdallocation.EdgeGrant:
+		m.ClearGrant()
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHoldAllocation unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BatchImageCreditHoldAllocationMutation) ResetEdge(name string) error {
+	switch name {
+	case batchimagecreditholdallocation.EdgeHold:
+		m.ResetHold()
+		return nil
+	case batchimagecreditholdallocation.EdgeGrant:
+		m.ResetGrant()
+		return nil
+	}
+	return fmt.Errorf("unknown BatchImageCreditHoldAllocation edge %s", name)
 }
 
 // BatchImageEventMutation represents an operation that mutates the BatchImageEvent nodes in the graph.
@@ -19468,6 +23659,871 @@ func (m *ChannelMonitorRequestTemplateMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown ChannelMonitorRequestTemplate edge %s", name)
 }
 
+// DailyCheckinMutation represents an operation that mutates the DailyCheckin nodes in the graph.
+type DailyCheckinMutation struct {
+	config
+	op                            Op
+	typ                           string
+	id                            *int64
+	created_at                    *time.Time
+	updated_at                    *time.Time
+	checkin_date                  *time.Time
+	streak_day                    *int
+	addstreak_day                 *int
+	reward_day                    *int
+	addreward_day                 *int
+	reward_amount                 *float64
+	addreward_amount              *float64
+	clearedFields                 map[string]struct{}
+	user                          *int64
+	cleareduser                   bool
+	temporary_credit_grant        *int64
+	clearedtemporary_credit_grant bool
+	done                          bool
+	oldValue                      func(context.Context) (*DailyCheckin, error)
+	predicates                    []predicate.DailyCheckin
+}
+
+var _ ent.Mutation = (*DailyCheckinMutation)(nil)
+
+// dailycheckinOption allows management of the mutation configuration using functional options.
+type dailycheckinOption func(*DailyCheckinMutation)
+
+// newDailyCheckinMutation creates new mutation for the DailyCheckin entity.
+func newDailyCheckinMutation(c config, op Op, opts ...dailycheckinOption) *DailyCheckinMutation {
+	m := &DailyCheckinMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDailyCheckin,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDailyCheckinID sets the ID field of the mutation.
+func withDailyCheckinID(id int64) dailycheckinOption {
+	return func(m *DailyCheckinMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *DailyCheckin
+		)
+		m.oldValue = func(ctx context.Context) (*DailyCheckin, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().DailyCheckin.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDailyCheckin sets the old DailyCheckin of the mutation.
+func withDailyCheckin(node *DailyCheckin) dailycheckinOption {
+	return func(m *DailyCheckinMutation) {
+		m.oldValue = func(context.Context) (*DailyCheckin, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DailyCheckinMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DailyCheckinMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DailyCheckinMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DailyCheckinMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().DailyCheckin.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DailyCheckinMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DailyCheckinMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the DailyCheckin entity.
+// If the DailyCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DailyCheckinMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DailyCheckinMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *DailyCheckinMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *DailyCheckinMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the DailyCheckin entity.
+// If the DailyCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DailyCheckinMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *DailyCheckinMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *DailyCheckinMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *DailyCheckinMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the DailyCheckin entity.
+// If the DailyCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DailyCheckinMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *DailyCheckinMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetCheckinDate sets the "checkin_date" field.
+func (m *DailyCheckinMutation) SetCheckinDate(t time.Time) {
+	m.checkin_date = &t
+}
+
+// CheckinDate returns the value of the "checkin_date" field in the mutation.
+func (m *DailyCheckinMutation) CheckinDate() (r time.Time, exists bool) {
+	v := m.checkin_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCheckinDate returns the old "checkin_date" field's value of the DailyCheckin entity.
+// If the DailyCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DailyCheckinMutation) OldCheckinDate(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCheckinDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCheckinDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCheckinDate: %w", err)
+	}
+	return oldValue.CheckinDate, nil
+}
+
+// ResetCheckinDate resets all changes to the "checkin_date" field.
+func (m *DailyCheckinMutation) ResetCheckinDate() {
+	m.checkin_date = nil
+}
+
+// SetStreakDay sets the "streak_day" field.
+func (m *DailyCheckinMutation) SetStreakDay(i int) {
+	m.streak_day = &i
+	m.addstreak_day = nil
+}
+
+// StreakDay returns the value of the "streak_day" field in the mutation.
+func (m *DailyCheckinMutation) StreakDay() (r int, exists bool) {
+	v := m.streak_day
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStreakDay returns the old "streak_day" field's value of the DailyCheckin entity.
+// If the DailyCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DailyCheckinMutation) OldStreakDay(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStreakDay is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStreakDay requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStreakDay: %w", err)
+	}
+	return oldValue.StreakDay, nil
+}
+
+// AddStreakDay adds i to the "streak_day" field.
+func (m *DailyCheckinMutation) AddStreakDay(i int) {
+	if m.addstreak_day != nil {
+		*m.addstreak_day += i
+	} else {
+		m.addstreak_day = &i
+	}
+}
+
+// AddedStreakDay returns the value that was added to the "streak_day" field in this mutation.
+func (m *DailyCheckinMutation) AddedStreakDay() (r int, exists bool) {
+	v := m.addstreak_day
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetStreakDay resets all changes to the "streak_day" field.
+func (m *DailyCheckinMutation) ResetStreakDay() {
+	m.streak_day = nil
+	m.addstreak_day = nil
+}
+
+// SetRewardDay sets the "reward_day" field.
+func (m *DailyCheckinMutation) SetRewardDay(i int) {
+	m.reward_day = &i
+	m.addreward_day = nil
+}
+
+// RewardDay returns the value of the "reward_day" field in the mutation.
+func (m *DailyCheckinMutation) RewardDay() (r int, exists bool) {
+	v := m.reward_day
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardDay returns the old "reward_day" field's value of the DailyCheckin entity.
+// If the DailyCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DailyCheckinMutation) OldRewardDay(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardDay is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardDay requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardDay: %w", err)
+	}
+	return oldValue.RewardDay, nil
+}
+
+// AddRewardDay adds i to the "reward_day" field.
+func (m *DailyCheckinMutation) AddRewardDay(i int) {
+	if m.addreward_day != nil {
+		*m.addreward_day += i
+	} else {
+		m.addreward_day = &i
+	}
+}
+
+// AddedRewardDay returns the value that was added to the "reward_day" field in this mutation.
+func (m *DailyCheckinMutation) AddedRewardDay() (r int, exists bool) {
+	v := m.addreward_day
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRewardDay resets all changes to the "reward_day" field.
+func (m *DailyCheckinMutation) ResetRewardDay() {
+	m.reward_day = nil
+	m.addreward_day = nil
+}
+
+// SetRewardAmount sets the "reward_amount" field.
+func (m *DailyCheckinMutation) SetRewardAmount(f float64) {
+	m.reward_amount = &f
+	m.addreward_amount = nil
+}
+
+// RewardAmount returns the value of the "reward_amount" field in the mutation.
+func (m *DailyCheckinMutation) RewardAmount() (r float64, exists bool) {
+	v := m.reward_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardAmount returns the old "reward_amount" field's value of the DailyCheckin entity.
+// If the DailyCheckin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DailyCheckinMutation) OldRewardAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardAmount: %w", err)
+	}
+	return oldValue.RewardAmount, nil
+}
+
+// AddRewardAmount adds f to the "reward_amount" field.
+func (m *DailyCheckinMutation) AddRewardAmount(f float64) {
+	if m.addreward_amount != nil {
+		*m.addreward_amount += f
+	} else {
+		m.addreward_amount = &f
+	}
+}
+
+// AddedRewardAmount returns the value that was added to the "reward_amount" field in this mutation.
+func (m *DailyCheckinMutation) AddedRewardAmount() (r float64, exists bool) {
+	v := m.addreward_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRewardAmount resets all changes to the "reward_amount" field.
+func (m *DailyCheckinMutation) ResetRewardAmount() {
+	m.reward_amount = nil
+	m.addreward_amount = nil
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *DailyCheckinMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[dailycheckin.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *DailyCheckinMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *DailyCheckinMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *DailyCheckinMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// SetTemporaryCreditGrantID sets the "temporary_credit_grant" edge to the TemporaryCreditGrant entity by id.
+func (m *DailyCheckinMutation) SetTemporaryCreditGrantID(id int64) {
+	m.temporary_credit_grant = &id
+}
+
+// ClearTemporaryCreditGrant clears the "temporary_credit_grant" edge to the TemporaryCreditGrant entity.
+func (m *DailyCheckinMutation) ClearTemporaryCreditGrant() {
+	m.clearedtemporary_credit_grant = true
+}
+
+// TemporaryCreditGrantCleared reports if the "temporary_credit_grant" edge to the TemporaryCreditGrant entity was cleared.
+func (m *DailyCheckinMutation) TemporaryCreditGrantCleared() bool {
+	return m.clearedtemporary_credit_grant
+}
+
+// TemporaryCreditGrantID returns the "temporary_credit_grant" edge ID in the mutation.
+func (m *DailyCheckinMutation) TemporaryCreditGrantID() (id int64, exists bool) {
+	if m.temporary_credit_grant != nil {
+		return *m.temporary_credit_grant, true
+	}
+	return
+}
+
+// TemporaryCreditGrantIDs returns the "temporary_credit_grant" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// TemporaryCreditGrantID instead. It exists only for internal usage by the builders.
+func (m *DailyCheckinMutation) TemporaryCreditGrantIDs() (ids []int64) {
+	if id := m.temporary_credit_grant; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetTemporaryCreditGrant resets all changes to the "temporary_credit_grant" edge.
+func (m *DailyCheckinMutation) ResetTemporaryCreditGrant() {
+	m.temporary_credit_grant = nil
+	m.clearedtemporary_credit_grant = false
+}
+
+// Where appends a list predicates to the DailyCheckinMutation builder.
+func (m *DailyCheckinMutation) Where(ps ...predicate.DailyCheckin) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DailyCheckinMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DailyCheckinMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.DailyCheckin, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DailyCheckinMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DailyCheckinMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (DailyCheckin).
+func (m *DailyCheckinMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DailyCheckinMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.created_at != nil {
+		fields = append(fields, dailycheckin.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, dailycheckin.FieldUpdatedAt)
+	}
+	if m.user != nil {
+		fields = append(fields, dailycheckin.FieldUserID)
+	}
+	if m.checkin_date != nil {
+		fields = append(fields, dailycheckin.FieldCheckinDate)
+	}
+	if m.streak_day != nil {
+		fields = append(fields, dailycheckin.FieldStreakDay)
+	}
+	if m.reward_day != nil {
+		fields = append(fields, dailycheckin.FieldRewardDay)
+	}
+	if m.reward_amount != nil {
+		fields = append(fields, dailycheckin.FieldRewardAmount)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DailyCheckinMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case dailycheckin.FieldCreatedAt:
+		return m.CreatedAt()
+	case dailycheckin.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case dailycheckin.FieldUserID:
+		return m.UserID()
+	case dailycheckin.FieldCheckinDate:
+		return m.CheckinDate()
+	case dailycheckin.FieldStreakDay:
+		return m.StreakDay()
+	case dailycheckin.FieldRewardDay:
+		return m.RewardDay()
+	case dailycheckin.FieldRewardAmount:
+		return m.RewardAmount()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DailyCheckinMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case dailycheckin.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case dailycheckin.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case dailycheckin.FieldUserID:
+		return m.OldUserID(ctx)
+	case dailycheckin.FieldCheckinDate:
+		return m.OldCheckinDate(ctx)
+	case dailycheckin.FieldStreakDay:
+		return m.OldStreakDay(ctx)
+	case dailycheckin.FieldRewardDay:
+		return m.OldRewardDay(ctx)
+	case dailycheckin.FieldRewardAmount:
+		return m.OldRewardAmount(ctx)
+	}
+	return nil, fmt.Errorf("unknown DailyCheckin field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DailyCheckinMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case dailycheckin.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case dailycheckin.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case dailycheckin.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case dailycheckin.FieldCheckinDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCheckinDate(v)
+		return nil
+	case dailycheckin.FieldStreakDay:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStreakDay(v)
+		return nil
+	case dailycheckin.FieldRewardDay:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardDay(v)
+		return nil
+	case dailycheckin.FieldRewardAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardAmount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DailyCheckin field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DailyCheckinMutation) AddedFields() []string {
+	var fields []string
+	if m.addstreak_day != nil {
+		fields = append(fields, dailycheckin.FieldStreakDay)
+	}
+	if m.addreward_day != nil {
+		fields = append(fields, dailycheckin.FieldRewardDay)
+	}
+	if m.addreward_amount != nil {
+		fields = append(fields, dailycheckin.FieldRewardAmount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DailyCheckinMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case dailycheckin.FieldStreakDay:
+		return m.AddedStreakDay()
+	case dailycheckin.FieldRewardDay:
+		return m.AddedRewardDay()
+	case dailycheckin.FieldRewardAmount:
+		return m.AddedRewardAmount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DailyCheckinMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case dailycheckin.FieldStreakDay:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddStreakDay(v)
+		return nil
+	case dailycheckin.FieldRewardDay:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRewardDay(v)
+		return nil
+	case dailycheckin.FieldRewardAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRewardAmount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DailyCheckin numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DailyCheckinMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DailyCheckinMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DailyCheckinMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown DailyCheckin nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DailyCheckinMutation) ResetField(name string) error {
+	switch name {
+	case dailycheckin.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case dailycheckin.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case dailycheckin.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case dailycheckin.FieldCheckinDate:
+		m.ResetCheckinDate()
+		return nil
+	case dailycheckin.FieldStreakDay:
+		m.ResetStreakDay()
+		return nil
+	case dailycheckin.FieldRewardDay:
+		m.ResetRewardDay()
+		return nil
+	case dailycheckin.FieldRewardAmount:
+		m.ResetRewardAmount()
+		return nil
+	}
+	return fmt.Errorf("unknown DailyCheckin field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DailyCheckinMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.user != nil {
+		edges = append(edges, dailycheckin.EdgeUser)
+	}
+	if m.temporary_credit_grant != nil {
+		edges = append(edges, dailycheckin.EdgeTemporaryCreditGrant)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DailyCheckinMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case dailycheckin.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	case dailycheckin.EdgeTemporaryCreditGrant:
+		if id := m.temporary_credit_grant; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DailyCheckinMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DailyCheckinMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DailyCheckinMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.cleareduser {
+		edges = append(edges, dailycheckin.EdgeUser)
+	}
+	if m.clearedtemporary_credit_grant {
+		edges = append(edges, dailycheckin.EdgeTemporaryCreditGrant)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DailyCheckinMutation) EdgeCleared(name string) bool {
+	switch name {
+	case dailycheckin.EdgeUser:
+		return m.cleareduser
+	case dailycheckin.EdgeTemporaryCreditGrant:
+		return m.clearedtemporary_credit_grant
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DailyCheckinMutation) ClearEdge(name string) error {
+	switch name {
+	case dailycheckin.EdgeUser:
+		m.ClearUser()
+		return nil
+	case dailycheckin.EdgeTemporaryCreditGrant:
+		m.ClearTemporaryCreditGrant()
+		return nil
+	}
+	return fmt.Errorf("unknown DailyCheckin unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DailyCheckinMutation) ResetEdge(name string) error {
+	switch name {
+	case dailycheckin.EdgeUser:
+		m.ResetUser()
+		return nil
+	case dailycheckin.EdgeTemporaryCreditGrant:
+		m.ResetTemporaryCreditGrant()
+		return nil
+	}
+	return fmt.Errorf("unknown DailyCheckin edge %s", name)
+}
+
 // ErrorPassthroughRuleMutation represents an operation that mutates the ErrorPassthroughRule nodes in the graph.
 type ErrorPassthroughRuleMutation struct {
 	config
@@ -20878,6 +25934,9 @@ type GroupMutation struct {
 	usage_logs                              map[int64]struct{}
 	removedusage_logs                       map[int64]struct{}
 	clearedusage_logs                       bool
+	batch_image_credit_holds                map[int64]struct{}
+	removedbatch_image_credit_holds         map[int64]struct{}
+	clearedbatch_image_credit_holds         bool
 	accounts                                map[int64]struct{}
 	removedaccounts                         map[int64]struct{}
 	clearedaccounts                         bool
@@ -23622,6 +28681,60 @@ func (m *GroupMutation) ResetUsageLogs() {
 	m.removedusage_logs = nil
 }
 
+// AddBatchImageCreditHoldIDs adds the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by ids.
+func (m *GroupMutation) AddBatchImageCreditHoldIDs(ids ...int64) {
+	if m.batch_image_credit_holds == nil {
+		m.batch_image_credit_holds = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.batch_image_credit_holds[ids[i]] = struct{}{}
+	}
+}
+
+// ClearBatchImageCreditHolds clears the "batch_image_credit_holds" edge to the BatchImageCreditHold entity.
+func (m *GroupMutation) ClearBatchImageCreditHolds() {
+	m.clearedbatch_image_credit_holds = true
+}
+
+// BatchImageCreditHoldsCleared reports if the "batch_image_credit_holds" edge to the BatchImageCreditHold entity was cleared.
+func (m *GroupMutation) BatchImageCreditHoldsCleared() bool {
+	return m.clearedbatch_image_credit_holds
+}
+
+// RemoveBatchImageCreditHoldIDs removes the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by IDs.
+func (m *GroupMutation) RemoveBatchImageCreditHoldIDs(ids ...int64) {
+	if m.removedbatch_image_credit_holds == nil {
+		m.removedbatch_image_credit_holds = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.batch_image_credit_holds, ids[i])
+		m.removedbatch_image_credit_holds[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedBatchImageCreditHolds returns the removed IDs of the "batch_image_credit_holds" edge to the BatchImageCreditHold entity.
+func (m *GroupMutation) RemovedBatchImageCreditHoldsIDs() (ids []int64) {
+	for id := range m.removedbatch_image_credit_holds {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// BatchImageCreditHoldsIDs returns the "batch_image_credit_holds" edge IDs in the mutation.
+func (m *GroupMutation) BatchImageCreditHoldsIDs() (ids []int64) {
+	for id := range m.batch_image_credit_holds {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetBatchImageCreditHolds resets all changes to the "batch_image_credit_holds" edge.
+func (m *GroupMutation) ResetBatchImageCreditHolds() {
+	m.batch_image_credit_holds = nil
+	m.clearedbatch_image_credit_holds = false
+	m.removedbatch_image_credit_holds = nil
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by ids.
 func (m *GroupMutation) AddAccountIDs(ids ...int64) {
 	if m.accounts == nil {
@@ -25033,7 +30146,7 @@ func (m *GroupMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *GroupMutation) AddedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.api_keys != nil {
 		edges = append(edges, group.EdgeAPIKeys)
 	}
@@ -25045,6 +30158,9 @@ func (m *GroupMutation) AddedEdges() []string {
 	}
 	if m.usage_logs != nil {
 		edges = append(edges, group.EdgeUsageLogs)
+	}
+	if m.batch_image_credit_holds != nil {
+		edges = append(edges, group.EdgeBatchImageCreditHolds)
 	}
 	if m.accounts != nil {
 		edges = append(edges, group.EdgeAccounts)
@@ -25083,6 +30199,12 @@ func (m *GroupMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case group.EdgeBatchImageCreditHolds:
+		ids := make([]ent.Value, 0, len(m.batch_image_credit_holds))
+		for id := range m.batch_image_credit_holds {
+			ids = append(ids, id)
+		}
+		return ids
 	case group.EdgeAccounts:
 		ids := make([]ent.Value, 0, len(m.accounts))
 		for id := range m.accounts {
@@ -25101,7 +30223,7 @@ func (m *GroupMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *GroupMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.removedapi_keys != nil {
 		edges = append(edges, group.EdgeAPIKeys)
 	}
@@ -25113,6 +30235,9 @@ func (m *GroupMutation) RemovedEdges() []string {
 	}
 	if m.removedusage_logs != nil {
 		edges = append(edges, group.EdgeUsageLogs)
+	}
+	if m.removedbatch_image_credit_holds != nil {
+		edges = append(edges, group.EdgeBatchImageCreditHolds)
 	}
 	if m.removedaccounts != nil {
 		edges = append(edges, group.EdgeAccounts)
@@ -25151,6 +30276,12 @@ func (m *GroupMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case group.EdgeBatchImageCreditHolds:
+		ids := make([]ent.Value, 0, len(m.removedbatch_image_credit_holds))
+		for id := range m.removedbatch_image_credit_holds {
+			ids = append(ids, id)
+		}
+		return ids
 	case group.EdgeAccounts:
 		ids := make([]ent.Value, 0, len(m.removedaccounts))
 		for id := range m.removedaccounts {
@@ -25169,7 +30300,7 @@ func (m *GroupMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *GroupMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.clearedapi_keys {
 		edges = append(edges, group.EdgeAPIKeys)
 	}
@@ -25181,6 +30312,9 @@ func (m *GroupMutation) ClearedEdges() []string {
 	}
 	if m.clearedusage_logs {
 		edges = append(edges, group.EdgeUsageLogs)
+	}
+	if m.clearedbatch_image_credit_holds {
+		edges = append(edges, group.EdgeBatchImageCreditHolds)
 	}
 	if m.clearedaccounts {
 		edges = append(edges, group.EdgeAccounts)
@@ -25203,6 +30337,8 @@ func (m *GroupMutation) EdgeCleared(name string) bool {
 		return m.clearedsubscriptions
 	case group.EdgeUsageLogs:
 		return m.clearedusage_logs
+	case group.EdgeBatchImageCreditHolds:
+		return m.clearedbatch_image_credit_holds
 	case group.EdgeAccounts:
 		return m.clearedaccounts
 	case group.EdgeAllowedUsers:
@@ -25235,6 +30371,9 @@ func (m *GroupMutation) ResetEdge(name string) error {
 	case group.EdgeUsageLogs:
 		m.ResetUsageLogs()
 		return nil
+	case group.EdgeBatchImageCreditHolds:
+		m.ResetBatchImageCreditHolds()
+		return nil
 	case group.EdgeAccounts:
 		m.ResetAccounts()
 		return nil
@@ -25253,7 +30392,8 @@ type IdempotencyRecordMutation struct {
 	id                   *int64
 	created_at           *time.Time
 	updated_at           *time.Time
-	scope                *string
+	operation_scope      *string
+	actor_scope          *string
 	idempotency_key_hash *string
 	request_fingerprint  *string
 	status               *string
@@ -25439,40 +30579,76 @@ func (m *IdempotencyRecordMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
-// SetScope sets the "scope" field.
-func (m *IdempotencyRecordMutation) SetScope(s string) {
-	m.scope = &s
+// SetOperationScope sets the "operation_scope" field.
+func (m *IdempotencyRecordMutation) SetOperationScope(s string) {
+	m.operation_scope = &s
 }
 
-// Scope returns the value of the "scope" field in the mutation.
-func (m *IdempotencyRecordMutation) Scope() (r string, exists bool) {
-	v := m.scope
+// OperationScope returns the value of the "operation_scope" field in the mutation.
+func (m *IdempotencyRecordMutation) OperationScope() (r string, exists bool) {
+	v := m.operation_scope
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldScope returns the old "scope" field's value of the IdempotencyRecord entity.
+// OldOperationScope returns the old "operation_scope" field's value of the IdempotencyRecord entity.
 // If the IdempotencyRecord object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IdempotencyRecordMutation) OldScope(ctx context.Context) (v string, err error) {
+func (m *IdempotencyRecordMutation) OldOperationScope(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldScope is only allowed on UpdateOne operations")
+		return v, errors.New("OldOperationScope is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldScope requires an ID field in the mutation")
+		return v, errors.New("OldOperationScope requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldScope: %w", err)
+		return v, fmt.Errorf("querying old value for OldOperationScope: %w", err)
 	}
-	return oldValue.Scope, nil
+	return oldValue.OperationScope, nil
 }
 
-// ResetScope resets all changes to the "scope" field.
-func (m *IdempotencyRecordMutation) ResetScope() {
-	m.scope = nil
+// ResetOperationScope resets all changes to the "operation_scope" field.
+func (m *IdempotencyRecordMutation) ResetOperationScope() {
+	m.operation_scope = nil
+}
+
+// SetActorScope sets the "actor_scope" field.
+func (m *IdempotencyRecordMutation) SetActorScope(s string) {
+	m.actor_scope = &s
+}
+
+// ActorScope returns the value of the "actor_scope" field in the mutation.
+func (m *IdempotencyRecordMutation) ActorScope() (r string, exists bool) {
+	v := m.actor_scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActorScope returns the old "actor_scope" field's value of the IdempotencyRecord entity.
+// If the IdempotencyRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdempotencyRecordMutation) OldActorScope(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActorScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActorScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActorScope: %w", err)
+	}
+	return oldValue.ActorScope, nil
+}
+
+// ResetActorScope resets all changes to the "actor_scope" field.
+func (m *IdempotencyRecordMutation) ResetActorScope() {
+	m.actor_scope = nil
 }
 
 // SetIdempotencyKeyHash sets the "idempotency_key_hash" field.
@@ -25870,15 +31046,18 @@ func (m *IdempotencyRecordMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IdempotencyRecordMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, idempotencyrecord.FieldCreatedAt)
 	}
 	if m.updated_at != nil {
 		fields = append(fields, idempotencyrecord.FieldUpdatedAt)
 	}
-	if m.scope != nil {
-		fields = append(fields, idempotencyrecord.FieldScope)
+	if m.operation_scope != nil {
+		fields = append(fields, idempotencyrecord.FieldOperationScope)
+	}
+	if m.actor_scope != nil {
+		fields = append(fields, idempotencyrecord.FieldActorScope)
 	}
 	if m.idempotency_key_hash != nil {
 		fields = append(fields, idempotencyrecord.FieldIdempotencyKeyHash)
@@ -25916,8 +31095,10 @@ func (m *IdempotencyRecordMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case idempotencyrecord.FieldUpdatedAt:
 		return m.UpdatedAt()
-	case idempotencyrecord.FieldScope:
-		return m.Scope()
+	case idempotencyrecord.FieldOperationScope:
+		return m.OperationScope()
+	case idempotencyrecord.FieldActorScope:
+		return m.ActorScope()
 	case idempotencyrecord.FieldIdempotencyKeyHash:
 		return m.IdempotencyKeyHash()
 	case idempotencyrecord.FieldRequestFingerprint:
@@ -25947,8 +31128,10 @@ func (m *IdempotencyRecordMutation) OldField(ctx context.Context, name string) (
 		return m.OldCreatedAt(ctx)
 	case idempotencyrecord.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
-	case idempotencyrecord.FieldScope:
-		return m.OldScope(ctx)
+	case idempotencyrecord.FieldOperationScope:
+		return m.OldOperationScope(ctx)
+	case idempotencyrecord.FieldActorScope:
+		return m.OldActorScope(ctx)
 	case idempotencyrecord.FieldIdempotencyKeyHash:
 		return m.OldIdempotencyKeyHash(ctx)
 	case idempotencyrecord.FieldRequestFingerprint:
@@ -25988,12 +31171,19 @@ func (m *IdempotencyRecordMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetUpdatedAt(v)
 		return nil
-	case idempotencyrecord.FieldScope:
+	case idempotencyrecord.FieldOperationScope:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetScope(v)
+		m.SetOperationScope(v)
+		return nil
+	case idempotencyrecord.FieldActorScope:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActorScope(v)
 		return nil
 	case idempotencyrecord.FieldIdempotencyKeyHash:
 		v, ok := value.(string)
@@ -26148,8 +31338,11 @@ func (m *IdempotencyRecordMutation) ResetField(name string) error {
 	case idempotencyrecord.FieldUpdatedAt:
 		m.ResetUpdatedAt()
 		return nil
-	case idempotencyrecord.FieldScope:
-		m.ResetScope()
+	case idempotencyrecord.FieldOperationScope:
+		m.ResetOperationScope()
+		return nil
+	case idempotencyrecord.FieldActorScope:
+		m.ResetActorScope()
 		return nil
 	case idempotencyrecord.FieldIdempotencyKeyHash:
 		m.ResetIdempotencyKeyHash()
@@ -40804,6 +45997,1974 @@ func (m *TLSFingerprintProfileMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown TLSFingerprintProfile edge %s", name)
 }
 
+// TemporaryCreditConsumptionMutation represents an operation that mutates the TemporaryCreditConsumption nodes in the graph.
+type TemporaryCreditConsumptionMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int64
+	request_id       *string
+	amount           *float64
+	addamount        *float64
+	created_at       *time.Time
+	clearedFields    map[string]struct{}
+	grant            *int64
+	clearedgrant     bool
+	usage_log        *int64
+	clearedusage_log bool
+	done             bool
+	oldValue         func(context.Context) (*TemporaryCreditConsumption, error)
+	predicates       []predicate.TemporaryCreditConsumption
+}
+
+var _ ent.Mutation = (*TemporaryCreditConsumptionMutation)(nil)
+
+// temporarycreditconsumptionOption allows management of the mutation configuration using functional options.
+type temporarycreditconsumptionOption func(*TemporaryCreditConsumptionMutation)
+
+// newTemporaryCreditConsumptionMutation creates new mutation for the TemporaryCreditConsumption entity.
+func newTemporaryCreditConsumptionMutation(c config, op Op, opts ...temporarycreditconsumptionOption) *TemporaryCreditConsumptionMutation {
+	m := &TemporaryCreditConsumptionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeTemporaryCreditConsumption,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withTemporaryCreditConsumptionID sets the ID field of the mutation.
+func withTemporaryCreditConsumptionID(id int64) temporarycreditconsumptionOption {
+	return func(m *TemporaryCreditConsumptionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *TemporaryCreditConsumption
+		)
+		m.oldValue = func(ctx context.Context) (*TemporaryCreditConsumption, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().TemporaryCreditConsumption.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withTemporaryCreditConsumption sets the old TemporaryCreditConsumption of the mutation.
+func withTemporaryCreditConsumption(node *TemporaryCreditConsumption) temporarycreditconsumptionOption {
+	return func(m *TemporaryCreditConsumptionMutation) {
+		m.oldValue = func(context.Context) (*TemporaryCreditConsumption, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m TemporaryCreditConsumptionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m TemporaryCreditConsumptionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *TemporaryCreditConsumptionMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *TemporaryCreditConsumptionMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().TemporaryCreditConsumption.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetGrantID sets the "grant_id" field.
+func (m *TemporaryCreditConsumptionMutation) SetGrantID(i int64) {
+	m.grant = &i
+}
+
+// GrantID returns the value of the "grant_id" field in the mutation.
+func (m *TemporaryCreditConsumptionMutation) GrantID() (r int64, exists bool) {
+	v := m.grant
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantID returns the old "grant_id" field's value of the TemporaryCreditConsumption entity.
+// If the TemporaryCreditConsumption object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditConsumptionMutation) OldGrantID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantID: %w", err)
+	}
+	return oldValue.GrantID, nil
+}
+
+// ResetGrantID resets all changes to the "grant_id" field.
+func (m *TemporaryCreditConsumptionMutation) ResetGrantID() {
+	m.grant = nil
+}
+
+// SetUsageLogID sets the "usage_log_id" field.
+func (m *TemporaryCreditConsumptionMutation) SetUsageLogID(i int64) {
+	m.usage_log = &i
+}
+
+// UsageLogID returns the value of the "usage_log_id" field in the mutation.
+func (m *TemporaryCreditConsumptionMutation) UsageLogID() (r int64, exists bool) {
+	v := m.usage_log
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsageLogID returns the old "usage_log_id" field's value of the TemporaryCreditConsumption entity.
+// If the TemporaryCreditConsumption object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditConsumptionMutation) OldUsageLogID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsageLogID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsageLogID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsageLogID: %w", err)
+	}
+	return oldValue.UsageLogID, nil
+}
+
+// ClearUsageLogID clears the value of the "usage_log_id" field.
+func (m *TemporaryCreditConsumptionMutation) ClearUsageLogID() {
+	m.usage_log = nil
+	m.clearedFields[temporarycreditconsumption.FieldUsageLogID] = struct{}{}
+}
+
+// UsageLogIDCleared returns if the "usage_log_id" field was cleared in this mutation.
+func (m *TemporaryCreditConsumptionMutation) UsageLogIDCleared() bool {
+	_, ok := m.clearedFields[temporarycreditconsumption.FieldUsageLogID]
+	return ok
+}
+
+// ResetUsageLogID resets all changes to the "usage_log_id" field.
+func (m *TemporaryCreditConsumptionMutation) ResetUsageLogID() {
+	m.usage_log = nil
+	delete(m.clearedFields, temporarycreditconsumption.FieldUsageLogID)
+}
+
+// SetRequestID sets the "request_id" field.
+func (m *TemporaryCreditConsumptionMutation) SetRequestID(s string) {
+	m.request_id = &s
+}
+
+// RequestID returns the value of the "request_id" field in the mutation.
+func (m *TemporaryCreditConsumptionMutation) RequestID() (r string, exists bool) {
+	v := m.request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestID returns the old "request_id" field's value of the TemporaryCreditConsumption entity.
+// If the TemporaryCreditConsumption object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditConsumptionMutation) OldRequestID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestID: %w", err)
+	}
+	return oldValue.RequestID, nil
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (m *TemporaryCreditConsumptionMutation) ClearRequestID() {
+	m.request_id = nil
+	m.clearedFields[temporarycreditconsumption.FieldRequestID] = struct{}{}
+}
+
+// RequestIDCleared returns if the "request_id" field was cleared in this mutation.
+func (m *TemporaryCreditConsumptionMutation) RequestIDCleared() bool {
+	_, ok := m.clearedFields[temporarycreditconsumption.FieldRequestID]
+	return ok
+}
+
+// ResetRequestID resets all changes to the "request_id" field.
+func (m *TemporaryCreditConsumptionMutation) ResetRequestID() {
+	m.request_id = nil
+	delete(m.clearedFields, temporarycreditconsumption.FieldRequestID)
+}
+
+// SetAmount sets the "amount" field.
+func (m *TemporaryCreditConsumptionMutation) SetAmount(f float64) {
+	m.amount = &f
+	m.addamount = nil
+}
+
+// Amount returns the value of the "amount" field in the mutation.
+func (m *TemporaryCreditConsumptionMutation) Amount() (r float64, exists bool) {
+	v := m.amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAmount returns the old "amount" field's value of the TemporaryCreditConsumption entity.
+// If the TemporaryCreditConsumption object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditConsumptionMutation) OldAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAmount: %w", err)
+	}
+	return oldValue.Amount, nil
+}
+
+// AddAmount adds f to the "amount" field.
+func (m *TemporaryCreditConsumptionMutation) AddAmount(f float64) {
+	if m.addamount != nil {
+		*m.addamount += f
+	} else {
+		m.addamount = &f
+	}
+}
+
+// AddedAmount returns the value that was added to the "amount" field in this mutation.
+func (m *TemporaryCreditConsumptionMutation) AddedAmount() (r float64, exists bool) {
+	v := m.addamount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAmount resets all changes to the "amount" field.
+func (m *TemporaryCreditConsumptionMutation) ResetAmount() {
+	m.amount = nil
+	m.addamount = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *TemporaryCreditConsumptionMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *TemporaryCreditConsumptionMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the TemporaryCreditConsumption entity.
+// If the TemporaryCreditConsumption object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditConsumptionMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *TemporaryCreditConsumptionMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// ClearGrant clears the "grant" edge to the TemporaryCreditGrant entity.
+func (m *TemporaryCreditConsumptionMutation) ClearGrant() {
+	m.clearedgrant = true
+	m.clearedFields[temporarycreditconsumption.FieldGrantID] = struct{}{}
+}
+
+// GrantCleared reports if the "grant" edge to the TemporaryCreditGrant entity was cleared.
+func (m *TemporaryCreditConsumptionMutation) GrantCleared() bool {
+	return m.clearedgrant
+}
+
+// GrantIDs returns the "grant" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GrantID instead. It exists only for internal usage by the builders.
+func (m *TemporaryCreditConsumptionMutation) GrantIDs() (ids []int64) {
+	if id := m.grant; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGrant resets all changes to the "grant" edge.
+func (m *TemporaryCreditConsumptionMutation) ResetGrant() {
+	m.grant = nil
+	m.clearedgrant = false
+}
+
+// ClearUsageLog clears the "usage_log" edge to the UsageLog entity.
+func (m *TemporaryCreditConsumptionMutation) ClearUsageLog() {
+	m.clearedusage_log = true
+	m.clearedFields[temporarycreditconsumption.FieldUsageLogID] = struct{}{}
+}
+
+// UsageLogCleared reports if the "usage_log" edge to the UsageLog entity was cleared.
+func (m *TemporaryCreditConsumptionMutation) UsageLogCleared() bool {
+	return m.UsageLogIDCleared() || m.clearedusage_log
+}
+
+// UsageLogIDs returns the "usage_log" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UsageLogID instead. It exists only for internal usage by the builders.
+func (m *TemporaryCreditConsumptionMutation) UsageLogIDs() (ids []int64) {
+	if id := m.usage_log; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUsageLog resets all changes to the "usage_log" edge.
+func (m *TemporaryCreditConsumptionMutation) ResetUsageLog() {
+	m.usage_log = nil
+	m.clearedusage_log = false
+}
+
+// Where appends a list predicates to the TemporaryCreditConsumptionMutation builder.
+func (m *TemporaryCreditConsumptionMutation) Where(ps ...predicate.TemporaryCreditConsumption) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the TemporaryCreditConsumptionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TemporaryCreditConsumptionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.TemporaryCreditConsumption, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *TemporaryCreditConsumptionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TemporaryCreditConsumptionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (TemporaryCreditConsumption).
+func (m *TemporaryCreditConsumptionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *TemporaryCreditConsumptionMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.grant != nil {
+		fields = append(fields, temporarycreditconsumption.FieldGrantID)
+	}
+	if m.usage_log != nil {
+		fields = append(fields, temporarycreditconsumption.FieldUsageLogID)
+	}
+	if m.request_id != nil {
+		fields = append(fields, temporarycreditconsumption.FieldRequestID)
+	}
+	if m.amount != nil {
+		fields = append(fields, temporarycreditconsumption.FieldAmount)
+	}
+	if m.created_at != nil {
+		fields = append(fields, temporarycreditconsumption.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *TemporaryCreditConsumptionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case temporarycreditconsumption.FieldGrantID:
+		return m.GrantID()
+	case temporarycreditconsumption.FieldUsageLogID:
+		return m.UsageLogID()
+	case temporarycreditconsumption.FieldRequestID:
+		return m.RequestID()
+	case temporarycreditconsumption.FieldAmount:
+		return m.Amount()
+	case temporarycreditconsumption.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *TemporaryCreditConsumptionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case temporarycreditconsumption.FieldGrantID:
+		return m.OldGrantID(ctx)
+	case temporarycreditconsumption.FieldUsageLogID:
+		return m.OldUsageLogID(ctx)
+	case temporarycreditconsumption.FieldRequestID:
+		return m.OldRequestID(ctx)
+	case temporarycreditconsumption.FieldAmount:
+		return m.OldAmount(ctx)
+	case temporarycreditconsumption.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown TemporaryCreditConsumption field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TemporaryCreditConsumptionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case temporarycreditconsumption.FieldGrantID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantID(v)
+		return nil
+	case temporarycreditconsumption.FieldUsageLogID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsageLogID(v)
+		return nil
+	case temporarycreditconsumption.FieldRequestID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestID(v)
+		return nil
+	case temporarycreditconsumption.FieldAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAmount(v)
+		return nil
+	case temporarycreditconsumption.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditConsumption field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *TemporaryCreditConsumptionMutation) AddedFields() []string {
+	var fields []string
+	if m.addamount != nil {
+		fields = append(fields, temporarycreditconsumption.FieldAmount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *TemporaryCreditConsumptionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case temporarycreditconsumption.FieldAmount:
+		return m.AddedAmount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TemporaryCreditConsumptionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case temporarycreditconsumption.FieldAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAmount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditConsumption numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *TemporaryCreditConsumptionMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(temporarycreditconsumption.FieldUsageLogID) {
+		fields = append(fields, temporarycreditconsumption.FieldUsageLogID)
+	}
+	if m.FieldCleared(temporarycreditconsumption.FieldRequestID) {
+		fields = append(fields, temporarycreditconsumption.FieldRequestID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *TemporaryCreditConsumptionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *TemporaryCreditConsumptionMutation) ClearField(name string) error {
+	switch name {
+	case temporarycreditconsumption.FieldUsageLogID:
+		m.ClearUsageLogID()
+		return nil
+	case temporarycreditconsumption.FieldRequestID:
+		m.ClearRequestID()
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditConsumption nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *TemporaryCreditConsumptionMutation) ResetField(name string) error {
+	switch name {
+	case temporarycreditconsumption.FieldGrantID:
+		m.ResetGrantID()
+		return nil
+	case temporarycreditconsumption.FieldUsageLogID:
+		m.ResetUsageLogID()
+		return nil
+	case temporarycreditconsumption.FieldRequestID:
+		m.ResetRequestID()
+		return nil
+	case temporarycreditconsumption.FieldAmount:
+		m.ResetAmount()
+		return nil
+	case temporarycreditconsumption.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditConsumption field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *TemporaryCreditConsumptionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.grant != nil {
+		edges = append(edges, temporarycreditconsumption.EdgeGrant)
+	}
+	if m.usage_log != nil {
+		edges = append(edges, temporarycreditconsumption.EdgeUsageLog)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *TemporaryCreditConsumptionMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case temporarycreditconsumption.EdgeGrant:
+		if id := m.grant; id != nil {
+			return []ent.Value{*id}
+		}
+	case temporarycreditconsumption.EdgeUsageLog:
+		if id := m.usage_log; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *TemporaryCreditConsumptionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *TemporaryCreditConsumptionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *TemporaryCreditConsumptionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedgrant {
+		edges = append(edges, temporarycreditconsumption.EdgeGrant)
+	}
+	if m.clearedusage_log {
+		edges = append(edges, temporarycreditconsumption.EdgeUsageLog)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *TemporaryCreditConsumptionMutation) EdgeCleared(name string) bool {
+	switch name {
+	case temporarycreditconsumption.EdgeGrant:
+		return m.clearedgrant
+	case temporarycreditconsumption.EdgeUsageLog:
+		return m.clearedusage_log
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *TemporaryCreditConsumptionMutation) ClearEdge(name string) error {
+	switch name {
+	case temporarycreditconsumption.EdgeGrant:
+		m.ClearGrant()
+		return nil
+	case temporarycreditconsumption.EdgeUsageLog:
+		m.ClearUsageLog()
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditConsumption unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *TemporaryCreditConsumptionMutation) ResetEdge(name string) error {
+	switch name {
+	case temporarycreditconsumption.EdgeGrant:
+		m.ResetGrant()
+		return nil
+	case temporarycreditconsumption.EdgeUsageLog:
+		m.ResetUsageLog()
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditConsumption edge %s", name)
+}
+
+// TemporaryCreditGrantMutation represents an operation that mutates the TemporaryCreditGrant nodes in the graph.
+type TemporaryCreditGrantMutation struct {
+	config
+	op                                         Op
+	typ                                        string
+	id                                         *int64
+	created_at                                 *time.Time
+	updated_at                                 *time.Time
+	source                                     *temporarycreditgrant.Source
+	amount                                     *float64
+	addamount                                  *float64
+	remaining_amount                           *float64
+	addremaining_amount                        *float64
+	expires_at                                 *time.Time
+	notes                                      *string
+	clearedFields                              map[string]struct{}
+	user                                       *int64
+	cleareduser                                bool
+	checkin                                    *int64
+	clearedcheckin                             bool
+	granted_by_user                            *int64
+	clearedgranted_by_user                     bool
+	consumptions                               map[int64]struct{}
+	removedconsumptions                        map[int64]struct{}
+	clearedconsumptions                        bool
+	batch_image_credit_hold_allocations        map[int64]struct{}
+	removedbatch_image_credit_hold_allocations map[int64]struct{}
+	clearedbatch_image_credit_hold_allocations bool
+	done                                       bool
+	oldValue                                   func(context.Context) (*TemporaryCreditGrant, error)
+	predicates                                 []predicate.TemporaryCreditGrant
+}
+
+var _ ent.Mutation = (*TemporaryCreditGrantMutation)(nil)
+
+// temporarycreditgrantOption allows management of the mutation configuration using functional options.
+type temporarycreditgrantOption func(*TemporaryCreditGrantMutation)
+
+// newTemporaryCreditGrantMutation creates new mutation for the TemporaryCreditGrant entity.
+func newTemporaryCreditGrantMutation(c config, op Op, opts ...temporarycreditgrantOption) *TemporaryCreditGrantMutation {
+	m := &TemporaryCreditGrantMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeTemporaryCreditGrant,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withTemporaryCreditGrantID sets the ID field of the mutation.
+func withTemporaryCreditGrantID(id int64) temporarycreditgrantOption {
+	return func(m *TemporaryCreditGrantMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *TemporaryCreditGrant
+		)
+		m.oldValue = func(ctx context.Context) (*TemporaryCreditGrant, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().TemporaryCreditGrant.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withTemporaryCreditGrant sets the old TemporaryCreditGrant of the mutation.
+func withTemporaryCreditGrant(node *TemporaryCreditGrant) temporarycreditgrantOption {
+	return func(m *TemporaryCreditGrantMutation) {
+		m.oldValue = func(context.Context) (*TemporaryCreditGrant, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m TemporaryCreditGrantMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m TemporaryCreditGrantMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *TemporaryCreditGrantMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *TemporaryCreditGrantMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().TemporaryCreditGrant.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *TemporaryCreditGrantMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *TemporaryCreditGrantMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *TemporaryCreditGrantMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *TemporaryCreditGrantMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *TemporaryCreditGrantMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *TemporaryCreditGrantMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *TemporaryCreditGrantMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *TemporaryCreditGrantMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *TemporaryCreditGrantMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetSource sets the "source" field.
+func (m *TemporaryCreditGrantMutation) SetSource(t temporarycreditgrant.Source) {
+	m.source = &t
+}
+
+// Source returns the value of the "source" field in the mutation.
+func (m *TemporaryCreditGrantMutation) Source() (r temporarycreditgrant.Source, exists bool) {
+	v := m.source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSource returns the old "source" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldSource(ctx context.Context) (v temporarycreditgrant.Source, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSource: %w", err)
+	}
+	return oldValue.Source, nil
+}
+
+// ResetSource resets all changes to the "source" field.
+func (m *TemporaryCreditGrantMutation) ResetSource() {
+	m.source = nil
+}
+
+// SetCheckinID sets the "checkin_id" field.
+func (m *TemporaryCreditGrantMutation) SetCheckinID(i int64) {
+	m.checkin = &i
+}
+
+// CheckinID returns the value of the "checkin_id" field in the mutation.
+func (m *TemporaryCreditGrantMutation) CheckinID() (r int64, exists bool) {
+	v := m.checkin
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCheckinID returns the old "checkin_id" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldCheckinID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCheckinID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCheckinID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCheckinID: %w", err)
+	}
+	return oldValue.CheckinID, nil
+}
+
+// ClearCheckinID clears the value of the "checkin_id" field.
+func (m *TemporaryCreditGrantMutation) ClearCheckinID() {
+	m.checkin = nil
+	m.clearedFields[temporarycreditgrant.FieldCheckinID] = struct{}{}
+}
+
+// CheckinIDCleared returns if the "checkin_id" field was cleared in this mutation.
+func (m *TemporaryCreditGrantMutation) CheckinIDCleared() bool {
+	_, ok := m.clearedFields[temporarycreditgrant.FieldCheckinID]
+	return ok
+}
+
+// ResetCheckinID resets all changes to the "checkin_id" field.
+func (m *TemporaryCreditGrantMutation) ResetCheckinID() {
+	m.checkin = nil
+	delete(m.clearedFields, temporarycreditgrant.FieldCheckinID)
+}
+
+// SetAmount sets the "amount" field.
+func (m *TemporaryCreditGrantMutation) SetAmount(f float64) {
+	m.amount = &f
+	m.addamount = nil
+}
+
+// Amount returns the value of the "amount" field in the mutation.
+func (m *TemporaryCreditGrantMutation) Amount() (r float64, exists bool) {
+	v := m.amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAmount returns the old "amount" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAmount: %w", err)
+	}
+	return oldValue.Amount, nil
+}
+
+// AddAmount adds f to the "amount" field.
+func (m *TemporaryCreditGrantMutation) AddAmount(f float64) {
+	if m.addamount != nil {
+		*m.addamount += f
+	} else {
+		m.addamount = &f
+	}
+}
+
+// AddedAmount returns the value that was added to the "amount" field in this mutation.
+func (m *TemporaryCreditGrantMutation) AddedAmount() (r float64, exists bool) {
+	v := m.addamount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAmount resets all changes to the "amount" field.
+func (m *TemporaryCreditGrantMutation) ResetAmount() {
+	m.amount = nil
+	m.addamount = nil
+}
+
+// SetRemainingAmount sets the "remaining_amount" field.
+func (m *TemporaryCreditGrantMutation) SetRemainingAmount(f float64) {
+	m.remaining_amount = &f
+	m.addremaining_amount = nil
+}
+
+// RemainingAmount returns the value of the "remaining_amount" field in the mutation.
+func (m *TemporaryCreditGrantMutation) RemainingAmount() (r float64, exists bool) {
+	v := m.remaining_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRemainingAmount returns the old "remaining_amount" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldRemainingAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRemainingAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRemainingAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRemainingAmount: %w", err)
+	}
+	return oldValue.RemainingAmount, nil
+}
+
+// AddRemainingAmount adds f to the "remaining_amount" field.
+func (m *TemporaryCreditGrantMutation) AddRemainingAmount(f float64) {
+	if m.addremaining_amount != nil {
+		*m.addremaining_amount += f
+	} else {
+		m.addremaining_amount = &f
+	}
+}
+
+// AddedRemainingAmount returns the value that was added to the "remaining_amount" field in this mutation.
+func (m *TemporaryCreditGrantMutation) AddedRemainingAmount() (r float64, exists bool) {
+	v := m.addremaining_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRemainingAmount resets all changes to the "remaining_amount" field.
+func (m *TemporaryCreditGrantMutation) ResetRemainingAmount() {
+	m.remaining_amount = nil
+	m.addremaining_amount = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *TemporaryCreditGrantMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *TemporaryCreditGrantMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *TemporaryCreditGrantMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetNotes sets the "notes" field.
+func (m *TemporaryCreditGrantMutation) SetNotes(s string) {
+	m.notes = &s
+}
+
+// Notes returns the value of the "notes" field in the mutation.
+func (m *TemporaryCreditGrantMutation) Notes() (r string, exists bool) {
+	v := m.notes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNotes returns the old "notes" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldNotes(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNotes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNotes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNotes: %w", err)
+	}
+	return oldValue.Notes, nil
+}
+
+// ResetNotes resets all changes to the "notes" field.
+func (m *TemporaryCreditGrantMutation) ResetNotes() {
+	m.notes = nil
+}
+
+// SetGrantedBy sets the "granted_by" field.
+func (m *TemporaryCreditGrantMutation) SetGrantedBy(i int64) {
+	m.granted_by_user = &i
+}
+
+// GrantedBy returns the value of the "granted_by" field in the mutation.
+func (m *TemporaryCreditGrantMutation) GrantedBy() (r int64, exists bool) {
+	v := m.granted_by_user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantedBy returns the old "granted_by" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldGrantedBy(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantedBy: %w", err)
+	}
+	return oldValue.GrantedBy, nil
+}
+
+// ClearGrantedBy clears the value of the "granted_by" field.
+func (m *TemporaryCreditGrantMutation) ClearGrantedBy() {
+	m.granted_by_user = nil
+	m.clearedFields[temporarycreditgrant.FieldGrantedBy] = struct{}{}
+}
+
+// GrantedByCleared returns if the "granted_by" field was cleared in this mutation.
+func (m *TemporaryCreditGrantMutation) GrantedByCleared() bool {
+	_, ok := m.clearedFields[temporarycreditgrant.FieldGrantedBy]
+	return ok
+}
+
+// ResetGrantedBy resets all changes to the "granted_by" field.
+func (m *TemporaryCreditGrantMutation) ResetGrantedBy() {
+	m.granted_by_user = nil
+	delete(m.clearedFields, temporarycreditgrant.FieldGrantedBy)
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *TemporaryCreditGrantMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[temporarycreditgrant.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *TemporaryCreditGrantMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *TemporaryCreditGrantMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *TemporaryCreditGrantMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// ClearCheckin clears the "checkin" edge to the DailyCheckin entity.
+func (m *TemporaryCreditGrantMutation) ClearCheckin() {
+	m.clearedcheckin = true
+	m.clearedFields[temporarycreditgrant.FieldCheckinID] = struct{}{}
+}
+
+// CheckinCleared reports if the "checkin" edge to the DailyCheckin entity was cleared.
+func (m *TemporaryCreditGrantMutation) CheckinCleared() bool {
+	return m.CheckinIDCleared() || m.clearedcheckin
+}
+
+// CheckinIDs returns the "checkin" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// CheckinID instead. It exists only for internal usage by the builders.
+func (m *TemporaryCreditGrantMutation) CheckinIDs() (ids []int64) {
+	if id := m.checkin; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetCheckin resets all changes to the "checkin" edge.
+func (m *TemporaryCreditGrantMutation) ResetCheckin() {
+	m.checkin = nil
+	m.clearedcheckin = false
+}
+
+// SetGrantedByUserID sets the "granted_by_user" edge to the User entity by id.
+func (m *TemporaryCreditGrantMutation) SetGrantedByUserID(id int64) {
+	m.granted_by_user = &id
+}
+
+// ClearGrantedByUser clears the "granted_by_user" edge to the User entity.
+func (m *TemporaryCreditGrantMutation) ClearGrantedByUser() {
+	m.clearedgranted_by_user = true
+	m.clearedFields[temporarycreditgrant.FieldGrantedBy] = struct{}{}
+}
+
+// GrantedByUserCleared reports if the "granted_by_user" edge to the User entity was cleared.
+func (m *TemporaryCreditGrantMutation) GrantedByUserCleared() bool {
+	return m.GrantedByCleared() || m.clearedgranted_by_user
+}
+
+// GrantedByUserID returns the "granted_by_user" edge ID in the mutation.
+func (m *TemporaryCreditGrantMutation) GrantedByUserID() (id int64, exists bool) {
+	if m.granted_by_user != nil {
+		return *m.granted_by_user, true
+	}
+	return
+}
+
+// GrantedByUserIDs returns the "granted_by_user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GrantedByUserID instead. It exists only for internal usage by the builders.
+func (m *TemporaryCreditGrantMutation) GrantedByUserIDs() (ids []int64) {
+	if id := m.granted_by_user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGrantedByUser resets all changes to the "granted_by_user" edge.
+func (m *TemporaryCreditGrantMutation) ResetGrantedByUser() {
+	m.granted_by_user = nil
+	m.clearedgranted_by_user = false
+}
+
+// AddConsumptionIDs adds the "consumptions" edge to the TemporaryCreditConsumption entity by ids.
+func (m *TemporaryCreditGrantMutation) AddConsumptionIDs(ids ...int64) {
+	if m.consumptions == nil {
+		m.consumptions = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.consumptions[ids[i]] = struct{}{}
+	}
+}
+
+// ClearConsumptions clears the "consumptions" edge to the TemporaryCreditConsumption entity.
+func (m *TemporaryCreditGrantMutation) ClearConsumptions() {
+	m.clearedconsumptions = true
+}
+
+// ConsumptionsCleared reports if the "consumptions" edge to the TemporaryCreditConsumption entity was cleared.
+func (m *TemporaryCreditGrantMutation) ConsumptionsCleared() bool {
+	return m.clearedconsumptions
+}
+
+// RemoveConsumptionIDs removes the "consumptions" edge to the TemporaryCreditConsumption entity by IDs.
+func (m *TemporaryCreditGrantMutation) RemoveConsumptionIDs(ids ...int64) {
+	if m.removedconsumptions == nil {
+		m.removedconsumptions = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.consumptions, ids[i])
+		m.removedconsumptions[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedConsumptions returns the removed IDs of the "consumptions" edge to the TemporaryCreditConsumption entity.
+func (m *TemporaryCreditGrantMutation) RemovedConsumptionsIDs() (ids []int64) {
+	for id := range m.removedconsumptions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ConsumptionsIDs returns the "consumptions" edge IDs in the mutation.
+func (m *TemporaryCreditGrantMutation) ConsumptionsIDs() (ids []int64) {
+	for id := range m.consumptions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetConsumptions resets all changes to the "consumptions" edge.
+func (m *TemporaryCreditGrantMutation) ResetConsumptions() {
+	m.consumptions = nil
+	m.clearedconsumptions = false
+	m.removedconsumptions = nil
+}
+
+// AddBatchImageCreditHoldAllocationIDs adds the "batch_image_credit_hold_allocations" edge to the BatchImageCreditHoldAllocation entity by ids.
+func (m *TemporaryCreditGrantMutation) AddBatchImageCreditHoldAllocationIDs(ids ...int64) {
+	if m.batch_image_credit_hold_allocations == nil {
+		m.batch_image_credit_hold_allocations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.batch_image_credit_hold_allocations[ids[i]] = struct{}{}
+	}
+}
+
+// ClearBatchImageCreditHoldAllocations clears the "batch_image_credit_hold_allocations" edge to the BatchImageCreditHoldAllocation entity.
+func (m *TemporaryCreditGrantMutation) ClearBatchImageCreditHoldAllocations() {
+	m.clearedbatch_image_credit_hold_allocations = true
+}
+
+// BatchImageCreditHoldAllocationsCleared reports if the "batch_image_credit_hold_allocations" edge to the BatchImageCreditHoldAllocation entity was cleared.
+func (m *TemporaryCreditGrantMutation) BatchImageCreditHoldAllocationsCleared() bool {
+	return m.clearedbatch_image_credit_hold_allocations
+}
+
+// RemoveBatchImageCreditHoldAllocationIDs removes the "batch_image_credit_hold_allocations" edge to the BatchImageCreditHoldAllocation entity by IDs.
+func (m *TemporaryCreditGrantMutation) RemoveBatchImageCreditHoldAllocationIDs(ids ...int64) {
+	if m.removedbatch_image_credit_hold_allocations == nil {
+		m.removedbatch_image_credit_hold_allocations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.batch_image_credit_hold_allocations, ids[i])
+		m.removedbatch_image_credit_hold_allocations[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedBatchImageCreditHoldAllocations returns the removed IDs of the "batch_image_credit_hold_allocations" edge to the BatchImageCreditHoldAllocation entity.
+func (m *TemporaryCreditGrantMutation) RemovedBatchImageCreditHoldAllocationsIDs() (ids []int64) {
+	for id := range m.removedbatch_image_credit_hold_allocations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// BatchImageCreditHoldAllocationsIDs returns the "batch_image_credit_hold_allocations" edge IDs in the mutation.
+func (m *TemporaryCreditGrantMutation) BatchImageCreditHoldAllocationsIDs() (ids []int64) {
+	for id := range m.batch_image_credit_hold_allocations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetBatchImageCreditHoldAllocations resets all changes to the "batch_image_credit_hold_allocations" edge.
+func (m *TemporaryCreditGrantMutation) ResetBatchImageCreditHoldAllocations() {
+	m.batch_image_credit_hold_allocations = nil
+	m.clearedbatch_image_credit_hold_allocations = false
+	m.removedbatch_image_credit_hold_allocations = nil
+}
+
+// Where appends a list predicates to the TemporaryCreditGrantMutation builder.
+func (m *TemporaryCreditGrantMutation) Where(ps ...predicate.TemporaryCreditGrant) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the TemporaryCreditGrantMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TemporaryCreditGrantMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.TemporaryCreditGrant, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *TemporaryCreditGrantMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TemporaryCreditGrantMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (TemporaryCreditGrant).
+func (m *TemporaryCreditGrantMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *TemporaryCreditGrantMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.created_at != nil {
+		fields = append(fields, temporarycreditgrant.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, temporarycreditgrant.FieldUpdatedAt)
+	}
+	if m.user != nil {
+		fields = append(fields, temporarycreditgrant.FieldUserID)
+	}
+	if m.source != nil {
+		fields = append(fields, temporarycreditgrant.FieldSource)
+	}
+	if m.checkin != nil {
+		fields = append(fields, temporarycreditgrant.FieldCheckinID)
+	}
+	if m.amount != nil {
+		fields = append(fields, temporarycreditgrant.FieldAmount)
+	}
+	if m.remaining_amount != nil {
+		fields = append(fields, temporarycreditgrant.FieldRemainingAmount)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, temporarycreditgrant.FieldExpiresAt)
+	}
+	if m.notes != nil {
+		fields = append(fields, temporarycreditgrant.FieldNotes)
+	}
+	if m.granted_by_user != nil {
+		fields = append(fields, temporarycreditgrant.FieldGrantedBy)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *TemporaryCreditGrantMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case temporarycreditgrant.FieldCreatedAt:
+		return m.CreatedAt()
+	case temporarycreditgrant.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case temporarycreditgrant.FieldUserID:
+		return m.UserID()
+	case temporarycreditgrant.FieldSource:
+		return m.Source()
+	case temporarycreditgrant.FieldCheckinID:
+		return m.CheckinID()
+	case temporarycreditgrant.FieldAmount:
+		return m.Amount()
+	case temporarycreditgrant.FieldRemainingAmount:
+		return m.RemainingAmount()
+	case temporarycreditgrant.FieldExpiresAt:
+		return m.ExpiresAt()
+	case temporarycreditgrant.FieldNotes:
+		return m.Notes()
+	case temporarycreditgrant.FieldGrantedBy:
+		return m.GrantedBy()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *TemporaryCreditGrantMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case temporarycreditgrant.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case temporarycreditgrant.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case temporarycreditgrant.FieldUserID:
+		return m.OldUserID(ctx)
+	case temporarycreditgrant.FieldSource:
+		return m.OldSource(ctx)
+	case temporarycreditgrant.FieldCheckinID:
+		return m.OldCheckinID(ctx)
+	case temporarycreditgrant.FieldAmount:
+		return m.OldAmount(ctx)
+	case temporarycreditgrant.FieldRemainingAmount:
+		return m.OldRemainingAmount(ctx)
+	case temporarycreditgrant.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case temporarycreditgrant.FieldNotes:
+		return m.OldNotes(ctx)
+	case temporarycreditgrant.FieldGrantedBy:
+		return m.OldGrantedBy(ctx)
+	}
+	return nil, fmt.Errorf("unknown TemporaryCreditGrant field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TemporaryCreditGrantMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case temporarycreditgrant.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case temporarycreditgrant.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case temporarycreditgrant.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case temporarycreditgrant.FieldSource:
+		v, ok := value.(temporarycreditgrant.Source)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSource(v)
+		return nil
+	case temporarycreditgrant.FieldCheckinID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCheckinID(v)
+		return nil
+	case temporarycreditgrant.FieldAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAmount(v)
+		return nil
+	case temporarycreditgrant.FieldRemainingAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRemainingAmount(v)
+		return nil
+	case temporarycreditgrant.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case temporarycreditgrant.FieldNotes:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNotes(v)
+		return nil
+	case temporarycreditgrant.FieldGrantedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantedBy(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditGrant field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *TemporaryCreditGrantMutation) AddedFields() []string {
+	var fields []string
+	if m.addamount != nil {
+		fields = append(fields, temporarycreditgrant.FieldAmount)
+	}
+	if m.addremaining_amount != nil {
+		fields = append(fields, temporarycreditgrant.FieldRemainingAmount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *TemporaryCreditGrantMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case temporarycreditgrant.FieldAmount:
+		return m.AddedAmount()
+	case temporarycreditgrant.FieldRemainingAmount:
+		return m.AddedRemainingAmount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TemporaryCreditGrantMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case temporarycreditgrant.FieldAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAmount(v)
+		return nil
+	case temporarycreditgrant.FieldRemainingAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRemainingAmount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditGrant numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *TemporaryCreditGrantMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(temporarycreditgrant.FieldCheckinID) {
+		fields = append(fields, temporarycreditgrant.FieldCheckinID)
+	}
+	if m.FieldCleared(temporarycreditgrant.FieldGrantedBy) {
+		fields = append(fields, temporarycreditgrant.FieldGrantedBy)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *TemporaryCreditGrantMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *TemporaryCreditGrantMutation) ClearField(name string) error {
+	switch name {
+	case temporarycreditgrant.FieldCheckinID:
+		m.ClearCheckinID()
+		return nil
+	case temporarycreditgrant.FieldGrantedBy:
+		m.ClearGrantedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditGrant nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *TemporaryCreditGrantMutation) ResetField(name string) error {
+	switch name {
+	case temporarycreditgrant.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case temporarycreditgrant.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case temporarycreditgrant.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case temporarycreditgrant.FieldSource:
+		m.ResetSource()
+		return nil
+	case temporarycreditgrant.FieldCheckinID:
+		m.ResetCheckinID()
+		return nil
+	case temporarycreditgrant.FieldAmount:
+		m.ResetAmount()
+		return nil
+	case temporarycreditgrant.FieldRemainingAmount:
+		m.ResetRemainingAmount()
+		return nil
+	case temporarycreditgrant.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case temporarycreditgrant.FieldNotes:
+		m.ResetNotes()
+		return nil
+	case temporarycreditgrant.FieldGrantedBy:
+		m.ResetGrantedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditGrant field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *TemporaryCreditGrantMutation) AddedEdges() []string {
+	edges := make([]string, 0, 5)
+	if m.user != nil {
+		edges = append(edges, temporarycreditgrant.EdgeUser)
+	}
+	if m.checkin != nil {
+		edges = append(edges, temporarycreditgrant.EdgeCheckin)
+	}
+	if m.granted_by_user != nil {
+		edges = append(edges, temporarycreditgrant.EdgeGrantedByUser)
+	}
+	if m.consumptions != nil {
+		edges = append(edges, temporarycreditgrant.EdgeConsumptions)
+	}
+	if m.batch_image_credit_hold_allocations != nil {
+		edges = append(edges, temporarycreditgrant.EdgeBatchImageCreditHoldAllocations)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *TemporaryCreditGrantMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case temporarycreditgrant.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	case temporarycreditgrant.EdgeCheckin:
+		if id := m.checkin; id != nil {
+			return []ent.Value{*id}
+		}
+	case temporarycreditgrant.EdgeGrantedByUser:
+		if id := m.granted_by_user; id != nil {
+			return []ent.Value{*id}
+		}
+	case temporarycreditgrant.EdgeConsumptions:
+		ids := make([]ent.Value, 0, len(m.consumptions))
+		for id := range m.consumptions {
+			ids = append(ids, id)
+		}
+		return ids
+	case temporarycreditgrant.EdgeBatchImageCreditHoldAllocations:
+		ids := make([]ent.Value, 0, len(m.batch_image_credit_hold_allocations))
+		for id := range m.batch_image_credit_hold_allocations {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *TemporaryCreditGrantMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 5)
+	if m.removedconsumptions != nil {
+		edges = append(edges, temporarycreditgrant.EdgeConsumptions)
+	}
+	if m.removedbatch_image_credit_hold_allocations != nil {
+		edges = append(edges, temporarycreditgrant.EdgeBatchImageCreditHoldAllocations)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *TemporaryCreditGrantMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case temporarycreditgrant.EdgeConsumptions:
+		ids := make([]ent.Value, 0, len(m.removedconsumptions))
+		for id := range m.removedconsumptions {
+			ids = append(ids, id)
+		}
+		return ids
+	case temporarycreditgrant.EdgeBatchImageCreditHoldAllocations:
+		ids := make([]ent.Value, 0, len(m.removedbatch_image_credit_hold_allocations))
+		for id := range m.removedbatch_image_credit_hold_allocations {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *TemporaryCreditGrantMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 5)
+	if m.cleareduser {
+		edges = append(edges, temporarycreditgrant.EdgeUser)
+	}
+	if m.clearedcheckin {
+		edges = append(edges, temporarycreditgrant.EdgeCheckin)
+	}
+	if m.clearedgranted_by_user {
+		edges = append(edges, temporarycreditgrant.EdgeGrantedByUser)
+	}
+	if m.clearedconsumptions {
+		edges = append(edges, temporarycreditgrant.EdgeConsumptions)
+	}
+	if m.clearedbatch_image_credit_hold_allocations {
+		edges = append(edges, temporarycreditgrant.EdgeBatchImageCreditHoldAllocations)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *TemporaryCreditGrantMutation) EdgeCleared(name string) bool {
+	switch name {
+	case temporarycreditgrant.EdgeUser:
+		return m.cleareduser
+	case temporarycreditgrant.EdgeCheckin:
+		return m.clearedcheckin
+	case temporarycreditgrant.EdgeGrantedByUser:
+		return m.clearedgranted_by_user
+	case temporarycreditgrant.EdgeConsumptions:
+		return m.clearedconsumptions
+	case temporarycreditgrant.EdgeBatchImageCreditHoldAllocations:
+		return m.clearedbatch_image_credit_hold_allocations
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *TemporaryCreditGrantMutation) ClearEdge(name string) error {
+	switch name {
+	case temporarycreditgrant.EdgeUser:
+		m.ClearUser()
+		return nil
+	case temporarycreditgrant.EdgeCheckin:
+		m.ClearCheckin()
+		return nil
+	case temporarycreditgrant.EdgeGrantedByUser:
+		m.ClearGrantedByUser()
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditGrant unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *TemporaryCreditGrantMutation) ResetEdge(name string) error {
+	switch name {
+	case temporarycreditgrant.EdgeUser:
+		m.ResetUser()
+		return nil
+	case temporarycreditgrant.EdgeCheckin:
+		m.ResetCheckin()
+		return nil
+	case temporarycreditgrant.EdgeGrantedByUser:
+		m.ResetGrantedByUser()
+		return nil
+	case temporarycreditgrant.EdgeConsumptions:
+		m.ResetConsumptions()
+		return nil
+	case temporarycreditgrant.EdgeBatchImageCreditHoldAllocations:
+		m.ResetBatchImageCreditHoldAllocations()
+		return nil
+	}
+	return fmt.Errorf("unknown TemporaryCreditGrant edge %s", name)
+}
+
 // UsageCleanupTaskMutation represents an operation that mutates the UsageCleanupTask nodes in the graph.
 type UsageCleanupTaskMutation struct {
 	config
@@ -41890,84 +49051,87 @@ func (m *UsageCleanupTaskMutation) ResetEdge(name string) error {
 // UsageLogMutation represents an operation that mutates the UsageLog nodes in the graph.
 type UsageLogMutation struct {
 	config
-	op                           Op
-	typ                          string
-	id                           *int64
-	request_id                   *string
-	model                        *string
-	requested_model              *string
-	upstream_model               *string
-	channel_id                   *int64
-	addchannel_id                *int64
-	model_mapping_chain          *string
-	billing_tier                 *string
-	billing_mode                 *string
-	input_tokens                 *int
-	addinput_tokens              *int
-	output_tokens                *int
-	addoutput_tokens             *int
-	cache_creation_tokens        *int
-	addcache_creation_tokens     *int
-	cache_read_tokens            *int
-	addcache_read_tokens         *int
-	cache_creation_5m_tokens     *int
-	addcache_creation_5m_tokens  *int
-	cache_creation_1h_tokens     *int
-	addcache_creation_1h_tokens  *int
-	input_cost                   *float64
-	addinput_cost                *float64
-	output_cost                  *float64
-	addoutput_cost               *float64
-	cache_creation_cost          *float64
-	addcache_creation_cost       *float64
-	cache_read_cost              *float64
-	addcache_read_cost           *float64
-	total_cost                   *float64
-	addtotal_cost                *float64
-	actual_cost                  *float64
-	addactual_cost               *float64
-	rate_multiplier              *float64
-	addrate_multiplier           *float64
-	long_context_billing_applied *bool
-	account_rate_multiplier      *float64
-	addaccount_rate_multiplier   *float64
-	billing_type                 *int8
-	addbilling_type              *int8
-	stream                       *bool
-	duration_ms                  *int
-	addduration_ms               *int
-	first_token_ms               *int
-	addfirst_token_ms            *int
-	user_agent                   *string
-	ip_address                   *string
-	image_count                  *int
-	addimage_count               *int
-	image_size                   *string
-	image_input_size             *string
-	image_output_size            *string
-	image_size_source            *string
-	image_size_breakdown         *map[string]int
-	video_count                  *int
-	addvideo_count               *int
-	video_resolution             *string
-	video_duration_seconds       *int
-	addvideo_duration_seconds    *int
-	cache_ttl_overridden         *bool
-	created_at                   *time.Time
-	clearedFields                map[string]struct{}
-	user                         *int64
-	cleareduser                  bool
-	api_key                      *int64
-	clearedapi_key               bool
-	account                      *int64
-	clearedaccount               bool
-	group                        *int64
-	clearedgroup                 bool
-	subscription                 *int64
-	clearedsubscription          bool
-	done                         bool
-	oldValue                     func(context.Context) (*UsageLog, error)
-	predicates                   []predicate.UsageLog
+	op                                   Op
+	typ                                  string
+	id                                   *int64
+	request_id                           *string
+	model                                *string
+	requested_model                      *string
+	upstream_model                       *string
+	channel_id                           *int64
+	addchannel_id                        *int64
+	model_mapping_chain                  *string
+	billing_tier                         *string
+	billing_mode                         *string
+	input_tokens                         *int
+	addinput_tokens                      *int
+	output_tokens                        *int
+	addoutput_tokens                     *int
+	cache_creation_tokens                *int
+	addcache_creation_tokens             *int
+	cache_read_tokens                    *int
+	addcache_read_tokens                 *int
+	cache_creation_5m_tokens             *int
+	addcache_creation_5m_tokens          *int
+	cache_creation_1h_tokens             *int
+	addcache_creation_1h_tokens          *int
+	input_cost                           *float64
+	addinput_cost                        *float64
+	output_cost                          *float64
+	addoutput_cost                       *float64
+	cache_creation_cost                  *float64
+	addcache_creation_cost               *float64
+	cache_read_cost                      *float64
+	addcache_read_cost                   *float64
+	total_cost                           *float64
+	addtotal_cost                        *float64
+	actual_cost                          *float64
+	addactual_cost                       *float64
+	rate_multiplier                      *float64
+	addrate_multiplier                   *float64
+	long_context_billing_applied         *bool
+	account_rate_multiplier              *float64
+	addaccount_rate_multiplier           *float64
+	billing_type                         *int8
+	addbilling_type                      *int8
+	stream                               *bool
+	duration_ms                          *int
+	addduration_ms                       *int
+	first_token_ms                       *int
+	addfirst_token_ms                    *int
+	user_agent                           *string
+	ip_address                           *string
+	image_count                          *int
+	addimage_count                       *int
+	image_size                           *string
+	image_input_size                     *string
+	image_output_size                    *string
+	image_size_source                    *string
+	image_size_breakdown                 *map[string]int
+	video_count                          *int
+	addvideo_count                       *int
+	video_resolution                     *string
+	video_duration_seconds               *int
+	addvideo_duration_seconds            *int
+	cache_ttl_overridden                 *bool
+	created_at                           *time.Time
+	clearedFields                        map[string]struct{}
+	user                                 *int64
+	cleareduser                          bool
+	api_key                              *int64
+	clearedapi_key                       bool
+	account                              *int64
+	clearedaccount                       bool
+	group                                *int64
+	clearedgroup                         bool
+	subscription                         *int64
+	clearedsubscription                  bool
+	temporary_credit_consumptions        map[int64]struct{}
+	removedtemporary_credit_consumptions map[int64]struct{}
+	clearedtemporary_credit_consumptions bool
+	done                                 bool
+	oldValue                             func(context.Context) (*UsageLog, error)
+	predicates                           []predicate.UsageLog
 }
 
 var _ ent.Mutation = (*UsageLogMutation)(nil)
@@ -44508,6 +51672,60 @@ func (m *UsageLogMutation) ResetSubscription() {
 	m.clearedsubscription = false
 }
 
+// AddTemporaryCreditConsumptionIDs adds the "temporary_credit_consumptions" edge to the TemporaryCreditConsumption entity by ids.
+func (m *UsageLogMutation) AddTemporaryCreditConsumptionIDs(ids ...int64) {
+	if m.temporary_credit_consumptions == nil {
+		m.temporary_credit_consumptions = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.temporary_credit_consumptions[ids[i]] = struct{}{}
+	}
+}
+
+// ClearTemporaryCreditConsumptions clears the "temporary_credit_consumptions" edge to the TemporaryCreditConsumption entity.
+func (m *UsageLogMutation) ClearTemporaryCreditConsumptions() {
+	m.clearedtemporary_credit_consumptions = true
+}
+
+// TemporaryCreditConsumptionsCleared reports if the "temporary_credit_consumptions" edge to the TemporaryCreditConsumption entity was cleared.
+func (m *UsageLogMutation) TemporaryCreditConsumptionsCleared() bool {
+	return m.clearedtemporary_credit_consumptions
+}
+
+// RemoveTemporaryCreditConsumptionIDs removes the "temporary_credit_consumptions" edge to the TemporaryCreditConsumption entity by IDs.
+func (m *UsageLogMutation) RemoveTemporaryCreditConsumptionIDs(ids ...int64) {
+	if m.removedtemporary_credit_consumptions == nil {
+		m.removedtemporary_credit_consumptions = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.temporary_credit_consumptions, ids[i])
+		m.removedtemporary_credit_consumptions[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedTemporaryCreditConsumptions returns the removed IDs of the "temporary_credit_consumptions" edge to the TemporaryCreditConsumption entity.
+func (m *UsageLogMutation) RemovedTemporaryCreditConsumptionsIDs() (ids []int64) {
+	for id := range m.removedtemporary_credit_consumptions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// TemporaryCreditConsumptionsIDs returns the "temporary_credit_consumptions" edge IDs in the mutation.
+func (m *UsageLogMutation) TemporaryCreditConsumptionsIDs() (ids []int64) {
+	for id := range m.temporary_credit_consumptions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetTemporaryCreditConsumptions resets all changes to the "temporary_credit_consumptions" edge.
+func (m *UsageLogMutation) ResetTemporaryCreditConsumptions() {
+	m.temporary_credit_consumptions = nil
+	m.clearedtemporary_credit_consumptions = false
+	m.removedtemporary_credit_consumptions = nil
+}
+
 // Where appends a list predicates to the UsageLogMutation builder.
 func (m *UsageLogMutation) Where(ps ...predicate.UsageLog) {
 	m.predicates = append(m.predicates, ps...)
@@ -45767,7 +52985,7 @@ func (m *UsageLogMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UsageLogMutation) AddedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.user != nil {
 		edges = append(edges, usagelog.EdgeUser)
 	}
@@ -45782,6 +53000,9 @@ func (m *UsageLogMutation) AddedEdges() []string {
 	}
 	if m.subscription != nil {
 		edges = append(edges, usagelog.EdgeSubscription)
+	}
+	if m.temporary_credit_consumptions != nil {
+		edges = append(edges, usagelog.EdgeTemporaryCreditConsumptions)
 	}
 	return edges
 }
@@ -45810,25 +53031,42 @@ func (m *UsageLogMutation) AddedIDs(name string) []ent.Value {
 		if id := m.subscription; id != nil {
 			return []ent.Value{*id}
 		}
+	case usagelog.EdgeTemporaryCreditConsumptions:
+		ids := make([]ent.Value, 0, len(m.temporary_credit_consumptions))
+		for id := range m.temporary_credit_consumptions {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UsageLogMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
+	if m.removedtemporary_credit_consumptions != nil {
+		edges = append(edges, usagelog.EdgeTemporaryCreditConsumptions)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *UsageLogMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case usagelog.EdgeTemporaryCreditConsumptions:
+		ids := make([]ent.Value, 0, len(m.removedtemporary_credit_consumptions))
+		for id := range m.removedtemporary_credit_consumptions {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UsageLogMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.cleareduser {
 		edges = append(edges, usagelog.EdgeUser)
 	}
@@ -45843,6 +53081,9 @@ func (m *UsageLogMutation) ClearedEdges() []string {
 	}
 	if m.clearedsubscription {
 		edges = append(edges, usagelog.EdgeSubscription)
+	}
+	if m.clearedtemporary_credit_consumptions {
+		edges = append(edges, usagelog.EdgeTemporaryCreditConsumptions)
 	}
 	return edges
 }
@@ -45861,6 +53102,8 @@ func (m *UsageLogMutation) EdgeCleared(name string) bool {
 		return m.clearedgroup
 	case usagelog.EdgeSubscription:
 		return m.clearedsubscription
+	case usagelog.EdgeTemporaryCreditConsumptions:
+		return m.clearedtemporary_credit_consumptions
 	}
 	return false
 }
@@ -45907,6 +53150,9 @@ func (m *UsageLogMutation) ResetEdge(name string) error {
 	case usagelog.EdgeSubscription:
 		m.ResetSubscription()
 		return nil
+	case usagelog.EdgeTemporaryCreditConsumptions:
+		m.ResetTemporaryCreditConsumptions()
+		return nil
 	}
 	return fmt.Errorf("unknown UsageLog edge %s", name)
 }
@@ -45914,82 +53160,94 @@ func (m *UsageLogMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                            Op
-	typ                           string
-	id                            *int64
-	created_at                    *time.Time
-	updated_at                    *time.Time
-	deleted_at                    *time.Time
-	email                         *string
-	password_hash                 *string
-	role                          *string
-	balance                       *float64
-	addbalance                    *float64
-	frozen_balance                *float64
-	addfrozen_balance             *float64
-	concurrency                   *int
-	addconcurrency                *int
-	status                        *string
-	username                      *string
-	notes                         *string
-	totp_secret_encrypted         *string
-	totp_enabled                  *bool
-	totp_enabled_at               *time.Time
-	signup_source                 *string
-	last_login_at                 *time.Time
-	last_active_at                *time.Time
-	balance_notify_enabled        *bool
-	balance_notify_threshold_type *string
-	balance_notify_threshold      *float64
-	addbalance_notify_threshold   *float64
-	balance_notify_extra_emails   *string
-	total_recharged               *float64
-	addtotal_recharged            *float64
-	rpm_limit                     *int
-	addrpm_limit                  *int
-	clearedFields                 map[string]struct{}
-	api_keys                      map[int64]struct{}
-	removedapi_keys               map[int64]struct{}
-	clearedapi_keys               bool
-	redeem_codes                  map[int64]struct{}
-	removedredeem_codes           map[int64]struct{}
-	clearedredeem_codes           bool
-	subscriptions                 map[int64]struct{}
-	removedsubscriptions          map[int64]struct{}
-	clearedsubscriptions          bool
-	assigned_subscriptions        map[int64]struct{}
-	removedassigned_subscriptions map[int64]struct{}
-	clearedassigned_subscriptions bool
-	announcement_reads            map[int64]struct{}
-	removedannouncement_reads     map[int64]struct{}
-	clearedannouncement_reads     bool
-	allowed_groups                map[int64]struct{}
-	removedallowed_groups         map[int64]struct{}
-	clearedallowed_groups         bool
-	usage_logs                    map[int64]struct{}
-	removedusage_logs             map[int64]struct{}
-	clearedusage_logs             bool
-	attribute_values              map[int64]struct{}
-	removedattribute_values       map[int64]struct{}
-	clearedattribute_values       bool
-	promo_code_usages             map[int64]struct{}
-	removedpromo_code_usages      map[int64]struct{}
-	clearedpromo_code_usages      bool
-	payment_orders                map[int64]struct{}
-	removedpayment_orders         map[int64]struct{}
-	clearedpayment_orders         bool
-	auth_identities               map[int64]struct{}
-	removedauth_identities        map[int64]struct{}
-	clearedauth_identities        bool
-	pending_auth_sessions         map[int64]struct{}
-	removedpending_auth_sessions  map[int64]struct{}
-	clearedpending_auth_sessions  bool
-	platform_quotas               map[int64]struct{}
-	removedplatform_quotas        map[int64]struct{}
-	clearedplatform_quotas        bool
-	done                          bool
-	oldValue                      func(context.Context) (*User, error)
-	predicates                    []predicate.User
+	op                                     Op
+	typ                                    string
+	id                                     *int64
+	created_at                             *time.Time
+	updated_at                             *time.Time
+	deleted_at                             *time.Time
+	email                                  *string
+	password_hash                          *string
+	role                                   *string
+	balance                                *float64
+	addbalance                             *float64
+	frozen_balance                         *float64
+	addfrozen_balance                      *float64
+	concurrency                            *int
+	addconcurrency                         *int
+	status                                 *string
+	username                               *string
+	notes                                  *string
+	totp_secret_encrypted                  *string
+	totp_enabled                           *bool
+	totp_enabled_at                        *time.Time
+	signup_source                          *string
+	last_login_at                          *time.Time
+	last_active_at                         *time.Time
+	balance_notify_enabled                 *bool
+	balance_notify_threshold_type          *string
+	balance_notify_threshold               *float64
+	addbalance_notify_threshold            *float64
+	balance_notify_extra_emails            *string
+	total_recharged                        *float64
+	addtotal_recharged                     *float64
+	rpm_limit                              *int
+	addrpm_limit                           *int
+	clearedFields                          map[string]struct{}
+	api_keys                               map[int64]struct{}
+	removedapi_keys                        map[int64]struct{}
+	clearedapi_keys                        bool
+	redeem_codes                           map[int64]struct{}
+	removedredeem_codes                    map[int64]struct{}
+	clearedredeem_codes                    bool
+	subscriptions                          map[int64]struct{}
+	removedsubscriptions                   map[int64]struct{}
+	clearedsubscriptions                   bool
+	assigned_subscriptions                 map[int64]struct{}
+	removedassigned_subscriptions          map[int64]struct{}
+	clearedassigned_subscriptions          bool
+	announcement_reads                     map[int64]struct{}
+	removedannouncement_reads              map[int64]struct{}
+	clearedannouncement_reads              bool
+	allowed_groups                         map[int64]struct{}
+	removedallowed_groups                  map[int64]struct{}
+	clearedallowed_groups                  bool
+	usage_logs                             map[int64]struct{}
+	removedusage_logs                      map[int64]struct{}
+	clearedusage_logs                      bool
+	attribute_values                       map[int64]struct{}
+	removedattribute_values                map[int64]struct{}
+	clearedattribute_values                bool
+	promo_code_usages                      map[int64]struct{}
+	removedpromo_code_usages               map[int64]struct{}
+	clearedpromo_code_usages               bool
+	payment_orders                         map[int64]struct{}
+	removedpayment_orders                  map[int64]struct{}
+	clearedpayment_orders                  bool
+	auth_identities                        map[int64]struct{}
+	removedauth_identities                 map[int64]struct{}
+	clearedauth_identities                 bool
+	pending_auth_sessions                  map[int64]struct{}
+	removedpending_auth_sessions           map[int64]struct{}
+	clearedpending_auth_sessions           bool
+	platform_quotas                        map[int64]struct{}
+	removedplatform_quotas                 map[int64]struct{}
+	clearedplatform_quotas                 bool
+	daily_checkins                         map[int64]struct{}
+	removeddaily_checkins                  map[int64]struct{}
+	cleareddaily_checkins                  bool
+	temporary_credit_grants                map[int64]struct{}
+	removedtemporary_credit_grants         map[int64]struct{}
+	clearedtemporary_credit_grants         bool
+	granted_temporary_credit_grants        map[int64]struct{}
+	removedgranted_temporary_credit_grants map[int64]struct{}
+	clearedgranted_temporary_credit_grants bool
+	batch_image_credit_holds               map[int64]struct{}
+	removedbatch_image_credit_holds        map[int64]struct{}
+	clearedbatch_image_credit_holds        bool
+	done                                   bool
+	oldValue                               func(context.Context) (*User, error)
+	predicates                             []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -47855,6 +55113,222 @@ func (m *UserMutation) ResetPlatformQuotas() {
 	m.removedplatform_quotas = nil
 }
 
+// AddDailyCheckinIDs adds the "daily_checkins" edge to the DailyCheckin entity by ids.
+func (m *UserMutation) AddDailyCheckinIDs(ids ...int64) {
+	if m.daily_checkins == nil {
+		m.daily_checkins = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.daily_checkins[ids[i]] = struct{}{}
+	}
+}
+
+// ClearDailyCheckins clears the "daily_checkins" edge to the DailyCheckin entity.
+func (m *UserMutation) ClearDailyCheckins() {
+	m.cleareddaily_checkins = true
+}
+
+// DailyCheckinsCleared reports if the "daily_checkins" edge to the DailyCheckin entity was cleared.
+func (m *UserMutation) DailyCheckinsCleared() bool {
+	return m.cleareddaily_checkins
+}
+
+// RemoveDailyCheckinIDs removes the "daily_checkins" edge to the DailyCheckin entity by IDs.
+func (m *UserMutation) RemoveDailyCheckinIDs(ids ...int64) {
+	if m.removeddaily_checkins == nil {
+		m.removeddaily_checkins = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.daily_checkins, ids[i])
+		m.removeddaily_checkins[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedDailyCheckins returns the removed IDs of the "daily_checkins" edge to the DailyCheckin entity.
+func (m *UserMutation) RemovedDailyCheckinsIDs() (ids []int64) {
+	for id := range m.removeddaily_checkins {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// DailyCheckinsIDs returns the "daily_checkins" edge IDs in the mutation.
+func (m *UserMutation) DailyCheckinsIDs() (ids []int64) {
+	for id := range m.daily_checkins {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetDailyCheckins resets all changes to the "daily_checkins" edge.
+func (m *UserMutation) ResetDailyCheckins() {
+	m.daily_checkins = nil
+	m.cleareddaily_checkins = false
+	m.removeddaily_checkins = nil
+}
+
+// AddTemporaryCreditGrantIDs adds the "temporary_credit_grants" edge to the TemporaryCreditGrant entity by ids.
+func (m *UserMutation) AddTemporaryCreditGrantIDs(ids ...int64) {
+	if m.temporary_credit_grants == nil {
+		m.temporary_credit_grants = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.temporary_credit_grants[ids[i]] = struct{}{}
+	}
+}
+
+// ClearTemporaryCreditGrants clears the "temporary_credit_grants" edge to the TemporaryCreditGrant entity.
+func (m *UserMutation) ClearTemporaryCreditGrants() {
+	m.clearedtemporary_credit_grants = true
+}
+
+// TemporaryCreditGrantsCleared reports if the "temporary_credit_grants" edge to the TemporaryCreditGrant entity was cleared.
+func (m *UserMutation) TemporaryCreditGrantsCleared() bool {
+	return m.clearedtemporary_credit_grants
+}
+
+// RemoveTemporaryCreditGrantIDs removes the "temporary_credit_grants" edge to the TemporaryCreditGrant entity by IDs.
+func (m *UserMutation) RemoveTemporaryCreditGrantIDs(ids ...int64) {
+	if m.removedtemporary_credit_grants == nil {
+		m.removedtemporary_credit_grants = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.temporary_credit_grants, ids[i])
+		m.removedtemporary_credit_grants[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedTemporaryCreditGrants returns the removed IDs of the "temporary_credit_grants" edge to the TemporaryCreditGrant entity.
+func (m *UserMutation) RemovedTemporaryCreditGrantsIDs() (ids []int64) {
+	for id := range m.removedtemporary_credit_grants {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// TemporaryCreditGrantsIDs returns the "temporary_credit_grants" edge IDs in the mutation.
+func (m *UserMutation) TemporaryCreditGrantsIDs() (ids []int64) {
+	for id := range m.temporary_credit_grants {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetTemporaryCreditGrants resets all changes to the "temporary_credit_grants" edge.
+func (m *UserMutation) ResetTemporaryCreditGrants() {
+	m.temporary_credit_grants = nil
+	m.clearedtemporary_credit_grants = false
+	m.removedtemporary_credit_grants = nil
+}
+
+// AddGrantedTemporaryCreditGrantIDs adds the "granted_temporary_credit_grants" edge to the TemporaryCreditGrant entity by ids.
+func (m *UserMutation) AddGrantedTemporaryCreditGrantIDs(ids ...int64) {
+	if m.granted_temporary_credit_grants == nil {
+		m.granted_temporary_credit_grants = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.granted_temporary_credit_grants[ids[i]] = struct{}{}
+	}
+}
+
+// ClearGrantedTemporaryCreditGrants clears the "granted_temporary_credit_grants" edge to the TemporaryCreditGrant entity.
+func (m *UserMutation) ClearGrantedTemporaryCreditGrants() {
+	m.clearedgranted_temporary_credit_grants = true
+}
+
+// GrantedTemporaryCreditGrantsCleared reports if the "granted_temporary_credit_grants" edge to the TemporaryCreditGrant entity was cleared.
+func (m *UserMutation) GrantedTemporaryCreditGrantsCleared() bool {
+	return m.clearedgranted_temporary_credit_grants
+}
+
+// RemoveGrantedTemporaryCreditGrantIDs removes the "granted_temporary_credit_grants" edge to the TemporaryCreditGrant entity by IDs.
+func (m *UserMutation) RemoveGrantedTemporaryCreditGrantIDs(ids ...int64) {
+	if m.removedgranted_temporary_credit_grants == nil {
+		m.removedgranted_temporary_credit_grants = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.granted_temporary_credit_grants, ids[i])
+		m.removedgranted_temporary_credit_grants[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedGrantedTemporaryCreditGrants returns the removed IDs of the "granted_temporary_credit_grants" edge to the TemporaryCreditGrant entity.
+func (m *UserMutation) RemovedGrantedTemporaryCreditGrantsIDs() (ids []int64) {
+	for id := range m.removedgranted_temporary_credit_grants {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// GrantedTemporaryCreditGrantsIDs returns the "granted_temporary_credit_grants" edge IDs in the mutation.
+func (m *UserMutation) GrantedTemporaryCreditGrantsIDs() (ids []int64) {
+	for id := range m.granted_temporary_credit_grants {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetGrantedTemporaryCreditGrants resets all changes to the "granted_temporary_credit_grants" edge.
+func (m *UserMutation) ResetGrantedTemporaryCreditGrants() {
+	m.granted_temporary_credit_grants = nil
+	m.clearedgranted_temporary_credit_grants = false
+	m.removedgranted_temporary_credit_grants = nil
+}
+
+// AddBatchImageCreditHoldIDs adds the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by ids.
+func (m *UserMutation) AddBatchImageCreditHoldIDs(ids ...int64) {
+	if m.batch_image_credit_holds == nil {
+		m.batch_image_credit_holds = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.batch_image_credit_holds[ids[i]] = struct{}{}
+	}
+}
+
+// ClearBatchImageCreditHolds clears the "batch_image_credit_holds" edge to the BatchImageCreditHold entity.
+func (m *UserMutation) ClearBatchImageCreditHolds() {
+	m.clearedbatch_image_credit_holds = true
+}
+
+// BatchImageCreditHoldsCleared reports if the "batch_image_credit_holds" edge to the BatchImageCreditHold entity was cleared.
+func (m *UserMutation) BatchImageCreditHoldsCleared() bool {
+	return m.clearedbatch_image_credit_holds
+}
+
+// RemoveBatchImageCreditHoldIDs removes the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by IDs.
+func (m *UserMutation) RemoveBatchImageCreditHoldIDs(ids ...int64) {
+	if m.removedbatch_image_credit_holds == nil {
+		m.removedbatch_image_credit_holds = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.batch_image_credit_holds, ids[i])
+		m.removedbatch_image_credit_holds[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedBatchImageCreditHolds returns the removed IDs of the "batch_image_credit_holds" edge to the BatchImageCreditHold entity.
+func (m *UserMutation) RemovedBatchImageCreditHoldsIDs() (ids []int64) {
+	for id := range m.removedbatch_image_credit_holds {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// BatchImageCreditHoldsIDs returns the "batch_image_credit_holds" edge IDs in the mutation.
+func (m *UserMutation) BatchImageCreditHoldsIDs() (ids []int64) {
+	for id := range m.batch_image_credit_holds {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetBatchImageCreditHolds resets all changes to the "batch_image_credit_holds" edge.
+func (m *UserMutation) ResetBatchImageCreditHolds() {
+	m.batch_image_credit_holds = nil
+	m.clearedbatch_image_credit_holds = false
+	m.removedbatch_image_credit_holds = nil
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -48493,7 +55967,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 13)
+	edges := make([]string, 0, 17)
 	if m.api_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -48532,6 +56006,18 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.platform_quotas != nil {
 		edges = append(edges, user.EdgePlatformQuotas)
+	}
+	if m.daily_checkins != nil {
+		edges = append(edges, user.EdgeDailyCheckins)
+	}
+	if m.temporary_credit_grants != nil {
+		edges = append(edges, user.EdgeTemporaryCreditGrants)
+	}
+	if m.granted_temporary_credit_grants != nil {
+		edges = append(edges, user.EdgeGrantedTemporaryCreditGrants)
+	}
+	if m.batch_image_credit_holds != nil {
+		edges = append(edges, user.EdgeBatchImageCreditHolds)
 	}
 	return edges
 }
@@ -48618,13 +56104,37 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeDailyCheckins:
+		ids := make([]ent.Value, 0, len(m.daily_checkins))
+		for id := range m.daily_checkins {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeTemporaryCreditGrants:
+		ids := make([]ent.Value, 0, len(m.temporary_credit_grants))
+		for id := range m.temporary_credit_grants {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeGrantedTemporaryCreditGrants:
+		ids := make([]ent.Value, 0, len(m.granted_temporary_credit_grants))
+		for id := range m.granted_temporary_credit_grants {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeBatchImageCreditHolds:
+		ids := make([]ent.Value, 0, len(m.batch_image_credit_holds))
+		for id := range m.batch_image_credit_holds {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 13)
+	edges := make([]string, 0, 17)
 	if m.removedapi_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -48663,6 +56173,18 @@ func (m *UserMutation) RemovedEdges() []string {
 	}
 	if m.removedplatform_quotas != nil {
 		edges = append(edges, user.EdgePlatformQuotas)
+	}
+	if m.removeddaily_checkins != nil {
+		edges = append(edges, user.EdgeDailyCheckins)
+	}
+	if m.removedtemporary_credit_grants != nil {
+		edges = append(edges, user.EdgeTemporaryCreditGrants)
+	}
+	if m.removedgranted_temporary_credit_grants != nil {
+		edges = append(edges, user.EdgeGrantedTemporaryCreditGrants)
+	}
+	if m.removedbatch_image_credit_holds != nil {
+		edges = append(edges, user.EdgeBatchImageCreditHolds)
 	}
 	return edges
 }
@@ -48749,13 +56271,37 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeDailyCheckins:
+		ids := make([]ent.Value, 0, len(m.removeddaily_checkins))
+		for id := range m.removeddaily_checkins {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeTemporaryCreditGrants:
+		ids := make([]ent.Value, 0, len(m.removedtemporary_credit_grants))
+		for id := range m.removedtemporary_credit_grants {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeGrantedTemporaryCreditGrants:
+		ids := make([]ent.Value, 0, len(m.removedgranted_temporary_credit_grants))
+		for id := range m.removedgranted_temporary_credit_grants {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeBatchImageCreditHolds:
+		ids := make([]ent.Value, 0, len(m.removedbatch_image_credit_holds))
+		for id := range m.removedbatch_image_credit_holds {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 13)
+	edges := make([]string, 0, 17)
 	if m.clearedapi_keys {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -48795,6 +56341,18 @@ func (m *UserMutation) ClearedEdges() []string {
 	if m.clearedplatform_quotas {
 		edges = append(edges, user.EdgePlatformQuotas)
 	}
+	if m.cleareddaily_checkins {
+		edges = append(edges, user.EdgeDailyCheckins)
+	}
+	if m.clearedtemporary_credit_grants {
+		edges = append(edges, user.EdgeTemporaryCreditGrants)
+	}
+	if m.clearedgranted_temporary_credit_grants {
+		edges = append(edges, user.EdgeGrantedTemporaryCreditGrants)
+	}
+	if m.clearedbatch_image_credit_holds {
+		edges = append(edges, user.EdgeBatchImageCreditHolds)
+	}
 	return edges
 }
 
@@ -48828,6 +56386,14 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedpending_auth_sessions
 	case user.EdgePlatformQuotas:
 		return m.clearedplatform_quotas
+	case user.EdgeDailyCheckins:
+		return m.cleareddaily_checkins
+	case user.EdgeTemporaryCreditGrants:
+		return m.clearedtemporary_credit_grants
+	case user.EdgeGrantedTemporaryCreditGrants:
+		return m.clearedgranted_temporary_credit_grants
+	case user.EdgeBatchImageCreditHolds:
+		return m.clearedbatch_image_credit_holds
 	}
 	return false
 }
@@ -48882,6 +56448,18 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgePlatformQuotas:
 		m.ResetPlatformQuotas()
+		return nil
+	case user.EdgeDailyCheckins:
+		m.ResetDailyCheckins()
+		return nil
+	case user.EdgeTemporaryCreditGrants:
+		m.ResetTemporaryCreditGrants()
+		return nil
+	case user.EdgeGrantedTemporaryCreditGrants:
+		m.ResetGrantedTemporaryCreditGrants()
+		return nil
+	case user.EdgeBatchImageCreditHolds:
+		m.ResetBatchImageCreditHolds()
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)

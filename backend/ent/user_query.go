@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
@@ -55,6 +56,7 @@ type UserQuery struct {
 	withDailyCheckins                *DailyCheckinQuery
 	withTemporaryCreditGrants        *TemporaryCreditGrantQuery
 	withGrantedTemporaryCreditGrants *TemporaryCreditGrantQuery
+	withBatchImageCreditHolds        *BatchImageCreditHoldQuery
 	withUserAllowedGroups            *UserAllowedGroupQuery
 	modifiers                        []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
@@ -445,6 +447,28 @@ func (_q *UserQuery) QueryGrantedTemporaryCreditGrants() *TemporaryCreditGrantQu
 	return query
 }
 
+// QueryBatchImageCreditHolds chains the current query on the "batch_image_credit_holds" edge.
+func (_q *UserQuery) QueryBatchImageCreditHolds() *BatchImageCreditHoldQuery {
+	query := (&BatchImageCreditHoldClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(batchimagecredithold.Table, batchimagecredithold.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.BatchImageCreditHoldsTable, user.BatchImageCreditHoldsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups chains the current query on the "user_allowed_groups" edge.
 func (_q *UserQuery) QueryUserAllowedGroups() *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: _q.config}).Query()
@@ -675,6 +699,7 @@ func (_q *UserQuery) Clone() *UserQuery {
 		withDailyCheckins:                _q.withDailyCheckins.Clone(),
 		withTemporaryCreditGrants:        _q.withTemporaryCreditGrants.Clone(),
 		withGrantedTemporaryCreditGrants: _q.withGrantedTemporaryCreditGrants.Clone(),
+		withBatchImageCreditHolds:        _q.withBatchImageCreditHolds.Clone(),
 		withUserAllowedGroups:            _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
@@ -858,6 +883,17 @@ func (_q *UserQuery) WithGrantedTemporaryCreditGrants(opts ...func(*TemporaryCre
 	return _q
 }
 
+// WithBatchImageCreditHolds tells the query-builder to eager-load the nodes that are connected to
+// the "batch_image_credit_holds" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithBatchImageCreditHolds(opts ...func(*BatchImageCreditHoldQuery)) *UserQuery {
+	query := (&BatchImageCreditHoldClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withBatchImageCreditHolds = query
+	return _q
+}
+
 // WithUserAllowedGroups tells the query-builder to eager-load the nodes that are connected to
 // the "user_allowed_groups" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithUserAllowedGroups(opts ...func(*UserAllowedGroupQuery)) *UserQuery {
@@ -947,7 +983,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [17]bool{
+		loadedTypes = [18]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
@@ -964,6 +1000,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			_q.withDailyCheckins != nil,
 			_q.withTemporaryCreditGrants != nil,
 			_q.withGrantedTemporaryCreditGrants != nil,
+			_q.withBatchImageCreditHolds != nil,
 			_q.withUserAllowedGroups != nil,
 		}
 	)
@@ -1104,6 +1141,15 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			func(n *User) { n.Edges.GrantedTemporaryCreditGrants = []*TemporaryCreditGrant{} },
 			func(n *User, e *TemporaryCreditGrant) {
 				n.Edges.GrantedTemporaryCreditGrants = append(n.Edges.GrantedTemporaryCreditGrants, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withBatchImageCreditHolds; query != nil {
+		if err := _q.loadBatchImageCreditHolds(ctx, query, nodes,
+			func(n *User) { n.Edges.BatchImageCreditHolds = []*BatchImageCreditHold{} },
+			func(n *User, e *BatchImageCreditHold) {
+				n.Edges.BatchImageCreditHolds = append(n.Edges.BatchImageCreditHolds, e)
 			}); err != nil {
 			return nil, err
 		}
@@ -1636,6 +1682,36 @@ func (_q *UserQuery) loadGrantedTemporaryCreditGrants(ctx context.Context, query
 		node, ok := nodeids[*fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "granted_by" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadBatchImageCreditHolds(ctx context.Context, query *BatchImageCreditHoldQuery, nodes []*User, init func(*User), assign func(*User, *BatchImageCreditHold)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(batchimagecredithold.FieldUserID)
+	}
+	query.Where(predicate.BatchImageCreditHold(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.BatchImageCreditHoldsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

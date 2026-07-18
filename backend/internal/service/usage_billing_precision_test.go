@@ -1,6 +1,10 @@
 package service
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"math"
 	"reflect"
 	"testing"
 
@@ -61,4 +65,51 @@ func TestBuildUsageBillingCommandQuantizesLegacyCostBeforeLedger(t *testing.T) {
 
 	require.NotNil(t, command)
 	require.Equal(t, "1.23456789", formatLedgerAmount(command.BalanceCost))
+}
+
+func TestBatchImageBalanceHoldCommandNormalizesAmountsToEightDecimals(t *testing.T) {
+	command := BatchImageBalanceHoldCommand{
+		RequestID:    " batch_image_hold:batch-precision ",
+		UserID:       1,
+		APIKeyID:     2,
+		BatchID:      " batch-precision ",
+		HoldAmount:   1.123456789,
+		ActualAmount: 0.876543215,
+	}
+
+	err := command.Normalize()
+
+	require.NoError(t, err)
+	require.Equal(t, "batch_image_hold:batch-precision", command.RequestID)
+	require.Equal(t, "batch-precision", command.BatchID)
+	require.Equal(t, "1.12345679", formatLedgerAmount(command.HoldAmount))
+	require.Equal(t, "0.87654322", formatLedgerAmount(command.ActualAmount))
+	require.NotEmpty(t, command.RequestFingerprint)
+}
+
+func TestBatchImageBalanceHoldCommandRejectsInvalidAmounts(t *testing.T) {
+	for _, amount := range []float64{-0.000000001, -0.00000001, math.NaN(), math.Inf(1), math.Inf(-1), maxLedgerAmount} {
+		command := BatchImageBalanceHoldCommand{HoldAmount: amount}
+		err := command.Normalize()
+		require.ErrorIs(t, err, ErrUsageBillingAmountInvalid, "amount=%v", amount)
+	}
+}
+
+func TestBatchImageBalanceHoldFingerprintAcceptsLegacyTenDecimalRetry(t *testing.T) {
+	command := BatchImageBalanceHoldCommand{
+		UserID:             11,
+		APIKeyID:           22,
+		BatchID:            "batch-legacy-fingerprint",
+		HoldAmount:         1.234567891,
+		ActualAmount:       0.765432109,
+		RequestPayloadHash: "payload",
+	}
+	legacyRaw := fmt.Sprintf("%d|%d|%s|%0.10f|%0.10f|%s", command.UserID, command.APIKeyID, command.BatchID, command.HoldAmount, command.ActualAmount, command.RequestPayloadHash)
+	legacySum := sha256.Sum256([]byte(legacyRaw))
+	legacyFingerprint := hex.EncodeToString(legacySum[:])
+	require.NoError(t, command.Normalize())
+
+	require.True(t, MatchesBatchImageBalanceHoldFingerprint(command.RequestFingerprint, &command))
+	require.True(t, MatchesBatchImageBalanceHoldFingerprint(legacyFingerprint, &command))
+	require.False(t, MatchesBatchImageBalanceHoldFingerprint("different", &command))
 }

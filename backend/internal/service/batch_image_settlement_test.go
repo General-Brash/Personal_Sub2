@@ -335,12 +335,24 @@ func TestBatchImageSettlementService_InvalidCountsExhaustsAndReleases(t *testing
 	require.Equal(t, requestHash, billing.releases[0].RequestPayloadHash)
 }
 
-func TestReleaseBatchImageBalanceHold_TreatsFingerprintConflictAsReleased(t *testing.T) {
+func TestReleaseBatchImageBalanceHold_DoesNotTreatTerminalConflictAsReleased(t *testing.T) {
 	job := testSettlingBatchImageJob("imgbatch_release_conflict")
-	// 历史版本用 manifestHash 释放过一次：同一 request id 再以 RequestHash
-	// 释放会命中指纹冲突。资金已归还，必须视为幂等成功而非毒消息。
 	billing := &fakeBatchImageBillingRepo{releaseErr: ErrUsageBillingRequestConflict}
+
 	err := releaseBatchImageBalanceHold(context.Background(), billing, job, "request-hash")
+
+	require.ErrorIs(t, err, ErrBatchImageBillingHoldFailed)
+	require.ErrorIs(t, err, ErrUsageBillingRequestConflict)
+	require.Len(t, billing.releases, 1)
+}
+
+func TestReleaseBatchImageBalanceHold_SameRequestReplaySucceeds(t *testing.T) {
+	job := testSettlingBatchImageJob("imgbatch_release_replay")
+	requestID := BatchImageReleaseRequestID(job.BatchID)
+	billing := &fakeBatchImageBillingRepo{alreadyApplied: map[string]bool{requestID: true}}
+
+	err := releaseBatchImageBalanceHold(context.Background(), billing, job, "request-hash")
+
 	require.NoError(t, err)
 	require.Len(t, billing.releases, 1)
 }

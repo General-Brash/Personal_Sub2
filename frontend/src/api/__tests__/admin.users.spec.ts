@@ -17,6 +17,7 @@ import {
   bindUserAuthIdentity,
   getTemporaryCredits,
   grantTemporaryCredit,
+  updateBalance,
   type AdminBindAuthIdentityRequest,
   type AdminBoundAuthIdentity,
   type BatchUpdateUserLimitsRequest,
@@ -220,5 +221,33 @@ describe('admin users temporary credit api', () => {
     expect(result.items[0]?.checkin_id).toBe(5)
     expect(result.items[0]?.granted_by).toBeNull()
     expect(result.items[0]?.amount).toBe('1.25000000')
+  })
+})
+
+describe('admin users permanent balance api', () => {
+  beforeEach(() => {
+    post.mockReset()
+  })
+
+  it('sends the explicit idempotency key with the balance adjustment', async () => {
+    const response = { id: 9, balance: 13.75 }
+    post.mockResolvedValue({ data: response })
+
+    const result = await updateBalance(9, 1.25, 'add', 'admin-balance-9-retry', 'manual')
+
+    expect(post).toHaveBeenCalledWith(
+      '/admin/users/9/balance',
+      { balance: 1.25, operation: 'add', notes: 'manual' },
+      { headers: { 'Idempotency-Key': 'admin-balance-9-retry' } },
+    )
+    expect(result).toEqual(response)
+  })
+
+  it.each(['', '   '])('rejects an empty idempotency key before sending: %j', async key => {
+    await expect(updateBalance(9, 1.25, 'add', key, 'manual')).rejects.toThrow(
+      'Idempotency-Key is required',
+    )
+
+    expect(post).not.toHaveBeenCalled()
   })
 })

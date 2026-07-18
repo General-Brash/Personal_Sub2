@@ -180,20 +180,42 @@ type BatchImageBalanceHoldCommand struct {
 	RequestFingerprint string
 	RequestPayloadHash string
 	UserID             int64
+	GroupID            *int64
 	BatchID            string
 	HoldAmount         float64
 	ActualAmount       float64
+
+	legacyFingerprintHoldAmount   float64
+	legacyFingerprintActualAmount float64
+	legacyFingerprintAmountsSet   bool
 }
 
-func (c *BatchImageBalanceHoldCommand) Normalize() {
+func (c *BatchImageBalanceHoldCommand) Normalize() error {
 	if c == nil {
-		return
+		return nil
 	}
 	c.RequestID = strings.TrimSpace(c.RequestID)
 	c.BatchID = strings.TrimSpace(c.BatchID)
+	if !c.legacyFingerprintAmountsSet {
+		c.legacyFingerprintHoldAmount = c.HoldAmount
+		c.legacyFingerprintActualAmount = c.ActualAmount
+		c.legacyFingerprintAmountsSet = true
+	}
+	amounts := []*float64{&c.HoldAmount, &c.ActualAmount}
+	for _, amount := range amounts {
+		if *amount < 0 {
+			return ErrUsageBillingAmountInvalid
+		}
+		normalized, err := normalizeUsageBillingAmount(*amount)
+		if err != nil {
+			return err
+		}
+		*amount = normalized
+	}
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildBatchImageBalanceHoldFingerprint(c)
 	}
+	return nil
 }
 
 func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) string {
@@ -201,12 +223,12 @@ func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) stri
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%s|%0.10f|%0.10f",
+		"%d|%d|%s|%s|%s",
 		c.UserID,
 		c.APIKeyID,
 		strings.TrimSpace(c.BatchID),
-		c.HoldAmount,
-		c.ActualAmount,
+		formatLedgerAmount(c.HoldAmount),
+		formatLedgerAmount(c.ActualAmount),
 	)
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
@@ -215,10 +237,60 @@ func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) stri
 	return hex.EncodeToString(sum[:])
 }
 
+// MatchesBatchImageBalanceHoldFingerprint accepts the current eight-decimal
+// fingerprint and the pre-ledger ten-decimal fingerprint for safe retries of
+// holds committed before the precision contract was introduced.
+func MatchesBatchImageBalanceHoldFingerprint(existing string, c *BatchImageBalanceHoldCommand) bool {
+	if c == nil {
+		return false
+	}
+	existing = strings.TrimSpace(existing)
+	if existing == strings.TrimSpace(c.RequestFingerprint) {
+		return true
+	}
+	legacyHoldAmount := c.HoldAmount
+	legacyActualAmount := c.ActualAmount
+	if c.legacyFingerprintAmountsSet {
+		legacyHoldAmount = c.legacyFingerprintHoldAmount
+		legacyActualAmount = c.legacyFingerprintActualAmount
+	}
+	raw := fmt.Sprintf(
+		"%d|%d|%s|%0.10f|%0.10f",
+		c.UserID,
+		c.APIKeyID,
+		strings.TrimSpace(c.BatchID),
+		legacyHoldAmount,
+		legacyActualAmount,
+	)
+	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
+		raw += "|" + payloadHash
+	}
+	sum := sha256.Sum256([]byte(raw))
+	return existing == hex.EncodeToString(sum[:])
+}
+
 type BatchImageBalanceHoldResult struct {
-	Applied       bool
-	NewBalance    *float64
-	FrozenBalance *float64
+	Applied                 bool
+	NewBalance              *float64
+	FrozenBalance           *float64
+	TemporaryReservedAmount float64
+	PermanentReservedAmount float64
+	TemporaryCapturedAmount float64
+	PermanentCapturedAmount float64
+	TemporaryRefundedAmount float64
+	TemporaryExpiredAmount  float64
+}
+
+// NormalizeUsageBillingLedgerAmount exposes the shared eight-decimal ledger
+// boundary to transaction repositories without duplicating float rules.
+func NormalizeUsageBillingLedgerAmount(amount float64) (float64, error) {
+	return normalizeLedgerAmount(amount)
+}
+
+// FormatUsageBillingLedgerAmount formats a normalized amount for NUMERIC(20,8)
+// SQL parameters.
+func FormatUsageBillingLedgerAmount(amount float64) string {
+	return formatLedgerAmount(amount)
 }
 
 type UsageBillingRepository interface {

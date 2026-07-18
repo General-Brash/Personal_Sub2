@@ -19,7 +19,7 @@ func TestOpenAIGatewayUsageTokenCostUsesLegacyFloatMultiplier(t *testing.T) {
 	want, err := svc.billingService.CalculateCostWithServiceTier("gpt-5.1", tokens, multiplier, "")
 	require.NoError(t, err)
 
-	got, err := svc.calculateOpenAIRecordUsageTokenCost(context.Background(), &APIKey{}, "gpt-5.1", multiplier, tokens, "")
+	got, err := svc.calculateOpenAIRecordUsageTokenCost(context.Background(), &APIKey{}, "gpt-5.1", multiplier, tokens, "", false)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
@@ -31,7 +31,7 @@ func TestOpenAIGatewayUsageImageCostUsesLegacyFloatMultiplier(t *testing.T) {
 	multiplier := 1.0 / 3.0
 	svc := &OpenAIGatewayService{billingService: NewBillingService(&config.Config{}, nil)}
 
-	got := svc.calculateOpenAIImageCost(
+	got, err := svc.calculateOpenAIImageCost(
 		context.Background(),
 		"gpt-image-1",
 		&APIKey{Group: &Group{ImagePrice1K: &unitPrice}},
@@ -39,6 +39,7 @@ func TestOpenAIGatewayUsageImageCostUsesLegacyFloatMultiplier(t *testing.T) {
 		multiplier,
 	)
 
+	require.NoError(t, err)
 	require.InDelta(t, 0.3, got.TotalCost, 1e-12)
 	require.InDelta(t, 0.1, got.ActualCost, 1e-12)
 }
@@ -50,7 +51,7 @@ func TestOpenAIGatewayUsageVideoCostUsesLegacyFloatMultiplier(t *testing.T) {
 	multiplier := 1.0 / 3.0
 	svc := &OpenAIGatewayService{billingService: NewBillingService(&config.Config{}, nil)}
 
-	got := svc.calculateOpenAIVideoCost(
+	got, err := svc.calculateOpenAIVideoCost(
 		context.Background(),
 		"grok-imagine-video",
 		&APIKey{Group: &Group{VideoPrice480P: &unitPrice}},
@@ -58,6 +59,7 @@ func TestOpenAIGatewayUsageVideoCostUsesLegacyFloatMultiplier(t *testing.T) {
 		multiplier,
 	)
 
+	require.NoError(t, err)
 	require.InDelta(t, 0.5, got.TotalCost, 1e-12)
 	require.InDelta(t, 1.0/6.0, got.ActualCost, 1e-12)
 }

@@ -63,6 +63,12 @@ declare module 'vue-router' {
     requiredFeatureFlag?: FeatureFlagDefinition
 
     /**
+     * Additional public-settings feature flags required to open this page.
+     * Only an explicitly disabled flag blocks navigation.
+     */
+    requiredFeatureFlags?: readonly FeatureFlagDefinition[]
+
+    /**
      * i18n key for the page title
      */
     titleKey?: string

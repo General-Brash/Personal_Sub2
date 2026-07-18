@@ -105,11 +105,13 @@ type UserEdges struct {
 	TemporaryCreditGrants []*TemporaryCreditGrant `json:"temporary_credit_grants,omitempty"`
 	// GrantedTemporaryCreditGrants holds the value of the granted_temporary_credit_grants edge.
 	GrantedTemporaryCreditGrants []*TemporaryCreditGrant `json:"granted_temporary_credit_grants,omitempty"`
+	// BatchImageCreditHolds holds the value of the batch_image_credit_holds edge.
+	BatchImageCreditHolds []*BatchImageCreditHold `json:"batch_image_credit_holds,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [17]bool
+	loadedTypes [18]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -256,10 +258,19 @@ func (e UserEdges) GrantedTemporaryCreditGrantsOrErr() ([]*TemporaryCreditGrant,
 	return nil, &NotLoadedError{edge: "granted_temporary_credit_grants"}
 }
 
+// BatchImageCreditHoldsOrErr returns the BatchImageCreditHolds value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) BatchImageCreditHoldsOrErr() ([]*BatchImageCreditHold, error) {
+	if e.loadedTypes[16] {
+		return e.BatchImageCreditHolds, nil
+	}
+	return nil, &NotLoadedError{edge: "batch_image_credit_holds"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[16] {
+	if e.loadedTypes[17] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -542,6 +553,11 @@ func (_m *User) QueryTemporaryCreditGrants() *TemporaryCreditGrantQuery {
 // QueryGrantedTemporaryCreditGrants queries the "granted_temporary_credit_grants" edge of the User entity.
 func (_m *User) QueryGrantedTemporaryCreditGrants() *TemporaryCreditGrantQuery {
 	return NewUserClient(_m.config).QueryGrantedTemporaryCreditGrants(_m)
+}
+
+// QueryBatchImageCreditHolds queries the "batch_image_credit_holds" edge of the User entity.
+func (_m *User) QueryBatchImageCreditHolds() *BatchImageCreditHoldQuery {
+	return NewUserClient(_m.config).QueryBatchImageCreditHolds(_m)
 }
 
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.

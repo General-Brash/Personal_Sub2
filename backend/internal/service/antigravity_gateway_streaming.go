@@ -1118,6 +1118,10 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 }
 
 func (s *AntigravityGatewayService) extractImageInputSize(body []byte) string {
+	return ExtractGeminiImageSize(body)
+}
+
+func ExtractGeminiImageSize(body []byte) string {
 	var req antigravity.GeminiRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return ""
@@ -1147,4 +1151,8 @@ func isImageGenerationModel(model string) bool {
 		modelLower == "gemini-2.5-flash-image" ||
 		modelLower == "gemini-2.5-flash-image-preview" ||
 		strings.HasPrefix(modelLower, "gemini-2.5-flash-image-")
+}
+
+func IsGeminiImageGenerationModel(model string) bool {
+	return isImageGenerationModel(model)
 }

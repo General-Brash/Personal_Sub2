@@ -3,7 +3,9 @@
     :show="show"
     :title="operation === 'add' ? t('admin.users.deposit') : t('admin.users.withdraw')"
     width="narrow"
-    @close="emit('close')"
+    :close-on-escape="!submitting"
+    :show-close-button="!submitting"
+    @close="handleClose"
   >
     <form
       v-if="user && !grantResult"
@@ -35,6 +37,7 @@
           <button
             type="button"
             data-testid="credit-type-permanent"
+            :disabled="submitting"
             :aria-pressed="creditType === 'permanent'"
             :class="[
               'text-sm font-medium transition-colors',
@@ -49,6 +52,7 @@
           <button
             type="button"
             data-testid="credit-type-temporary"
+            :disabled="submitting"
             :aria-pressed="creditType === 'temporary'"
             :class="[
               'text-sm font-medium transition-colors',
@@ -77,6 +81,7 @@
               type="text"
               inputmode="decimal"
               autocomplete="off"
+              :disabled="submitting"
               required
               class="input pl-8"
             />
@@ -85,6 +90,7 @@
             v-if="operation === 'subtract'"
             type="button"
             class="btn btn-secondary whitespace-nowrap"
+            :disabled="submitting"
             @click="fillAllBalance"
           >
             {{ t('admin.users.withdrawAll') }}
@@ -103,7 +109,13 @@
 
       <div>
         <label for="balance-notes" class="input-label">{{ t('admin.users.notes') }}</label>
-        <textarea id="balance-notes" v-model="form.notes" rows="3" class="input" />
+        <textarea
+          id="balance-notes"
+          v-model="form.notes"
+          rows="3"
+          class="input"
+          :disabled="submitting"
+        />
       </div>
 
       <div
@@ -146,12 +158,18 @@
 
     <template #footer>
       <div v-if="grantResult" class="flex justify-end">
-        <button type="button" class="btn btn-primary" @click="emit('close')">
+        <button type="button" class="btn btn-primary" @click="handleClose">
           {{ t('common.close') }}
         </button>
       </div>
       <div v-else class="flex justify-end gap-3">
-        <button type="button" class="btn btn-secondary" @click="emit('close')">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          data-testid="balance-cancel"
+          :disabled="submitting"
+          @click="handleClose"
+        >
           {{ t('common.cancel') }}
         </button>
         <button
@@ -199,21 +217,39 @@ const creditType = ref<CreditType>('permanent')
 const idempotencyKey = ref('')
 const grantResult = ref<GrantTemporaryCreditResult | null>(null)
 const form = reactive({ amount: '', notes: '' })
+let sessionToken = 0
+let requestSequence = 0
+let activeRequestToken = 0
+
+interface RequestGuard {
+  session: number
+  request: number
+}
 
 watch(
-  () => props.show,
-  (visible) => {
+  [() => props.show, () => props.user?.id, () => props.operation],
+  ([visible]) => {
+    sessionToken += 1
+    activeRequestToken = 0
+    submitting.value = false
+    idempotencyKey.value = ''
+    grantResult.value = null
     if (!visible) return
     form.amount = ''
     form.notes = ''
     creditType.value = 'permanent'
-    idempotencyKey.value = ''
-    grantResult.value = null
   },
+  { immediate: true },
 )
 
 watch(
-  [() => form.amount, () => form.notes, creditType],
+  [
+    () => form.amount,
+    () => form.notes,
+    creditType,
+    () => props.operation,
+    () => props.user?.id,
+  ],
   () => {
     idempotencyKey.value = ''
   },
@@ -243,10 +279,42 @@ function isValidAmount(value: string): boolean {
   return integer !== '0' || /[1-9]/.test(fraction)
 }
 
-function createIdempotencyKey(userID: number): string {
+function createIdempotencyKey(userID: number, mode: CreditType): string {
+  const prefix = mode === 'temporary' ? 'admin-temp-credit' : 'admin-balance'
   const uuid = globalThis.crypto?.randomUUID?.()
-  if (uuid) return `admin-temp-credit-${userID}-${uuid}`
-  return `admin-temp-credit-${userID}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  if (uuid) return `${prefix}-${userID}-${uuid}`
+  return `${prefix}-${userID}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function getIdempotencyKey(userID: number, mode: CreditType): string {
+  if (!idempotencyKey.value) {
+    idempotencyKey.value = createIdempotencyKey(userID, mode)
+  }
+  return idempotencyKey.value
+}
+
+function beginRequest(): RequestGuard {
+  const request = ++requestSequence
+  activeRequestToken = request
+  submitting.value = true
+  return { session: sessionToken, request }
+}
+
+function isCurrentRequest(guard: RequestGuard): boolean {
+  return props.show
+    && guard.session === sessionToken
+    && guard.request === activeRequestToken
+}
+
+function finishRequest(guard: RequestGuard) {
+  if (!isCurrentRequest(guard)) return
+  activeRequestToken = 0
+  submitting.value = false
+}
+
+function handleClose() {
+  if (submitting.value) return
+  emit('close')
 }
 
 async function handleBalanceSubmit() {
@@ -259,23 +327,25 @@ async function handleBalanceSubmit() {
       return
     }
 
-    submitting.value = true
+    const key = getIdempotencyKey(props.user.id, 'temporary')
+    const request = beginRequest()
     try {
-      if (!idempotencyKey.value) {
-        idempotencyKey.value = createIdempotencyKey(props.user.id)
-      }
-      grantResult.value = await adminAPI.users.grantTemporaryCredit(
+      const result = await adminAPI.users.grantTemporaryCredit(
         props.user.id,
         { amount: form.amount, notes: form.notes },
-        idempotencyKey.value,
+        key,
       )
+      if (!isCurrentRequest(request)) return
+      grantResult.value = result
+      idempotencyKey.value = ''
       appStore.showSuccess(t('checkin.admin.grantSucceeded'))
       emit('success')
     } catch (error: any) {
+      if (!isCurrentRequest(request)) return
       console.error('Failed to grant temporary credit:', error)
       appStore.showError(error?.message || t('common.error'))
     } finally {
-      submitting.value = false
+      finishRequest(request)
     }
     return
   }
@@ -290,17 +360,21 @@ async function handleBalanceSubmit() {
     return
   }
 
-  submitting.value = true
+  const key = getIdempotencyKey(props.user.id, 'permanent')
+  const request = beginRequest()
   try {
-    await adminAPI.users.updateBalance(props.user.id, amount, props.operation, form.notes)
+    await adminAPI.users.updateBalance(props.user.id, amount, props.operation, key, form.notes)
+    if (!isCurrentRequest(request)) return
+    idempotencyKey.value = ''
     appStore.showSuccess(t('common.success'))
     emit('success')
     emit('close')
   } catch (error: any) {
+    if (!isCurrentRequest(request)) return
     console.error('Failed to update balance:', error)
     appStore.showError(error?.response?.data?.detail || error?.message || t('common.error'))
   } finally {
-    submitting.value = false
+    finishRequest(request)
   }
 }
 </script>

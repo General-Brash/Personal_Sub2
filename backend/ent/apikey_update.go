@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -463,6 +464,21 @@ func (_u *APIKeyUpdate) AddUsageLogs(v ...*UsageLog) *APIKeyUpdate {
 	return _u.AddUsageLogIDs(ids...)
 }
 
+// AddBatchImageCreditHoldIDs adds the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by IDs.
+func (_u *APIKeyUpdate) AddBatchImageCreditHoldIDs(ids ...int64) *APIKeyUpdate {
+	_u.mutation.AddBatchImageCreditHoldIDs(ids...)
+	return _u
+}
+
+// AddBatchImageCreditHolds adds the "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_u *APIKeyUpdate) AddBatchImageCreditHolds(v ...*BatchImageCreditHold) *APIKeyUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddBatchImageCreditHoldIDs(ids...)
+}
+
 // Mutation returns the APIKeyMutation object of the builder.
 func (_u *APIKeyUpdate) Mutation() *APIKeyMutation {
 	return _u.mutation
@@ -499,6 +515,27 @@ func (_u *APIKeyUpdate) RemoveUsageLogs(v ...*UsageLog) *APIKeyUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearBatchImageCreditHolds clears all "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_u *APIKeyUpdate) ClearBatchImageCreditHolds() *APIKeyUpdate {
+	_u.mutation.ClearBatchImageCreditHolds()
+	return _u
+}
+
+// RemoveBatchImageCreditHoldIDs removes the "batch_image_credit_holds" edge to BatchImageCreditHold entities by IDs.
+func (_u *APIKeyUpdate) RemoveBatchImageCreditHoldIDs(ids ...int64) *APIKeyUpdate {
+	_u.mutation.RemoveBatchImageCreditHoldIDs(ids...)
+	return _u
+}
+
+// RemoveBatchImageCreditHolds removes "batch_image_credit_holds" edges to BatchImageCreditHold entities.
+func (_u *APIKeyUpdate) RemoveBatchImageCreditHolds(v ...*BatchImageCreditHold) *APIKeyUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveBatchImageCreditHoldIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -792,6 +829,51 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.BatchImageCreditHoldsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.BatchImageCreditHoldsTable,
+			Columns: []string{apikey.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedBatchImageCreditHoldsIDs(); len(nodes) > 0 && !_u.mutation.BatchImageCreditHoldsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.BatchImageCreditHoldsTable,
+			Columns: []string{apikey.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.BatchImageCreditHoldsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.BatchImageCreditHoldsTable,
+			Columns: []string{apikey.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1250,6 +1332,21 @@ func (_u *APIKeyUpdateOne) AddUsageLogs(v ...*UsageLog) *APIKeyUpdateOne {
 	return _u.AddUsageLogIDs(ids...)
 }
 
+// AddBatchImageCreditHoldIDs adds the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by IDs.
+func (_u *APIKeyUpdateOne) AddBatchImageCreditHoldIDs(ids ...int64) *APIKeyUpdateOne {
+	_u.mutation.AddBatchImageCreditHoldIDs(ids...)
+	return _u
+}
+
+// AddBatchImageCreditHolds adds the "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_u *APIKeyUpdateOne) AddBatchImageCreditHolds(v ...*BatchImageCreditHold) *APIKeyUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddBatchImageCreditHoldIDs(ids...)
+}
+
 // Mutation returns the APIKeyMutation object of the builder.
 func (_u *APIKeyUpdateOne) Mutation() *APIKeyMutation {
 	return _u.mutation
@@ -1286,6 +1383,27 @@ func (_u *APIKeyUpdateOne) RemoveUsageLogs(v ...*UsageLog) *APIKeyUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearBatchImageCreditHolds clears all "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_u *APIKeyUpdateOne) ClearBatchImageCreditHolds() *APIKeyUpdateOne {
+	_u.mutation.ClearBatchImageCreditHolds()
+	return _u
+}
+
+// RemoveBatchImageCreditHoldIDs removes the "batch_image_credit_holds" edge to BatchImageCreditHold entities by IDs.
+func (_u *APIKeyUpdateOne) RemoveBatchImageCreditHoldIDs(ids ...int64) *APIKeyUpdateOne {
+	_u.mutation.RemoveBatchImageCreditHoldIDs(ids...)
+	return _u
+}
+
+// RemoveBatchImageCreditHolds removes "batch_image_credit_holds" edges to BatchImageCreditHold entities.
+func (_u *APIKeyUpdateOne) RemoveBatchImageCreditHolds(v ...*BatchImageCreditHold) *APIKeyUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveBatchImageCreditHoldIDs(ids...)
 }
 
 // Where appends a list predicates to the APIKeyUpdate builder.
@@ -1609,6 +1727,51 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.BatchImageCreditHoldsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.BatchImageCreditHoldsTable,
+			Columns: []string{apikey.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedBatchImageCreditHoldsIDs(); len(nodes) > 0 && !_u.mutation.BatchImageCreditHoldsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.BatchImageCreditHoldsTable,
+			Columns: []string{apikey.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.BatchImageCreditHoldsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.BatchImageCreditHoldsTable,
+			Columns: []string{apikey.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

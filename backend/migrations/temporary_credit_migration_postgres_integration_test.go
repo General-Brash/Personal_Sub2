@@ -4,12 +4,8 @@ package migrations_test
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"io/fs"
-	"sort"
-	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/repository"
@@ -29,7 +25,7 @@ func TestDailyCheckinAndActorScopeMigrations_PostgresForwardAndReentrant(t *test
 	require.NoError(t, createLegacyIdempotencyTable(ctx, db))
 	legacyID, err := insertLegacyIdempotencyRecord(ctx, db, "user.daily_checkin.create", "legacy-checkin-key")
 	require.NoError(t, err)
-	require.NoError(t, seedMigrationHistoryBefore(ctx, db, dailyCheckinMigration))
+	require.NoError(t, seedMigrationHistoryExcept(ctx, db, dailyCheckinMigration, idempotencyActorScopeMigration))
 
 	require.NoError(t, repository.ApplyMigrations(ctx, db), "forward apply must run 175 then 176")
 	requireDailyCheckinMigrationShape(t, ctx, db)
@@ -69,43 +65,6 @@ CREATE TABLE settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );`)
 	return err
-}
-
-func seedMigrationHistoryBefore(ctx context.Context, db *sql.DB, stopBefore string) error {
-	if _, err := db.ExecContext(ctx, `
-CREATE TABLE schema_migrations (
-    filename TEXT PRIMARY KEY,
-    checksum TEXT NOT NULL,
-    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)`); err != nil {
-		return err
-	}
-
-	files, err := fs.Glob(migrations.FS, "*.sql")
-	if err != nil {
-		return err
-	}
-	sort.Strings(files)
-	for _, name := range files {
-		if name >= stopBefore {
-			continue
-		}
-		contents, err := fs.ReadFile(migrations.FS, name)
-		if err != nil {
-			return err
-		}
-		content := strings.TrimSpace(string(contents))
-		if content == "" {
-			continue
-		}
-		sum := sha256.Sum256([]byte(content))
-		if _, err := db.ExecContext(ctx, `
-INSERT INTO schema_migrations (filename, checksum)
-VALUES ($1, $2)`, name, hex.EncodeToString(sum[:])); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func requireDailyCheckinMigrationShape(t *testing.T, ctx context.Context, db *sql.DB) {

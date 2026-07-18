@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
@@ -28,19 +29,20 @@ import (
 // GroupQuery is the builder for querying Group entities.
 type GroupQuery struct {
 	config
-	ctx                   *QueryContext
-	order                 []group.OrderOption
-	inters                []Interceptor
-	predicates            []predicate.Group
-	withAPIKeys           *APIKeyQuery
-	withRedeemCodes       *RedeemCodeQuery
-	withSubscriptions     *UserSubscriptionQuery
-	withUsageLogs         *UsageLogQuery
-	withAccounts          *AccountQuery
-	withAllowedUsers      *UserQuery
-	withAccountGroups     *AccountGroupQuery
-	withUserAllowedGroups *UserAllowedGroupQuery
-	modifiers             []func(*sql.Selector)
+	ctx                       *QueryContext
+	order                     []group.OrderOption
+	inters                    []Interceptor
+	predicates                []predicate.Group
+	withAPIKeys               *APIKeyQuery
+	withRedeemCodes           *RedeemCodeQuery
+	withSubscriptions         *UserSubscriptionQuery
+	withUsageLogs             *UsageLogQuery
+	withBatchImageCreditHolds *BatchImageCreditHoldQuery
+	withAccounts              *AccountQuery
+	withAllowedUsers          *UserQuery
+	withAccountGroups         *AccountGroupQuery
+	withUserAllowedGroups     *UserAllowedGroupQuery
+	modifiers                 []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -158,6 +160,28 @@ func (_q *GroupQuery) QueryUsageLogs() *UsageLogQuery {
 			sqlgraph.From(group.Table, group.FieldID, selector),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, group.UsageLogsTable, group.UsageLogsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryBatchImageCreditHolds chains the current query on the "batch_image_credit_holds" edge.
+func (_q *GroupQuery) QueryBatchImageCreditHolds() *BatchImageCreditHoldQuery {
+	query := (&BatchImageCreditHoldClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, selector),
+			sqlgraph.To(batchimagecredithold.Table, batchimagecredithold.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.BatchImageCreditHoldsTable, group.BatchImageCreditHoldsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -440,19 +464,20 @@ func (_q *GroupQuery) Clone() *GroupQuery {
 		return nil
 	}
 	return &GroupQuery{
-		config:                _q.config,
-		ctx:                   _q.ctx.Clone(),
-		order:                 append([]group.OrderOption{}, _q.order...),
-		inters:                append([]Interceptor{}, _q.inters...),
-		predicates:            append([]predicate.Group{}, _q.predicates...),
-		withAPIKeys:           _q.withAPIKeys.Clone(),
-		withRedeemCodes:       _q.withRedeemCodes.Clone(),
-		withSubscriptions:     _q.withSubscriptions.Clone(),
-		withUsageLogs:         _q.withUsageLogs.Clone(),
-		withAccounts:          _q.withAccounts.Clone(),
-		withAllowedUsers:      _q.withAllowedUsers.Clone(),
-		withAccountGroups:     _q.withAccountGroups.Clone(),
-		withUserAllowedGroups: _q.withUserAllowedGroups.Clone(),
+		config:                    _q.config,
+		ctx:                       _q.ctx.Clone(),
+		order:                     append([]group.OrderOption{}, _q.order...),
+		inters:                    append([]Interceptor{}, _q.inters...),
+		predicates:                append([]predicate.Group{}, _q.predicates...),
+		withAPIKeys:               _q.withAPIKeys.Clone(),
+		withRedeemCodes:           _q.withRedeemCodes.Clone(),
+		withSubscriptions:         _q.withSubscriptions.Clone(),
+		withUsageLogs:             _q.withUsageLogs.Clone(),
+		withBatchImageCreditHolds: _q.withBatchImageCreditHolds.Clone(),
+		withAccounts:              _q.withAccounts.Clone(),
+		withAllowedUsers:          _q.withAllowedUsers.Clone(),
+		withAccountGroups:         _q.withAccountGroups.Clone(),
+		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -500,6 +525,17 @@ func (_q *GroupQuery) WithUsageLogs(opts ...func(*UsageLogQuery)) *GroupQuery {
 		opt(query)
 	}
 	_q.withUsageLogs = query
+	return _q
+}
+
+// WithBatchImageCreditHolds tells the query-builder to eager-load the nodes that are connected to
+// the "batch_image_credit_holds" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *GroupQuery) WithBatchImageCreditHolds(opts ...func(*BatchImageCreditHoldQuery)) *GroupQuery {
+	query := (&BatchImageCreditHoldClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withBatchImageCreditHolds = query
 	return _q
 }
 
@@ -625,11 +661,12 @@ func (_q *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 	var (
 		nodes       = []*Group{}
 		_spec       = _q.querySpec()
-		loadedTypes = [8]bool{
+		loadedTypes = [9]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
 			_q.withUsageLogs != nil,
+			_q.withBatchImageCreditHolds != nil,
 			_q.withAccounts != nil,
 			_q.withAllowedUsers != nil,
 			_q.withAccountGroups != nil,
@@ -682,6 +719,15 @@ func (_q *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 		if err := _q.loadUsageLogs(ctx, query, nodes,
 			func(n *Group) { n.Edges.UsageLogs = []*UsageLog{} },
 			func(n *Group, e *UsageLog) { n.Edges.UsageLogs = append(n.Edges.UsageLogs, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withBatchImageCreditHolds; query != nil {
+		if err := _q.loadBatchImageCreditHolds(ctx, query, nodes,
+			func(n *Group) { n.Edges.BatchImageCreditHolds = []*BatchImageCreditHold{} },
+			func(n *Group, e *BatchImageCreditHold) {
+				n.Edges.BatchImageCreditHolds = append(n.Edges.BatchImageCreditHolds, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -827,6 +873,39 @@ func (_q *GroupQuery) loadUsageLogs(ctx context.Context, query *UsageLogQuery, n
 	}
 	query.Where(predicate.UsageLog(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(group.UsageLogsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GroupID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "group_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "group_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *GroupQuery) loadBatchImageCreditHolds(ctx context.Context, query *BatchImageCreditHoldQuery, nodes []*Group, init func(*Group), assign func(*Group, *BatchImageCreditHold)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*Group)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(batchimagecredithold.FieldGroupID)
+	}
+	query.Where(predicate.BatchImageCreditHold(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(group.BatchImageCreditHoldsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

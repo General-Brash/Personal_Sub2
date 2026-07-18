@@ -1753,6 +1753,29 @@ func HasGrantedTemporaryCreditGrantsWith(preds ...predicate.TemporaryCreditGrant
 	})
 }
 
+// HasBatchImageCreditHolds applies the HasEdge predicate on the "batch_image_credit_holds" edge.
+func HasBatchImageCreditHolds() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, BatchImageCreditHoldsTable, BatchImageCreditHoldsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasBatchImageCreditHoldsWith applies the HasEdge predicate on the "batch_image_credit_holds" edge with a given conditions (other predicates).
+func HasBatchImageCreditHoldsWith(preds ...predicate.BatchImageCreditHold) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newBatchImageCreditHoldsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasUserAllowedGroups applies the HasEdge predicate on the "user_allowed_groups" edge.
 func HasUserAllowedGroups() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

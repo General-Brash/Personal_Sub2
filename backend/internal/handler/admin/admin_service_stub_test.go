@@ -2,12 +2,20 @@ package admin
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
+
+type successfulAtomicExecutor struct{}
+
+func (successfulAtomicExecutor) ExecContext(context.Context, string, ...any) (sql.Result, error) {
+	return driver.RowsAffected(1), nil
+}
 
 type stubAdminService struct {
 	users                               []service.User
@@ -77,7 +85,10 @@ type stubAdminService struct {
 		sortOrder string
 		calls     int
 	}
-	mu sync.Mutex
+	adminBalanceAtomicStore service.IdempotencyAtomicSuccessExecutor
+	adminBalanceAtomicErr   error
+	adminBalanceAtomicCalls int
+	mu                      sync.Mutex
 }
 
 func newStubAdminService() *stubAdminService {
@@ -189,6 +200,23 @@ func (s *stubAdminService) DeleteUser(ctx context.Context, id int64) error {
 func (s *stubAdminService) UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*service.User, error) {
 	user := service.User{ID: userID, Balance: balance, Status: service.StatusActive}
 	return &user, nil
+}
+
+func (s *stubAdminService) UpdateUserBalanceAtomic(ctx context.Context, userID int64, balance float64, _ string, _ string, claim *service.IdempotencyAtomicClaim, responseFactory service.AdminBalanceAdjustmentResponseFactory) (any, error) {
+	s.adminBalanceAtomicCalls++
+	if s.adminBalanceAtomicErr != nil {
+		return nil, s.adminBalanceAtomicErr
+	}
+	user := &service.User{ID: userID, Balance: balance, Status: service.StatusActive}
+	responseData := responseFactory(user)
+	executor := s.adminBalanceAtomicStore
+	if executor == nil {
+		executor = successfulAtomicExecutor{}
+	}
+	if err := claim.PersistSuccess(ctx, executor, responseData); err != nil {
+		return nil, err
+	}
+	return responseData, nil
 }
 
 func (s *stubAdminService) BatchUpdateConcurrency(ctx context.Context, userIDs []int64, value int, mode string) (int, error) {

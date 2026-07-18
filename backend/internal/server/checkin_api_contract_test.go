@@ -56,8 +56,10 @@ func TestCheckinAndTemporaryCreditHTTPContract(t *testing.T) {
 	denyAdmin := middleware.AdminAuthMiddleware(func(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED"})
 	})
-	routes.RegisterUserRoutes(v1, handlers, allowUser, nil)
-	routes.RegisterAdminRoutes(v1, handlers, denyAdmin, nil)
+	auditLog := middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() })
+	stepUp := middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() })
+	routes.RegisterUserRoutes(v1, handlers, allowUser, auditLog, nil)
+	routes.RegisterAdminRoutes(v1, handlers, denyAdmin, auditLog, stepUp, nil)
 
 	registered := make(map[string]bool)
 	for _, route := range engine.Routes() {

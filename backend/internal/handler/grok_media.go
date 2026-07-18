@@ -253,6 +253,28 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		if !accountAcquired {
 			return
 		}
+		if endpoint.IsGenerationRequest() {
+			mapping := service.ChannelMappingResult{MappedModel: requestModel}
+			var pricingErr error
+			switch endpoint {
+			case service.GrokMediaEndpointImagesGenerations, service.GrokMediaEndpointImagesEdits:
+				pricingErr = h.gatewayService.PreflightImageRequestPricing(requestCtx, apiKey, account, requestModel, mapping, requestInfo.SizeTier)
+			default:
+				pricingErr = h.gatewayService.PreflightVideoRequestPricing(requestCtx, apiKey, account, requestModel, mapping, requestInfo.Resolution)
+			}
+			if pricingErr != nil {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				reqLog.Error("grok_media.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+				if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+					h.errorResponse(c, status, code, message)
+				} else {
+					h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error())
+				}
+				return
+			}
+		}
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()

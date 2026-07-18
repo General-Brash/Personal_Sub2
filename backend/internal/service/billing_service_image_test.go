@@ -8,6 +8,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func newImageBillingServiceForTest() *BillingService {
+	return &BillingService{pricingService: &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gemini-3-pro-image": {
+			OutputCostPerImage:        defaultImageGenerationPrice,
+			OutputCostPerImagePresent: true,
+		},
+	}}}
+}
+
 func TestResolveImageRateMultiplier_Float64(t *testing.T) {
 	const base = 1.25
 
@@ -32,7 +41,7 @@ func TestResolveImageRateMultiplier_Float64(t *testing.T) {
 
 // TestCalculateImageCost_DefaultPricing 测试无分组配置时使用默认价格
 func TestCalculateImageCost_DefaultPricing(t *testing.T) {
-	svc := &BillingService{} // pricingService 为 nil，使用硬编码默认值
+	svc := newImageBillingServiceForTest()
 
 	// 2K 尺寸，默认价格 $0.134 * 1.5 = $0.201
 	cost := svc.CalculateImageCost("gemini-3-pro-image", "2K", 1, nil, 1.0)
@@ -46,7 +55,7 @@ func TestCalculateImageCost_DefaultPricing(t *testing.T) {
 
 // TestCalculateImageCost_GroupCustomPricing 测试分组自定义价格
 func TestCalculateImageCost_GroupCustomPricing(t *testing.T) {
-	svc := &BillingService{}
+	svc := newImageBillingServiceForTest()
 
 	price1K := 0.10
 	price2K := 0.15
@@ -71,7 +80,7 @@ func TestCalculateImageCost_GroupCustomPricing(t *testing.T) {
 }
 
 func TestCalculateImageCost_NormalizesInvalidSizeTo2K(t *testing.T) {
-	svc := &BillingService{}
+	svc := newImageBillingServiceForTest()
 
 	price2K := 0.25
 	groupConfig := &ImagePriceConfig{Price2K: &price2K}
@@ -87,7 +96,7 @@ func TestCalculateImageCost_NormalizesInvalidSizeTo2K(t *testing.T) {
 
 // TestCalculateImageCost_4KDoublePrice 测试 4K 默认价格翻倍
 func TestCalculateImageCost_4KDoublePrice(t *testing.T) {
-	svc := &BillingService{}
+	svc := newImageBillingServiceForTest()
 
 	// 4K 尺寸，默认价格翻倍 $0.134 * 2 = $0.268
 	cost := svc.CalculateImageCost("gemini-3-pro-image", "4K", 1, nil, 1.0)
@@ -96,7 +105,7 @@ func TestCalculateImageCost_4KDoublePrice(t *testing.T) {
 
 // TestCalculateImageCost_RateMultiplier 测试费率倍数
 func TestCalculateImageCost_RateMultiplier(t *testing.T) {
-	svc := &BillingService{}
+	svc := newImageBillingServiceForTest()
 
 	// 费率倍数 1.5x
 	cost := svc.CalculateImageCost("gemini-3-pro-image", "2K", 1, nil, 1.5)
@@ -111,7 +120,7 @@ func TestCalculateImageCost_RateMultiplier(t *testing.T) {
 
 // TestCalculateImageCost_ZeroCount 测试 imageCount=0
 func TestCalculateImageCost_ZeroCount(t *testing.T) {
-	svc := &BillingService{}
+	svc := newImageBillingServiceForTest()
 
 	cost := svc.CalculateImageCost("gemini-3-pro-image", "2K", 0, nil, 1.0)
 	require.Equal(t, 0.0, cost.TotalCost)
@@ -120,7 +129,7 @@ func TestCalculateImageCost_ZeroCount(t *testing.T) {
 
 // TestCalculateImageCost_NegativeCount 测试 imageCount=-1
 func TestCalculateImageCost_NegativeCount(t *testing.T) {
-	svc := &BillingService{}
+	svc := newImageBillingServiceForTest()
 
 	cost := svc.CalculateImageCost("gemini-3-pro-image", "2K", -1, nil, 1.0)
 	require.Equal(t, 0.0, cost.TotalCost)
@@ -130,7 +139,7 @@ func TestCalculateImageCost_NegativeCount(t *testing.T) {
 // TestCalculateImageCost_ZeroRateMultiplier 锁定新行为：倍率 0 直接按 0 计费
 // （保存时已强制 > 0；若仍有 0 泄漏到计费层，零消耗比历史的 1.0 更安全）。
 func TestCalculateImageCost_ZeroRateMultiplier(t *testing.T) {
-	svc := &BillingService{}
+	svc := newImageBillingServiceForTest()
 
 	cost := svc.CalculateImageCost("gemini-3-pro-image", "2K", 1, nil, 0)
 	require.InDelta(t, 0.201, cost.TotalCost, 0.0001)
@@ -139,7 +148,7 @@ func TestCalculateImageCost_ZeroRateMultiplier(t *testing.T) {
 
 // TestGetImageUnitPrice_GroupPriorityOverDefault 测试分组价格优先于默认价格
 func TestGetImageUnitPrice_GroupPriorityOverDefault(t *testing.T) {
-	svc := &BillingService{}
+	svc := newImageBillingServiceForTest()
 
 	price2K := 0.20
 	groupConfig := &ImagePriceConfig{
@@ -153,7 +162,7 @@ func TestGetImageUnitPrice_GroupPriorityOverDefault(t *testing.T) {
 
 // TestGetImageUnitPrice_PartialGroupConfig 测试分组部分配置时回退默认
 func TestGetImageUnitPrice_PartialGroupConfig(t *testing.T) {
-	svc := &BillingService{}
+	svc := newImageBillingServiceForTest()
 
 	// 只配置 1K 价格
 	price1K := 0.10
@@ -174,9 +183,8 @@ func TestGetImageUnitPrice_PartialGroupConfig(t *testing.T) {
 	require.InDelta(t, 0.268, cost.TotalCost, 0.0001)
 }
 
-// TestGetDefaultImagePrice_FallbackHardcoded 测试 PricingService 无数据时使用硬编码默认值
-func TestGetDefaultImagePrice_FallbackHardcoded(t *testing.T) {
-	svc := &BillingService{} // pricingService 为 nil
+func TestGetDefaultImagePrice_FromPricingService(t *testing.T) {
+	svc := newImageBillingServiceForTest()
 
 	// 1K 默认价格 $0.134，2K 默认价格 $0.201 (1.5倍)
 	cost := svc.CalculateImageCost("gemini-3-pro-image", "1K", 1, nil, 1.0)

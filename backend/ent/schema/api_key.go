@@ -130,6 +130,8 @@ func (APIKey) Edges() []ent.Edge {
 			Field("group_id").
 			Unique(),
 		edge.To("usage_logs", UsageLog.Type),
+		edge.To("batch_image_credit_holds", BatchImageCreditHold.Type).
+			Annotations(entsql.OnDelete(entsql.Restrict)),
 	}
 }
 

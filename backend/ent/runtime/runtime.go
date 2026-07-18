@@ -7,11 +7,14 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/affiliaterebatejob"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecreditholdallocation"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageevent"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageitem"
 	"github.com/Wei-Shaw/sub2api/ent/batchimagejob"
@@ -268,6 +271,32 @@ func init() {
 	accountgroupDescCreatedAt := accountgroupFields[3].Descriptor()
 	// accountgroup.DefaultCreatedAt holds the default value on creation for the created_at field.
 	accountgroup.DefaultCreatedAt = accountgroupDescCreatedAt.Default.(func() time.Time)
+	affiliaterebatejobFields := schema.AffiliateRebateJob{}.Fields()
+	_ = affiliaterebatejobFields
+	// affiliaterebatejobDescBaseAmount is the schema descriptor for base_amount field.
+	affiliaterebatejobDescBaseAmount := affiliaterebatejobFields[3].Descriptor()
+	// affiliaterebatejob.BaseAmountValidator is a validator for the "base_amount" field. It is called by the builders before save.
+	affiliaterebatejob.BaseAmountValidator = affiliaterebatejobDescBaseAmount.Validators[0].(func(float64) error)
+	// affiliaterebatejobDescAttempts is the schema descriptor for attempts field.
+	affiliaterebatejobDescAttempts := affiliaterebatejobFields[5].Descriptor()
+	// affiliaterebatejob.DefaultAttempts holds the default value on creation for the attempts field.
+	affiliaterebatejob.DefaultAttempts = affiliaterebatejobDescAttempts.Default.(int)
+	// affiliaterebatejob.AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
+	affiliaterebatejob.AttemptsValidator = affiliaterebatejobDescAttempts.Validators[0].(func(int) error)
+	// affiliaterebatejobDescNextRetryAt is the schema descriptor for next_retry_at field.
+	affiliaterebatejobDescNextRetryAt := affiliaterebatejobFields[6].Descriptor()
+	// affiliaterebatejob.DefaultNextRetryAt holds the default value on creation for the next_retry_at field.
+	affiliaterebatejob.DefaultNextRetryAt = affiliaterebatejobDescNextRetryAt.Default.(func() time.Time)
+	// affiliaterebatejobDescCreatedAt is the schema descriptor for created_at field.
+	affiliaterebatejobDescCreatedAt := affiliaterebatejobFields[13].Descriptor()
+	// affiliaterebatejob.DefaultCreatedAt holds the default value on creation for the created_at field.
+	affiliaterebatejob.DefaultCreatedAt = affiliaterebatejobDescCreatedAt.Default.(func() time.Time)
+	// affiliaterebatejobDescUpdatedAt is the schema descriptor for updated_at field.
+	affiliaterebatejobDescUpdatedAt := affiliaterebatejobFields[14].Descriptor()
+	// affiliaterebatejob.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	affiliaterebatejob.DefaultUpdatedAt = affiliaterebatejobDescUpdatedAt.Default.(func() time.Time)
+	// affiliaterebatejob.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	affiliaterebatejob.UpdateDefaultUpdatedAt = affiliaterebatejobDescUpdatedAt.UpdateDefault.(func() time.Time)
 	announcementFields := schema.Announcement{}.Fields()
 	_ = announcementFields
 	// announcementDescTitle is the schema descriptor for title field.
@@ -438,6 +467,82 @@ func init() {
 	authidentitychannelDescMetadata := authidentitychannelFields[6].Descriptor()
 	// authidentitychannel.DefaultMetadata holds the default value on creation for the metadata field.
 	authidentitychannel.DefaultMetadata = authidentitychannelDescMetadata.Default.(func() map[string]interface{})
+	batchimagecreditholdFields := schema.BatchImageCreditHold{}.Fields()
+	_ = batchimagecreditholdFields
+	// batchimagecreditholdDescBatchID is the schema descriptor for batch_id field.
+	batchimagecreditholdDescBatchID := batchimagecreditholdFields[0].Descriptor()
+	// batchimagecredithold.BatchIDValidator is a validator for the "batch_id" field. It is called by the builders before save.
+	batchimagecredithold.BatchIDValidator = batchimagecreditholdDescBatchID.Validators[0].(func(string) error)
+	// batchimagecreditholdDescTemporaryReservedAmount is the schema descriptor for temporary_reserved_amount field.
+	batchimagecreditholdDescTemporaryReservedAmount := batchimagecreditholdFields[6].Descriptor()
+	// batchimagecredithold.DefaultTemporaryReservedAmount holds the default value on creation for the temporary_reserved_amount field.
+	batchimagecredithold.DefaultTemporaryReservedAmount = batchimagecreditholdDescTemporaryReservedAmount.Default.(float64)
+	// batchimagecreditholdDescPermanentReservedAmount is the schema descriptor for permanent_reserved_amount field.
+	batchimagecreditholdDescPermanentReservedAmount := batchimagecreditholdFields[7].Descriptor()
+	// batchimagecredithold.DefaultPermanentReservedAmount holds the default value on creation for the permanent_reserved_amount field.
+	batchimagecredithold.DefaultPermanentReservedAmount = batchimagecreditholdDescPermanentReservedAmount.Default.(float64)
+	// batchimagecreditholdDescCapturedAmount is the schema descriptor for captured_amount field.
+	batchimagecreditholdDescCapturedAmount := batchimagecreditholdFields[8].Descriptor()
+	// batchimagecredithold.DefaultCapturedAmount holds the default value on creation for the captured_amount field.
+	batchimagecredithold.DefaultCapturedAmount = batchimagecreditholdDescCapturedAmount.Default.(float64)
+	// batchimagecreditholdDescTemporaryCapturedAmount is the schema descriptor for temporary_captured_amount field.
+	batchimagecreditholdDescTemporaryCapturedAmount := batchimagecreditholdFields[9].Descriptor()
+	// batchimagecredithold.DefaultTemporaryCapturedAmount holds the default value on creation for the temporary_captured_amount field.
+	batchimagecredithold.DefaultTemporaryCapturedAmount = batchimagecreditholdDescTemporaryCapturedAmount.Default.(float64)
+	// batchimagecreditholdDescPermanentCapturedAmount is the schema descriptor for permanent_captured_amount field.
+	batchimagecreditholdDescPermanentCapturedAmount := batchimagecreditholdFields[10].Descriptor()
+	// batchimagecredithold.DefaultPermanentCapturedAmount holds the default value on creation for the permanent_captured_amount field.
+	batchimagecredithold.DefaultPermanentCapturedAmount = batchimagecreditholdDescPermanentCapturedAmount.Default.(float64)
+	// batchimagecreditholdDescExpiredUnrestoredAmount is the schema descriptor for expired_unrestored_amount field.
+	batchimagecreditholdDescExpiredUnrestoredAmount := batchimagecreditholdFields[11].Descriptor()
+	// batchimagecredithold.DefaultExpiredUnrestoredAmount holds the default value on creation for the expired_unrestored_amount field.
+	batchimagecredithold.DefaultExpiredUnrestoredAmount = batchimagecreditholdDescExpiredUnrestoredAmount.Default.(float64)
+	// batchimagecreditholdDescReserveFingerprint is the schema descriptor for reserve_fingerprint field.
+	batchimagecreditholdDescReserveFingerprint := batchimagecreditholdFields[12].Descriptor()
+	// batchimagecredithold.ReserveFingerprintValidator is a validator for the "reserve_fingerprint" field. It is called by the builders before save.
+	batchimagecredithold.ReserveFingerprintValidator = batchimagecreditholdDescReserveFingerprint.Validators[0].(func(string) error)
+	// batchimagecreditholdDescTerminalFingerprint is the schema descriptor for terminal_fingerprint field.
+	batchimagecreditholdDescTerminalFingerprint := batchimagecreditholdFields[13].Descriptor()
+	// batchimagecredithold.TerminalFingerprintValidator is a validator for the "terminal_fingerprint" field. It is called by the builders before save.
+	batchimagecredithold.TerminalFingerprintValidator = batchimagecreditholdDescTerminalFingerprint.Validators[0].(func(string) error)
+	// batchimagecreditholdDescReservedAt is the schema descriptor for reserved_at field.
+	batchimagecreditholdDescReservedAt := batchimagecreditholdFields[14].Descriptor()
+	// batchimagecredithold.DefaultReservedAt holds the default value on creation for the reserved_at field.
+	batchimagecredithold.DefaultReservedAt = batchimagecreditholdDescReservedAt.Default.(func() time.Time)
+	// batchimagecreditholdDescUpdatedAt is the schema descriptor for updated_at field.
+	batchimagecreditholdDescUpdatedAt := batchimagecreditholdFields[16].Descriptor()
+	// batchimagecredithold.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	batchimagecredithold.DefaultUpdatedAt = batchimagecreditholdDescUpdatedAt.Default.(func() time.Time)
+	// batchimagecredithold.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	batchimagecredithold.UpdateDefaultUpdatedAt = batchimagecreditholdDescUpdatedAt.UpdateDefault.(func() time.Time)
+	batchimagecreditholdallocationFields := schema.BatchImageCreditHoldAllocation{}.Fields()
+	_ = batchimagecreditholdallocationFields
+	// batchimagecreditholdallocationDescBatchID is the schema descriptor for batch_id field.
+	batchimagecreditholdallocationDescBatchID := batchimagecreditholdallocationFields[1].Descriptor()
+	// batchimagecreditholdallocation.BatchIDValidator is a validator for the "batch_id" field. It is called by the builders before save.
+	batchimagecreditholdallocation.BatchIDValidator = batchimagecreditholdallocationDescBatchID.Validators[0].(func(string) error)
+	// batchimagecreditholdallocationDescCapturedAmount is the schema descriptor for captured_amount field.
+	batchimagecreditholdallocationDescCapturedAmount := batchimagecreditholdallocationFields[5].Descriptor()
+	// batchimagecreditholdallocation.DefaultCapturedAmount holds the default value on creation for the captured_amount field.
+	batchimagecreditholdallocation.DefaultCapturedAmount = batchimagecreditholdallocationDescCapturedAmount.Default.(float64)
+	// batchimagecreditholdallocationDescRefundedAmount is the schema descriptor for refunded_amount field.
+	batchimagecreditholdallocationDescRefundedAmount := batchimagecreditholdallocationFields[6].Descriptor()
+	// batchimagecreditholdallocation.DefaultRefundedAmount holds the default value on creation for the refunded_amount field.
+	batchimagecreditholdallocation.DefaultRefundedAmount = batchimagecreditholdallocationDescRefundedAmount.Default.(float64)
+	// batchimagecreditholdallocationDescExpiredAmount is the schema descriptor for expired_amount field.
+	batchimagecreditholdallocationDescExpiredAmount := batchimagecreditholdallocationFields[7].Descriptor()
+	// batchimagecreditholdallocation.DefaultExpiredAmount holds the default value on creation for the expired_amount field.
+	batchimagecreditholdallocation.DefaultExpiredAmount = batchimagecreditholdallocationDescExpiredAmount.Default.(float64)
+	// batchimagecreditholdallocationDescCreatedAt is the schema descriptor for created_at field.
+	batchimagecreditholdallocationDescCreatedAt := batchimagecreditholdallocationFields[8].Descriptor()
+	// batchimagecreditholdallocation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	batchimagecreditholdallocation.DefaultCreatedAt = batchimagecreditholdallocationDescCreatedAt.Default.(func() time.Time)
+	// batchimagecreditholdallocationDescUpdatedAt is the schema descriptor for updated_at field.
+	batchimagecreditholdallocationDescUpdatedAt := batchimagecreditholdallocationFields[9].Descriptor()
+	// batchimagecreditholdallocation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	batchimagecreditholdallocation.DefaultUpdatedAt = batchimagecreditholdallocationDescUpdatedAt.Default.(func() time.Time)
+	// batchimagecreditholdallocation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	batchimagecreditholdallocation.UpdateDefaultUpdatedAt = batchimagecreditholdallocationDescUpdatedAt.UpdateDefault.(func() time.Time)
 	batchimageeventFields := schema.BatchImageEvent{}.Fields()
 	_ = batchimageeventFields
 	// batchimageeventDescJobID is the schema descriptor for job_id field.

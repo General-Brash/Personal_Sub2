@@ -55,9 +55,11 @@ type TemporaryCreditGrantEdges struct {
 	GrantedByUser *User `json:"granted_by_user,omitempty"`
 	// Consumptions holds the value of the consumptions edge.
 	Consumptions []*TemporaryCreditConsumption `json:"consumptions,omitempty"`
+	// BatchImageCreditHoldAllocations holds the value of the batch_image_credit_hold_allocations edge.
+	BatchImageCreditHoldAllocations []*BatchImageCreditHoldAllocation `json:"batch_image_credit_hold_allocations,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [5]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -100,6 +102,15 @@ func (e TemporaryCreditGrantEdges) ConsumptionsOrErr() ([]*TemporaryCreditConsum
 		return e.Consumptions, nil
 	}
 	return nil, &NotLoadedError{edge: "consumptions"}
+}
+
+// BatchImageCreditHoldAllocationsOrErr returns the BatchImageCreditHoldAllocations value or an error if the edge
+// was not loaded in eager-loading.
+func (e TemporaryCreditGrantEdges) BatchImageCreditHoldAllocationsOrErr() ([]*BatchImageCreditHoldAllocation, error) {
+	if e.loadedTypes[4] {
+		return e.BatchImageCreditHoldAllocations, nil
+	}
+	return nil, &NotLoadedError{edge: "batch_image_credit_hold_allocations"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -229,6 +240,11 @@ func (_m *TemporaryCreditGrant) QueryGrantedByUser() *UserQuery {
 // QueryConsumptions queries the "consumptions" edge of the TemporaryCreditGrant entity.
 func (_m *TemporaryCreditGrant) QueryConsumptions() *TemporaryCreditConsumptionQuery {
 	return NewTemporaryCreditGrantClient(_m.config).QueryConsumptions(_m)
+}
+
+// QueryBatchImageCreditHoldAllocations queries the "batch_image_credit_hold_allocations" edge of the TemporaryCreditGrant entity.
+func (_m *TemporaryCreditGrant) QueryBatchImageCreditHoldAllocations() *BatchImageCreditHoldAllocationQuery {
+	return NewTemporaryCreditGrantClient(_m.config).QueryBatchImageCreditHoldAllocations(_m)
 }
 
 // Update returns a builder for updating this TemporaryCreditGrant.

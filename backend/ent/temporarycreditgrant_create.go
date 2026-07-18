@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecreditholdallocation"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/temporarycreditconsumption"
 	"github.com/Wei-Shaw/sub2api/ent/temporarycreditgrant"
@@ -167,6 +168,21 @@ func (_c *TemporaryCreditGrantCreate) AddConsumptions(v ...*TemporaryCreditConsu
 		ids[i] = v[i].ID
 	}
 	return _c.AddConsumptionIDs(ids...)
+}
+
+// AddBatchImageCreditHoldAllocationIDs adds the "batch_image_credit_hold_allocations" edge to the BatchImageCreditHoldAllocation entity by IDs.
+func (_c *TemporaryCreditGrantCreate) AddBatchImageCreditHoldAllocationIDs(ids ...int64) *TemporaryCreditGrantCreate {
+	_c.mutation.AddBatchImageCreditHoldAllocationIDs(ids...)
+	return _c
+}
+
+// AddBatchImageCreditHoldAllocations adds the "batch_image_credit_hold_allocations" edges to the BatchImageCreditHoldAllocation entity.
+func (_c *TemporaryCreditGrantCreate) AddBatchImageCreditHoldAllocations(v ...*BatchImageCreditHoldAllocation) *TemporaryCreditGrantCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddBatchImageCreditHoldAllocationIDs(ids...)
 }
 
 // Mutation returns the TemporaryCreditGrantMutation object of the builder.
@@ -367,6 +383,22 @@ func (_c *TemporaryCreditGrantCreate) createSpec() (*TemporaryCreditGrant, *sqlg
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(temporarycreditconsumption.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.BatchImageCreditHoldAllocationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   temporarycreditgrant.BatchImageCreditHoldAllocationsTable,
+			Columns: []string{temporarycreditgrant.BatchImageCreditHoldAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecreditholdallocation.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

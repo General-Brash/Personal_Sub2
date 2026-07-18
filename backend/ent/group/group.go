@@ -122,6 +122,8 @@ const (
 	EdgeSubscriptions = "subscriptions"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeBatchImageCreditHolds holds the string denoting the batch_image_credit_holds edge name in mutations.
+	EdgeBatchImageCreditHolds = "batch_image_credit_holds"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
 	// EdgeAllowedUsers holds the string denoting the allowed_users edge name in mutations.
@@ -160,6 +162,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "group_id"
+	// BatchImageCreditHoldsTable is the table that holds the batch_image_credit_holds relation/edge.
+	BatchImageCreditHoldsTable = "batch_image_credit_holds"
+	// BatchImageCreditHoldsInverseTable is the table name for the BatchImageCreditHold entity.
+	// It exists in this package in order to avoid circular dependency with the "batchimagecredithold" package.
+	BatchImageCreditHoldsInverseTable = "batch_image_credit_holds"
+	// BatchImageCreditHoldsColumn is the table column denoting the batch_image_credit_holds relation/edge.
+	BatchImageCreditHoldsColumn = "group_id"
 	// AccountsTable is the table that holds the accounts relation/edge. The primary key declared below.
 	AccountsTable = "account_groups"
 	// AccountsInverseTable is the table name for the Account entity.
@@ -640,6 +649,20 @@ func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByBatchImageCreditHoldsCount orders the results by batch_image_credit_holds count.
+func ByBatchImageCreditHoldsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newBatchImageCreditHoldsStep(), opts...)
+	}
+}
+
+// ByBatchImageCreditHolds orders the results by batch_image_credit_holds terms.
+func ByBatchImageCreditHolds(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newBatchImageCreditHoldsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAccountsCount orders the results by accounts count.
 func ByAccountsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -721,6 +744,13 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newBatchImageCreditHoldsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(BatchImageCreditHoldsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, BatchImageCreditHoldsTable, BatchImageCreditHoldsColumn),
 	)
 }
 func newAccountsStep() *sqlgraph.Step {

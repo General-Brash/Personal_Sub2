@@ -40,7 +40,7 @@ func TestIdempotencyActorScopeMigration_PostgresLegacyContract(t *testing.T) {
 	secondID, err := insertLegacyIdempotencyRecord(ctx, db, "user.checkin", "second-legacy-key")
 	require.NoError(t, err)
 
-	require.NoError(t, seedMigrationHistoryBeforeActorScope(ctx, db))
+	require.NoError(t, seedMigrationHistoryExcept(ctx, db, idempotencyActorScopeMigration))
 	require.NoError(t, repository.ApplyMigrations(ctx, db))
 
 	requireLegacyActorScope(t, ctx, db, firstID, "user.checkin")
@@ -223,7 +223,7 @@ func requireLegacyBinaryShapeRemoved(t *testing.T, ctx context.Context, db *sql.
 	require.True(t, unique)
 }
 
-func seedMigrationHistoryBeforeActorScope(ctx context.Context, db *sql.DB) error {
+func seedMigrationHistoryExcept(ctx context.Context, db *sql.DB, excluded ...string) error {
 	if _, err := db.ExecContext(ctx, `
 		CREATE TABLE schema_migrations (
 			filename TEXT PRIMARY KEY,
@@ -234,13 +234,21 @@ func seedMigrationHistoryBeforeActorScope(ctx context.Context, db *sql.DB) error
 		return err
 	}
 
+	excludedSet := make(map[string]struct{}, len(excluded))
+	for _, name := range excluded {
+		excludedSet[name] = struct{}{}
+	}
+
 	files, err := fs.Glob(migrations.FS, "*.sql")
 	if err != nil {
 		return err
 	}
 	sort.Strings(files)
 	for _, name := range files {
-		if name >= idempotencyActorScopeMigration {
+		// The catalog contains same-numbered and later migrations. Mark all
+		// non-target files as applied so this focused fixture executes only the
+		// migration contract under test.
+		if _, skip := excludedSet[name]; skip {
 			continue
 		}
 		contents, err := fs.ReadFile(migrations.FS, name)

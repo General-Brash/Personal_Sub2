@@ -2197,6 +2197,29 @@ func HasUsageLogsWith(preds ...predicate.UsageLog) predicate.Group {
 	})
 }
 
+// HasBatchImageCreditHolds applies the HasEdge predicate on the "batch_image_credit_holds" edge.
+func HasBatchImageCreditHolds() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, BatchImageCreditHoldsTable, BatchImageCreditHoldsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasBatchImageCreditHoldsWith applies the HasEdge predicate on the "batch_image_credit_holds" edge with a given conditions (other predicates).
+func HasBatchImageCreditHoldsWith(preds ...predicate.BatchImageCreditHold) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newBatchImageCreditHoldsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasAccounts applies the HasEdge predicate on the "accounts" edge.
 func HasAccounts() predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {

@@ -355,6 +355,35 @@ func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, invit
 		return 0, nil
 	}
 
+	// Concrete repositories serialize on the inviter row and calculate the
+	// per-invitee cap inside the same transaction. Keep the legacy path below
+	// for lightweight test doubles and third-party implementations.
+	var freezeHours int
+	var perInviteeCap float64
+	if s.settingService != nil {
+		freezeHours = s.settingService.GetAffiliateRebateFreezeHours(ctx)
+		perInviteeCap = s.settingService.GetAffiliateRebatePerInviteeCap(ctx)
+	}
+	if outboxRepo, ok := s.repo.(AffiliateRebateOutboxRepository); ok {
+		result, err := outboxRepo.AccrueQuotaCapped(
+			ctx,
+			*inviteeSummary.InviterID,
+			inviteeUserID,
+			rebate,
+			perInviteeCap,
+			freezeHours,
+			sourceOrderID,
+			nil,
+		)
+		if err != nil {
+			return 0, err
+		}
+		if !result.Applied && !result.Duplicate {
+			return 0, nil
+		}
+		return result.Amount, nil
+	}
+
 	// 单人上限检查：精确截断到剩余额度
 	if s.settingService != nil {
 		if perInviteeCap := s.settingService.GetAffiliateRebatePerInviteeCap(ctx); perInviteeCap > 0 {
@@ -369,11 +398,6 @@ func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, invit
 				rebate = roundTo(remaining, 8)
 			}
 		}
-	}
-
-	var freezeHours int
-	if s.settingService != nil {
-		freezeHours = s.settingService.GetAffiliateRebateFreezeHours(ctx)
 	}
 
 	applied, err := s.repo.AccrueQuota(ctx, *inviteeSummary.InviterID, inviteeUserID, rebate, freezeHours, sourceOrderID)

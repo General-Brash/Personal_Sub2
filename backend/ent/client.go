@@ -17,11 +17,14 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/affiliaterebatejob"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecreditholdallocation"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageevent"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageitem"
 	"github.com/Wei-Shaw/sub2api/ent/batchimagejob"
@@ -71,6 +74,8 @@ type Client struct {
 	Account *AccountClient
 	// AccountGroup is the client for interacting with the AccountGroup builders.
 	AccountGroup *AccountGroupClient
+	// AffiliateRebateJob is the client for interacting with the AffiliateRebateJob builders.
+	AffiliateRebateJob *AffiliateRebateJobClient
 	// Announcement is the client for interacting with the Announcement builders.
 	Announcement *AnnouncementClient
 	// AnnouncementRead is the client for interacting with the AnnouncementRead builders.
@@ -79,6 +84,10 @@ type Client struct {
 	AuthIdentity *AuthIdentityClient
 	// AuthIdentityChannel is the client for interacting with the AuthIdentityChannel builders.
 	AuthIdentityChannel *AuthIdentityChannelClient
+	// BatchImageCreditHold is the client for interacting with the BatchImageCreditHold builders.
+	BatchImageCreditHold *BatchImageCreditHoldClient
+	// BatchImageCreditHoldAllocation is the client for interacting with the BatchImageCreditHoldAllocation builders.
+	BatchImageCreditHoldAllocation *BatchImageCreditHoldAllocationClient
 	// BatchImageEvent is the client for interacting with the BatchImageEvent builders.
 	BatchImageEvent *BatchImageEventClient
 	// BatchImageItem is the client for interacting with the BatchImageItem builders.
@@ -161,10 +170,13 @@ func (c *Client) init() {
 	c.APIKey = NewAPIKeyClient(c.config)
 	c.Account = NewAccountClient(c.config)
 	c.AccountGroup = NewAccountGroupClient(c.config)
+	c.AffiliateRebateJob = NewAffiliateRebateJobClient(c.config)
 	c.Announcement = NewAnnouncementClient(c.config)
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
 	c.AuthIdentity = NewAuthIdentityClient(c.config)
 	c.AuthIdentityChannel = NewAuthIdentityChannelClient(c.config)
+	c.BatchImageCreditHold = NewBatchImageCreditHoldClient(c.config)
+	c.BatchImageCreditHoldAllocation = NewBatchImageCreditHoldAllocationClient(c.config)
 	c.BatchImageEvent = NewBatchImageEventClient(c.config)
 	c.BatchImageItem = NewBatchImageItemClient(c.config)
 	c.BatchImageJob = NewBatchImageJobClient(c.config)
@@ -289,49 +301,52 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                           ctx,
-		config:                        cfg,
-		APIKey:                        NewAPIKeyClient(cfg),
-		Account:                       NewAccountClient(cfg),
-		AccountGroup:                  NewAccountGroupClient(cfg),
-		Announcement:                  NewAnnouncementClient(cfg),
-		AnnouncementRead:              NewAnnouncementReadClient(cfg),
-		AuthIdentity:                  NewAuthIdentityClient(cfg),
-		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
-		BatchImageEvent:               NewBatchImageEventClient(cfg),
-		BatchImageItem:                NewBatchImageItemClient(cfg),
-		BatchImageJob:                 NewBatchImageJobClient(cfg),
-		ChannelMonitor:                NewChannelMonitorClient(cfg),
-		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
-		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
-		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
-		DailyCheckin:                  NewDailyCheckinClient(cfg),
-		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
-		Group:                         NewGroupClient(cfg),
-		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
-		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
-		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
-		PaymentOrder:                  NewPaymentOrderClient(cfg),
-		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
-		PendingAuthSession:            NewPendingAuthSessionClient(cfg),
-		PromoCode:                     NewPromoCodeClient(cfg),
-		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
-		Proxy:                         NewProxyClient(cfg),
-		RedeemCode:                    NewRedeemCodeClient(cfg),
-		SecuritySecret:                NewSecuritySecretClient(cfg),
-		Setting:                       NewSettingClient(cfg),
-		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
-		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
-		TemporaryCreditConsumption:    NewTemporaryCreditConsumptionClient(cfg),
-		TemporaryCreditGrant:          NewTemporaryCreditGrantClient(cfg),
-		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
-		UsageLog:                      NewUsageLogClient(cfg),
-		User:                          NewUserClient(cfg),
-		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:            NewUserAttributeValueClient(cfg),
-		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
-		UserSubscription:              NewUserSubscriptionClient(cfg),
+		ctx:                            ctx,
+		config:                         cfg,
+		APIKey:                         NewAPIKeyClient(cfg),
+		Account:                        NewAccountClient(cfg),
+		AccountGroup:                   NewAccountGroupClient(cfg),
+		AffiliateRebateJob:             NewAffiliateRebateJobClient(cfg),
+		Announcement:                   NewAnnouncementClient(cfg),
+		AnnouncementRead:               NewAnnouncementReadClient(cfg),
+		AuthIdentity:                   NewAuthIdentityClient(cfg),
+		AuthIdentityChannel:            NewAuthIdentityChannelClient(cfg),
+		BatchImageCreditHold:           NewBatchImageCreditHoldClient(cfg),
+		BatchImageCreditHoldAllocation: NewBatchImageCreditHoldAllocationClient(cfg),
+		BatchImageEvent:                NewBatchImageEventClient(cfg),
+		BatchImageItem:                 NewBatchImageItemClient(cfg),
+		BatchImageJob:                  NewBatchImageJobClient(cfg),
+		ChannelMonitor:                 NewChannelMonitorClient(cfg),
+		ChannelMonitorDailyRollup:      NewChannelMonitorDailyRollupClient(cfg),
+		ChannelMonitorHistory:          NewChannelMonitorHistoryClient(cfg),
+		ChannelMonitorRequestTemplate:  NewChannelMonitorRequestTemplateClient(cfg),
+		DailyCheckin:                   NewDailyCheckinClient(cfg),
+		ErrorPassthroughRule:           NewErrorPassthroughRuleClient(cfg),
+		Group:                          NewGroupClient(cfg),
+		IdempotencyRecord:              NewIdempotencyRecordClient(cfg),
+		IdentityAdoptionDecision:       NewIdentityAdoptionDecisionClient(cfg),
+		PaymentAuditLog:                NewPaymentAuditLogClient(cfg),
+		PaymentOrder:                   NewPaymentOrderClient(cfg),
+		PaymentProviderInstance:        NewPaymentProviderInstanceClient(cfg),
+		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
+		PromoCode:                      NewPromoCodeClient(cfg),
+		PromoCodeUsage:                 NewPromoCodeUsageClient(cfg),
+		Proxy:                          NewProxyClient(cfg),
+		RedeemCode:                     NewRedeemCodeClient(cfg),
+		SecuritySecret:                 NewSecuritySecretClient(cfg),
+		Setting:                        NewSettingClient(cfg),
+		SubscriptionPlan:               NewSubscriptionPlanClient(cfg),
+		TLSFingerprintProfile:          NewTLSFingerprintProfileClient(cfg),
+		TemporaryCreditConsumption:     NewTemporaryCreditConsumptionClient(cfg),
+		TemporaryCreditGrant:           NewTemporaryCreditGrantClient(cfg),
+		UsageCleanupTask:               NewUsageCleanupTaskClient(cfg),
+		UsageLog:                       NewUsageLogClient(cfg),
+		User:                           NewUserClient(cfg),
+		UserAllowedGroup:               NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:        NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:             NewUserAttributeValueClient(cfg),
+		UserPlatformQuota:              NewUserPlatformQuotaClient(cfg),
+		UserSubscription:               NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -349,49 +364,52 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                           ctx,
-		config:                        cfg,
-		APIKey:                        NewAPIKeyClient(cfg),
-		Account:                       NewAccountClient(cfg),
-		AccountGroup:                  NewAccountGroupClient(cfg),
-		Announcement:                  NewAnnouncementClient(cfg),
-		AnnouncementRead:              NewAnnouncementReadClient(cfg),
-		AuthIdentity:                  NewAuthIdentityClient(cfg),
-		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
-		BatchImageEvent:               NewBatchImageEventClient(cfg),
-		BatchImageItem:                NewBatchImageItemClient(cfg),
-		BatchImageJob:                 NewBatchImageJobClient(cfg),
-		ChannelMonitor:                NewChannelMonitorClient(cfg),
-		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
-		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
-		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
-		DailyCheckin:                  NewDailyCheckinClient(cfg),
-		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
-		Group:                         NewGroupClient(cfg),
-		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
-		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
-		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
-		PaymentOrder:                  NewPaymentOrderClient(cfg),
-		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
-		PendingAuthSession:            NewPendingAuthSessionClient(cfg),
-		PromoCode:                     NewPromoCodeClient(cfg),
-		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
-		Proxy:                         NewProxyClient(cfg),
-		RedeemCode:                    NewRedeemCodeClient(cfg),
-		SecuritySecret:                NewSecuritySecretClient(cfg),
-		Setting:                       NewSettingClient(cfg),
-		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
-		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
-		TemporaryCreditConsumption:    NewTemporaryCreditConsumptionClient(cfg),
-		TemporaryCreditGrant:          NewTemporaryCreditGrantClient(cfg),
-		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
-		UsageLog:                      NewUsageLogClient(cfg),
-		User:                          NewUserClient(cfg),
-		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:            NewUserAttributeValueClient(cfg),
-		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
-		UserSubscription:              NewUserSubscriptionClient(cfg),
+		ctx:                            ctx,
+		config:                         cfg,
+		APIKey:                         NewAPIKeyClient(cfg),
+		Account:                        NewAccountClient(cfg),
+		AccountGroup:                   NewAccountGroupClient(cfg),
+		AffiliateRebateJob:             NewAffiliateRebateJobClient(cfg),
+		Announcement:                   NewAnnouncementClient(cfg),
+		AnnouncementRead:               NewAnnouncementReadClient(cfg),
+		AuthIdentity:                   NewAuthIdentityClient(cfg),
+		AuthIdentityChannel:            NewAuthIdentityChannelClient(cfg),
+		BatchImageCreditHold:           NewBatchImageCreditHoldClient(cfg),
+		BatchImageCreditHoldAllocation: NewBatchImageCreditHoldAllocationClient(cfg),
+		BatchImageEvent:                NewBatchImageEventClient(cfg),
+		BatchImageItem:                 NewBatchImageItemClient(cfg),
+		BatchImageJob:                  NewBatchImageJobClient(cfg),
+		ChannelMonitor:                 NewChannelMonitorClient(cfg),
+		ChannelMonitorDailyRollup:      NewChannelMonitorDailyRollupClient(cfg),
+		ChannelMonitorHistory:          NewChannelMonitorHistoryClient(cfg),
+		ChannelMonitorRequestTemplate:  NewChannelMonitorRequestTemplateClient(cfg),
+		DailyCheckin:                   NewDailyCheckinClient(cfg),
+		ErrorPassthroughRule:           NewErrorPassthroughRuleClient(cfg),
+		Group:                          NewGroupClient(cfg),
+		IdempotencyRecord:              NewIdempotencyRecordClient(cfg),
+		IdentityAdoptionDecision:       NewIdentityAdoptionDecisionClient(cfg),
+		PaymentAuditLog:                NewPaymentAuditLogClient(cfg),
+		PaymentOrder:                   NewPaymentOrderClient(cfg),
+		PaymentProviderInstance:        NewPaymentProviderInstanceClient(cfg),
+		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
+		PromoCode:                      NewPromoCodeClient(cfg),
+		PromoCodeUsage:                 NewPromoCodeUsageClient(cfg),
+		Proxy:                          NewProxyClient(cfg),
+		RedeemCode:                     NewRedeemCodeClient(cfg),
+		SecuritySecret:                 NewSecuritySecretClient(cfg),
+		Setting:                        NewSettingClient(cfg),
+		SubscriptionPlan:               NewSubscriptionPlanClient(cfg),
+		TLSFingerprintProfile:          NewTLSFingerprintProfileClient(cfg),
+		TemporaryCreditConsumption:     NewTemporaryCreditConsumptionClient(cfg),
+		TemporaryCreditGrant:           NewTemporaryCreditGrantClient(cfg),
+		UsageCleanupTask:               NewUsageCleanupTaskClient(cfg),
+		UsageLog:                       NewUsageLogClient(cfg),
+		User:                           NewUserClient(cfg),
+		UserAllowedGroup:               NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:        NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:             NewUserAttributeValueClient(cfg),
+		UserPlatformQuota:              NewUserPlatformQuotaClient(cfg),
+		UserSubscription:               NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -421,18 +439,19 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent, c.BatchImageItem,
-		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
-		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate, c.DailyCheckin,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
-		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
-		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.TemporaryCreditConsumption, c.TemporaryCreditGrant,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
-		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.APIKey, c.Account, c.AccountGroup, c.AffiliateRebateJob, c.Announcement,
+		c.AnnouncementRead, c.AuthIdentity, c.AuthIdentityChannel,
+		c.BatchImageCreditHold, c.BatchImageCreditHoldAllocation, c.BatchImageEvent,
+		c.BatchImageItem, c.BatchImageJob, c.ChannelMonitor,
+		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
+		c.ChannelMonitorRequestTemplate, c.DailyCheckin, c.ErrorPassthroughRule,
+		c.Group, c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
+		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.TemporaryCreditConsumption,
+		c.TemporaryCreditGrant, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -442,18 +461,19 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent, c.BatchImageItem,
-		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
-		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate, c.DailyCheckin,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
-		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
-		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.TemporaryCreditConsumption, c.TemporaryCreditGrant,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
-		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.APIKey, c.Account, c.AccountGroup, c.AffiliateRebateJob, c.Announcement,
+		c.AnnouncementRead, c.AuthIdentity, c.AuthIdentityChannel,
+		c.BatchImageCreditHold, c.BatchImageCreditHoldAllocation, c.BatchImageEvent,
+		c.BatchImageItem, c.BatchImageJob, c.ChannelMonitor,
+		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
+		c.ChannelMonitorRequestTemplate, c.DailyCheckin, c.ErrorPassthroughRule,
+		c.Group, c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
+		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.TemporaryCreditConsumption,
+		c.TemporaryCreditGrant, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -468,6 +488,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Account.mutate(ctx, m)
 	case *AccountGroupMutation:
 		return c.AccountGroup.mutate(ctx, m)
+	case *AffiliateRebateJobMutation:
+		return c.AffiliateRebateJob.mutate(ctx, m)
 	case *AnnouncementMutation:
 		return c.Announcement.mutate(ctx, m)
 	case *AnnouncementReadMutation:
@@ -476,6 +498,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AuthIdentity.mutate(ctx, m)
 	case *AuthIdentityChannelMutation:
 		return c.AuthIdentityChannel.mutate(ctx, m)
+	case *BatchImageCreditHoldMutation:
+		return c.BatchImageCreditHold.mutate(ctx, m)
+	case *BatchImageCreditHoldAllocationMutation:
+		return c.BatchImageCreditHoldAllocation.mutate(ctx, m)
 	case *BatchImageEventMutation:
 		return c.BatchImageEvent.mutate(ctx, m)
 	case *BatchImageItemMutation:
@@ -698,6 +724,22 @@ func (c *APIKeyClient) QueryUsageLogs(_m *APIKey) *UsageLogQuery {
 			sqlgraph.From(apikey.Table, apikey.FieldID, id),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, apikey.UsageLogsTable, apikey.UsageLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryBatchImageCreditHolds queries the batch_image_credit_holds edge of a APIKey.
+func (c *APIKeyClient) QueryBatchImageCreditHolds(_m *APIKey) *BatchImageCreditHoldQuery {
+	query := (&BatchImageCreditHoldClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, id),
+			sqlgraph.To(batchimagecredithold.Table, batchimagecredithold.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, apikey.BatchImageCreditHoldsTable, apikey.BatchImageCreditHoldsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -1076,6 +1118,139 @@ func (c *AccountGroupClient) mutate(ctx context.Context, m *AccountGroupMutation
 		return (&AccountGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AccountGroup mutation op: %q", m.Op())
+	}
+}
+
+// AffiliateRebateJobClient is a client for the AffiliateRebateJob schema.
+type AffiliateRebateJobClient struct {
+	config
+}
+
+// NewAffiliateRebateJobClient returns a client for the AffiliateRebateJob from the given config.
+func NewAffiliateRebateJobClient(c config) *AffiliateRebateJobClient {
+	return &AffiliateRebateJobClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `affiliaterebatejob.Hooks(f(g(h())))`.
+func (c *AffiliateRebateJobClient) Use(hooks ...Hook) {
+	c.hooks.AffiliateRebateJob = append(c.hooks.AffiliateRebateJob, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `affiliaterebatejob.Intercept(f(g(h())))`.
+func (c *AffiliateRebateJobClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AffiliateRebateJob = append(c.inters.AffiliateRebateJob, interceptors...)
+}
+
+// Create returns a builder for creating a AffiliateRebateJob entity.
+func (c *AffiliateRebateJobClient) Create() *AffiliateRebateJobCreate {
+	mutation := newAffiliateRebateJobMutation(c.config, OpCreate)
+	return &AffiliateRebateJobCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AffiliateRebateJob entities.
+func (c *AffiliateRebateJobClient) CreateBulk(builders ...*AffiliateRebateJobCreate) *AffiliateRebateJobCreateBulk {
+	return &AffiliateRebateJobCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AffiliateRebateJobClient) MapCreateBulk(slice any, setFunc func(*AffiliateRebateJobCreate, int)) *AffiliateRebateJobCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AffiliateRebateJobCreateBulk{err: fmt.Errorf("calling to AffiliateRebateJobClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AffiliateRebateJobCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AffiliateRebateJobCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AffiliateRebateJob.
+func (c *AffiliateRebateJobClient) Update() *AffiliateRebateJobUpdate {
+	mutation := newAffiliateRebateJobMutation(c.config, OpUpdate)
+	return &AffiliateRebateJobUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AffiliateRebateJobClient) UpdateOne(_m *AffiliateRebateJob) *AffiliateRebateJobUpdateOne {
+	mutation := newAffiliateRebateJobMutation(c.config, OpUpdateOne, withAffiliateRebateJob(_m))
+	return &AffiliateRebateJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AffiliateRebateJobClient) UpdateOneID(id int64) *AffiliateRebateJobUpdateOne {
+	mutation := newAffiliateRebateJobMutation(c.config, OpUpdateOne, withAffiliateRebateJobID(id))
+	return &AffiliateRebateJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AffiliateRebateJob.
+func (c *AffiliateRebateJobClient) Delete() *AffiliateRebateJobDelete {
+	mutation := newAffiliateRebateJobMutation(c.config, OpDelete)
+	return &AffiliateRebateJobDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AffiliateRebateJobClient) DeleteOne(_m *AffiliateRebateJob) *AffiliateRebateJobDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AffiliateRebateJobClient) DeleteOneID(id int64) *AffiliateRebateJobDeleteOne {
+	builder := c.Delete().Where(affiliaterebatejob.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AffiliateRebateJobDeleteOne{builder}
+}
+
+// Query returns a query builder for AffiliateRebateJob.
+func (c *AffiliateRebateJobClient) Query() *AffiliateRebateJobQuery {
+	return &AffiliateRebateJobQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAffiliateRebateJob},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AffiliateRebateJob entity by its id.
+func (c *AffiliateRebateJobClient) Get(ctx context.Context, id int64) (*AffiliateRebateJob, error) {
+	return c.Query().Where(affiliaterebatejob.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AffiliateRebateJobClient) GetX(ctx context.Context, id int64) *AffiliateRebateJob {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AffiliateRebateJobClient) Hooks() []Hook {
+	return c.hooks.AffiliateRebateJob
+}
+
+// Interceptors returns the client interceptors.
+func (c *AffiliateRebateJobClient) Interceptors() []Interceptor {
+	return c.inters.AffiliateRebateJob
+}
+
+func (c *AffiliateRebateJobClient) mutate(ctx context.Context, m *AffiliateRebateJobMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AffiliateRebateJobCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AffiliateRebateJobUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AffiliateRebateJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AffiliateRebateJobDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AffiliateRebateJob mutation op: %q", m.Op())
 	}
 }
 
@@ -1720,6 +1895,368 @@ func (c *AuthIdentityChannelClient) mutate(ctx context.Context, m *AuthIdentityC
 		return (&AuthIdentityChannelDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AuthIdentityChannel mutation op: %q", m.Op())
+	}
+}
+
+// BatchImageCreditHoldClient is a client for the BatchImageCreditHold schema.
+type BatchImageCreditHoldClient struct {
+	config
+}
+
+// NewBatchImageCreditHoldClient returns a client for the BatchImageCreditHold from the given config.
+func NewBatchImageCreditHoldClient(c config) *BatchImageCreditHoldClient {
+	return &BatchImageCreditHoldClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `batchimagecredithold.Hooks(f(g(h())))`.
+func (c *BatchImageCreditHoldClient) Use(hooks ...Hook) {
+	c.hooks.BatchImageCreditHold = append(c.hooks.BatchImageCreditHold, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `batchimagecredithold.Intercept(f(g(h())))`.
+func (c *BatchImageCreditHoldClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BatchImageCreditHold = append(c.inters.BatchImageCreditHold, interceptors...)
+}
+
+// Create returns a builder for creating a BatchImageCreditHold entity.
+func (c *BatchImageCreditHoldClient) Create() *BatchImageCreditHoldCreate {
+	mutation := newBatchImageCreditHoldMutation(c.config, OpCreate)
+	return &BatchImageCreditHoldCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BatchImageCreditHold entities.
+func (c *BatchImageCreditHoldClient) CreateBulk(builders ...*BatchImageCreditHoldCreate) *BatchImageCreditHoldCreateBulk {
+	return &BatchImageCreditHoldCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BatchImageCreditHoldClient) MapCreateBulk(slice any, setFunc func(*BatchImageCreditHoldCreate, int)) *BatchImageCreditHoldCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BatchImageCreditHoldCreateBulk{err: fmt.Errorf("calling to BatchImageCreditHoldClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BatchImageCreditHoldCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BatchImageCreditHoldCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BatchImageCreditHold.
+func (c *BatchImageCreditHoldClient) Update() *BatchImageCreditHoldUpdate {
+	mutation := newBatchImageCreditHoldMutation(c.config, OpUpdate)
+	return &BatchImageCreditHoldUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BatchImageCreditHoldClient) UpdateOne(_m *BatchImageCreditHold) *BatchImageCreditHoldUpdateOne {
+	mutation := newBatchImageCreditHoldMutation(c.config, OpUpdateOne, withBatchImageCreditHold(_m))
+	return &BatchImageCreditHoldUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BatchImageCreditHoldClient) UpdateOneID(id int64) *BatchImageCreditHoldUpdateOne {
+	mutation := newBatchImageCreditHoldMutation(c.config, OpUpdateOne, withBatchImageCreditHoldID(id))
+	return &BatchImageCreditHoldUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BatchImageCreditHold.
+func (c *BatchImageCreditHoldClient) Delete() *BatchImageCreditHoldDelete {
+	mutation := newBatchImageCreditHoldMutation(c.config, OpDelete)
+	return &BatchImageCreditHoldDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BatchImageCreditHoldClient) DeleteOne(_m *BatchImageCreditHold) *BatchImageCreditHoldDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BatchImageCreditHoldClient) DeleteOneID(id int64) *BatchImageCreditHoldDeleteOne {
+	builder := c.Delete().Where(batchimagecredithold.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BatchImageCreditHoldDeleteOne{builder}
+}
+
+// Query returns a query builder for BatchImageCreditHold.
+func (c *BatchImageCreditHoldClient) Query() *BatchImageCreditHoldQuery {
+	return &BatchImageCreditHoldQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBatchImageCreditHold},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BatchImageCreditHold entity by its id.
+func (c *BatchImageCreditHoldClient) Get(ctx context.Context, id int64) (*BatchImageCreditHold, error) {
+	return c.Query().Where(batchimagecredithold.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BatchImageCreditHoldClient) GetX(ctx context.Context, id int64) *BatchImageCreditHold {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a BatchImageCreditHold.
+func (c *BatchImageCreditHoldClient) QueryUser(_m *BatchImageCreditHold) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(batchimagecredithold.Table, batchimagecredithold.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, batchimagecredithold.UserTable, batchimagecredithold.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAPIKey queries the api_key edge of a BatchImageCreditHold.
+func (c *BatchImageCreditHoldClient) QueryAPIKey(_m *BatchImageCreditHold) *APIKeyQuery {
+	query := (&APIKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(batchimagecredithold.Table, batchimagecredithold.FieldID, id),
+			sqlgraph.To(apikey.Table, apikey.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, batchimagecredithold.APIKeyTable, batchimagecredithold.APIKeyColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGroup queries the group edge of a BatchImageCreditHold.
+func (c *BatchImageCreditHoldClient) QueryGroup(_m *BatchImageCreditHold) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(batchimagecredithold.Table, batchimagecredithold.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, batchimagecredithold.GroupTable, batchimagecredithold.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAllocations queries the allocations edge of a BatchImageCreditHold.
+func (c *BatchImageCreditHoldClient) QueryAllocations(_m *BatchImageCreditHold) *BatchImageCreditHoldAllocationQuery {
+	query := (&BatchImageCreditHoldAllocationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(batchimagecredithold.Table, batchimagecredithold.FieldID, id),
+			sqlgraph.To(batchimagecreditholdallocation.Table, batchimagecreditholdallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, batchimagecredithold.AllocationsTable, batchimagecredithold.AllocationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *BatchImageCreditHoldClient) Hooks() []Hook {
+	return c.hooks.BatchImageCreditHold
+}
+
+// Interceptors returns the client interceptors.
+func (c *BatchImageCreditHoldClient) Interceptors() []Interceptor {
+	return c.inters.BatchImageCreditHold
+}
+
+func (c *BatchImageCreditHoldClient) mutate(ctx context.Context, m *BatchImageCreditHoldMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BatchImageCreditHoldCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BatchImageCreditHoldUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BatchImageCreditHoldUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BatchImageCreditHoldDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BatchImageCreditHold mutation op: %q", m.Op())
+	}
+}
+
+// BatchImageCreditHoldAllocationClient is a client for the BatchImageCreditHoldAllocation schema.
+type BatchImageCreditHoldAllocationClient struct {
+	config
+}
+
+// NewBatchImageCreditHoldAllocationClient returns a client for the BatchImageCreditHoldAllocation from the given config.
+func NewBatchImageCreditHoldAllocationClient(c config) *BatchImageCreditHoldAllocationClient {
+	return &BatchImageCreditHoldAllocationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `batchimagecreditholdallocation.Hooks(f(g(h())))`.
+func (c *BatchImageCreditHoldAllocationClient) Use(hooks ...Hook) {
+	c.hooks.BatchImageCreditHoldAllocation = append(c.hooks.BatchImageCreditHoldAllocation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `batchimagecreditholdallocation.Intercept(f(g(h())))`.
+func (c *BatchImageCreditHoldAllocationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BatchImageCreditHoldAllocation = append(c.inters.BatchImageCreditHoldAllocation, interceptors...)
+}
+
+// Create returns a builder for creating a BatchImageCreditHoldAllocation entity.
+func (c *BatchImageCreditHoldAllocationClient) Create() *BatchImageCreditHoldAllocationCreate {
+	mutation := newBatchImageCreditHoldAllocationMutation(c.config, OpCreate)
+	return &BatchImageCreditHoldAllocationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BatchImageCreditHoldAllocation entities.
+func (c *BatchImageCreditHoldAllocationClient) CreateBulk(builders ...*BatchImageCreditHoldAllocationCreate) *BatchImageCreditHoldAllocationCreateBulk {
+	return &BatchImageCreditHoldAllocationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BatchImageCreditHoldAllocationClient) MapCreateBulk(slice any, setFunc func(*BatchImageCreditHoldAllocationCreate, int)) *BatchImageCreditHoldAllocationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BatchImageCreditHoldAllocationCreateBulk{err: fmt.Errorf("calling to BatchImageCreditHoldAllocationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BatchImageCreditHoldAllocationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BatchImageCreditHoldAllocationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BatchImageCreditHoldAllocation.
+func (c *BatchImageCreditHoldAllocationClient) Update() *BatchImageCreditHoldAllocationUpdate {
+	mutation := newBatchImageCreditHoldAllocationMutation(c.config, OpUpdate)
+	return &BatchImageCreditHoldAllocationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BatchImageCreditHoldAllocationClient) UpdateOne(_m *BatchImageCreditHoldAllocation) *BatchImageCreditHoldAllocationUpdateOne {
+	mutation := newBatchImageCreditHoldAllocationMutation(c.config, OpUpdateOne, withBatchImageCreditHoldAllocation(_m))
+	return &BatchImageCreditHoldAllocationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BatchImageCreditHoldAllocationClient) UpdateOneID(id int64) *BatchImageCreditHoldAllocationUpdateOne {
+	mutation := newBatchImageCreditHoldAllocationMutation(c.config, OpUpdateOne, withBatchImageCreditHoldAllocationID(id))
+	return &BatchImageCreditHoldAllocationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BatchImageCreditHoldAllocation.
+func (c *BatchImageCreditHoldAllocationClient) Delete() *BatchImageCreditHoldAllocationDelete {
+	mutation := newBatchImageCreditHoldAllocationMutation(c.config, OpDelete)
+	return &BatchImageCreditHoldAllocationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BatchImageCreditHoldAllocationClient) DeleteOne(_m *BatchImageCreditHoldAllocation) *BatchImageCreditHoldAllocationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BatchImageCreditHoldAllocationClient) DeleteOneID(id int64) *BatchImageCreditHoldAllocationDeleteOne {
+	builder := c.Delete().Where(batchimagecreditholdallocation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BatchImageCreditHoldAllocationDeleteOne{builder}
+}
+
+// Query returns a query builder for BatchImageCreditHoldAllocation.
+func (c *BatchImageCreditHoldAllocationClient) Query() *BatchImageCreditHoldAllocationQuery {
+	return &BatchImageCreditHoldAllocationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBatchImageCreditHoldAllocation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BatchImageCreditHoldAllocation entity by its id.
+func (c *BatchImageCreditHoldAllocationClient) Get(ctx context.Context, id int64) (*BatchImageCreditHoldAllocation, error) {
+	return c.Query().Where(batchimagecreditholdallocation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BatchImageCreditHoldAllocationClient) GetX(ctx context.Context, id int64) *BatchImageCreditHoldAllocation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryHold queries the hold edge of a BatchImageCreditHoldAllocation.
+func (c *BatchImageCreditHoldAllocationClient) QueryHold(_m *BatchImageCreditHoldAllocation) *BatchImageCreditHoldQuery {
+	query := (&BatchImageCreditHoldClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(batchimagecreditholdallocation.Table, batchimagecreditholdallocation.FieldID, id),
+			sqlgraph.To(batchimagecredithold.Table, batchimagecredithold.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, batchimagecreditholdallocation.HoldTable, batchimagecreditholdallocation.HoldColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGrant queries the grant edge of a BatchImageCreditHoldAllocation.
+func (c *BatchImageCreditHoldAllocationClient) QueryGrant(_m *BatchImageCreditHoldAllocation) *TemporaryCreditGrantQuery {
+	query := (&TemporaryCreditGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(batchimagecreditholdallocation.Table, batchimagecreditholdallocation.FieldID, id),
+			sqlgraph.To(temporarycreditgrant.Table, temporarycreditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, batchimagecreditholdallocation.GrantTable, batchimagecreditholdallocation.GrantColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *BatchImageCreditHoldAllocationClient) Hooks() []Hook {
+	return c.hooks.BatchImageCreditHoldAllocation
+}
+
+// Interceptors returns the client interceptors.
+func (c *BatchImageCreditHoldAllocationClient) Interceptors() []Interceptor {
+	return c.inters.BatchImageCreditHoldAllocation
+}
+
+func (c *BatchImageCreditHoldAllocationClient) mutate(ctx context.Context, m *BatchImageCreditHoldAllocationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BatchImageCreditHoldAllocationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BatchImageCreditHoldAllocationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BatchImageCreditHoldAllocationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BatchImageCreditHoldAllocationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BatchImageCreditHoldAllocation mutation op: %q", m.Op())
 	}
 }
 
@@ -3213,6 +3750,22 @@ func (c *GroupClient) QueryUsageLogs(_m *Group) *UsageLogQuery {
 			sqlgraph.From(group.Table, group.FieldID, id),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, group.UsageLogsTable, group.UsageLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryBatchImageCreditHolds queries the batch_image_credit_holds edge of a Group.
+func (c *GroupClient) QueryBatchImageCreditHolds(_m *Group) *BatchImageCreditHoldQuery {
+	query := (&BatchImageCreditHoldClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(batchimagecredithold.Table, batchimagecredithold.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.BatchImageCreditHoldsTable, group.BatchImageCreditHoldsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -5704,6 +6257,22 @@ func (c *TemporaryCreditGrantClient) QueryConsumptions(_m *TemporaryCreditGrant)
 	return query
 }
 
+// QueryBatchImageCreditHoldAllocations queries the batch_image_credit_hold_allocations edge of a TemporaryCreditGrant.
+func (c *TemporaryCreditGrantClient) QueryBatchImageCreditHoldAllocations(_m *TemporaryCreditGrant) *BatchImageCreditHoldAllocationQuery {
+	query := (&BatchImageCreditHoldAllocationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(temporarycreditgrant.Table, temporarycreditgrant.FieldID, id),
+			sqlgraph.To(batchimagecreditholdallocation.Table, batchimagecreditholdallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, temporarycreditgrant.BatchImageCreditHoldAllocationsTable, temporarycreditgrant.BatchImageCreditHoldAllocationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *TemporaryCreditGrantClient) Hooks() []Hook {
 	return c.hooks.TemporaryCreditGrant
@@ -6448,6 +7017,22 @@ func (c *UserClient) QueryGrantedTemporaryCreditGrants(_m *User) *TemporaryCredi
 			sqlgraph.From(user.Table, user.FieldID, id),
 			sqlgraph.To(temporarycreditgrant.Table, temporarycreditgrant.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.GrantedTemporaryCreditGrantsTable, user.GrantedTemporaryCreditGrantsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryBatchImageCreditHolds queries the batch_image_credit_holds edge of a User.
+func (c *UserClient) QueryBatchImageCreditHolds(_m *User) *BatchImageCreditHoldQuery {
+	query := (&BatchImageCreditHoldClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(batchimagecredithold.Table, batchimagecredithold.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.BatchImageCreditHoldsTable, user.BatchImageCreditHoldsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -7283,8 +7868,9 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
-		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
+		APIKey, Account, AccountGroup, AffiliateRebateJob, Announcement,
+		AnnouncementRead, AuthIdentity, AuthIdentityChannel, BatchImageCreditHold,
+		BatchImageCreditHoldAllocation, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
 		ChannelMonitorRequestTemplate, DailyCheckin, ErrorPassthroughRule, Group,
 		IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
@@ -7295,8 +7881,9 @@ type (
 		UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
-		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
+		APIKey, Account, AccountGroup, AffiliateRebateJob, Announcement,
+		AnnouncementRead, AuthIdentity, AuthIdentityChannel, BatchImageCreditHold,
+		BatchImageCreditHoldAllocation, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
 		ChannelMonitorRequestTemplate, DailyCheckin, ErrorPassthroughRule, Group,
 		IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,

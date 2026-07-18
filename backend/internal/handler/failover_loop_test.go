@@ -860,6 +860,41 @@ func TestHandleSelectionExhausted(t *testing.T) {
 	})
 }
 
+func TestHandlePricingUnavailable(t *testing.T) {
+	t.Run("excludes candidate and continues within budget", func(t *testing.T) {
+		fs := NewFailoverState(2, false)
+
+		action := fs.HandlePricingUnavailable(context.Background(), 101)
+
+		require.Equal(t, FailoverContinue, action)
+		require.Equal(t, 1, fs.SwitchCount)
+		require.Contains(t, fs.FailedAccountIDs, int64(101))
+		require.Nil(t, fs.LastFailoverErr)
+	})
+
+	t.Run("exhausts after every allowed switch", func(t *testing.T) {
+		fs := NewFailoverState(1, false)
+		require.Equal(t, FailoverContinue, fs.HandlePricingUnavailable(context.Background(), 101))
+
+		action := fs.HandlePricingUnavailable(context.Background(), 102)
+
+		require.Equal(t, FailoverExhausted, action)
+		require.Contains(t, fs.FailedAccountIDs, int64(102))
+	})
+
+	t.Run("honors cancellation without mutating state", func(t *testing.T) {
+		fs := NewFailoverState(2, false)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		action := fs.HandlePricingUnavailable(ctx, 101)
+
+		require.Equal(t, FailoverCanceled, action)
+		require.Empty(t, fs.FailedAccountIDs)
+		require.Zero(t, fs.SwitchCount)
+	})
+}
+
 // ---------------------------------------------------------------------------
 // failoverClientGone 测试
 // ---------------------------------------------------------------------------

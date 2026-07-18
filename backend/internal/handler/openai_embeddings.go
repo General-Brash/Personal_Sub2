@@ -104,6 +104,7 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 
 	failedAccountIDs := make(map[int64]struct{})
 	var lastFailoverErr *service.UpstreamFailoverError
+	var lastPricingErr error
 	switchCount := 0
 	maxAccountSwitches := h.maxAccountSwitches
 	if maxAccountSwitches <= 0 {
@@ -134,6 +135,14 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 				zap.Error(err),
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
 			)
+			if lastPricingErr != nil {
+				if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+					h.errorResponse(c, status, code, message)
+				} else {
+					h.errorResponse(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error())
+				}
+				return
+			}
 			if len(failedAccountIDs) == 0 {
 				cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel, service.PlatformOpenAI)
 				if !cls.ModelNotFound {
@@ -150,6 +159,14 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 			return
 		}
 		if selection == nil || selection.Account == nil {
+			if lastPricingErr != nil {
+				if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+					h.errorResponse(c, status, code, message)
+				} else {
+					h.errorResponse(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error())
+				}
+				return
+			}
 			cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel, service.PlatformOpenAI)
 			if !cls.ModelNotFound {
 				markOpsRoutingCapacityLimited(c)
@@ -162,6 +179,33 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 
 		accountReleaseFunc, accountAcquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, "", selection, false, &streamStarted, reqLog)
 		if !accountAcquired {
+			return
+		}
+		if pricingErr := h.gatewayService.PreflightTokenRequestPricing(c.Request.Context(), apiKey, account, reqModel, channelMapping); pricingErr != nil {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			if errors.Is(pricingErr, service.ErrBillingPricingUnavailable) {
+				lastPricingErr = pricingErr
+				failedAccountIDs[account.ID] = struct{}{}
+				if switchCount >= maxAccountSwitches {
+					if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+						h.errorResponse(c, status, code, message)
+					} else {
+						h.errorResponse(c, http.StatusServiceUnavailable, "api_error", pricingErr.Error())
+					}
+					return
+				}
+				switchCount++
+				continue
+			}
+			reqLog.Error("openai_embeddings.billing_pricing_preflight_failed",
+				zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+			if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+				h.errorResponse(c, status, code, message)
+			} else {
+				h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error())
+			}
 			return
 		}
 

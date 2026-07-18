@@ -15,6 +15,9 @@ type Account func(*sql.Selector)
 // AccountGroup is the predicate function for accountgroup builders.
 type AccountGroup func(*sql.Selector)
 
+// AffiliateRebateJob is the predicate function for affiliaterebatejob builders.
+type AffiliateRebateJob func(*sql.Selector)
+
 // Announcement is the predicate function for announcement builders.
 type Announcement func(*sql.Selector)
 
@@ -26,6 +29,12 @@ type AuthIdentity func(*sql.Selector)
 
 // AuthIdentityChannel is the predicate function for authidentitychannel builders.
 type AuthIdentityChannel func(*sql.Selector)
+
+// BatchImageCreditHold is the predicate function for batchimagecredithold builders.
+type BatchImageCreditHold func(*sql.Selector)
+
+// BatchImageCreditHoldAllocation is the predicate function for batchimagecreditholdallocation builders.
+type BatchImageCreditHoldAllocation func(*sql.Selector)
 
 // BatchImageEvent is the predicate function for batchimageevent builders.
 type BatchImageEvent func(*sql.Selector)

@@ -26,6 +26,7 @@ const appStore = vi.hoisted(() => ({
   cachedPublicSettings: null as null | {
     payment_enabled?: boolean
     risk_control_enabled?: boolean
+    channel_monitor_enabled?: boolean
     user_channel_status_enabled?: boolean
     user_subscriptions_enabled?: boolean
     admin_promo_codes_enabled?: boolean
@@ -122,6 +123,15 @@ function runGuard(meta: Record<string, unknown>, path: string) {
   return { navigation, next }
 }
 
+const featureFlagValues = [true, false, undefined] as const
+const combinedFeatureFlagCases = featureFlagValues.flatMap((pageFlag) =>
+  featureFlagValues.map((channelMonitorFlag) => ({
+    pageFlag,
+    channelMonitorFlag,
+    blocked: pageFlag === false || channelMonitorFlag === false,
+  })),
+)
+
 describe('feature route guard', () => {
   beforeAll(async () => {
     await import('@/router')
@@ -149,6 +159,17 @@ describe('feature route guard', () => {
 
     expect(route?.meta?.requiredFeatureFlag?.key).toBe(key)
   })
+
+  it.each(['/monitor', '/admin/channels/monitor'])(
+    'also binds %s to the shared channel monitor flag',
+    (path) => {
+      const route = routerHarness.routes.find((item) => item.path === path)
+
+      expect(route?.meta?.requiredFeatureFlags?.map((flag: { key: string }) => flag.key)).toEqual([
+        'channel_monitor_enabled',
+      ])
+    },
+  )
 
   it('waits for the first public-settings request before deciding payment access', async () => {
     const deferred = createDeferred<{ payment_enabled: boolean }>()
@@ -183,6 +204,24 @@ describe('feature route guard', () => {
         },
       },
       '/subscriptions',
+    ],
+    [
+      'page visibility list',
+      {
+        requiredFeatureFlags: [
+          {
+            key: 'user_channel_status_enabled',
+            mode: 'opt-out',
+            label: 'User Channel Status',
+          },
+          {
+            key: 'channel_monitor_enabled',
+            mode: 'opt-out',
+            label: 'Channel Monitor',
+          },
+        ],
+      },
+      '/monitor',
     ],
   ])('does not treat a failed %s settings load as explicitly disabled', async (_name, meta, path) => {
     authStore.isAdmin = meta.requiresRiskControl === true
@@ -250,4 +289,43 @@ describe('feature route guard', () => {
     expect(next).toHaveBeenCalledWith(target)
     expect(appStore.showWarning).toHaveBeenCalledWith('common.pageDisabledByAdmin')
   })
+
+  it.each(combinedFeatureFlagCases)(
+    'applies the user monitor flag matrix: page=$pageFlag monitor=$channelMonitorFlag',
+    async ({ pageFlag, channelMonitorFlag, blocked }) => {
+      const route = routerHarness.routes.find((item) => item.path === '/monitor')
+      appStore.cachedPublicSettings = {
+        user_channel_status_enabled: pageFlag,
+        channel_monitor_enabled: channelMonitorFlag,
+      }
+      appStore.publicSettingsLoaded = true
+
+      const { navigation, next } = runGuard(route?.meta ?? {}, '/monitor')
+      await navigation
+
+      expect(next).toHaveBeenCalledOnce()
+      expect(next).toHaveBeenCalledWith(...(blocked ? ['/dashboard'] : []))
+      expect(appStore.showWarning).toHaveBeenCalledTimes(blocked ? 1 : 0)
+    },
+  )
+
+  it.each(combinedFeatureFlagCases)(
+    'applies the administrator monitor flag matrix: page=$pageFlag monitor=$channelMonitorFlag',
+    async ({ pageFlag, channelMonitorFlag, blocked }) => {
+      const route = routerHarness.routes.find((item) => item.path === '/admin/channels/monitor')
+      authStore.isAdmin = true
+      appStore.cachedPublicSettings = {
+        admin_channel_management_enabled: pageFlag,
+        channel_monitor_enabled: channelMonitorFlag,
+      }
+      appStore.publicSettingsLoaded = true
+
+      const { navigation, next } = runGuard(route?.meta ?? {}, '/admin/channels/monitor')
+      await navigation
+
+      expect(next).toHaveBeenCalledOnce()
+      expect(next).toHaveBeenCalledWith(...(blocked ? ['/admin/dashboard'] : []))
+      expect(appStore.showWarning).toHaveBeenCalledTimes(blocked ? 1 : 0)
+    },
+  )
 })

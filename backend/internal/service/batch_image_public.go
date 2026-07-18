@@ -1014,8 +1014,8 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 			return nil, ErrBatchImageGroupDisabled
 		}
 		groupDefaultMultiplier := group.RateMultiplier
-		if groupDefaultMultiplier < 0 {
-			groupDefaultMultiplier = 0
+		if err := validateBillingPriceFor(req.Model, "batch_image", "group_rate_multiplier", groupDefaultMultiplier); err != nil {
+			return nil, err
 		}
 		effectiveGroupMultiplier := groupDefaultMultiplier
 		if s.UserGroupRateRepo != nil {
@@ -1031,17 +1031,23 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 		if group.ImageRateIndependent {
 			groupMultiplier = group.ImageRateMultiplier
 		}
-		if groupMultiplier < 0 {
-			groupMultiplier = 0
+		if err := validateBillingPriceFor(req.Model, "batch_image", "effective_group_rate_multiplier", groupMultiplier); err != nil {
+			return nil, err
 		}
 		discountMultiplier = group.BatchImageDiscountMultiplier
-		if discountMultiplier < 0 {
-			discountMultiplier = 0
+		if err := validateBillingPriceFor(req.Model, "batch_image", "batch_discount_multiplier", discountMultiplier); err != nil {
+			return nil, err
 		}
 		if group.BatchImageHoldMultiplier >= 0 {
 			holdMultiplier = group.BatchImageHoldMultiplier
 		}
-		if configuredUnit := group.GetImagePrice(req.ImageSize); configuredUnit != nil && *configuredUnit >= 0 {
+		if err := validateBillingPriceFor(req.Model, "batch_image", "hold_multiplier", holdMultiplier); err != nil {
+			return nil, err
+		}
+		if configuredUnit := group.GetImagePrice(req.ImageSize); configuredUnit != nil {
+			if err := validateBillingPriceFor(req.Model, "batch_image", "group_image_price", *configuredUnit); err != nil {
+				return nil, err
+			}
 			unit = *configuredUnit
 		}
 	}
@@ -1050,10 +1056,13 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 			return nil, ErrBatchImageSettlementPricingMissing
 		}
 		resolvedUnit, err := s.Pricing.BatchImageUnitPrice(ctx, &BatchImageJob{Provider: provider, Model: req.Model})
-		if err != nil || resolvedUnit < 0 {
-			return nil, ErrBatchImageSettlementPricingMissing
+		if err != nil {
+			return nil, err
 		}
 		unit = resolvedUnit
+	}
+	if err := validateBillingPriceFor(req.Model, "batch_image", "base_unit_price", unit); err != nil {
+		return nil, err
 	}
 	// 定价不变式：hold 比例不得低于 discount 比例，否则成功率足够高时
 	// actualCost > holdAmount，结算永远失败、冻结余额无法解冻。
@@ -1069,14 +1078,25 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 	if account != nil {
 		accountMultiplier = account.BillingRateMultiplier()
 	}
-	if accountMultiplier < 0 {
-		accountMultiplier = 0
+	if err := validateBillingPriceFor(req.Model, "batch_image", "account_rate_multiplier", accountMultiplier); err != nil {
+		return nil, err
 	}
 	standardUnitPrice := unit * groupMultiplier * accountMultiplier
 	billableUnitPrice := standardUnitPrice * discountMultiplier
 	holdUnitPrice := standardUnitPrice * holdMultiplier
 	estimatedCost := billableUnitPrice * float64(len(req.Items))
 	holdAmount := holdUnitPrice * float64(len(req.Items))
+	for field, value := range map[string]float64{
+		"standard_unit_price": standardUnitPrice,
+		"billable_unit_price": billableUnitPrice,
+		"hold_unit_price":     holdUnitPrice,
+		"estimated_cost":      estimatedCost,
+		"hold_amount":         holdAmount,
+	} {
+		if err := validateBillingPriceFor(req.Model, "batch_image", field, value); err != nil {
+			return nil, err
+		}
+	}
 	return &BatchImagePricingSnapshot{
 		BaseUnitPrice:           unit,
 		GroupRateMultiplier:     groupMultiplier,

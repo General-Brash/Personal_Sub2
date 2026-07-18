@@ -54,9 +54,18 @@ func (e *handlerPromptEngine) snapshot() (evaluated, enqueued int, requests []se
 func securityAuditMediaTestMiddleware(c *gin.Context) {
 	groupID := int64(3)
 	user := &service.User{ID: 7, Username: "media-user", Email: "media@example.test"}
+	imagePrice := 0.134
 	c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
 		ID: 9, UserID: 7, User: user, Name: "media-key", GroupID: &groupID,
-		Group: &service.Group{ID: groupID, Name: "media-group", Platform: service.PlatformOpenAI, AllowImageGeneration: true},
+		Group: &service.Group{
+			ID:                   groupID,
+			Name:                 "media-group",
+			Platform:             service.PlatformOpenAI,
+			AllowImageGeneration: true,
+			ImagePrice1K:         &imagePrice,
+			ImagePrice2K:         &imagePrice,
+			ImagePrice4K:         &imagePrice,
+		},
 	})
 	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 7, Concurrency: 2})
 	c.Next()
@@ -101,7 +110,8 @@ func TestAsyncImageSuccessfulPrecheckIsNotRepeatedByDetachedExecution(t *testing
 	store := &asyncImageMemoryStore{tasks: map[string]*service.ImageTaskRecord{}}
 	tasks := service.NewImageTaskServiceWithUploader(store, nil, time.Hour, time.Minute)
 	engine := &handlerPromptEngine{mode: securityaudit.ModeBlocking, decision: &securityaudit.PromptDecision{Kind: securityaudit.DecisionAllow, AllowNextStage: true}}
-	openAI := &OpenAIGatewayHandler{securityAuditCoordinator: securityaudit.NewCoordinator(nil, engine)}
+	openAI, _ := newMissingPricingOpenAIHandler(t, service.Account{}, nil, nil)
+	openAI.securityAuditCoordinator = securityaudit.NewCoordinator(nil, engine)
 	h := &AsyncImageHandler{tasks: tasks, openAI: openAI}
 	var executionMu sync.Mutex
 	repeatedDecision := false

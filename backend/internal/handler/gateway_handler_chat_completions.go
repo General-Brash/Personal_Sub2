@@ -161,6 +161,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	if groupPlatform == service.PlatformGemini {
 		fs = NewFailoverState(h.maxAccountSwitchesGemini, false)
 	}
+	var lastPricingErr error
 
 	for {
 		if c.Request.Context().Err() != nil {
@@ -178,6 +179,14 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 					message = "No available accounts: " + err.Error()
 				}
 				h.chatCompletionsErrorResponse(c, cls.Status, cls.ErrType, message)
+				return
+			}
+			if lastPricingErr != nil && fs.LastFailoverErr == nil {
+				if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+					h.chatCompletionsErrorResponse(c, status, code, message)
+				} else {
+					h.chatCompletionsErrorResponse(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error())
+				}
 				return
 			}
 			action := fs.HandleSelectionExhausted(c.Request.Context())
@@ -229,6 +238,28 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			}
 			fs.FailedAccountIDs[account.ID] = struct{}{}
 			continue
+		}
+		if pricingErr := h.gatewayService.PreflightTokenRequestPricing(c.Request.Context(), apiKey, account, reqModel, channelMapping); pricingErr != nil {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			if errors.Is(pricingErr, service.ErrBillingPricingUnavailable) {
+				lastPricingErr = pricingErr
+				switch fs.HandlePricingUnavailable(c.Request.Context(), account.ID) {
+				case FailoverContinue:
+					continue
+				case FailoverCanceled:
+					failoverClientGone(c)
+					return
+				}
+			}
+			reqLog.Error("gateway.cc.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+			if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+				h.chatCompletionsErrorResponse(c, status, code, message)
+			} else {
+				h.chatCompletionsErrorResponse(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error())
+			}
+			return
 		}
 
 		// 5. Forward request

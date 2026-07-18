@@ -85,21 +85,54 @@ func TestUsageBillingRepositoryApply_PersistsUsageLogAndTemporaryCreditAtomicall
 	ctx := context.Background()
 	client := testEntClient(t)
 	repo := NewUsageBillingRepository(client, integrationDB)
+	requestID := uuid.NewString()
 
 	user := mustCreateUser(t, client, &service.User{
 		Email:        fmt.Sprintf("usage-billing-atomic-user-%d@example.com", time.Now().UnixNano()),
 		PasswordHash: "hash",
 		Balance:      100,
 	})
+	var apiKeyID, accountID, grantID int64
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		steps := []struct {
+			name  string
+			query string
+			args  []any
+		}{
+			{
+				name: "temporary credit consumptions",
+				query: `DELETE FROM temporary_credit_consumptions
+WHERE grant_id = $1
+   OR usage_log_id IN (
+       SELECT id FROM usage_logs WHERE request_id = $2 AND api_key_id = $3
+   )`,
+				args: []any{grantID, requestID, apiKeyID},
+			},
+			{name: "temporary credit grant", query: "DELETE FROM temporary_credit_grants WHERE id = $1", args: []any{grantID}},
+			{name: "usage log", query: "DELETE FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", args: []any{requestID, apiKeyID}},
+			{name: "usage billing dedup", query: "DELETE FROM usage_billing_dedup WHERE request_id = $1 AND api_key_id = $2", args: []any{requestID, apiKeyID}},
+			{name: "API key", query: "DELETE FROM api_keys WHERE id = $1", args: []any{apiKeyID}},
+			{name: "account", query: "DELETE FROM accounts WHERE id = $1", args: []any{accountID}},
+			{name: "user", query: "DELETE FROM users WHERE id = $1", args: []any{user.ID}},
+		}
+		for _, step := range steps {
+			if _, err := integrationDB.ExecContext(cleanupCtx, step.query, step.args...); err != nil {
+				t.Errorf("clean up atomic usage billing %s: %v", step.name, err)
+			}
+		}
+	})
 	apiKey := mustCreateApiKey(t, client, &service.APIKey{
 		UserID: user.ID,
 		Key:    "sk-usage-billing-atomic-" + uuid.NewString(),
 		Name:   "billing-atomic",
 	})
+	apiKeyID = apiKey.ID
 	account := mustCreateAccount(t, client, &service.Account{
 		Name: "usage-billing-atomic-account-" + uuid.NewString(),
 		Type: service.AccountTypeAPIKey,
 	})
+	accountID = account.ID
 	adminID := user.ID
 	grant, err := service.NewTemporaryCreditService(NewTemporaryCreditRepository(integrationDB)).CreateGrant(ctx, service.CreateTemporaryCreditGrantInput{
 		UserID:    user.ID,
@@ -108,8 +141,8 @@ func TestUsageBillingRepositoryApply_PersistsUsageLogAndTemporaryCreditAtomicall
 		GrantedBy: &adminID,
 	})
 	require.NoError(t, err)
+	grantID = grant.ID
 
-	requestID := uuid.NewString()
 	usageLog := &service.UsageLog{
 		UserID:    user.ID,
 		APIKeyID:  apiKey.ID,

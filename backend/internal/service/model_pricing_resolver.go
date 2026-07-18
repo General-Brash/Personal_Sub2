@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"log/slog"
+	"strings"
 )
 
 // PricingSource 定价来源标识
@@ -27,7 +28,8 @@ type ResolvedPricing struct {
 	RequestTiers []PricingInterval
 
 	// 按次/图片模式：默认价格（未命中层级时使用）
-	DefaultPerRequestPrice float64
+	DefaultPerRequestPrice        float64
+	DefaultPerRequestPricePresent bool
 
 	// 来源标识
 	Source string // "channel", "litellm", "fallback"
@@ -176,10 +178,12 @@ func (r *ModelPricingResolver) applyTokenOverrides(chPricing *ChannelModelPricin
 
 	if chPricing.InputPrice != nil {
 		resolved.BasePricing.InputPricePerToken = *chPricing.InputPrice
+		resolved.BasePricing.InputPricePresent = true
 		resolved.BasePricing.InputPricePerTokenPriority = *chPricing.InputPrice
 	}
 	if chPricing.OutputPrice != nil {
 		resolved.BasePricing.OutputPricePerToken = *chPricing.OutputPrice
+		resolved.BasePricing.OutputPricePresent = true
 		resolved.BasePricing.OutputPricePerTokenPriority = *chPricing.OutputPrice
 	}
 	if chPricing.CacheWritePrice != nil {
@@ -221,6 +225,7 @@ func (r *ModelPricingResolver) applyRequestTierOverrides(chPricing *ChannelModel
 	resolved.RequestTiers = filterValidIntervals(chPricing.Intervals)
 	if chPricing.PerRequestPrice != nil {
 		resolved.DefaultPerRequestPrice = *chPricing.PerRequestPrice
+		resolved.DefaultPerRequestPricePresent = true
 	}
 }
 
@@ -260,10 +265,12 @@ func intervalToModelPricing(iv *PricingInterval, supportsCacheBreakdown bool, ch
 	}
 	if iv.InputPrice != nil {
 		pricing.InputPricePerToken = *iv.InputPrice
+		pricing.InputPricePresent = true
 		pricing.InputPricePerTokenPriority = *iv.InputPrice
 	}
 	if iv.OutputPrice != nil {
 		pricing.OutputPricePerToken = *iv.OutputPrice
+		pricing.OutputPricePresent = true
 		pricing.OutputPricePerTokenPriority = *iv.OutputPrice
 	}
 	if iv.CacheWritePrice != nil {
@@ -291,19 +298,37 @@ func intervalToModelPricing(iv *PricingInterval, supportsCacheBreakdown bool, ch
 
 // GetRequestTierPrice 根据层级标签获取按次价格
 func (r *ModelPricingResolver) GetRequestTierPrice(resolved *ResolvedPricing, tierLabel string) float64 {
+	price, _ := r.FindRequestTierPrice(resolved, tierLabel)
+	return price
+}
+
+// FindRequestTierPrice preserves presence so an explicitly configured zero
+// price does not fall through to another tier or the default price.
+func (r *ModelPricingResolver) FindRequestTierPrice(resolved *ResolvedPricing, tierLabel string) (float64, bool) {
+	if resolved == nil {
+		return 0, false
+	}
 	for _, tier := range resolved.RequestTiers {
-		if tier.TierLabel == tierLabel && tier.PerRequestPrice != nil {
-			return *tier.PerRequestPrice
+		if strings.EqualFold(strings.TrimSpace(tier.TierLabel), strings.TrimSpace(tierLabel)) && tier.PerRequestPrice != nil {
+			return *tier.PerRequestPrice, true
 		}
 	}
-	return 0
+	return 0, false
 }
 
 // GetRequestTierPriceByContext 根据 context token 数获取按次价格
 func (r *ModelPricingResolver) GetRequestTierPriceByContext(resolved *ResolvedPricing, totalContextTokens int) float64 {
+	price, _ := r.FindRequestTierPriceByContext(resolved, totalContextTokens)
+	return price
+}
+
+func (r *ModelPricingResolver) FindRequestTierPriceByContext(resolved *ResolvedPricing, totalContextTokens int) (float64, bool) {
+	if resolved == nil {
+		return 0, false
+	}
 	iv := FindMatchingInterval(resolved.RequestTiers, totalContextTokens)
 	if iv != nil && iv.PerRequestPrice != nil {
-		return *iv.PerRequestPrice
+		return *iv.PerRequestPrice, true
 	}
-	return 0
+	return 0, false
 }

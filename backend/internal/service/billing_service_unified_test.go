@@ -230,8 +230,9 @@ func TestCalculateCostUnified_UsesPreResolvedPricing(t *testing.T) {
 
 	// Pre-resolve with per_request mode to verify it's used instead of re-resolving
 	preResolved := &ResolvedPricing{
-		Mode:                   BillingModePerRequest,
-		DefaultPerRequestPrice: 0.07,
+		Mode:                          BillingModePerRequest,
+		DefaultPerRequestPrice:        0.07,
+		DefaultPerRequestPricePresent: true,
 	}
 
 	cost, err := bs.CalculateCostUnified(CostInput{

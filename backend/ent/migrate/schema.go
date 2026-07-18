@@ -259,6 +259,59 @@ var (
 			},
 		},
 	}
+	// AffiliateRebateJobsColumns holds the columns for the "affiliate_rebate_jobs" table.
+	AffiliateRebateJobsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "invitee_user_id", Type: field.TypeInt64},
+		{Name: "source_redeem_code_id", Type: field.TypeInt64},
+		{Name: "source_kind", Type: field.TypeEnum, Enums: []string{"redeem", "admin_recharge"}},
+		{Name: "base_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "processing", "succeeded", "skipped", "failed"}, Default: "pending"},
+		{Name: "attempts", Type: field.TypeInt, Default: 0},
+		{Name: "next_retry_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "last_error", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "last_error_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "processing_started_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "succeeded_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "skipped_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "failed_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// AffiliateRebateJobsTable holds the schema information for the "affiliate_rebate_jobs" table.
+	AffiliateRebateJobsTable = &schema.Table{
+		Name:       "affiliate_rebate_jobs",
+		Columns:    AffiliateRebateJobsColumns,
+		PrimaryKey: []*schema.Column{AffiliateRebateJobsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "affiliaterebatejob_source_redeem_code_id",
+				Unique:  true,
+				Columns: []*schema.Column{AffiliateRebateJobsColumns[2]},
+			},
+			{
+				Name:    "affiliaterebatejob_next_retry_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{AffiliateRebateJobsColumns[7], AffiliateRebateJobsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status IN ('pending', 'failed')",
+				},
+			},
+			{
+				Name:    "affiliaterebatejob_processing_started_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{AffiliateRebateJobsColumns[10], AffiliateRebateJobsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'processing'",
+				},
+			},
+			{
+				Name:    "affiliaterebatejob_invitee_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AffiliateRebateJobsColumns[1], AffiliateRebateJobsColumns[14]},
+			},
+		},
+	}
 	// AnnouncementsColumns holds the columns for the "announcements" table.
 	AnnouncementsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -432,6 +485,134 @@ var (
 				Name:    "authidentitychannel_identity_id",
 				Unique:  false,
 				Columns: []*schema.Column{AuthIdentityChannelsColumns[9]},
+			},
+		},
+	}
+	// BatchImageCreditHoldsColumns holds the columns for the "batch_image_credit_holds" table.
+	BatchImageCreditHoldsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "batch_id", Type: field.TypeString, Size: 64},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"reserved", "captured", "released"}, Default: "reserved"},
+		{Name: "hold_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "temporary_reserved_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "permanent_reserved_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "captured_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "temporary_captured_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "permanent_captured_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "expired_unrestored_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "reserve_fingerprint", Type: field.TypeString, Size: 128},
+		{Name: "terminal_fingerprint", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "reserved_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "settled_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "api_key_id", Type: field.TypeInt64},
+		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// BatchImageCreditHoldsTable holds the schema information for the "batch_image_credit_holds" table.
+	BatchImageCreditHoldsTable = &schema.Table{
+		Name:       "batch_image_credit_holds",
+		Columns:    BatchImageCreditHoldsColumns,
+		PrimaryKey: []*schema.Column{BatchImageCreditHoldsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "batch_image_credit_holds_api_keys_batch_image_credit_holds",
+				Columns:    []*schema.Column{BatchImageCreditHoldsColumns[15]},
+				RefColumns: []*schema.Column{APIKeysColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "batch_image_credit_holds_groups_batch_image_credit_holds",
+				Columns:    []*schema.Column{BatchImageCreditHoldsColumns[16]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "batch_image_credit_holds_users_batch_image_credit_holds",
+				Columns:    []*schema.Column{BatchImageCreditHoldsColumns[17]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "batchimagecredithold_batch_id",
+				Unique:  true,
+				Columns: []*schema.Column{BatchImageCreditHoldsColumns[1]},
+			},
+			{
+				Name:    "batchimagecredithold_user_id_status_reserved_at",
+				Unique:  false,
+				Columns: []*schema.Column{BatchImageCreditHoldsColumns[17], BatchImageCreditHoldsColumns[2], BatchImageCreditHoldsColumns[12]},
+			},
+			{
+				Name:    "batchimagecredithold_api_key_id_reserved_at",
+				Unique:  false,
+				Columns: []*schema.Column{BatchImageCreditHoldsColumns[15], BatchImageCreditHoldsColumns[12]},
+			},
+			{
+				Name:    "batchimagecredithold_group_id_reserved_at",
+				Unique:  false,
+				Columns: []*schema.Column{BatchImageCreditHoldsColumns[16], BatchImageCreditHoldsColumns[12]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "group_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "batchimagecredithold_status_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{BatchImageCreditHoldsColumns[2], BatchImageCreditHoldsColumns[14]},
+			},
+		},
+	}
+	// BatchImageCreditHoldAllocationsColumns holds the columns for the "batch_image_credit_hold_allocations" table.
+	BatchImageCreditHoldAllocationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "batch_id", Type: field.TypeString, Size: 64},
+		{Name: "grant_expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "reserved_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "captured_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "refunded_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "expired_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "hold_id", Type: field.TypeInt64},
+		{Name: "grant_id", Type: field.TypeInt64},
+	}
+	// BatchImageCreditHoldAllocationsTable holds the schema information for the "batch_image_credit_hold_allocations" table.
+	BatchImageCreditHoldAllocationsTable = &schema.Table{
+		Name:       "batch_image_credit_hold_allocations",
+		Columns:    BatchImageCreditHoldAllocationsColumns,
+		PrimaryKey: []*schema.Column{BatchImageCreditHoldAllocationsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "batch_image_credit_hold_allocations_batch_image_credit_holds_allocations",
+				Columns:    []*schema.Column{BatchImageCreditHoldAllocationsColumns[9]},
+				RefColumns: []*schema.Column{BatchImageCreditHoldsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "batch_image_credit_hold_allocations_temporary_credit_grants_batch_image_credit_hold_allocations",
+				Columns:    []*schema.Column{BatchImageCreditHoldAllocationsColumns[10]},
+				RefColumns: []*schema.Column{TemporaryCreditGrantsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "batchimagecreditholdallocation_hold_id_grant_id",
+				Unique:  true,
+				Columns: []*schema.Column{BatchImageCreditHoldAllocationsColumns[9], BatchImageCreditHoldAllocationsColumns[10]},
+			},
+			{
+				Name:    "batchimagecreditholdallocation_batch_id",
+				Unique:  false,
+				Columns: []*schema.Column{BatchImageCreditHoldAllocationsColumns[1]},
+			},
+			{
+				Name:    "batchimagecreditholdallocation_grant_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{BatchImageCreditHoldAllocationsColumns[10], BatchImageCreditHoldAllocationsColumns[7]},
 			},
 		},
 	}
@@ -2154,10 +2335,13 @@ var (
 		APIKeysTable,
 		AccountsTable,
 		AccountGroupsTable,
+		AffiliateRebateJobsTable,
 		AnnouncementsTable,
 		AnnouncementReadsTable,
 		AuthIdentitiesTable,
 		AuthIdentityChannelsTable,
+		BatchImageCreditHoldsTable,
+		BatchImageCreditHoldAllocationsTable,
 		BatchImageEventsTable,
 		BatchImageItemsTable,
 		BatchImageJobsTable,
@@ -2211,6 +2395,15 @@ func init() {
 	AccountGroupsTable.Annotation = &entsql.Annotation{
 		Table: "account_groups",
 	}
+	AffiliateRebateJobsTable.Annotation = &entsql.Annotation{
+		Table: "affiliate_rebate_jobs",
+	}
+	AffiliateRebateJobsTable.Annotation.Checks = map[string]string{
+		"affiliate_rebate_jobs_amount_check":      "base_amount > 0",
+		"affiliate_rebate_jobs_attempts_check":    "attempts >= 0",
+		"affiliate_rebate_jobs_source_kind_check": "source_kind IN ('redeem', 'admin_recharge')",
+		"affiliate_rebate_jobs_status_check":      "status IN ('pending', 'processing', 'succeeded', 'skipped', 'failed')",
+	}
 	AnnouncementsTable.Annotation = &entsql.Annotation{
 		Table: "announcements",
 	}
@@ -2226,6 +2419,31 @@ func init() {
 	AuthIdentityChannelsTable.ForeignKeys[0].RefTable = AuthIdentitiesTable
 	AuthIdentityChannelsTable.Annotation = &entsql.Annotation{
 		Table: "auth_identity_channels",
+	}
+	BatchImageCreditHoldsTable.ForeignKeys[0].RefTable = APIKeysTable
+	BatchImageCreditHoldsTable.ForeignKeys[1].RefTable = GroupsTable
+	BatchImageCreditHoldsTable.ForeignKeys[2].RefTable = UsersTable
+	BatchImageCreditHoldsTable.Annotation = &entsql.Annotation{
+		Table: "batch_image_credit_holds",
+	}
+	BatchImageCreditHoldsTable.Annotation.Checks = map[string]string{
+		"batch_image_credit_holds_amounts_nonnegative_check":   "hold_amount >= 0 AND temporary_reserved_amount >= 0 AND permanent_reserved_amount >= 0 AND captured_amount >= 0 AND temporary_captured_amount >= 0 AND permanent_captured_amount >= 0 AND expired_unrestored_amount >= 0",
+		"batch_image_credit_holds_captured_conservation_check": "temporary_captured_amount + permanent_captured_amount = captured_amount AND temporary_captured_amount <= temporary_reserved_amount AND permanent_captured_amount <= permanent_reserved_amount AND captured_amount <= hold_amount",
+		"batch_image_credit_holds_expired_bound_check":         "expired_unrestored_amount <= temporary_reserved_amount - temporary_captured_amount",
+		"batch_image_credit_holds_fingerprint_check":           "(trim(reserve_fingerprint) <> '' AND (terminal_fingerprint IS NULL OR trim(terminal_fingerprint) <> ''))",
+		"batch_image_credit_holds_reserved_conservation_check": "temporary_reserved_amount + permanent_reserved_amount = hold_amount",
+		"batch_image_credit_holds_terminal_state_check":        "((status = 'reserved' AND captured_amount = 0 AND temporary_captured_amount = 0 AND permanent_captured_amount = 0 AND expired_unrestored_amount = 0 AND terminal_fingerprint IS NULL AND settled_at IS NULL) OR (status = 'captured' AND terminal_fingerprint IS NOT NULL AND settled_at IS NOT NULL AND settled_at >= reserved_at) OR (status = 'released' AND captured_amount = 0 AND temporary_captured_amount = 0 AND permanent_captured_amount = 0 AND terminal_fingerprint IS NOT NULL AND settled_at IS NOT NULL AND settled_at >= reserved_at))",
+	}
+	BatchImageCreditHoldAllocationsTable.ForeignKeys[0].RefTable = BatchImageCreditHoldsTable
+	BatchImageCreditHoldAllocationsTable.ForeignKeys[1].RefTable = TemporaryCreditGrantsTable
+	BatchImageCreditHoldAllocationsTable.Annotation = &entsql.Annotation{
+		Table: "batch_image_credit_hold_allocations",
+	}
+	BatchImageCreditHoldAllocationsTable.Annotation.Checks = map[string]string{
+		"batch_image_credit_hold_allocations_amounts_check":         "reserved_amount > 0 AND captured_amount >= 0 AND refunded_amount >= 0 AND expired_amount >= 0 AND captured_amount + refunded_amount + expired_amount <= reserved_amount",
+		"batch_image_credit_hold_allocations_expiry_snapshot_check": "grant_expires_at > created_at",
+		"batch_image_credit_hold_allocations_settlement_check":      "((captured_amount = 0 AND refunded_amount = 0 AND expired_amount = 0) OR captured_amount + refunded_amount + expired_amount = reserved_amount)",
+		"batch_image_credit_hold_allocations_timestamps_check":      "updated_at >= created_at",
 	}
 	BatchImageEventsTable.Annotation = &entsql.Annotation{
 		Table: "batch_image_events",

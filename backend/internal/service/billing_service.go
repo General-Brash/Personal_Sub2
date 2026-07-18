@@ -91,9 +91,11 @@ type BillingCache interface {
 // ModelPricing 模型价格配置（per-token价格，与LiteLLM格式一致）
 type ModelPricing struct {
 	InputPricePerToken                 float64 // 每token输入价格 (USD)
+	InputPricePresent                  bool    // 源价格是否存在；显式 0 价时为 true
 	InputPricePerTokenPriority         float64 // priority service tier 下每token输入价格 (USD)
 	ImageInputPricePerToken            float64 // 图片输入 token 价格 (USD)，用于多模态 embedding 等图文不同价场景；为 0 时回退到 InputPricePerToken
 	OutputPricePerToken                float64 // 每token输出价格 (USD)
+	OutputPricePresent                 bool    // 源价格是否存在；显式 0 价时为 true
 	OutputPricePerTokenPriority        float64 // priority service tier 下每token输出价格 (USD)
 	CacheCreationPricePerToken         float64 // 缓存创建每token价格 (USD)
 	CacheCreationPricePerTokenPriority float64 // priority service tier 下缓存创建每token价格 (USD)
@@ -455,12 +457,16 @@ func (s *BillingService) initFallbackPricing() {
 	// GLM-4.5-Flash / GLM-4.7-Flash 在 z.ai 上为 Free，保留 zero-cost entry 防止未知 alias 误计费。
 	s.fallbackPrices["glm-4.5-flash"] = &ModelPricing{
 		InputPricePerToken:     0,
+		InputPricePresent:      true,
 		OutputPricePerToken:    0,
+		OutputPricePresent:     true,
 		SupportsCacheBreakdown: false,
 	}
 	s.fallbackPrices["glm-4.7-flash"] = &ModelPricing{
 		InputPricePerToken:     0,
+		InputPricePresent:      true,
 		OutputPricePerToken:    0,
+		OutputPricePresent:     true,
 		SupportsCacheBreakdown: false,
 	}
 
@@ -550,6 +556,7 @@ func (s *BillingService) initFallbackPricing() {
 		InputPricePerToken:      0.098e-6, // ¥0.7/MTok ≈ $0.098（文本输入）
 		ImageInputPricePerToken: 0.252e-6, // ¥1.8/MTok ≈ $0.252（图片输入）
 		OutputPricePerToken:     0,
+		OutputPricePresent:      true,
 		SupportsCacheBreakdown:  false,
 	}
 
@@ -790,8 +797,10 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 			enableBreakdown := price1h > 0 && price1h > price5m
 			return s.applyModelSpecificPricingPolicy(model, &ModelPricing{
 				InputPricePerToken:                 litellmPricing.InputCostPerToken,
+				InputPricePresent:                  litellmPricing.InputCostPerTokenPresent,
 				InputPricePerTokenPriority:         litellmPricing.InputCostPerTokenPriority,
 				OutputPricePerToken:                litellmPricing.OutputCostPerToken,
+				OutputPricePresent:                 litellmPricing.OutputCostPerTokenPresent,
 				OutputPricePerTokenPriority:        litellmPricing.OutputCostPerTokenPriority,
 				CacheCreationPricePerToken:         litellmPricing.CacheCreationInputTokenCost,
 				CacheCreationPricePerTokenPriority: litellmPricing.CacheCreationInputTokenCostPriority,
@@ -805,6 +814,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 				LongContextOutputMultiplier:        litellmPricing.LongContextOutputCostMultiplier,
 				ImageInputPricePerToken:            litellmPricing.InputCostPerImageToken,
 				ImageOutputPricePerToken:           litellmPricing.OutputCostPerImageToken,
+				ImageOutputPriceExplicit:           litellmPricing.OutputCostPerImageTokenPresent,
 			}), nil
 		}
 	}
@@ -838,10 +848,12 @@ func (s *BillingService) GetModelPricingWithChannel(model string, channelPricing
 	pricing = &cloned
 	if channelPricing.InputPrice != nil {
 		pricing.InputPricePerToken = *channelPricing.InputPrice
+		pricing.InputPricePresent = true
 		pricing.InputPricePerTokenPriority = *channelPricing.InputPrice
 	}
 	if channelPricing.OutputPrice != nil {
 		pricing.OutputPricePerToken = *channelPricing.OutputPrice
+		pricing.OutputPricePresent = true
 		pricing.OutputPricePerTokenPriority = *channelPricing.OutputPrice
 	}
 	if channelPricing.CacheWritePrice != nil {
@@ -1085,19 +1097,27 @@ func (s *BillingService) calculatePerRequestCost(resolved *ResolvedPricing, inpu
 	}
 
 	var unitPrice float64
+	var pricePresent bool
 
 	if input.SizeTier != "" {
-		unitPrice = input.Resolver.GetRequestTierPrice(resolved, input.SizeTier)
+		unitPrice, pricePresent = input.Resolver.FindRequestTierPrice(resolved, input.SizeTier)
 	}
 
-	if unitPrice == 0 {
+	if !pricePresent {
 		totalContext := input.Tokens.InputTokens + input.Tokens.CacheCreationTokens + input.Tokens.CacheReadTokens
-		unitPrice = input.Resolver.GetRequestTierPriceByContext(resolved, totalContext)
+		unitPrice, pricePresent = input.Resolver.FindRequestTierPriceByContext(resolved, totalContext)
 	}
 
 	// 回退到默认按次价格
-	if unitPrice == 0 {
+	if !pricePresent && resolved.DefaultPerRequestPricePresent {
 		unitPrice = resolved.DefaultPerRequestPrice
+		pricePresent = true
+	}
+	if !pricePresent {
+		return nil, billingPricingUnavailable(input.Model, "per_request")
+	}
+	if err := validateBillingPrice("per_request_price", unitPrice); err != nil {
+		return nil, err
 	}
 
 	totalCost := unitPrice * float64(count)
@@ -1417,13 +1437,23 @@ func (s *BillingService) CalculateWebSearchCost(callCount int, groupPrice *float
 // groupConfig: 分组配置的价格（可能为 nil，表示使用默认值）
 // rateMultiplier: 费率倍数
 func (s *BillingService) CalculateImageCost(model string, imageSize string, imageCount int, groupConfig *ImagePriceConfig, rateMultiplier float64) *CostBreakdown {
+	cost, err := s.CalculateImageCostChecked(model, imageSize, imageCount, groupConfig, rateMultiplier)
+	if err != nil {
+		return nil
+	}
+	return cost
+}
+
+func (s *BillingService) CalculateImageCostChecked(model string, imageSize string, imageCount int, groupConfig *ImagePriceConfig, rateMultiplier float64) (*CostBreakdown, error) {
 	if imageCount <= 0 {
-		return &CostBreakdown{}
+		return &CostBreakdown{}, nil
 	}
 	imageSize = NormalizeImageBillingTierOrDefault(imageSize)
 
-	// 获取单价
-	unitPrice := s.getImageUnitPrice(model, imageSize, groupConfig)
+	unitPrice, err := s.getImageUnitPriceChecked(model, imageSize, groupConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	// 计算总费用
 	totalCost := unitPrice * float64(imageCount)
@@ -1438,7 +1468,7 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 		TotalCost:   totalCost,
 		ActualCost:  actualCost,
 		BillingMode: string(BillingModeImage),
-	}
+	}, nil
 }
 
 // CalculateVideoCost 计算视频生成费用（按秒计费，与 xAI 口径一致）。
@@ -1449,13 +1479,24 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 // groupConfig: 分组配置的每秒价格（可能为 nil，表示使用默认值）
 // rateMultiplier: 费率倍数
 func (s *BillingService) CalculateVideoCost(model string, resolution string, videoCount int, durationSeconds int, groupConfig *VideoPriceConfig, rateMultiplier float64) *CostBreakdown {
+	cost, err := s.CalculateVideoCostChecked(model, resolution, videoCount, durationSeconds, groupConfig, rateMultiplier)
+	if err != nil {
+		return nil
+	}
+	return cost
+}
+
+func (s *BillingService) CalculateVideoCostChecked(model string, resolution string, videoCount int, durationSeconds int, groupConfig *VideoPriceConfig, rateMultiplier float64) (*CostBreakdown, error) {
 	if videoCount <= 0 {
-		return &CostBreakdown{}
+		return &CostBreakdown{}, nil
 	}
 	resolution = NormalizeVideoBillingResolutionOrDefault(resolution)
 	durationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(durationSeconds)
 
-	perSecondPrice := s.getVideoUnitPrice(model, resolution, groupConfig)
+	perSecondPrice, err := s.getVideoUnitPriceChecked(model, resolution, groupConfig)
+	if err != nil {
+		return nil, err
+	}
 	totalCost := perSecondPrice * float64(durationSeconds) * float64(videoCount)
 
 	if rateMultiplier < 0 {
@@ -1467,96 +1508,52 @@ func (s *BillingService) CalculateVideoCost(model string, resolution string, vid
 		TotalCost:   totalCost,
 		ActualCost:  actualCost,
 		BillingMode: string(BillingModeVideo),
-	}
+	}, nil
 }
 
 // getImageUnitPrice 获取图片单价
 func (s *BillingService) getImageUnitPrice(model string, imageSize string, groupConfig *ImagePriceConfig) float64 {
+	price, _ := s.getImageUnitPriceChecked(model, imageSize, groupConfig)
+	return price
+}
+
+func (s *BillingService) getImageUnitPriceChecked(model string, imageSize string, groupConfig *ImagePriceConfig) (float64, error) {
 	// 优先使用分组配置的价格
-	if groupConfig != nil {
-		switch imageSize {
-		case "1K":
-			if groupConfig.Price1K != nil {
-				return *groupConfig.Price1K
-			}
-		case "2K":
-			if groupConfig.Price2K != nil {
-				return *groupConfig.Price2K
-			}
-		case "4K":
-			if groupConfig.Price4K != nil {
-				return *groupConfig.Price4K
-			}
+	if configured := selectedImageGroupPrice(groupConfig, imageSize); configured != nil {
+		if err := validateBillingPriceFor(model, "image", "group_image_price", *configured); err != nil {
+			return 0, err
 		}
+		return *configured, nil
 	}
 
-	// 回退到 LiteLLM 默认价格
-	return s.getDefaultImagePrice(model, imageSize)
+	return s.getDefaultImagePriceChecked(model, imageSize)
 }
 
 func (s *BillingService) getVideoUnitPrice(model string, resolution string, groupConfig *VideoPriceConfig) float64 {
-	if groupConfig != nil {
-		switch resolution {
-		case VideoBillingResolution480P:
-			if groupConfig.Price480P != nil {
-				return *groupConfig.Price480P
-			}
-		case VideoBillingResolution720P:
-			if groupConfig.Price720P != nil {
-				return *groupConfig.Price720P
-			}
-		case VideoBillingResolution1080P:
-			if groupConfig.Price1080P != nil {
-				return *groupConfig.Price1080P
-			}
+	price, _ := s.getVideoUnitPriceChecked(model, resolution, groupConfig)
+	return price
+}
+
+func (s *BillingService) getVideoUnitPriceChecked(model string, resolution string, groupConfig *VideoPriceConfig) (float64, error) {
+	if configured := selectedVideoGroupPrice(groupConfig, resolution); configured != nil {
+		if err := validateBillingPriceFor(model, "video", "group_video_price", *configured); err != nil {
+			return 0, err
 		}
+		return *configured, nil
 	}
 
-	return s.getDefaultVideoPrice(model, resolution)
+	return s.getDefaultVideoPriceChecked(model, resolution)
 }
 
 // getDefaultImagePrice 获取 LiteLLM 默认图片价格
 func (s *BillingService) getDefaultImagePrice(model string, imageSize string) float64 {
-	if price, ok := getDefaultGrokImagineImagePrice(model, imageSize); ok {
-		return price
-	}
-
-	basePrice := 0.0
-
-	// 从 PricingService 获取 output_cost_per_image
-	if s.pricingService != nil {
-		pricing := s.pricingService.GetModelPricing(model)
-		if pricing != nil && pricing.OutputCostPerImage > 0 {
-			basePrice = pricing.OutputCostPerImage
-		}
-	}
-
-	// 如果没有找到价格，使用硬编码默认值（$0.134，来自 gemini-3-pro-image-preview）
-	if basePrice <= 0 {
-		basePrice = defaultImageGenerationPrice
-	}
-
-	// 2K 尺寸 1.5 倍，4K 尺寸翻倍
-	if imageSize == "2K" {
-		return basePrice * 1.5
-	}
-	if imageSize == "4K" {
-		return basePrice * 2
-	}
-
-	return basePrice
+	price, _ := s.getDefaultImagePriceChecked(model, imageSize)
+	return price
 }
 
 func (s *BillingService) getDefaultVideoPrice(model string, resolution string) float64 {
-	if price, ok := getDefaultGrokImagineVideoPrice(model, resolution); ok {
-		return price
-	}
-
-	// The bundled LiteLLM schema does not expose an output video generation price.
-	// Keep the historical model default as the fallback (interpreted as a per-second
-	// rate; today only Grok models reach video billing, so this path is a safety net),
-	// while letting group-level video prices override it independently from image prices.
-	return s.getDefaultImagePrice(model, ImageBillingSize2K)
+	price, _ := s.getDefaultVideoPriceChecked(model, resolution)
+	return price
 }
 
 func getDefaultGrokImagineImagePrice(model string, imageSize string) (float64, bool) {

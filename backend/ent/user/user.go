@@ -95,6 +95,8 @@ const (
 	EdgeTemporaryCreditGrants = "temporary_credit_grants"
 	// EdgeGrantedTemporaryCreditGrants holds the string denoting the granted_temporary_credit_grants edge name in mutations.
 	EdgeGrantedTemporaryCreditGrants = "granted_temporary_credit_grants"
+	// EdgeBatchImageCreditHolds holds the string denoting the batch_image_credit_holds edge name in mutations.
+	EdgeBatchImageCreditHolds = "batch_image_credit_holds"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -209,6 +211,13 @@ const (
 	GrantedTemporaryCreditGrantsInverseTable = "temporary_credit_grants"
 	// GrantedTemporaryCreditGrantsColumn is the table column denoting the granted_temporary_credit_grants relation/edge.
 	GrantedTemporaryCreditGrantsColumn = "granted_by"
+	// BatchImageCreditHoldsTable is the table that holds the batch_image_credit_holds relation/edge.
+	BatchImageCreditHoldsTable = "batch_image_credit_holds"
+	// BatchImageCreditHoldsInverseTable is the table name for the BatchImageCreditHold entity.
+	// It exists in this package in order to avoid circular dependency with the "batchimagecredithold" package.
+	BatchImageCreditHoldsInverseTable = "batch_image_credit_holds"
+	// BatchImageCreditHoldsColumn is the table column denoting the batch_image_credit_holds relation/edge.
+	BatchImageCreditHoldsColumn = "user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -671,6 +680,20 @@ func ByGrantedTemporaryCreditGrants(term sql.OrderTerm, terms ...sql.OrderTerm) 
 	}
 }
 
+// ByBatchImageCreditHoldsCount orders the results by batch_image_credit_holds count.
+func ByBatchImageCreditHoldsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newBatchImageCreditHoldsStep(), opts...)
+	}
+}
+
+// ByBatchImageCreditHolds orders the results by batch_image_credit_holds terms.
+func ByBatchImageCreditHolds(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newBatchImageCreditHoldsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -794,6 +817,13 @@ func newGrantedTemporaryCreditGrantsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(GrantedTemporaryCreditGrantsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, GrantedTemporaryCreditGrantsTable, GrantedTemporaryCreditGrantsColumn),
+	)
+}
+func newBatchImageCreditHoldsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(BatchImageCreditHoldsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, BatchImageCreditHoldsTable, BatchImageCreditHoldsColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

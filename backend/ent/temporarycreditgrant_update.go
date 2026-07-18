@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecreditholdallocation"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/temporarycreditconsumption"
@@ -219,6 +220,21 @@ func (_u *TemporaryCreditGrantUpdate) AddConsumptions(v ...*TemporaryCreditConsu
 	return _u.AddConsumptionIDs(ids...)
 }
 
+// AddBatchImageCreditHoldAllocationIDs adds the "batch_image_credit_hold_allocations" edge to the BatchImageCreditHoldAllocation entity by IDs.
+func (_u *TemporaryCreditGrantUpdate) AddBatchImageCreditHoldAllocationIDs(ids ...int64) *TemporaryCreditGrantUpdate {
+	_u.mutation.AddBatchImageCreditHoldAllocationIDs(ids...)
+	return _u
+}
+
+// AddBatchImageCreditHoldAllocations adds the "batch_image_credit_hold_allocations" edges to the BatchImageCreditHoldAllocation entity.
+func (_u *TemporaryCreditGrantUpdate) AddBatchImageCreditHoldAllocations(v ...*BatchImageCreditHoldAllocation) *TemporaryCreditGrantUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddBatchImageCreditHoldAllocationIDs(ids...)
+}
+
 // Mutation returns the TemporaryCreditGrantMutation object of the builder.
 func (_u *TemporaryCreditGrantUpdate) Mutation() *TemporaryCreditGrantMutation {
 	return _u.mutation
@@ -261,6 +277,27 @@ func (_u *TemporaryCreditGrantUpdate) RemoveConsumptions(v ...*TemporaryCreditCo
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveConsumptionIDs(ids...)
+}
+
+// ClearBatchImageCreditHoldAllocations clears all "batch_image_credit_hold_allocations" edges to the BatchImageCreditHoldAllocation entity.
+func (_u *TemporaryCreditGrantUpdate) ClearBatchImageCreditHoldAllocations() *TemporaryCreditGrantUpdate {
+	_u.mutation.ClearBatchImageCreditHoldAllocations()
+	return _u
+}
+
+// RemoveBatchImageCreditHoldAllocationIDs removes the "batch_image_credit_hold_allocations" edge to BatchImageCreditHoldAllocation entities by IDs.
+func (_u *TemporaryCreditGrantUpdate) RemoveBatchImageCreditHoldAllocationIDs(ids ...int64) *TemporaryCreditGrantUpdate {
+	_u.mutation.RemoveBatchImageCreditHoldAllocationIDs(ids...)
+	return _u
+}
+
+// RemoveBatchImageCreditHoldAllocations removes "batch_image_credit_hold_allocations" edges to BatchImageCreditHoldAllocation entities.
+func (_u *TemporaryCreditGrantUpdate) RemoveBatchImageCreditHoldAllocations(v ...*BatchImageCreditHoldAllocation) *TemporaryCreditGrantUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveBatchImageCreditHoldAllocationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -480,6 +517,51 @@ func (_u *TemporaryCreditGrantUpdate) sqlSave(ctx context.Context) (_node int, e
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.BatchImageCreditHoldAllocationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   temporarycreditgrant.BatchImageCreditHoldAllocationsTable,
+			Columns: []string{temporarycreditgrant.BatchImageCreditHoldAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecreditholdallocation.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedBatchImageCreditHoldAllocationsIDs(); len(nodes) > 0 && !_u.mutation.BatchImageCreditHoldAllocationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   temporarycreditgrant.BatchImageCreditHoldAllocationsTable,
+			Columns: []string{temporarycreditgrant.BatchImageCreditHoldAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecreditholdallocation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.BatchImageCreditHoldAllocationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   temporarycreditgrant.BatchImageCreditHoldAllocationsTable,
+			Columns: []string{temporarycreditgrant.BatchImageCreditHoldAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecreditholdallocation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{temporarycreditgrant.Label}
@@ -688,6 +770,21 @@ func (_u *TemporaryCreditGrantUpdateOne) AddConsumptions(v ...*TemporaryCreditCo
 	return _u.AddConsumptionIDs(ids...)
 }
 
+// AddBatchImageCreditHoldAllocationIDs adds the "batch_image_credit_hold_allocations" edge to the BatchImageCreditHoldAllocation entity by IDs.
+func (_u *TemporaryCreditGrantUpdateOne) AddBatchImageCreditHoldAllocationIDs(ids ...int64) *TemporaryCreditGrantUpdateOne {
+	_u.mutation.AddBatchImageCreditHoldAllocationIDs(ids...)
+	return _u
+}
+
+// AddBatchImageCreditHoldAllocations adds the "batch_image_credit_hold_allocations" edges to the BatchImageCreditHoldAllocation entity.
+func (_u *TemporaryCreditGrantUpdateOne) AddBatchImageCreditHoldAllocations(v ...*BatchImageCreditHoldAllocation) *TemporaryCreditGrantUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddBatchImageCreditHoldAllocationIDs(ids...)
+}
+
 // Mutation returns the TemporaryCreditGrantMutation object of the builder.
 func (_u *TemporaryCreditGrantUpdateOne) Mutation() *TemporaryCreditGrantMutation {
 	return _u.mutation
@@ -730,6 +827,27 @@ func (_u *TemporaryCreditGrantUpdateOne) RemoveConsumptions(v ...*TemporaryCredi
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveConsumptionIDs(ids...)
+}
+
+// ClearBatchImageCreditHoldAllocations clears all "batch_image_credit_hold_allocations" edges to the BatchImageCreditHoldAllocation entity.
+func (_u *TemporaryCreditGrantUpdateOne) ClearBatchImageCreditHoldAllocations() *TemporaryCreditGrantUpdateOne {
+	_u.mutation.ClearBatchImageCreditHoldAllocations()
+	return _u
+}
+
+// RemoveBatchImageCreditHoldAllocationIDs removes the "batch_image_credit_hold_allocations" edge to BatchImageCreditHoldAllocation entities by IDs.
+func (_u *TemporaryCreditGrantUpdateOne) RemoveBatchImageCreditHoldAllocationIDs(ids ...int64) *TemporaryCreditGrantUpdateOne {
+	_u.mutation.RemoveBatchImageCreditHoldAllocationIDs(ids...)
+	return _u
+}
+
+// RemoveBatchImageCreditHoldAllocations removes "batch_image_credit_hold_allocations" edges to BatchImageCreditHoldAllocation entities.
+func (_u *TemporaryCreditGrantUpdateOne) RemoveBatchImageCreditHoldAllocations(v ...*BatchImageCreditHoldAllocation) *TemporaryCreditGrantUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveBatchImageCreditHoldAllocationIDs(ids...)
 }
 
 // Where appends a list predicates to the TemporaryCreditGrantUpdate builder.
@@ -972,6 +1090,51 @@ func (_u *TemporaryCreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *Te
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(temporarycreditconsumption.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.BatchImageCreditHoldAllocationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   temporarycreditgrant.BatchImageCreditHoldAllocationsTable,
+			Columns: []string{temporarycreditgrant.BatchImageCreditHoldAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecreditholdallocation.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedBatchImageCreditHoldAllocationsIDs(); len(nodes) > 0 && !_u.mutation.BatchImageCreditHoldAllocationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   temporarycreditgrant.BatchImageCreditHoldAllocationsTable,
+			Columns: []string{temporarycreditgrant.BatchImageCreditHoldAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecreditholdallocation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.BatchImageCreditHoldAllocationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   temporarycreditgrant.BatchImageCreditHoldAllocationsTable,
+			Columns: []string{temporarycreditgrant.BatchImageCreditHoldAllocationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecreditholdallocation.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

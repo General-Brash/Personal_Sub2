@@ -49,7 +49,21 @@ func TestAsyncImageHandlerSubmitAndPoll(t *testing.T) {
 	store := &asyncImageMemoryStore{tasks: make(map[string]*service.ImageTaskRecord)}
 	tasks := service.NewImageTaskServiceWithUploader(store, nil, time.Hour, time.Minute)
 	release := make(chan struct{})
-	h := &AsyncImageHandler{tasks: tasks}
+	openAI, _ := newMissingPricingOpenAIHandler(t, service.Account{}, nil, nil)
+	imagePrice := 0.134
+	apiKey := &service.APIKey{
+		ID: 9, UserID: 7,
+		GroupID: func() *int64 { value := int64(3); return &value }(),
+		Group: &service.Group{
+			ID:                   3,
+			Platform:             service.PlatformOpenAI,
+			AllowImageGeneration: true,
+			ImagePrice1K:         &imagePrice,
+			ImagePrice2K:         &imagePrice,
+			ImagePrice4K:         &imagePrice,
+		},
+	}
+	h := &AsyncImageHandler{tasks: tasks, openAI: openAI}
 	h.execute = func(_ string, c *gin.Context) {
 		<-release
 		c.JSON(http.StatusOK, gin.H{"created": 123, "data": []gin.H{{"url": "https://example.test/image.png"}}})
@@ -57,13 +71,8 @@ func TestAsyncImageHandlerSubmitAndPoll(t *testing.T) {
 
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		groupID := int64(3)
-		c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
-			ID:      9,
-			UserID:  7,
-			GroupID: &groupID,
-			Group:   &service.Group{ID: groupID, Platform: service.PlatformOpenAI, AllowImageGeneration: true},
-		})
+		c.Set(string(middleware2.ContextKeyAPIKey), apiKey)
+		c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: apiKey.UserID})
 		c.Next()
 	})
 	router.POST("/v1/images/generations/async", h.Submit)

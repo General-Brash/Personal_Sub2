@@ -32,26 +32,44 @@ type BatchImageModelPricingResolver struct {
 
 func (r *BatchImageModelPricingResolver) BatchImageUnitPrice(ctx context.Context, job *BatchImageJob) (float64, error) {
 	if r == nil || r.Resolver == nil || job == nil || strings.TrimSpace(job.Model) == "" {
-		return 0, ErrBatchImageSettlementPricingMissing
+		return 0, batchImagePricingUnavailable("")
 	}
 	resolved := r.Resolver.Resolve(ctx, PricingInput{Model: job.Model})
 	if resolved == nil {
-		return 0, ErrBatchImageSettlementPricingMissing
+		return 0, batchImagePricingUnavailable(job.Model)
 	}
 	switch resolved.Mode {
 	case BillingModeImage, BillingModePerRequest:
-		if resolved.DefaultPerRequestPrice > 0 {
+		if resolved.DefaultPerRequestPricePresent {
+			if err := validateBillingPriceFor(job.Model, "batch_image", "default_per_request_price", resolved.DefaultPerRequestPrice); err != nil {
+				return 0, err
+			}
 			return resolved.DefaultPerRequestPrice, nil
 		}
-		if len(resolved.RequestTiers) == 1 && resolved.RequestTiers[0].PerRequestPrice != nil && *resolved.RequestTiers[0].PerRequestPrice >= 0 {
-			return *resolved.RequestTiers[0].PerRequestPrice, nil
+		if len(resolved.RequestTiers) == 1 && resolved.RequestTiers[0].PerRequestPrice != nil {
+			price := *resolved.RequestTiers[0].PerRequestPrice
+			if err := validateBillingPriceFor(job.Model, "batch_image", "tier_per_request_price", price); err != nil {
+				return 0, err
+			}
+			return price, nil
 		}
 	case BillingModeToken:
 		if resolved.BasePricing != nil && (resolved.BasePricing.ImageOutputPriceExplicit || resolved.BasePricing.ImageOutputPricePerToken > 0) {
-			return resolved.BasePricing.ImageOutputPricePerToken, nil
+			price := resolved.BasePricing.ImageOutputPricePerToken
+			if err := validateBillingPriceFor(job.Model, "batch_image", "image_output_price", price); err != nil {
+				return 0, err
+			}
+			return price, nil
 		}
 	}
-	return 0, ErrBatchImageSettlementPricingMissing
+	return 0, batchImagePricingUnavailable(job.Model)
+}
+
+func batchImagePricingUnavailable(model string) error {
+	return ErrBillingPricingUnavailable.WithMetadata(map[string]string{
+		"model": strings.TrimSpace(model),
+		"kind":  "batch_image",
+	}).WithCause(ErrBatchImageSettlementPricingMissing)
 }
 
 type BatchImageSettlementService struct {
@@ -126,8 +144,8 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 	}
 
 	unitPrice, err := s.settlementUnitPrice(ctx, job)
-	if err == nil && unitPrice < 0 {
-		err = ErrBatchImageSettlementPricingMissing
+	if err == nil {
+		err = validateBillingPriceFor(job.Model, "batch_image", "settlement_unit_price", unitPrice)
 	}
 	if err != nil {
 		if failErr := s.recordSettlementFailure(ctx, job, "SETTLEMENT_PRICING_MISSING", err.Error()); failErr != nil {
@@ -291,8 +309,8 @@ func (s *BatchImageSettlementService) invalidateAuthCache(ctx context.Context, u
 
 func (s *BatchImageSettlementService) settlementUnitPrice(ctx context.Context, job *BatchImageJob) (float64, error) {
 	if job != nil && job.PricingSnapshotVersion >= 1 {
-		if job.BillableUnitPrice < 0 {
-			return 0, ErrBatchImageSettlementPricingMissing
+		if err := validateBillingPriceFor(job.Model, "batch_image", "snapshot_billable_unit_price", job.BillableUnitPrice); err != nil {
+			return 0, err
 		}
 		return job.BillableUnitPrice, nil
 	}

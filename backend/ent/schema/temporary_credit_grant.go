@@ -63,6 +63,8 @@ func (TemporaryCreditGrant) Edges() []ent.Edge {
 			Annotations(entsql.OnDelete(entsql.Restrict)),
 		edge.To("consumptions", TemporaryCreditConsumption.Type).
 			Annotations(entsql.OnDelete(entsql.Restrict)),
+		edge.To("batch_image_credit_hold_allocations", BatchImageCreditHoldAllocation.Type).
+			Annotations(entsql.OnDelete(entsql.Restrict)),
 	}
 }
 

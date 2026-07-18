@@ -173,6 +173,27 @@ func (s *FailoverState) HandleSelectionExhausted(ctx context.Context) FailoverAc
 	return FailoverExhausted
 }
 
+// HandlePricingUnavailable excludes a candidate whose effective billing model
+// cannot be priced. This is a request/account compatibility rejection, not an
+// upstream health failure, so it must not rate-limit or temp-unschedule the
+// account. Other priced candidates remain eligible for the same request.
+func (s *FailoverState) HandlePricingUnavailable(ctx context.Context, accountID int64) FailoverAction {
+	if ctx != nil && ctx.Err() != nil {
+		return FailoverCanceled
+	}
+	s.FailedAccountIDs[accountID] = struct{}{}
+	if s.SwitchCount >= s.MaxSwitches {
+		return FailoverExhausted
+	}
+	s.SwitchCount++
+	logger.FromContext(ctx).Warn("gateway.failover_unpriced_candidate",
+		zap.Int64("account_id", accountID),
+		zap.Int("switch_count", s.SwitchCount),
+		zap.Int("max_switches", s.MaxSwitches),
+	)
+	return FailoverContinue
+}
+
 // needForceCacheBilling 判断 failover 时是否需要强制缓存计费。
 // 粘性会话切换账号、或上游明确标记时，将 input_tokens 转为 cache_read 计费。
 func needForceCacheBilling(hasBoundSession bool, failoverErr *service.UpstreamFailoverError) bool {

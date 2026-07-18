@@ -114,6 +114,7 @@ func TestOpenAIGatewayHandlerImages_ServerErrorFailsOverAndReturnsClearErrorWhen
 	accountRepo := openAIImagesFailoverAccountRepo{accounts: accounts}
 	upstream := &openAIImagesFailoverHTTPUpstream{}
 	cfg := &config.Config{RunMode: config.RunModeSimple}
+	imagePrice := 0.134
 	gatewayService := service.NewOpenAIGatewayService(
 		accountRepo,
 		nil,
@@ -125,7 +126,7 @@ func TestOpenAIGatewayHandlerImages_ServerErrorFailsOverAndReturnsClearErrorWhen
 		cfg,
 		nil,
 		nil,
-		nil,
+		service.NewBillingService(cfg, nil),
 		nil,
 		nil,
 		upstream,
@@ -166,6 +167,9 @@ func TestOpenAIGatewayHandlerImages_ServerErrorFailsOverAndReturnsClearErrorWhen
 		Group: &service.Group{
 			ID:                   groupID,
 			AllowImageGeneration: true,
+			ImagePrice1K:         &imagePrice,
+			ImagePrice2K:         &imagePrice,
+			ImagePrice4K:         &imagePrice,
 		},
 		User: &service.User{ID: 100},
 	})

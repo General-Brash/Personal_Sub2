@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
@@ -674,6 +675,21 @@ func (_u *UserUpdate) AddGrantedTemporaryCreditGrants(v ...*TemporaryCreditGrant
 	return _u.AddGrantedTemporaryCreditGrantIDs(ids...)
 }
 
+// AddBatchImageCreditHoldIDs adds the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by IDs.
+func (_u *UserUpdate) AddBatchImageCreditHoldIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddBatchImageCreditHoldIDs(ids...)
+	return _u
+}
+
+// AddBatchImageCreditHolds adds the "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_u *UserUpdate) AddBatchImageCreditHolds(v ...*BatchImageCreditHold) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddBatchImageCreditHoldIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -1013,6 +1029,27 @@ func (_u *UserUpdate) RemoveGrantedTemporaryCreditGrants(v ...*TemporaryCreditGr
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveGrantedTemporaryCreditGrantIDs(ids...)
+}
+
+// ClearBatchImageCreditHolds clears all "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_u *UserUpdate) ClearBatchImageCreditHolds() *UserUpdate {
+	_u.mutation.ClearBatchImageCreditHolds()
+	return _u
+}
+
+// RemoveBatchImageCreditHoldIDs removes the "batch_image_credit_holds" edge to BatchImageCreditHold entities by IDs.
+func (_u *UserUpdate) RemoveBatchImageCreditHoldIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveBatchImageCreditHoldIDs(ids...)
+	return _u
+}
+
+// RemoveBatchImageCreditHolds removes "batch_image_credit_holds" edges to BatchImageCreditHold entities.
+func (_u *UserUpdate) RemoveBatchImageCreditHolds(v ...*BatchImageCreditHold) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveBatchImageCreditHoldIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1941,6 +1978,51 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.BatchImageCreditHoldsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.BatchImageCreditHoldsTable,
+			Columns: []string{user.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedBatchImageCreditHoldsIDs(); len(nodes) > 0 && !_u.mutation.BatchImageCreditHoldsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.BatchImageCreditHoldsTable,
+			Columns: []string{user.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.BatchImageCreditHoldsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.BatchImageCreditHoldsTable,
+			Columns: []string{user.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -2593,6 +2675,21 @@ func (_u *UserUpdateOne) AddGrantedTemporaryCreditGrants(v ...*TemporaryCreditGr
 	return _u.AddGrantedTemporaryCreditGrantIDs(ids...)
 }
 
+// AddBatchImageCreditHoldIDs adds the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by IDs.
+func (_u *UserUpdateOne) AddBatchImageCreditHoldIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddBatchImageCreditHoldIDs(ids...)
+	return _u
+}
+
+// AddBatchImageCreditHolds adds the "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_u *UserUpdateOne) AddBatchImageCreditHolds(v ...*BatchImageCreditHold) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddBatchImageCreditHoldIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -2932,6 +3029,27 @@ func (_u *UserUpdateOne) RemoveGrantedTemporaryCreditGrants(v ...*TemporaryCredi
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveGrantedTemporaryCreditGrantIDs(ids...)
+}
+
+// ClearBatchImageCreditHolds clears all "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_u *UserUpdateOne) ClearBatchImageCreditHolds() *UserUpdateOne {
+	_u.mutation.ClearBatchImageCreditHolds()
+	return _u
+}
+
+// RemoveBatchImageCreditHoldIDs removes the "batch_image_credit_holds" edge to BatchImageCreditHold entities by IDs.
+func (_u *UserUpdateOne) RemoveBatchImageCreditHoldIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveBatchImageCreditHoldIDs(ids...)
+	return _u
+}
+
+// RemoveBatchImageCreditHolds removes "batch_image_credit_holds" edges to BatchImageCreditHold entities.
+func (_u *UserUpdateOne) RemoveBatchImageCreditHolds(v ...*BatchImageCreditHold) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveBatchImageCreditHoldIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -3883,6 +4001,51 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(temporarycreditgrant.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.BatchImageCreditHoldsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.BatchImageCreditHoldsTable,
+			Columns: []string{user.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedBatchImageCreditHoldsIDs(); len(nodes) > 0 && !_u.mutation.BatchImageCreditHoldsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.BatchImageCreditHoldsTable,
+			Columns: []string{user.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.BatchImageCreditHoldsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.BatchImageCreditHoldsTable,
+			Columns: []string{user.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

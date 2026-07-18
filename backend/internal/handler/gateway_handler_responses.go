@@ -155,6 +155,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 
 	// 3. Account selection + failover loop
 	fs := NewFailoverState(h.maxAccountSwitches, false)
+	var lastPricingErr error
 
 	for {
 		if requestCtx.Err() != nil {
@@ -172,6 +173,14 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 					message = "No available accounts: " + err.Error()
 				}
 				h.responsesErrorResponse(c, cls.Status, cls.ErrType, message)
+				return
+			}
+			if lastPricingErr != nil && fs.LastFailoverErr == nil {
+				if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+					h.responsesErrorResponse(c, status, code, message)
+				} else {
+					h.responsesErrorResponse(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error())
+				}
 				return
 			}
 			action := fs.HandleSelectionExhausted(requestCtx)
@@ -216,6 +225,28 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			}
 		}
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+		if pricingErr := h.gatewayService.PreflightTokenRequestPricing(requestCtx, apiKey, account, reqModel, channelMapping); pricingErr != nil {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			if errors.Is(pricingErr, service.ErrBillingPricingUnavailable) {
+				lastPricingErr = pricingErr
+				switch fs.HandlePricingUnavailable(requestCtx, account.ID) {
+				case FailoverContinue:
+					continue
+				case FailoverCanceled:
+					failoverClientGone(c)
+					return
+				}
+			}
+			reqLog.Error("gateway.responses.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+			if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+				h.responsesErrorResponse(c, status, code, message)
+			} else {
+				h.responsesErrorResponse(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error())
+			}
+			return
+		}
 
 		// 5. Forward request
 		writerSizeBeforeForward := c.Writer.Size()

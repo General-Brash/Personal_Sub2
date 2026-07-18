@@ -10,6 +10,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"go.uber.org/zap"
 )
 
 func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
@@ -698,8 +699,18 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		requestedModel = input.OriginalModel
 	}
 
-	// 计算费用
-	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
+	// 计算费用。请求前 preflight 是第一道防线；这里仍必须 fail closed，
+	// 避免价格热更新或脏数据在上游响应后被记录为“正常成功 0 价”。
+	cost, pricingErr := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
+	if pricingErr != nil {
+		logger.L().Error("gateway_usage.billing_pricing_failure_after_response",
+			zap.String("billing_model", billingModel),
+			zap.Int64("api_key_id", apiKey.ID),
+			zap.Int64("account_id", account.ID),
+			zap.Error(pricingErr),
+		)
+		return pricingErr
+	}
 
 	// 判断计费方式：订阅模式 vs 余额模式
 	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
@@ -777,7 +788,7 @@ func (s *GatewayService) calculateRecordUsageCost(
 	multiplier float64,
 	imageMultiplier float64,
 	opts *recordUsageOpts,
-) *CostBreakdown {
+) (*CostBreakdown, error) {
 	// 图片生成：渠道定价为 token 计费时走 token 路径，否则走图片计费
 	if result.ImageCount > 0 {
 		if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil && resolved.Mode == BillingModeToken {
@@ -811,11 +822,11 @@ func (s *GatewayService) calculateImageCost(
 	apiKey *APIKey,
 	billingModel string,
 	multiplier float64,
-) *CostBreakdown {
+) (*CostBreakdown, error) {
 	sizeTier := NormalizeImageBillingTierOrDefault(result.ImageSize)
 	groupConfig := imagePriceConfigFromAPIKey(apiKey)
 	if apiKeyHasConfiguredImagePrice(apiKey, sizeTier) {
-		return s.billingService.CalculateImageCost(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
+		return s.billingService.CalculateImageCostChecked(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
 	}
 	if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil {
 		tokens := UsageTokens{
@@ -836,13 +847,12 @@ func (s *GatewayService) calculateImageCost(
 			Resolved:       resolved,
 		})
 		if err != nil {
-			logger.LegacyPrintf("service.gateway", "Calculate image token cost failed: %v", err)
-			return &CostBreakdown{ActualCost: 0}
+			return nil, err
 		}
-		return cost
+		return cost, nil
 	}
 
-	return s.billingService.CalculateImageCost(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
+	return s.billingService.CalculateImageCostChecked(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
 }
 
 // calculateTokenCost 计算 Token 计费：根据 opts 决定走普通/长上下文/渠道统一计费。
@@ -853,7 +863,7 @@ func (s *GatewayService) calculateTokenCost(
 	billingModel string,
 	multiplier float64,
 	opts *recordUsageOpts,
-) *CostBreakdown {
+) (*CostBreakdown, error) {
 	tokens := UsageTokens{
 		InputTokens:           result.Usage.InputTokens,
 		OutputTokens:          result.Usage.OutputTokens,
@@ -887,10 +897,9 @@ func (s *GatewayService) calculateTokenCost(
 		cost, err = s.billingService.CalculateCost(billingModel, tokens, multiplier)
 	}
 	if err != nil {
-		logger.LegacyPrintf("service.gateway", "Calculate cost failed: %v", err)
-		return &CostBreakdown{ActualCost: 0}
+		return nil, err
 	}
-	return cost
+	return cost, nil
 }
 
 // buildRecordUsageLog 构建使用日志并设置计费模式。

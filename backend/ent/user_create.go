@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecredithold"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
@@ -596,6 +597,21 @@ func (_c *UserCreate) AddGrantedTemporaryCreditGrants(v ...*TemporaryCreditGrant
 	return _c.AddGrantedTemporaryCreditGrantIDs(ids...)
 }
 
+// AddBatchImageCreditHoldIDs adds the "batch_image_credit_holds" edge to the BatchImageCreditHold entity by IDs.
+func (_c *UserCreate) AddBatchImageCreditHoldIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddBatchImageCreditHoldIDs(ids...)
+	return _c
+}
+
+// AddBatchImageCreditHolds adds the "batch_image_credit_holds" edges to the BatchImageCreditHold entity.
+func (_c *UserCreate) AddBatchImageCreditHolds(v ...*BatchImageCreditHold) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddBatchImageCreditHoldIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -1168,6 +1184,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(temporarycreditgrant.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.BatchImageCreditHoldsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.BatchImageCreditHoldsTable,
+			Columns: []string{user.BatchImageCreditHoldsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(batchimagecredithold.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

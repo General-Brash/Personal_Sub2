@@ -137,6 +137,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	var lastPricingErr error
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
 
 	for {
@@ -177,6 +178,12 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			} else {
 				if lastFailoverErr != nil {
 					h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
+				} else if lastPricingErr != nil {
+					if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+						h.handleStreamingAwareError(c, status, code, message, streamStarted)
+					} else {
+						h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error(), streamStarted)
+					}
 				} else {
 					h.handleStreamingAwareError(c, http.StatusBadGateway, "api_error", "Upstream request failed", streamStarted)
 				}
@@ -184,6 +191,14 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			}
 		}
 		if selection == nil || selection.Account == nil {
+			if lastPricingErr != nil && lastFailoverErr == nil {
+				if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+					h.handleStreamingAwareError(c, status, code, message, streamStarted)
+				} else {
+					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error(), streamStarted)
+				}
+				return
+			}
 			cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel)
 			if !cls.ModelNotFound {
 				markOpsRoutingCapacityLimited(c)
@@ -199,6 +214,28 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 
 		accountReleaseFunc, acquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
 		if !acquired {
+			return
+		}
+		if pricingErr := h.gatewayService.PreflightTokenRequestPricing(c.Request.Context(), apiKey, account, reqModel, channelMapping); pricingErr != nil {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			if errors.Is(pricingErr, service.ErrBillingPricingUnavailable) {
+				lastPricingErr = pricingErr
+				switch advancePricingFailover(c.Request.Context(), account.ID, failedAccountIDs, &switchCount, maxAccountSwitches) {
+				case FailoverContinue:
+					continue
+				case FailoverCanceled:
+					failoverClientGone(c)
+					return
+				}
+			}
+			reqLog.Error("openai_chat_completions.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+			if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+				h.handleStreamingAwareError(c, status, code, message, streamStarted)
+			} else {
+				h.handleStreamingAwareError(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error(), streamStarted)
+			}
 			return
 		}
 

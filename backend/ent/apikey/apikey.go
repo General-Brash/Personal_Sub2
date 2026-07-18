@@ -67,6 +67,8 @@ const (
 	EdgeGroup = "group"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeBatchImageCreditHolds holds the string denoting the batch_image_credit_holds edge name in mutations.
+	EdgeBatchImageCreditHolds = "batch_image_credit_holds"
 	// Table holds the table name of the apikey in the database.
 	Table = "api_keys"
 	// UserTable is the table that holds the user relation/edge.
@@ -90,6 +92,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "api_key_id"
+	// BatchImageCreditHoldsTable is the table that holds the batch_image_credit_holds relation/edge.
+	BatchImageCreditHoldsTable = "batch_image_credit_holds"
+	// BatchImageCreditHoldsInverseTable is the table name for the BatchImageCreditHold entity.
+	// It exists in this package in order to avoid circular dependency with the "batchimagecredithold" package.
+	BatchImageCreditHoldsInverseTable = "batch_image_credit_holds"
+	// BatchImageCreditHoldsColumn is the table column denoting the batch_image_credit_holds relation/edge.
+	BatchImageCreditHoldsColumn = "api_key_id"
 )
 
 // Columns holds all SQL columns for apikey fields.
@@ -310,6 +319,20 @@ func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newUsageLogsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByBatchImageCreditHoldsCount orders the results by batch_image_credit_holds count.
+func ByBatchImageCreditHoldsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newBatchImageCreditHoldsStep(), opts...)
+	}
+}
+
+// ByBatchImageCreditHolds orders the results by batch_image_credit_holds terms.
+func ByBatchImageCreditHolds(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newBatchImageCreditHoldsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -329,5 +352,12 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newBatchImageCreditHoldsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(BatchImageCreditHoldsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, BatchImageCreditHoldsTable, BatchImageCreditHoldsColumn),
 	)
 }

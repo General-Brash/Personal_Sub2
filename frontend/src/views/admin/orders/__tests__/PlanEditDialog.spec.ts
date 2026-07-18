@@ -1,16 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import type { AdminGroup } from '@/types'
 import PlanEditDialog from '../PlanEditDialog.vue'
 
-vi.mock('vue-i18n', () => ({
-  useI18n: () => ({
-    t: (key: string, params?: Record<string, unknown>) => {
-      if (key === 'payment.admin.subscriptionCnyPayPreview') return `preview ${params?.amount}`
-      if (key === 'payment.admin.subscriptionCnyPayPreviewWithFee') return `fee ${params?.feeRate} ${params?.total}`
-      return key
-    },
-  }),
-}))
+vi.mock('vue-i18n', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vue-i18n')>()
+  return {
+    ...actual,
+    useI18n: () => ({
+      t: (key: string, params?: Record<string, unknown>) => {
+        if (key === 'payment.admin.subscriptionCnyPayPreview') return `preview ${params?.amount}`
+        if (key === 'payment.admin.subscriptionCnyPayPreviewWithFee') return `fee ${params?.feeRate} ${params?.total}`
+        return key
+      },
+    }),
+  }
+})
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
@@ -26,12 +31,15 @@ vi.mock('@/api/admin/payment', () => ({
   },
 }))
 
-function mountDialog(paymentConfig: Record<string, unknown> | null) {
+function mountDialog(
+  paymentConfig: Record<string, unknown> | null,
+  groups: AdminGroup[] = [],
+) {
   return mount(PlanEditDialog, {
     props: {
       show: true,
       plan: null,
-      groups: [],
+      groups,
       paymentConfig,
     },
     global: {
@@ -73,5 +81,27 @@ describe('PlanEditDialog subscription CNY payment preview', () => {
 
     expect(wrapper.text()).not.toContain('preview')
     expect(wrapper.text()).not.toContain('¥71.43')
+  })
+})
+
+describe('PlanEditDialog group limit preview', () => {
+  it('rounds an eight-place USD limit to two display decimals', async () => {
+    const group = {
+      id: 7,
+      name: 'Precision group',
+      platform: 'anthropic',
+      rate_multiplier: 1,
+      subscription_type: 'subscription',
+      daily_limit_usd: 1.23500000,
+      weekly_limit_usd: null,
+      monthly_limit_usd: null,
+    } as AdminGroup
+    const wrapper = mountDialog(null, [group])
+
+    wrapper.findAllComponents({ name: 'Select' })[0].vm.$emit('update:modelValue', group.id)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('$1.24')
+    expect(wrapper.text()).not.toContain('$1.23500000')
   })
 })

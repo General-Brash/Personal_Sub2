@@ -295,6 +295,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	if platform == service.PlatformGemini {
 		fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
+		var lastPricingErr error
 
 		// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 		// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
@@ -323,6 +324,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						message = "No available accounts: " + err.Error()
 					}
 					h.handleStreamingAwareError(c, cls.Status, cls.ErrType, message, streamStarted)
+					return
+				}
+				if lastPricingErr != nil && fs.LastFailoverErr == nil {
+					if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+						h.handleStreamingAwareError(c, status, code, message, streamStarted)
+					} else {
+						h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error(), streamStarted)
+					}
 					return
 				}
 				action := fs.HandleSelectionExhausted(c.Request.Context())
@@ -419,6 +428,34 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 			// 账号槽位/等待计数需要在超时或断开时安全回收
 			accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+			var pricingErr error
+			if service.IsGeminiImageGenerationModel(reqModel) {
+				pricingErr = h.gatewayService.PreflightImageRequestPricing(c.Request.Context(), apiKey, account, reqModel, channelMapping, service.ExtractGeminiImageSize(body))
+			} else {
+				pricingErr = h.gatewayService.PreflightTokenRequestPricing(c.Request.Context(), apiKey, account, reqModel, channelMapping)
+			}
+			if pricingErr != nil {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				if errors.Is(pricingErr, service.ErrBillingPricingUnavailable) {
+					lastPricingErr = pricingErr
+					switch fs.HandlePricingUnavailable(c.Request.Context(), account.ID) {
+					case FailoverContinue:
+						continue
+					case FailoverCanceled:
+						failoverClientGone(c)
+						return
+					}
+				}
+				reqLog.Error("gateway.gemini.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+				if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+					h.handleStreamingAwareError(c, status, code, message, streamStarted)
+				} else {
+					h.handleStreamingAwareError(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error(), streamStarted)
+				}
+				return
+			}
 
 			// 转发请求 - 根据账号平台分流
 			var result *service.ForwardResult
@@ -575,6 +612,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	for {
 		fs := NewFailoverState(h.maxAccountSwitches, hasBoundSession)
+		var lastPricingErr error
 		retryWithFallback := false
 
 		for {
@@ -611,6 +649,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						message = "No available accounts: " + err.Error()
 					}
 					h.handleStreamingAwareError(c, cls.Status, cls.ErrType, message, streamStarted)
+					return
+				}
+				if lastPricingErr != nil && fs.LastFailoverErr == nil {
+					if status, code, message, ok := billingPricingErrorDetails(lastPricingErr); ok {
+						h.handleStreamingAwareError(c, status, code, message, streamStarted)
+					} else {
+						h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", lastPricingErr.Error(), streamStarted)
+					}
 					return
 				}
 				action := fs.HandleSelectionExhausted(c.Request.Context())
@@ -721,6 +767,29 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 			// 账号槽位/等待计数需要在超时或断开时安全回收
 			accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
+			attemptPricingMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), currentAPIKey.GroupID, reqModel)
+			if pricingErr := h.gatewayService.PreflightTokenRequestPricing(c.Request.Context(), currentAPIKey, account, reqModel, attemptPricingMapping); pricingErr != nil {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				if errors.Is(pricingErr, service.ErrBillingPricingUnavailable) {
+					lastPricingErr = pricingErr
+					switch fs.HandlePricingUnavailable(c.Request.Context(), account.ID) {
+					case FailoverContinue:
+						continue
+					case FailoverCanceled:
+						failoverClientGone(c)
+						return
+					}
+				}
+				reqLog.Error("gateway.messages.billing_pricing_preflight_failed", zap.Int64("account_id", account.ID), zap.Error(pricingErr))
+				if status, code, message, ok := billingPricingErrorDetails(pricingErr); ok {
+					h.handleStreamingAwareError(c, status, code, message, streamStarted)
+				} else {
+					h.handleStreamingAwareError(c, http.StatusBadRequest, "invalid_request_error", pricingErr.Error(), streamStarted)
+				}
+				return
+			}
 
 			// ===== 用户消息串行队列 START =====
 			var queueRelease func()
@@ -775,9 +844,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// ===== 用户消息串行队列 END =====
 
 			// 渠道模型映射只作用于本次账号尝试，避免 failover 后污染原始 ParsedRequest。
-			if channelMapping.Mapped {
-				attemptParsedReq.Model = channelMapping.MappedModel
-				if err := attemptParsedReq.ReplaceBody(h.gatewayService.ReplaceModelInBody(attemptParsedReq.Body.Bytes(), channelMapping.MappedModel)); err != nil {
+			if attemptPricingMapping.Mapped {
+				attemptParsedReq.Model = attemptPricingMapping.MappedModel
+				if err := attemptParsedReq.ReplaceBody(h.gatewayService.ReplaceModelInBody(attemptParsedReq.Body.Bytes(), attemptPricingMapping.MappedModel)); err != nil {
 					h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 					return
 				}
@@ -974,7 +1043,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					RequestPayloadHash: requestPayloadHash,
 					ForceCacheBilling:  forceCacheBilling,
 					APIKeyService:      h.apiKeyService,
-					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+					ChannelUsageFields: attemptPricingMapping.ToUsageFields(reqModel, result.UpstreamModel),
 				}); err != nil {
 					logger.L().With(
 						zap.String("component", "handler.gateway.messages"),

@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/batchimagecreditholdallocation"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/temporarycreditconsumption"
@@ -23,15 +24,16 @@ import (
 // TemporaryCreditGrantQuery is the builder for querying TemporaryCreditGrant entities.
 type TemporaryCreditGrantQuery struct {
 	config
-	ctx               *QueryContext
-	order             []temporarycreditgrant.OrderOption
-	inters            []Interceptor
-	predicates        []predicate.TemporaryCreditGrant
-	withUser          *UserQuery
-	withCheckin       *DailyCheckinQuery
-	withGrantedByUser *UserQuery
-	withConsumptions  *TemporaryCreditConsumptionQuery
-	modifiers         []func(*sql.Selector)
+	ctx                                 *QueryContext
+	order                               []temporarycreditgrant.OrderOption
+	inters                              []Interceptor
+	predicates                          []predicate.TemporaryCreditGrant
+	withUser                            *UserQuery
+	withCheckin                         *DailyCheckinQuery
+	withGrantedByUser                   *UserQuery
+	withConsumptions                    *TemporaryCreditConsumptionQuery
+	withBatchImageCreditHoldAllocations *BatchImageCreditHoldAllocationQuery
+	modifiers                           []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -149,6 +151,28 @@ func (_q *TemporaryCreditGrantQuery) QueryConsumptions() *TemporaryCreditConsump
 			sqlgraph.From(temporarycreditgrant.Table, temporarycreditgrant.FieldID, selector),
 			sqlgraph.To(temporarycreditconsumption.Table, temporarycreditconsumption.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, temporarycreditgrant.ConsumptionsTable, temporarycreditgrant.ConsumptionsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryBatchImageCreditHoldAllocations chains the current query on the "batch_image_credit_hold_allocations" edge.
+func (_q *TemporaryCreditGrantQuery) QueryBatchImageCreditHoldAllocations() *BatchImageCreditHoldAllocationQuery {
+	query := (&BatchImageCreditHoldAllocationClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(temporarycreditgrant.Table, temporarycreditgrant.FieldID, selector),
+			sqlgraph.To(batchimagecreditholdallocation.Table, batchimagecreditholdallocation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, temporarycreditgrant.BatchImageCreditHoldAllocationsTable, temporarycreditgrant.BatchImageCreditHoldAllocationsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -343,15 +367,16 @@ func (_q *TemporaryCreditGrantQuery) Clone() *TemporaryCreditGrantQuery {
 		return nil
 	}
 	return &TemporaryCreditGrantQuery{
-		config:            _q.config,
-		ctx:               _q.ctx.Clone(),
-		order:             append([]temporarycreditgrant.OrderOption{}, _q.order...),
-		inters:            append([]Interceptor{}, _q.inters...),
-		predicates:        append([]predicate.TemporaryCreditGrant{}, _q.predicates...),
-		withUser:          _q.withUser.Clone(),
-		withCheckin:       _q.withCheckin.Clone(),
-		withGrantedByUser: _q.withGrantedByUser.Clone(),
-		withConsumptions:  _q.withConsumptions.Clone(),
+		config:                              _q.config,
+		ctx:                                 _q.ctx.Clone(),
+		order:                               append([]temporarycreditgrant.OrderOption{}, _q.order...),
+		inters:                              append([]Interceptor{}, _q.inters...),
+		predicates:                          append([]predicate.TemporaryCreditGrant{}, _q.predicates...),
+		withUser:                            _q.withUser.Clone(),
+		withCheckin:                         _q.withCheckin.Clone(),
+		withGrantedByUser:                   _q.withGrantedByUser.Clone(),
+		withConsumptions:                    _q.withConsumptions.Clone(),
+		withBatchImageCreditHoldAllocations: _q.withBatchImageCreditHoldAllocations.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -399,6 +424,17 @@ func (_q *TemporaryCreditGrantQuery) WithConsumptions(opts ...func(*TemporaryCre
 		opt(query)
 	}
 	_q.withConsumptions = query
+	return _q
+}
+
+// WithBatchImageCreditHoldAllocations tells the query-builder to eager-load the nodes that are connected to
+// the "batch_image_credit_hold_allocations" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TemporaryCreditGrantQuery) WithBatchImageCreditHoldAllocations(opts ...func(*BatchImageCreditHoldAllocationQuery)) *TemporaryCreditGrantQuery {
+	query := (&BatchImageCreditHoldAllocationClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withBatchImageCreditHoldAllocations = query
 	return _q
 }
 
@@ -480,11 +516,12 @@ func (_q *TemporaryCreditGrantQuery) sqlAll(ctx context.Context, hooks ...queryH
 	var (
 		nodes       = []*TemporaryCreditGrant{}
 		_spec       = _q.querySpec()
-		loadedTypes = [4]bool{
+		loadedTypes = [5]bool{
 			_q.withUser != nil,
 			_q.withCheckin != nil,
 			_q.withGrantedByUser != nil,
 			_q.withConsumptions != nil,
+			_q.withBatchImageCreditHoldAllocations != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -531,6 +568,17 @@ func (_q *TemporaryCreditGrantQuery) sqlAll(ctx context.Context, hooks ...queryH
 			func(n *TemporaryCreditGrant) { n.Edges.Consumptions = []*TemporaryCreditConsumption{} },
 			func(n *TemporaryCreditGrant, e *TemporaryCreditConsumption) {
 				n.Edges.Consumptions = append(n.Edges.Consumptions, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withBatchImageCreditHoldAllocations; query != nil {
+		if err := _q.loadBatchImageCreditHoldAllocations(ctx, query, nodes,
+			func(n *TemporaryCreditGrant) {
+				n.Edges.BatchImageCreditHoldAllocations = []*BatchImageCreditHoldAllocation{}
+			},
+			func(n *TemporaryCreditGrant, e *BatchImageCreditHoldAllocation) {
+				n.Edges.BatchImageCreditHoldAllocations = append(n.Edges.BatchImageCreditHoldAllocations, e)
 			}); err != nil {
 			return nil, err
 		}
@@ -646,6 +694,36 @@ func (_q *TemporaryCreditGrantQuery) loadConsumptions(ctx context.Context, query
 	}
 	query.Where(predicate.TemporaryCreditConsumption(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(temporarycreditgrant.ConsumptionsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GrantID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "grant_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *TemporaryCreditGrantQuery) loadBatchImageCreditHoldAllocations(ctx context.Context, query *BatchImageCreditHoldAllocationQuery, nodes []*TemporaryCreditGrant, init func(*TemporaryCreditGrant), assign func(*TemporaryCreditGrant, *BatchImageCreditHoldAllocation)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*TemporaryCreditGrant)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(batchimagecreditholdallocation.FieldGrantID)
+	}
+	query.Where(predicate.BatchImageCreditHoldAllocation(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(temporarycreditgrant.BatchImageCreditHoldAllocationsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

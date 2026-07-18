@@ -43,6 +43,8 @@ const (
 	EdgeGrantedByUser = "granted_by_user"
 	// EdgeConsumptions holds the string denoting the consumptions edge name in mutations.
 	EdgeConsumptions = "consumptions"
+	// EdgeBatchImageCreditHoldAllocations holds the string denoting the batch_image_credit_hold_allocations edge name in mutations.
+	EdgeBatchImageCreditHoldAllocations = "batch_image_credit_hold_allocations"
 	// Table holds the table name of the temporarycreditgrant in the database.
 	Table = "temporary_credit_grants"
 	// UserTable is the table that holds the user relation/edge.
@@ -73,6 +75,13 @@ const (
 	ConsumptionsInverseTable = "temporary_credit_consumptions"
 	// ConsumptionsColumn is the table column denoting the consumptions relation/edge.
 	ConsumptionsColumn = "grant_id"
+	// BatchImageCreditHoldAllocationsTable is the table that holds the batch_image_credit_hold_allocations relation/edge.
+	BatchImageCreditHoldAllocationsTable = "batch_image_credit_hold_allocations"
+	// BatchImageCreditHoldAllocationsInverseTable is the table name for the BatchImageCreditHoldAllocation entity.
+	// It exists in this package in order to avoid circular dependency with the "batchimagecreditholdallocation" package.
+	BatchImageCreditHoldAllocationsInverseTable = "batch_image_credit_hold_allocations"
+	// BatchImageCreditHoldAllocationsColumn is the table column denoting the batch_image_credit_hold_allocations relation/edge.
+	BatchImageCreditHoldAllocationsColumn = "grant_id"
 )
 
 // Columns holds all SQL columns for temporarycreditgrant fields.
@@ -226,6 +235,20 @@ func ByConsumptions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newConsumptionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByBatchImageCreditHoldAllocationsCount orders the results by batch_image_credit_hold_allocations count.
+func ByBatchImageCreditHoldAllocationsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newBatchImageCreditHoldAllocationsStep(), opts...)
+	}
+}
+
+// ByBatchImageCreditHoldAllocations orders the results by batch_image_credit_hold_allocations terms.
+func ByBatchImageCreditHoldAllocations(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newBatchImageCreditHoldAllocationsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -252,5 +275,12 @@ func newConsumptionsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ConsumptionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ConsumptionsTable, ConsumptionsColumn),
+	)
+}
+func newBatchImageCreditHoldAllocationsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(BatchImageCreditHoldAllocationsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, BatchImageCreditHoldAllocationsTable, BatchImageCreditHoldAllocationsColumn),
 	)
 }

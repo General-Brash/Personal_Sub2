@@ -230,6 +230,8 @@ func (Group) Edges() []ent.Edge {
 		edge.To("redeem_codes", RedeemCode.Type),
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("usage_logs", UsageLog.Type),
+		edge.To("batch_image_credit_holds", BatchImageCreditHold.Type).
+			Annotations(entsql.OnDelete(entsql.SetNull)),
 		edge.From("accounts", Account.Type).
 			Ref("groups").
 			Through("account_groups", AccountGroup.Type),

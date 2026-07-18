@@ -141,6 +141,8 @@ func (User) Edges() []ent.Edge {
 			Annotations(entsql.OnDelete(entsql.Restrict)),
 		edge.To("granted_temporary_credit_grants", TemporaryCreditGrant.Type).
 			Annotations(entsql.OnDelete(entsql.Restrict)),
+		edge.To("batch_image_credit_holds", BatchImageCreditHold.Type).
+			Annotations(entsql.OnDelete(entsql.Restrict)),
 	}
 }
 
