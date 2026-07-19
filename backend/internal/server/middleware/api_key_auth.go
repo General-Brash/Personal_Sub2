@@ -196,6 +196,16 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完")
 				return
 			}
+			if apiKeyService.HasPermanentBalanceEligibilityChecker() {
+				if err := apiKeyService.CheckPermanentBalanceEligibility(c.Request.Context(), apiKey.User.ID); err != nil {
+					if errors.Is(err, service.ErrInsufficientBalance) {
+						AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+						return
+					}
+					AbortWithError(c, 503, "BILLING_SERVICE_ERROR", "Billing service temporarily unavailable. Please retry later.")
+					return
+				}
+			}
 
 			// 订阅模式：验证订阅限额
 			if subscription != nil {

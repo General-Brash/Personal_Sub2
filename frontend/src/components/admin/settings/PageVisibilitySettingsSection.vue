@@ -10,7 +10,7 @@
     </div>
 
     <div class="divide-y divide-gray-100 dark:divide-dark-700">
-      <div class="p-6">
+      <div class="p-6" data-test="user-pages-group">
         <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
           {{ t('admin.settings.features.pageVisibility.userPages') }}
         </h3>
@@ -49,11 +49,27 @@
         </div>
       </div>
 
-      <div class="p-6">
+      <div class="p-6" data-test="admin-pages-group">
         <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
           {{ t('admin.settings.features.pageVisibility.adminPages') }}
         </h3>
         <div class="mt-4 space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.features.pageVisibility.adminSubscriptions.label') }}
+              </p>
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.features.pageVisibility.adminSubscriptions.hint') }}
+              </p>
+            </div>
+            <Toggle
+              :model-value="adminSubscriptionsEnabled"
+              :aria-label="t('admin.settings.features.pageVisibility.adminSubscriptions.label')"
+              @update:model-value="emit('update:adminSubscriptionsEnabled', $event)"
+            />
+          </div>
+
           <div class="flex items-start justify-between gap-4">
             <div class="min-w-0">
               <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -99,6 +115,7 @@ import Toggle from '@/components/common/Toggle.vue'
 defineProps<{
   userChannelStatusEnabled: boolean
   userSubscriptionsEnabled: boolean
+  adminSubscriptionsEnabled: boolean
   adminPromoCodesEnabled: boolean
   adminChannelManagementEnabled: boolean
 }>()
@@ -106,6 +123,7 @@ defineProps<{
 const emit = defineEmits<{
   (event: 'update:userChannelStatusEnabled', value: boolean): void
   (event: 'update:userSubscriptionsEnabled', value: boolean): void
+  (event: 'update:adminSubscriptionsEnabled', value: boolean): void
   (event: 'update:adminPromoCodesEnabled', value: boolean): void
   (event: 'update:adminChannelManagementEnabled', value: boolean): void
 }>()

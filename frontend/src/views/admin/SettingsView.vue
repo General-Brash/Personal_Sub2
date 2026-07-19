@@ -5902,6 +5902,7 @@
         <PageVisibilitySettingsSection
           v-model:user-channel-status-enabled="form.user_channel_status_enabled"
           v-model:user-subscriptions-enabled="form.user_subscriptions_enabled"
+          v-model:admin-subscriptions-enabled="form.admin_subscriptions_enabled"
           v-model:admin-promo-codes-enabled="form.admin_promo_codes_enabled"
           v-model:admin-channel-management-enabled="form.admin_channel_management_enabled"
         />
@@ -8434,6 +8435,7 @@ const form = reactive<SettingsForm>({
   // Page visibility switches
   user_channel_status_enabled: true,
   user_subscriptions_enabled: true,
+  admin_subscriptions_enabled: true,
   admin_promo_codes_enabled: true,
   admin_channel_management_enabled: true,
   // Affiliate (邀请返利) feature switch
@@ -9835,6 +9837,7 @@ async function saveSettings() {
       // Page visibility switches
       user_channel_status_enabled: form.user_channel_status_enabled,
       user_subscriptions_enabled: form.user_subscriptions_enabled,
+      admin_subscriptions_enabled: form.admin_subscriptions_enabled,
       admin_promo_codes_enabled: form.admin_promo_codes_enabled,
       admin_channel_management_enabled: form.admin_channel_management_enabled,
       // Affiliate (邀请返利) feature switch

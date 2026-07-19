@@ -22,8 +22,10 @@ const temporaryCreditRequestIDMaxLen = 255
 type TemporaryCreditSource string
 
 const (
-	TemporaryCreditSourceCheckin    TemporaryCreditSource = "checkin"
-	TemporaryCreditSourceAdminGrant TemporaryCreditSource = "admin_grant"
+	TemporaryCreditSourceCheckin      TemporaryCreditSource = "checkin"
+	TemporaryCreditSourceAdminGrant   TemporaryCreditSource = "admin_grant"
+	TemporaryCreditSourceBankAdvance  TemporaryCreditSource = "bank_advance"
+	TemporaryCreditSourceBankExchange TemporaryCreditSource = "bank_exchange"
 )
 
 type TemporaryCreditGrant struct {
@@ -277,6 +279,10 @@ func validateTemporaryCreditGrant(grant TemporaryCreditGrant) error {
 	case TemporaryCreditSourceAdminGrant:
 		if grant.CheckinID != nil || grant.GrantedBy == nil || *grant.GrantedBy <= 0 {
 			return fmt.Errorf("admin grant must have administrator metadata and no checkin id")
+		}
+	case TemporaryCreditSourceBankAdvance, TemporaryCreditSourceBankExchange:
+		if grant.CheckinID != nil || grant.GrantedBy != nil || grant.Notes != "" {
+			return fmt.Errorf("bank grant must not have checkin or administrator metadata")
 		}
 	default:
 		return fmt.Errorf("unknown temporary credit source %q", grant.Source)

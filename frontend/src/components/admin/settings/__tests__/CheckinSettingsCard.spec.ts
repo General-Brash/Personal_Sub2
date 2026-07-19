@@ -35,8 +35,8 @@ const settings = {
   enabled: false,
   max_reward_day: 2,
   reward_tiers: [
-    { day: 1, amount: '0.00000001' },
-    { day: 2, amount: '1.25000000' },
+    { day: 1, amount: '0.00000001', permanent_amount: '0.00000000' },
+    { day: 2, amount: '1.25000000', permanent_amount: '2.00000000' },
   ],
 }
 
@@ -64,6 +64,7 @@ describe('CheckinSettingsCard', () => {
     expect(getCheckinSettings).toHaveBeenCalledTimes(1)
     expect((wrapper.get('[data-testid="checkin-max-reward-day"]').element as HTMLInputElement).value).toBe('2')
     expect((wrapper.get('[data-testid="checkin-tier-1"]').element as HTMLInputElement).value).toBe('0.00000001')
+    expect((wrapper.get('[data-testid="checkin-permanent-tier-2"]').element as HTMLInputElement).value).toBe('2.00000000')
     expect((wrapper.get('[data-testid="checkin-tier-2"]').element as HTMLInputElement).value).toBe('1.25000000')
   })
 
@@ -73,6 +74,7 @@ describe('CheckinSettingsCard', () => {
 
     await wrapper.get('[data-testid="checkin-max-reward-day"]').setValue('3')
     await wrapper.get('[data-testid="checkin-tier-3"]').setValue('0.00000101')
+    await wrapper.get('[data-testid="checkin-permanent-tier-3"]').setValue('0.50000000')
     await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
     await flushPromises()
 
@@ -80,9 +82,9 @@ describe('CheckinSettingsCard', () => {
       enabled: false,
       max_reward_day: 3,
       reward_tiers: [
-        { day: 1, amount: '0.00000001' },
-        { day: 2, amount: '1.25000000' },
-        { day: 3, amount: '0.00000101' },
+        { day: 1, amount: '0.00000001', permanent_amount: '0.00000000' },
+        { day: 2, amount: '1.25000000', permanent_amount: '2.00000000' },
+        { day: 3, amount: '0.00000101', permanent_amount: '0.50000000' },
       ],
     })
     expect(typeof updateCheckinSettings.mock.calls[0]?.[0]?.reward_tiers[2]?.amount).toBe('string')
@@ -109,7 +111,11 @@ describe('CheckinSettingsCard', () => {
     const payload = updateCheckinSettings.mock.calls[0]?.[0]
     expect(payload.max_reward_day).toBe(365)
     expect(payload.reward_tiers).toHaveLength(365)
-    expect(payload.reward_tiers[364]).toEqual({ day: 365, amount: '1.00000000' })
+    expect(payload.reward_tiers[364]).toEqual({
+      day: 365,
+      amount: '1.00000000',
+      permanent_amount: '0.00000000',
+    })
   })
 
   it('preserves hidden tier amounts while editing 365 down to 36 and back to 364', async () => {
@@ -142,9 +148,21 @@ describe('CheckinSettingsCard', () => {
     expect(payload.max_reward_day).toBe(364)
     expect(payload.reward_tiers).toHaveLength(364)
     expect(payload.reward_tiers.every((tier, index) => tier.day === index + 1)).toBe(true)
-    expect(payload.reward_tiers[36]).toEqual({ day: 37, amount: '0.00000037' })
-    expect(payload.reward_tiers[363]).toEqual({ day: 364, amount: '0.00000364' })
-    expect(payload.reward_tiers).not.toContainEqual({ day: 365, amount: '0.00000365' })
+    expect(payload.reward_tiers[36]).toEqual({
+      day: 37,
+      amount: '0.00000037',
+      permanent_amount: '0.00000000',
+    })
+    expect(payload.reward_tiers[363]).toEqual({
+      day: 364,
+      amount: '0.00000364',
+      permanent_amount: '0.00000000',
+    })
+    expect(payload.reward_tiers).not.toContainEqual({
+      day: 365,
+      amount: '0.00000365',
+      permanent_amount: '0.00000000',
+    })
   })
 
   it('does not expand or truncate reward tiers for a huge maximum reward day', async () => {
@@ -178,6 +196,37 @@ describe('CheckinSettingsCard', () => {
 
     expect(updateCheckinSettings).not.toHaveBeenCalled()
     expect(showError).toHaveBeenCalledWith('checkin.admin.invalidRewardAmount')
+  })
+
+  it('allows zero permanent rewards and rejects negative permanent rewards', async () => {
+    const wrapper = mount(CheckinSettingsCard)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="checkin-permanent-tier-1"]').setValue('0.00000000')
+    await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
+    await flushPromises()
+    expect(updateCheckinSettings).toHaveBeenCalledTimes(1)
+
+    updateCheckinSettings.mockClear()
+    await wrapper.get('[data-testid="checkin-permanent-tier-1"]').setValue('-0.00000001')
+    await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
+    expect(updateCheckinSettings).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('checkin.admin.invalidRewardAmount')
+  })
+
+  it('defaults permanent rewards to zero for legacy settings responses', async () => {
+    getCheckinSettings.mockResolvedValueOnce({
+      enabled: true,
+      max_reward_day: 1,
+      reward_tiers: [{ day: 1, amount: '1.00000000' }],
+    })
+
+    const wrapper = mount(CheckinSettingsCard)
+    await flushPromises()
+
+    expect(
+      (wrapper.get('[data-testid="checkin-permanent-tier-1"]').element as HTMLInputElement).value,
+    ).toBe('0.00000000')
   })
 
   it('serializes deferred save attempts and freezes inputs until the response settles', async () => {

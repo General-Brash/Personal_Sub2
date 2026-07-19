@@ -19,8 +19,9 @@ var beijingLocation = func() *time.Location {
 const dailyCheckinMaxRewardDay = 365
 
 type DailyCheckinRewardTier struct {
-	Day    int     `json:"day"`
-	Amount float64 `json:"amount"`
+	Day             int     `json:"day"`
+	Amount          float64 `json:"amount"`
+	PermanentAmount float64 `json:"permanent_amount"`
 }
 
 type DailyCheckinPolicy struct {
@@ -33,8 +34,9 @@ func DefaultDailyCheckinPolicy() DailyCheckinPolicy {
 	tiers := make([]DailyCheckinRewardTier, 7)
 	for day := range tiers {
 		tiers[day] = DailyCheckinRewardTier{
-			Day:    day + 1,
-			Amount: 1,
+			Day:             day + 1,
+			Amount:          1,
+			PermanentAmount: 0,
 		}
 	}
 	return DailyCheckinPolicy{
@@ -94,22 +96,34 @@ func (p DailyCheckinPolicy) Validate() error {
 		if err := ValidateTemporaryCreditAmount(tier.Amount); err != nil {
 			return ErrDailyCheckinPolicyInvalid
 		}
+		if err := validatePermanentRewardAmount(tier.PermanentAmount); err != nil {
+			return ErrDailyCheckinPolicyInvalid
+		}
 	}
 	return nil
 }
 
 func (p DailyCheckinPolicy) RewardForStreak(streakDay int) (int, float64, error) {
+	rewardDay, temporaryAmount, _, err := p.RewardForStreakAmounts(streakDay)
+	return rewardDay, temporaryAmount, err
+}
+
+// RewardForStreakAmounts resolves both credit balances for a streak day. The
+// legacy RewardForStreak method above intentionally keeps its original return
+// shape for callers that only consume temporary credit.
+func (p DailyCheckinPolicy) RewardForStreakAmounts(streakDay int) (int, float64, float64, error) {
 	if err := p.Validate(); err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	if streakDay < 1 {
-		return 0, 0, ErrDailyCheckinPolicyInvalid
+		return 0, 0, 0, ErrDailyCheckinPolicyInvalid
 	}
 	rewardDay := streakDay
 	if rewardDay > p.MaxRewardDay {
 		rewardDay = p.MaxRewardDay
 	}
-	return rewardDay, p.RewardTiers[rewardDay-1].Amount, nil
+	tier := p.RewardTiers[rewardDay-1]
+	return rewardDay, tier.Amount, tier.PermanentAmount, nil
 }
 
 func (p DailyCheckinPolicy) settingValues() (map[string]string, error) {
@@ -119,8 +133,9 @@ func (p DailyCheckinPolicy) settingValues() (map[string]string, error) {
 	tiers := make([]dailyCheckinRewardTierValue, len(p.RewardTiers))
 	for index, tier := range p.RewardTiers {
 		tiers[index] = dailyCheckinRewardTierValue{
-			Day:    tier.Day,
-			Amount: formatLedgerAmount(tier.Amount),
+			Day:             tier.Day,
+			Amount:          formatLedgerAmount(tier.Amount),
+			PermanentAmount: formatLedgerAmount(tier.PermanentAmount),
 		}
 	}
 	rawTiers, err := json.Marshal(tiers)
@@ -135,8 +150,9 @@ func (p DailyCheckinPolicy) settingValues() (map[string]string, error) {
 }
 
 type dailyCheckinRewardTierValue struct {
-	Day    int    `json:"day"`
-	Amount string `json:"amount"`
+	Day             int    `json:"day"`
+	Amount          string `json:"amount"`
+	PermanentAmount string `json:"permanent_amount,omitempty"`
 }
 
 func parseDailyCheckinRewardTiers(raw string) ([]DailyCheckinRewardTier, error) {
@@ -150,9 +166,28 @@ func parseDailyCheckinRewardTiers(raw string) ([]DailyCheckinRewardTier, error) 
 		if err != nil {
 			return nil, ErrDailyCheckinPolicyInvalid
 		}
-		tiers[index] = DailyCheckinRewardTier{Day: value.Day, Amount: amount}
+		permanentAmount := 0.0
+		if value.PermanentAmount != "" {
+			permanentAmount, err = ParseStrictLedgerAmount(value.PermanentAmount)
+			if err != nil {
+				return nil, ErrDailyCheckinPolicyInvalid
+			}
+		}
+		tiers[index] = DailyCheckinRewardTier{
+			Day:             value.Day,
+			Amount:          amount,
+			PermanentAmount: permanentAmount,
+		}
 	}
 	return tiers, nil
+}
+
+func validatePermanentRewardAmount(amount float64) error {
+	normalized, err := normalizeLedgerAmount(amount)
+	if err != nil || normalized < 0 {
+		return ErrDailyCheckinPolicyInvalid
+	}
+	return nil
 }
 
 func parseDailyCheckinPolicySettings(settings map[string]string) (*DailyCheckinPolicy, error) {

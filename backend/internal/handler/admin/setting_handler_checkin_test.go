@@ -42,9 +42,9 @@ func TestSettingHandler_CheckinSettingsRejectInvalidTiersAndRoundTrip(t *testing
 		"enabled": true,
 		"max_reward_day": 3,
 		"reward_tiers": [
-			{"day": 1, "amount": "1.00000000"},
-			{"day": 2, "amount": "2.50000000"},
-			{"day": 3, "amount": "4.00000000"}
+			{"day": 1, "amount": "1.00000000", "permanent_amount": "0.00000000"},
+			{"day": 2, "amount": "2.50000000", "permanent_amount": "0.25000000"},
+			{"day": 3, "amount": "4.00000000", "permanent_amount": "1.00000000"}
 		]
 	}`))
 	valid.Header.Set("Content-Type", "application/json")
@@ -56,19 +56,21 @@ func TestSettingHandler_CheckinSettingsRejectInvalidTiersAndRoundTrip(t *testing
 	require.Len(t, repo.lastUpdates, 3)
 	require.Equal(t, "true", repo.values[service.SettingKeyDailyCheckinEnabled])
 	require.Equal(t, "3", repo.values[service.SettingKeyDailyCheckinMaxRewardDay])
-	require.JSONEq(t, `[{"day":1,"amount":"1.00000000"},{"day":2,"amount":"2.50000000"},{"day":3,"amount":"4.00000000"}]`, repo.values[service.SettingKeyDailyCheckinRewardTiers])
+	require.JSONEq(t, `[{"day":1,"amount":"1.00000000","permanent_amount":"0.00000000"},{"day":2,"amount":"2.50000000","permanent_amount":"0.25000000"},{"day":3,"amount":"4.00000000","permanent_amount":"1.00000000"}]`, repo.values[service.SettingKeyDailyCheckinRewardTiers])
 
 	var putResponse struct {
 		Data struct {
 			RewardTiers []struct {
-				Day    int    `json:"day"`
-				Amount string `json:"amount"`
+				Day             int    `json:"day"`
+				Amount          string `json:"amount"`
+				PermanentAmount string `json:"permanent_amount"`
 			} `json:"reward_tiers"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(validRecorder.Body.Bytes(), &putResponse))
 	require.Equal(t, "1.00000000", putResponse.Data.RewardTiers[0].Amount)
 	require.Equal(t, "2.50000000", putResponse.Data.RewardTiers[1].Amount)
+	require.Equal(t, "0.25000000", putResponse.Data.RewardTiers[1].PermanentAmount)
 
 	getRecorder := httptest.NewRecorder()
 	getContext, _ := gin.CreateTestContext(getRecorder)
@@ -166,6 +168,28 @@ func TestSettingHandler_CheckinSettingsRejectNonCanonicalAmounts(t *testing.T) {
 			require.Nil(t, repo.lastUpdates)
 		})
 	}
+}
+
+func TestSettingHandler_CheckinSettingsAllowsZeroPermanentRewardAndRejectsNegative(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{values: map[string]string{}}
+	h := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), nil, nil, nil, nil, nil, nil)
+
+	valid := httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings/checkin", bytes.NewBufferString(`{"enabled":true,"max_reward_day":1,"reward_tiers":[{"day":1,"amount":"1.00000000","permanent_amount":"0.00000000"}]}`))
+	valid.Header.Set("Content-Type", "application/json")
+	validRecorder := httptest.NewRecorder()
+	validContext, _ := gin.CreateTestContext(validRecorder)
+	validContext.Request = valid
+	h.UpdateDailyCheckinSettings(validContext)
+	require.Equal(t, http.StatusOK, validRecorder.Code)
+
+	negative := httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings/checkin", bytes.NewBufferString(`{"enabled":true,"max_reward_day":1,"reward_tiers":[{"day":1,"amount":"1.00000000","permanent_amount":"-0.00000001"}]}`))
+	negative.Header.Set("Content-Type", "application/json")
+	negativeRecorder := httptest.NewRecorder()
+	negativeContext, _ := gin.CreateTestContext(negativeRecorder)
+	negativeContext.Request = negative
+	h.UpdateDailyCheckinSettings(negativeContext)
+	require.Equal(t, http.StatusBadRequest, negativeRecorder.Code)
 }
 
 func TestSettingHandler_CheckinSettingsExactAmountBoundaries(t *testing.T) {

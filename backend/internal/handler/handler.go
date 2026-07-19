@@ -10,6 +10,7 @@ type AdminHandlers struct {
 	Dashboard              *admin.DashboardHandler
 	User                   *admin.UserHandler
 	TemporaryCredit        *admin.TemporaryCreditHandler
+	Bank                   *admin.BankHandler
 	Group                  *admin.GroupHandler
 	Account                *admin.AccountHandler
 	Announcement           *admin.AnnouncementHandler
@@ -65,6 +66,7 @@ type Handlers struct {
 	AsyncImage       *AsyncImageHandler
 	BatchImage       *BatchImageHandler
 	Checkin          *CheckinHandler
+	Bank             *BankHandler
 }
 
 // BuildInfo contains build-time information

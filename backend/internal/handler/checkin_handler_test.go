@@ -81,15 +81,18 @@ func TestCheckinHandler_GetStatusAndPostReplay(t *testing.T) {
 	now := time.Date(2026, time.July, 13, 16, 0, 0, 0, time.UTC)
 	stub := &checkinAPIServiceStub{
 		status: &service.CheckinStatus{
-			Enabled:            true,
-			NextRewardDay:      1,
-			NextRewardAmount:   "1.00000000",
-			MonthlyRewardTotal: "2.00000000",
+			Enabled:                     true,
+			NextRewardDay:               1,
+			NextRewardAmount:            "1.00000000",
+			NextPermanentRewardAmount:   "0.25000000",
+			MonthlyRewardTotal:          "2.00000000",
+			MonthlyPermanentRewardTotal: "0.50000000",
 			Calendar: []service.DailyCheckinCalendarEntry{{
-				CheckinDate:  "2026-07-13",
-				StreakDay:    1,
-				RewardDay:    1,
-				RewardAmount: "1.00000000",
+				CheckinDate:           "2026-07-13",
+				StreakDay:             1,
+				RewardDay:             1,
+				RewardAmount:          "1.00000000",
+				PermanentRewardAmount: "0.25000000",
 			}},
 		},
 		checkin: &service.CheckinResult{
@@ -97,6 +100,7 @@ func TestCheckinHandler_GetStatusAndPostReplay(t *testing.T) {
 			StreakDay:              2,
 			RewardDay:              2,
 			RewardAmount:           "1.00000000",
+			PermanentRewardAmount:  "0.25000000",
 			TemporaryCreditGrantID: 91,
 			ExpiresAt:              now,
 		},
@@ -121,6 +125,7 @@ func TestCheckinHandler_GetStatusAndPostReplay(t *testing.T) {
 	require.Equal(t, http.StatusOK, getRecorder.Code)
 	require.Equal(t, "2026-07", stub.statusMonth)
 	require.Contains(t, getRecorder.Body.String(), `"monthly_reward_total":"2.00000000"`)
+	require.Contains(t, getRecorder.Body.String(), `"monthly_permanent_reward_total":"0.50000000"`)
 
 	missingKey := httptest.NewRequest(http.MethodPost, "/api/v1/user/check-in", nil)
 	missingKeyRecorder := httptest.NewRecorder()
@@ -146,7 +151,8 @@ func TestCheckinHandler_GetStatusAndPostReplay(t *testing.T) {
 		Data map[string]json.RawMessage `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &envelope))
-	require.Len(t, envelope.Data, 7)
+	require.Len(t, envelope.Data, 8)
+	require.Contains(t, envelope.Data, "permanent_reward_amount")
 	require.NotContains(t, envelope.Data, "temporary_credit_available")
 }
 

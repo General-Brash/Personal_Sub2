@@ -22,10 +22,11 @@ type DailyCheckinPolicyProvider interface {
 }
 
 type DailyCheckinCalendarEntry struct {
-	CheckinDate  string `json:"checkin_date"`
-	StreakDay    int    `json:"streak_day"`
-	RewardDay    int    `json:"reward_day"`
-	RewardAmount string `json:"reward_amount"`
+	CheckinDate           string `json:"checkin_date"`
+	StreakDay             int    `json:"streak_day"`
+	RewardDay             int    `json:"reward_day"`
+	RewardAmount          string `json:"reward_amount"`
+	PermanentRewardAmount string `json:"permanent_reward_amount"`
 }
 
 type CheckinStatus struct {
@@ -34,9 +35,11 @@ type CheckinStatus struct {
 	CurrentStreakDay                 int                         `json:"current_streak_day"`
 	NextRewardDay                    int                         `json:"next_reward_day"`
 	NextRewardAmount                 string                      `json:"next_reward_amount"`
+	NextPermanentRewardAmount        string                      `json:"next_permanent_reward_amount"`
 	TemporaryCreditAvailable         string                      `json:"temporary_credit_available"`
 	TemporaryCreditEarliestExpiresAt *time.Time                  `json:"temporary_credit_earliest_expires_at"`
 	MonthlyRewardTotal               string                      `json:"monthly_reward_total"`
+	MonthlyPermanentRewardTotal      string                      `json:"monthly_permanent_reward_total"`
 	Calendar                         []DailyCheckinCalendarEntry `json:"calendar"`
 }
 
@@ -46,6 +49,7 @@ type CheckinResult struct {
 	StreakDay              int       `json:"streak_day"`
 	RewardDay              int       `json:"reward_day"`
 	RewardAmount           string    `json:"reward_amount"`
+	PermanentRewardAmount  string    `json:"permanent_reward_amount"`
 	TemporaryCreditGrantID int64     `json:"temporary_credit_grant_id"`
 	ExpiresAt              time.Time `json:"expires_at"`
 }
@@ -132,7 +136,7 @@ func (s *CheckinService) checkIn(ctx context.Context, userID int64, claim *Idemp
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("commit existing daily checkin response: %w", err)
 		}
-		s.temporaryCreditService.invalidateAvailableCredit(ctx, userID)
+		s.invalidateCommittedCheckinCredit(ctx, userID, checkin.permanentRewardAmount > 0)
 		return result, nil
 	}
 
@@ -148,11 +152,11 @@ func (s *CheckinService) checkIn(ctx context.Context, userID int64, claim *Idemp
 	}
 
 	streakDay := NextCheckinStreak(lastDate, lastStreak, businessNow)
-	rewardDay, rewardAmount, err := policy.RewardForStreak(streakDay)
+	rewardDay, rewardAmount, permanentRewardAmount, err := policy.RewardForStreakAmounts(streakDay)
 	if err != nil {
 		return nil, err
 	}
-	checkin, err := insertCheckin(ctx, tx, userID, checkinDate, streakDay, rewardDay, rewardAmount)
+	checkin, err := insertCheckin(ctx, tx, userID, checkinDate, streakDay, rewardDay, rewardAmount, permanentRewardAmount)
 	if errors.Is(err, sql.ErrNoRows) {
 		checkin, err = loadCheckinByDate(ctx, tx, userID, checkinDate)
 		if err != nil {
@@ -169,11 +173,16 @@ func (s *CheckinService) checkIn(ctx context.Context, userID int64, claim *Idemp
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("commit raced daily checkin response: %w", err)
 		}
-		s.temporaryCreditService.invalidateAvailableCredit(ctx, userID)
+		s.invalidateCommittedCheckinCredit(ctx, userID, checkin.permanentRewardAmount > 0)
 		return result, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if permanentRewardAmount > 0 {
+		if err := addCheckinPermanentBalance(ctx, tx, userID, permanentRewardAmount); err != nil {
+			return nil, err
+		}
 	}
 	checkinID := checkin.id
 	grant, err := s.temporaryCreditService.CreateGrantTx(ctx, tx, CreateTemporaryCreditGrantInput{
@@ -193,7 +202,7 @@ func (s *CheckinService) checkIn(ctx context.Context, userID int64, claim *Idemp
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit daily checkin transaction: %w", err)
 	}
-	s.temporaryCreditService.invalidateAvailableCredit(ctx, userID)
+	s.invalidateCommittedCheckinCredit(ctx, userID, permanentRewardAmount > 0)
 	return result, nil
 }
 
@@ -204,6 +213,7 @@ func newCheckinResult(checkin *persistedCheckin, grant *TemporaryCreditGrant, al
 		StreakDay:              checkin.streakDay,
 		RewardDay:              checkin.rewardDay,
 		RewardAmount:           formatLedgerAmount(checkin.rewardAmount),
+		PermanentRewardAmount:  formatLedgerAmount(checkin.permanentRewardAmount),
 		TemporaryCreditGrantID: grant.ID,
 		ExpiresAt:              grant.ExpiresAt().UTC(),
 	}
@@ -263,7 +273,7 @@ func (s *CheckinService) GetStatus(ctx context.Context, userID int64, requestedM
 	if err != nil {
 		return nil, err
 	}
-	calendar, monthlyRewardTotal, err := loadCheckinCalendar(ctx, s.db, userID, monthStart, monthEnd)
+	calendar, monthlyRewardTotal, monthlyPermanentRewardTotal, err := loadCheckinCalendar(ctx, s.db, userID, monthStart, monthEnd)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +298,7 @@ func (s *CheckinService) GetStatus(ctx context.Context, userID int64, requestedM
 		currentStreakDay = lastStreak
 		nextStreakDay = lastStreak + 1
 	}
-	nextRewardDay, nextRewardAmount, err := policy.RewardForStreak(nextStreakDay)
+	nextRewardDay, nextRewardAmount, nextPermanentRewardAmount, err := policy.RewardForStreakAmounts(nextStreakDay)
 	if err != nil {
 		return nil, err
 	}
@@ -299,9 +309,11 @@ func (s *CheckinService) GetStatus(ctx context.Context, userID int64, requestedM
 		CurrentStreakDay:                 currentStreakDay,
 		NextRewardDay:                    nextRewardDay,
 		NextRewardAmount:                 formatLedgerAmount(nextRewardAmount),
+		NextPermanentRewardAmount:        formatLedgerAmount(nextPermanentRewardAmount),
 		TemporaryCreditAvailable:         formatLedgerAmount(available),
 		TemporaryCreditEarliestExpiresAt: earliestExpiry,
 		MonthlyRewardTotal:               formatLedgerAmount(monthlyRewardTotal),
+		MonthlyPermanentRewardTotal:      formatLedgerAmount(monthlyPermanentRewardTotal),
 		Calendar:                         calendar,
 	}, nil
 }
@@ -332,11 +344,12 @@ type sqlQueryer interface {
 }
 
 type persistedCheckin struct {
-	id           int64
-	date         string
-	streakDay    int
-	rewardDay    int
-	rewardAmount float64
+	id                    int64
+	date                  string
+	streakDay             int
+	rewardDay             int
+	rewardAmount          float64
+	permanentRewardAmount float64
 }
 
 func loadLatestCheckin(ctx context.Context, queryer sqlQueryer, userID int64) (*string, int, error) {
@@ -352,15 +365,15 @@ func loadLatestCheckin(ctx context.Context, queryer sqlQueryer, userID int64) (*
 	return &date, streakDay, nil
 }
 
-func insertCheckin(ctx context.Context, tx *sql.Tx, userID int64, checkinDate string, streakDay, rewardDay int, rewardAmount float64) (*persistedCheckin, error) {
+func insertCheckin(ctx context.Context, tx *sql.Tx, userID int64, checkinDate string, streakDay, rewardDay int, rewardAmount, permanentRewardAmount float64) (*persistedCheckin, error) {
 	checkin := &persistedCheckin{}
 	err := tx.QueryRowContext(ctx, `
-INSERT INTO daily_checkins (user_id, checkin_date, streak_day, reward_day, reward_amount)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO daily_checkins (user_id, checkin_date, streak_day, reward_day, reward_amount, permanent_reward_amount)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (user_id, checkin_date) DO NOTHING
-RETURNING id, checkin_date::text, streak_day, reward_day, reward_amount`,
-		userID, checkinDate, streakDay, rewardDay, formatLedgerAmount(rewardAmount),
-	).Scan(&checkin.id, &checkin.date, &checkin.streakDay, &checkin.rewardDay, &checkin.rewardAmount)
+RETURNING id, checkin_date::text, streak_day, reward_day, reward_amount, permanent_reward_amount`,
+		userID, checkinDate, streakDay, rewardDay, formatLedgerAmount(rewardAmount), formatLedgerAmount(permanentRewardAmount),
+	).Scan(&checkin.id, &checkin.date, &checkin.streakDay, &checkin.rewardDay, &checkin.rewardAmount, &checkin.permanentRewardAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -369,8 +382,8 @@ RETURNING id, checkin_date::text, streak_day, reward_day, reward_amount`,
 
 func loadCheckinByDate(ctx context.Context, tx *sql.Tx, userID int64, checkinDate string) (*persistedCheckin, error) {
 	checkin := &persistedCheckin{}
-	err := tx.QueryRowContext(ctx, `SELECT id, checkin_date::text, streak_day, reward_day, reward_amount FROM daily_checkins WHERE user_id = $1 AND checkin_date = $2`, userID, checkinDate).
-		Scan(&checkin.id, &checkin.date, &checkin.streakDay, &checkin.rewardDay, &checkin.rewardAmount)
+	err := tx.QueryRowContext(ctx, `SELECT id, checkin_date::text, streak_day, reward_day, reward_amount, permanent_reward_amount FROM daily_checkins WHERE user_id = $1 AND checkin_date = $2`, userID, checkinDate).
+		Scan(&checkin.id, &checkin.date, &checkin.streakDay, &checkin.rewardDay, &checkin.rewardAmount, &checkin.permanentRewardAmount)
 	if err != nil {
 		return nil, fmt.Errorf("load existing daily checkin: %w", err)
 	}
@@ -387,14 +400,14 @@ func loadCheckinGrant(ctx context.Context, tx *sql.Tx, checkinID int64) (*Tempor
 	return grant, nil
 }
 
-func loadCheckinCalendar(ctx context.Context, queryer sqlQueryer, userID int64, monthStart, monthEnd string) ([]DailyCheckinCalendarEntry, float64, error) {
+func loadCheckinCalendar(ctx context.Context, queryer sqlQueryer, userID int64, monthStart, monthEnd string) ([]DailyCheckinCalendarEntry, float64, float64, error) {
 	rows, err := queryer.QueryContext(ctx, `
-SELECT checkin_date::text, streak_day, reward_day, reward_amount
+SELECT checkin_date::text, streak_day, reward_day, reward_amount, permanent_reward_amount
 FROM daily_checkins
 WHERE user_id = $1 AND checkin_date >= $2 AND checkin_date < $3
 ORDER BY checkin_date ASC`, userID, monthStart, monthEnd)
 	if err != nil {
-		return nil, 0, fmt.Errorf("load daily checkin calendar: %w", err)
+		return nil, 0, 0, fmt.Errorf("load daily checkin calendar: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -402,23 +415,52 @@ ORDER BY checkin_date ASC`, userID, monthStart, monthEnd)
 	for rows.Next() {
 		entry := DailyCheckinCalendarEntry{}
 		var rewardAmount float64
-		if err := rows.Scan(&entry.CheckinDate, &entry.StreakDay, &entry.RewardDay, &rewardAmount); err != nil {
-			return nil, 0, fmt.Errorf("scan daily checkin calendar: %w", err)
+		var permanentRewardAmount float64
+		if err := rows.Scan(&entry.CheckinDate, &entry.StreakDay, &entry.RewardDay, &rewardAmount, &permanentRewardAmount); err != nil {
+			return nil, 0, 0, fmt.Errorf("scan daily checkin calendar: %w", err)
 		}
 		entry.RewardAmount = formatLedgerAmount(rewardAmount)
+		entry.PermanentRewardAmount = formatLedgerAmount(permanentRewardAmount)
 		calendar = append(calendar, entry)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("iterate daily checkin calendar: %w", err)
+		return nil, 0, 0, fmt.Errorf("iterate daily checkin calendar: %w", err)
 	}
 
-	var monthlyRewardTotal float64
-	err = queryer.QueryRowContext(ctx, `SELECT COALESCE(SUM(reward_amount), 0) FROM daily_checkins WHERE user_id = $1 AND checkin_date >= $2 AND checkin_date < $3`, userID, monthStart, monthEnd).
-		Scan(&monthlyRewardTotal)
+	var monthlyRewardTotal, monthlyPermanentRewardTotal float64
+	err = queryer.QueryRowContext(ctx, `SELECT COALESCE(SUM(reward_amount), 0), COALESCE(SUM(permanent_reward_amount), 0) FROM daily_checkins WHERE user_id = $1 AND checkin_date >= $2 AND checkin_date < $3`, userID, monthStart, monthEnd).
+		Scan(&monthlyRewardTotal, &monthlyPermanentRewardTotal)
 	if err != nil {
-		return nil, 0, fmt.Errorf("sum monthly daily checkin rewards: %w", err)
+		return nil, 0, 0, fmt.Errorf("sum monthly daily checkin rewards: %w", err)
 	}
-	return calendar, monthlyRewardTotal, nil
+	return calendar, monthlyRewardTotal, monthlyPermanentRewardTotal, nil
+}
+
+func addCheckinPermanentBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) error {
+	result, err := tx.ExecContext(ctx, `UPDATE users SET balance = balance + $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`, formatLedgerAmount(amount), userID)
+	if err != nil {
+		return fmt.Errorf("add daily checkin permanent balance: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read daily checkin permanent balance result: %w", err)
+	}
+	if affected != 1 {
+		return ErrCheckinUserNotFound
+	}
+	return nil
+}
+
+func (s *CheckinService) invalidateCommittedCheckinCredit(ctx context.Context, userID int64, permanentChanged bool) {
+	if permanentChanged {
+		if invalidator, ok := s.temporaryCreditService.availableCreditInvalidator.(interface {
+			InvalidateUserBalance(context.Context, int64) error
+		}); ok {
+			_ = invalidator.InvalidateUserBalance(ctx, userID)
+			return
+		}
+	}
+	s.temporaryCreditService.invalidateAvailableCredit(ctx, userID)
 }
 
 func checkinMonthBounds(requestedMonth string, now time.Time) (string, string, error) {

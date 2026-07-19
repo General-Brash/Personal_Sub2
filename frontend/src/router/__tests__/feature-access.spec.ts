@@ -29,6 +29,7 @@ const appStore = vi.hoisted(() => ({
     channel_monitor_enabled?: boolean
     user_channel_status_enabled?: boolean
     user_subscriptions_enabled?: boolean
+    admin_subscriptions_enabled?: boolean
     admin_promo_codes_enabled?: boolean
     admin_channel_management_enabled?: boolean
     custom_menu_items?: []
@@ -150,6 +151,7 @@ describe('feature route guard', () => {
   it.each([
     ['/monitor', 'user_channel_status_enabled'],
     ['/subscriptions', 'user_subscriptions_enabled'],
+    ['/admin/subscriptions', 'admin_subscriptions_enabled'],
     ['/admin/promo-codes', 'admin_promo_codes_enabled'],
     ['/admin/channels', 'admin_channel_management_enabled'],
     ['/admin/channels/pricing', 'admin_channel_management_enabled'],
@@ -269,6 +271,13 @@ describe('feature route guard', () => {
       true,
       '/admin/promo-codes',
       'admin_promo_codes_enabled',
+      '/admin/dashboard',
+    ],
+    [
+      'administrator subscriptions page',
+      true,
+      '/admin/subscriptions',
+      'admin_subscriptions_enabled',
       '/admin/dashboard',
     ],
   ])('redirects a disabled %s and shows a warning', async (_name, isAdmin, path, key, target) => {

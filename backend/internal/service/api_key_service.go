@@ -217,6 +217,7 @@ type APIKeyService struct {
 	cache                  APIKeyCache
 	rateLimitCacheInvalid  RateLimitCacheInvalidator // optional: invalidate Redis rate limit cache
 	availableCreditChecker AvailableCreditEligibilityChecker
+	permanentBalanceCheck  PermanentBalanceEligibilityChecker
 	concurrencyService     *ConcurrencyService
 	cfg                    *config.Config
 	authCacheL1            *ristretto.Cache
@@ -263,6 +264,21 @@ func (s *APIKeyService) SetAvailableCreditEligibilityChecker(checker AvailableCr
 
 func (s *APIKeyService) HasAvailableCreditEligibilityChecker() bool {
 	return s != nil && s.availableCreditChecker != nil
+}
+
+func (s *APIKeyService) SetPermanentBalanceEligibilityChecker(checker PermanentBalanceEligibilityChecker) {
+	s.permanentBalanceCheck = checker
+}
+
+func (s *APIKeyService) HasPermanentBalanceEligibilityChecker() bool {
+	return s != nil && s.permanentBalanceCheck != nil
+}
+
+func (s *APIKeyService) CheckPermanentBalanceEligibility(ctx context.Context, userID int64) error {
+	if s == nil || s.permanentBalanceCheck == nil {
+		return ErrBillingServiceUnavailable.WithCause(errors.New("permanent balance eligibility checker is not configured"))
+	}
+	return s.permanentBalanceCheck.CheckPermanentBalanceEligibility(ctx, userID)
 }
 
 // CheckAvailableCreditEligibility fails closed when the billing precheck is

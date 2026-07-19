@@ -31,15 +31,18 @@ describe('check-in api', () => {
       current_streak_day: 3,
       next_reward_day: 4,
       next_reward_amount: '1.00000000',
+      next_permanent_reward_amount: '0.25000000',
       temporary_credit_available: '2.00000000',
       temporary_credit_earliest_expires_at: '2026-07-13T16:00:00Z',
       monthly_reward_total: '3.00000000',
+      monthly_permanent_reward_total: '0.50000000',
       calendar: [
         {
           checkin_date: '2026-07-12',
           streak_day: 3,
           reward_day: 3,
           reward_amount: '1.00000000',
+          permanent_reward_amount: '0.25000000',
         },
       ],
     }
@@ -58,6 +61,7 @@ describe('check-in api', () => {
       streak_day: 4,
       reward_day: 4,
       reward_amount: '1.00000000',
+      permanent_reward_amount: '0.25000000',
       temporary_credit_grant_id: 42,
       expires_at: '2026-07-13T16:00:00Z',
     }
@@ -73,6 +77,7 @@ describe('check-in api', () => {
       'already_checked_in',
       'checkin_date',
       'expires_at',
+      'permanent_reward_amount',
       'reward_amount',
       'reward_day',
       'streak_day',
@@ -93,9 +98,9 @@ describe('admin check-in settings api', () => {
       enabled: true,
       max_reward_day: 3,
       reward_tiers: [
-        { day: 1, amount: '1.00000000' },
-        { day: 2, amount: '2.00000000' },
-        { day: 3, amount: '3.00000000' },
+		{ day: 1, amount: '1.00000000', permanent_amount: '0.00000000' },
+		{ day: 2, amount: '2.00000000', permanent_amount: '0.25000000' },
+		{ day: 3, amount: '3.00000000', permanent_amount: '0.50000000' },
       ],
     }
     get.mockResolvedValue({ data: response })
@@ -111,8 +116,8 @@ describe('admin check-in settings api', () => {
       enabled: false,
       max_reward_day: 2,
       reward_tiers: [
-        { day: 1, amount: '1.00000000' },
-        { day: 2, amount: '2.00000000' },
+		{ day: 1, amount: '1.00000000', permanent_amount: '0.00000000' },
+		{ day: 2, amount: '2.00000000', permanent_amount: '0.25000000' },
       ],
     }
     put.mockResolvedValue({ data: request })

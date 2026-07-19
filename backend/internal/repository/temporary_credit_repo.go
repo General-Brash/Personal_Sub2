@@ -71,6 +71,13 @@ RETURNING id, user_id, source, checkin_id, amount, remaining_amount, expires_at,
 	out.Source = service.TemporaryCreditSource(source)
 	out.CheckinID = nullableInt64Ptr(checkinID)
 	out.GrantedBy = nullableInt64Ptr(grantedBy)
+	if out.Source != service.TemporaryCreditSourceBankAdvance {
+		remaining, _, offsetErr := service.ApplyTemporaryCreditDebtOffsetTx(ctx, tx, out.UserID, out.ID, out.Amount)
+		if offsetErr != nil {
+			return nil, fmt.Errorf("apply temporary credit debt offset: %w", offsetErr)
+		}
+		out.RemainingAmount = remaining
+	}
 	return &out, nil
 }
 

@@ -222,6 +222,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAvailableChannelsEnabled,
 		SettingKeyUserChannelStatusEnabled,
 		SettingKeyUserSubscriptionsEnabled,
+		SettingKeyAdminSubscriptionsEnabled,
 		SettingKeyAdminPromoCodesEnabled,
 		SettingKeyAdminChannelManagementEnabled,
 		SettingKeyAffiliateEnabled,
@@ -338,6 +339,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 
 		UserChannelStatusEnabled:      !isFalseSettingValue(settings[SettingKeyUserChannelStatusEnabled]),
 		UserSubscriptionsEnabled:      !isFalseSettingValue(settings[SettingKeyUserSubscriptionsEnabled]),
+		AdminSubscriptionsEnabled:     !isFalseSettingValue(settings[SettingKeyAdminSubscriptionsEnabled]),
 		AdminPromoCodesEnabled:        !isFalseSettingValue(settings[SettingKeyAdminPromoCodesEnabled]),
 		AdminChannelManagementEnabled: !isFalseSettingValue(settings[SettingKeyAdminChannelManagementEnabled]),
 
@@ -505,6 +507,7 @@ type PublicSettingsInjectionPayload struct {
 	AvailableChannelsEnabled             bool `json:"available_channels_enabled"`
 	UserChannelStatusEnabled             bool `json:"user_channel_status_enabled"`
 	UserSubscriptionsEnabled             bool `json:"user_subscriptions_enabled"`
+	AdminSubscriptionsEnabled            bool `json:"admin_subscriptions_enabled"`
 	AdminPromoCodesEnabled               bool `json:"admin_promo_codes_enabled"`
 	AdminChannelManagementEnabled        bool `json:"admin_channel_management_enabled"`
 	AffiliateEnabled                     bool `json:"affiliate_enabled"`
@@ -574,6 +577,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
 		UserChannelStatusEnabled:             settings.UserChannelStatusEnabled,
 		UserSubscriptionsEnabled:             settings.UserSubscriptionsEnabled,
+		AdminSubscriptionsEnabled:            settings.AdminSubscriptionsEnabled,
 		AdminPromoCodesEnabled:               settings.AdminPromoCodesEnabled,
 		AdminChannelManagementEnabled:        settings.AdminChannelManagementEnabled,
 		AffiliateEnabled:                     settings.AffiliateEnabled,

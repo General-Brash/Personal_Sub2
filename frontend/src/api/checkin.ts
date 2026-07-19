@@ -7,6 +7,7 @@ export interface CheckinCalendarEntry {
   streak_day: number
   reward_day: number
   reward_amount: string
+  permanent_reward_amount?: string
 }
 
 export interface CheckinStatus {
@@ -15,9 +16,11 @@ export interface CheckinStatus {
   current_streak_day: number
   next_reward_day: number
   next_reward_amount: string
+  next_permanent_reward_amount?: string
   temporary_credit_available: string
   temporary_credit_earliest_expires_at: UTCDateTimeString | null
   monthly_reward_total: string
+  monthly_permanent_reward_total?: string
   calendar: CheckinCalendarEntry[]
 }
 
@@ -27,6 +30,7 @@ export interface CheckinResult {
   streak_day: number
   reward_day: number
   reward_amount: string
+  permanent_reward_amount?: string
   temporary_credit_grant_id: number
   expires_at: UTCDateTimeString
 }

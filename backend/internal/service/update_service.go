@@ -30,7 +30,7 @@ var (
 const (
 	updateCacheKey = "update_check_cache"
 	updateCacheTTL = 1200 // 20 minutes
-	githubRepo     = "Wei-Shaw/sub2api"
+	githubRepo     = "General-Brash/Personal_Sub2"
 
 	// Security: allowed download domains for updates
 	allowedDownloadHost = "github.com"
@@ -600,12 +600,16 @@ func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
 	}
 
 	var cached struct {
+		Repository  string       `json:"repository"`
 		Latest      string       `json:"latest"`
 		ReleaseInfo *ReleaseInfo `json:"release_info"`
 		Timestamp   int64        `json:"timestamp"`
 	}
 	if err := json.Unmarshal([]byte(data), &cached); err != nil {
 		return nil, err
+	}
+	if cached.Repository != githubRepo {
+		return nil, fmt.Errorf("update cache repository mismatch")
 	}
 
 	if time.Now().Unix()-cached.Timestamp > updateCacheTTL {
@@ -624,10 +628,12 @@ func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
 
 func (s *UpdateService) saveToCache(ctx context.Context, info *UpdateInfo) {
 	cacheData := struct {
+		Repository  string       `json:"repository"`
 		Latest      string       `json:"latest"`
 		ReleaseInfo *ReleaseInfo `json:"release_info"`
 		Timestamp   int64        `json:"timestamp"`
 	}{
+		Repository:  githubRepo,
 		Latest:      info.LatestVersion,
 		ReleaseInfo: info.ReleaseInfo,
 		Timestamp:   time.Now().Unix(),
@@ -637,29 +643,91 @@ func (s *UpdateService) saveToCache(ctx context.Context, info *UpdateInfo) {
 	_ = s.cache.SetUpdateInfo(ctx, string(data), time.Duration(updateCacheTTL)*time.Second)
 }
 
-// compareVersions compares two semantic versions
+// compareVersions supports the legacy three-part versions and the personal
+// release channel used by this fork. Personal releases outrank legacy builds,
+// and their P sequence is compared within the channel.
 func compareVersions(current, latest string) int {
-	currentParts := parseVersion(current)
-	latestParts := parseVersion(latest)
+	currentVersion := parseVersion(current)
+	latestVersion := parseVersion(latest)
+
+	if currentVersion.personal != latestVersion.personal {
+		if currentVersion.personal {
+			return 1
+		}
+		return -1
+	}
 
 	for i := 0; i < 3; i++ {
-		if currentParts[i] < latestParts[i] {
+		if currentVersion.core[i] < latestVersion.core[i] {
 			return -1
 		}
-		if currentParts[i] > latestParts[i] {
+		if currentVersion.core[i] > latestVersion.core[i] {
+			return 1
+		}
+	}
+
+	if currentVersion.personal {
+		if currentVersion.personalSequence < latestVersion.personalSequence {
+			return -1
+		}
+		if currentVersion.personalSequence > latestVersion.personalSequence {
+			return 1
+		}
+	}
+	if currentVersion.legacyPersonal != latestVersion.legacyPersonal {
+		if currentVersion.legacyPersonal {
+			return 1
+		}
+		return -1
+	}
+	if currentVersion.legacyPersonal {
+		if currentVersion.legacySequence < latestVersion.legacySequence {
+			return -1
+		}
+		if currentVersion.legacySequence > latestVersion.legacySequence {
 			return 1
 		}
 	}
 	return 0
 }
 
-func parseVersion(v string) [3]int {
-	v = strings.TrimPrefix(v, "v")
+type parsedVersion struct {
+	core             [3]int
+	personal         bool
+	personalSequence int
+	legacyPersonal   bool
+	legacySequence   int
+}
+
+func parseVersion(v string) parsedVersion {
+	v = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(v), "v"))
+	result := parsedVersion{}
+
+	if suffixIndex := strings.LastIndex(v, "-P"); suffixIndex >= 0 {
+		if sequence, err := strconv.Atoi(v[suffixIndex+2:]); err == nil && sequence >= 0 {
+			result.personal = true
+			result.personalSequence = sequence
+			v = v[:suffixIndex]
+		}
+	}
+	if !result.personal {
+		if suffixIndex := strings.LastIndex(v, "-personal."); suffixIndex >= 0 {
+			if sequence, err := strconv.Atoi(v[suffixIndex+10:]); err == nil && sequence >= 0 {
+				result.legacyPersonal = true
+				result.legacySequence = sequence
+				v = v[:suffixIndex]
+			}
+		}
+	}
+
 	parts := strings.Split(v, ".")
-	result := [3]int{0, 0, 0}
 	for i := 0; i < len(parts) && i < 3; i++ {
-		if parsed, err := strconv.Atoi(parts[i]); err == nil {
-			result[i] = parsed
+		part := parts[i]
+		if separator := strings.IndexByte(part, '-'); separator >= 0 {
+			part = part[:separator]
+		}
+		if parsed, err := strconv.Atoi(part); err == nil {
+			result.core[i] = parsed
 		}
 	}
 	return result

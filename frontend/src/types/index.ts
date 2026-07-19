@@ -240,6 +240,7 @@ export interface PublicSettings {
   available_channels_enabled: boolean
   user_channel_status_enabled?: boolean
   user_subscriptions_enabled?: boolean
+  admin_subscriptions_enabled?: boolean
   admin_promo_codes_enabled?: boolean
   admin_channel_management_enabled?: boolean
   service_quota_enabled: boolean

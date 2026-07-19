@@ -41,9 +41,11 @@ const baseStatus = (temporaryCredit: string): CheckinStatus => ({
   current_streak_day: 2,
   next_reward_day: 3,
   next_reward_amount: '1.00000000',
+  next_permanent_reward_amount: '0.25000000',
   temporary_credit_available: temporaryCredit,
   temporary_credit_earliest_expires_at: null,
   monthly_reward_total: '2.00000000',
+  monthly_permanent_reward_total: '0.50000000',
   calendar: [],
 })
 

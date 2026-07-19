@@ -53,6 +53,7 @@ func TestSettingService_InitializeDefaultSettings_PageVisibilityDefaultsToEnable
 	require.NoError(t, svc.InitializeDefaultSettings(context.Background()))
 	require.Equal(t, "true", repo.updates[SettingKeyUserChannelStatusEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyUserSubscriptionsEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyAdminSubscriptionsEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyAdminPromoCodesEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyAdminChannelManagementEnabled])
 }
@@ -64,6 +65,7 @@ func TestSettingService_GetAllSettings_PageVisibilityDefaultsToEnabledWhenMissin
 	require.NoError(t, err)
 	require.True(t, settings.UserChannelStatusEnabled)
 	require.True(t, settings.UserSubscriptionsEnabled)
+	require.True(t, settings.AdminSubscriptionsEnabled)
 	require.True(t, settings.AdminPromoCodesEnabled)
 	require.True(t, settings.AdminChannelManagementEnabled)
 }
@@ -80,6 +82,7 @@ func TestSettingService_GetAllSettings_PageVisibilityHonorsExplicitFalse(t *test
 	require.NoError(t, err)
 	require.False(t, settings.UserChannelStatusEnabled)
 	require.False(t, settings.UserSubscriptionsEnabled)
+	require.False(t, settings.AdminSubscriptionsEnabled)
 	require.False(t, settings.AdminPromoCodesEnabled)
 	require.False(t, settings.AdminChannelManagementEnabled)
 }
@@ -91,12 +94,14 @@ func TestSettingService_UpdateSettings_PersistsPageVisibility(t *testing.T) {
 	err := svc.UpdateSettings(context.Background(), &SystemSettings{
 		UserChannelStatusEnabled:      false,
 		UserSubscriptionsEnabled:      true,
+		AdminSubscriptionsEnabled:     true,
 		AdminPromoCodesEnabled:        false,
 		AdminChannelManagementEnabled: true,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "false", repo.updates[SettingKeyUserChannelStatusEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyUserSubscriptionsEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyAdminSubscriptionsEnabled])
 	require.Equal(t, "false", repo.updates[SettingKeyAdminPromoCodesEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyAdminChannelManagementEnabled])
 }
@@ -109,6 +114,7 @@ func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse
 		require.NoError(t, err)
 		require.True(t, settings.UserChannelStatusEnabled)
 		require.True(t, settings.UserSubscriptionsEnabled)
+		require.True(t, settings.AdminSubscriptionsEnabled)
 		require.True(t, settings.AdminPromoCodesEnabled)
 		require.True(t, settings.AdminChannelManagementEnabled)
 	})
@@ -117,6 +123,7 @@ func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse
 		svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
 			SettingKeyUserChannelStatusEnabled:      "false",
 			SettingKeyUserSubscriptionsEnabled:      "false",
+			SettingKeyAdminSubscriptionsEnabled:     "false",
 			SettingKeyAdminPromoCodesEnabled:        "false",
 			SettingKeyAdminChannelManagementEnabled: "false",
 		}}, &config.Config{})
@@ -125,6 +132,7 @@ func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse
 		require.NoError(t, err)
 		require.False(t, settings.UserChannelStatusEnabled)
 		require.False(t, settings.UserSubscriptionsEnabled)
+		require.False(t, settings.AdminSubscriptionsEnabled)
 		require.False(t, settings.AdminPromoCodesEnabled)
 		require.False(t, settings.AdminChannelManagementEnabled)
 	})
@@ -134,6 +142,7 @@ func TestSettingService_GetPublicSettingsForInjection_IncludesPageVisibility(t *
 	svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{
 		SettingKeyUserChannelStatusEnabled:      "false",
 		SettingKeyUserSubscriptionsEnabled:      "false",
+		SettingKeyAdminSubscriptionsEnabled:     "false",
 		SettingKeyAdminPromoCodesEnabled:        "false",
 		SettingKeyAdminChannelManagementEnabled: "false",
 	}}, &config.Config{})
@@ -144,6 +153,7 @@ func TestSettingService_GetPublicSettingsForInjection_IncludesPageVisibility(t *
 	require.True(t, ok)
 	require.False(t, payload.UserChannelStatusEnabled)
 	require.False(t, payload.UserSubscriptionsEnabled)
+	require.False(t, payload.AdminSubscriptionsEnabled)
 	require.False(t, payload.AdminPromoCodesEnabled)
 	require.False(t, payload.AdminChannelManagementEnabled)
 }

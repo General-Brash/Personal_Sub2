@@ -125,8 +125,10 @@ type Source string
 
 // Source values.
 const (
-	SourceCheckin    Source = "checkin"
-	SourceAdminGrant Source = "admin_grant"
+	SourceCheckin      Source = "checkin"
+	SourceAdminGrant   Source = "admin_grant"
+	SourceBankAdvance  Source = "bank_advance"
+	SourceBankExchange Source = "bank_exchange"
 )
 
 func (s Source) String() string {
@@ -136,7 +138,7 @@ func (s Source) String() string {
 // SourceValidator is a validator for the "source" field enum values. It is called by the builders before save.
 func SourceValidator(s Source) error {
 	switch s {
-	case SourceCheckin, SourceAdminGrant:
+	case SourceCheckin, SourceAdminGrant, SourceBankAdvance, SourceBankExchange:
 		return nil
 	default:
 		return fmt.Errorf("temporarycreditgrant: invalid enum value for source field: %q", s)

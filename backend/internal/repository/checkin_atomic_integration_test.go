@@ -252,12 +252,13 @@ WHERE operation_scope = $1
 
 	var snapshot map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal([]byte(responseBody), &snapshot))
-	require.Len(t, snapshot, 7)
+	require.Len(t, snapshot, 8)
 	require.Equal(t, json.RawMessage(fmt.Sprintf("%t", alreadyCheckedIn)), snapshot["already_checked_in"])
 	require.Equal(t, json.RawMessage(fmt.Sprintf("%q", want.CheckinDate)), snapshot["checkin_date"])
 	require.Equal(t, json.RawMessage(fmt.Sprintf("%d", want.StreakDay)), snapshot["streak_day"])
 	require.Equal(t, json.RawMessage(fmt.Sprintf("%d", want.RewardDay)), snapshot["reward_day"])
 	require.Equal(t, json.RawMessage(fmt.Sprintf("%q", want.RewardAmount)), snapshot["reward_amount"])
+	require.Equal(t, json.RawMessage(fmt.Sprintf("%q", want.PermanentRewardAmount)), snapshot["permanent_reward_amount"])
 	require.Equal(t, json.RawMessage(fmt.Sprintf("%d", want.TemporaryCreditGrantID)), snapshot["temporary_credit_grant_id"])
 	require.Equal(t, json.RawMessage(fmt.Sprintf("%q", want.ExpiresAt.Format(time.RFC3339Nano))), snapshot["expires_at"])
 }

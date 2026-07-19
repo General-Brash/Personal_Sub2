@@ -124,6 +124,16 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			abortWithGoogleError(c, 429, "API key 额度已用完")
 			return
 		}
+		if apiKeyService.HasPermanentBalanceEligibilityChecker() {
+			if err := apiKeyService.CheckPermanentBalanceEligibility(c.Request.Context(), apiKey.User.ID); err != nil {
+				if errors.Is(err, service.ErrInsufficientBalance) {
+					abortWithGoogleError(c, 403, "Insufficient account balance")
+					return
+				}
+				abortWithGoogleError(c, 503, "Billing service temporarily unavailable. Please retry later.")
+				return
+			}
+		}
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 		if isSubscriptionType && subscriptionService != nil {

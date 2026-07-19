@@ -334,6 +334,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAvailableChannelsEnabled] = strconv.FormatBool(settings.AvailableChannelsEnabled)
 	updates[SettingKeyUserChannelStatusEnabled] = strconv.FormatBool(settings.UserChannelStatusEnabled)
 	updates[SettingKeyUserSubscriptionsEnabled] = strconv.FormatBool(settings.UserSubscriptionsEnabled)
+	updates[SettingKeyAdminSubscriptionsEnabled] = strconv.FormatBool(settings.AdminSubscriptionsEnabled)
 	updates[SettingKeyAdminPromoCodesEnabled] = strconv.FormatBool(settings.AdminPromoCodesEnabled)
 	updates[SettingKeyAdminChannelManagementEnabled] = strconv.FormatBool(settings.AdminChannelManagementEnabled)
 

@@ -27,6 +27,10 @@ export default {
             label: '我的订阅',
             hint: '控制用户侧边栏中的我的订阅页面。',
           },
+          adminSubscriptions: {
+            label: '订阅管理',
+            hint: '控制管理员侧边栏中的订阅管理页面。',
+          },
           adminPromoCodes: {
             label: '优惠码管理',
             hint: '控制管理员侧边栏中的优惠码页面。',

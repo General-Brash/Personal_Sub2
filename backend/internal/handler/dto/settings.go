@@ -285,6 +285,7 @@ type SystemSettings struct {
 	// Page visibility (UI only)
 	UserChannelStatusEnabled      bool `json:"user_channel_status_enabled"`
 	UserSubscriptionsEnabled      bool `json:"user_subscriptions_enabled"`
+	AdminSubscriptionsEnabled     bool `json:"admin_subscriptions_enabled"`
 	AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
 	AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
 
@@ -373,6 +374,7 @@ type PublicSettings struct {
 
 	UserChannelStatusEnabled      bool `json:"user_channel_status_enabled"`
 	UserSubscriptionsEnabled      bool `json:"user_subscriptions_enabled"`
+	AdminSubscriptionsEnabled     bool `json:"admin_subscriptions_enabled"`
 	AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
 	AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
 

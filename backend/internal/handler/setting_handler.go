@@ -100,6 +100,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 
 		UserChannelStatusEnabled:      settings.UserChannelStatusEnabled,
 		UserSubscriptionsEnabled:      settings.UserSubscriptionsEnabled,
+		AdminSubscriptionsEnabled:     settings.AdminSubscriptionsEnabled,
 		AdminPromoCodesEnabled:        settings.AdminPromoCodesEnabled,
 		AdminChannelManagementEnabled: settings.AdminChannelManagementEnabled,
 

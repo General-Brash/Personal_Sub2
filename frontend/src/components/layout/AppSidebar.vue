@@ -685,6 +685,7 @@ const flagPayment = makeSidebarFlag(FeatureFlags.payment)
 const flagAvailableChannels = makeSidebarFlag(FeatureFlags.availableChannels)
 const flagUserChannelStatus = makeSidebarFlag(FeatureFlags.userChannelStatus)
 const flagUserSubscriptions = makeSidebarFlag(FeatureFlags.userSubscriptions)
+const flagAdminSubscriptions = makeSidebarFlag(FeatureFlags.adminSubscriptions)
 const flagAdminPromoCodes = makeSidebarFlag(FeatureFlags.adminPromoCodes)
 const flagAdminChannelManagement = makeSidebarFlag(FeatureFlags.adminChannelManagement)
 const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
@@ -706,6 +707,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   }
   items.push(
     { path: '/check-in', label: t('checkin.title'), icon: GiftIcon },
+    { path: '/bank', label: t('bank.title'), icon: CreditCardIcon },
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
@@ -774,7 +776,7 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: SignalIcon, featureFlag: flagChannelMonitor },
       ],
     },
-    { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
+    { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagAdminSubscriptions },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },

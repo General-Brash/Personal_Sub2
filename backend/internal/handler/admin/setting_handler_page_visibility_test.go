@@ -18,6 +18,7 @@ type pageVisibilityResponse struct {
 	Data struct {
 		UserChannelStatusEnabled      bool `json:"user_channel_status_enabled"`
 		UserSubscriptionsEnabled      bool `json:"user_subscriptions_enabled"`
+		AdminSubscriptionsEnabled     bool `json:"admin_subscriptions_enabled"`
 		AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
 		AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
 	} `json:"data"`
@@ -28,6 +29,7 @@ func TestSettingHandler_GetSettings_ExposesPageVisibility(t *testing.T) {
 	repo := &settingHandlerRepoStub{values: map[string]string{
 		service.SettingKeyUserChannelStatusEnabled:      "false",
 		service.SettingKeyUserSubscriptionsEnabled:      "true",
+		service.SettingKeyAdminSubscriptionsEnabled:     "true",
 		service.SettingKeyAdminPromoCodesEnabled:        "false",
 		service.SettingKeyAdminChannelManagementEnabled: "true",
 	}}
@@ -45,6 +47,7 @@ func TestSettingHandler_GetSettings_ExposesPageVisibility(t *testing.T) {
 	require.Equal(t, 0, resp.Code)
 	require.False(t, resp.Data.UserChannelStatusEnabled)
 	require.True(t, resp.Data.UserSubscriptionsEnabled)
+	require.True(t, resp.Data.AdminSubscriptionsEnabled)
 	require.False(t, resp.Data.AdminPromoCodesEnabled)
 	require.True(t, resp.Data.AdminChannelManagementEnabled)
 }
@@ -55,6 +58,7 @@ func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testin
 		service.SettingKeyPromoCodeEnabled:              "true",
 		service.SettingKeyUserChannelStatusEnabled:      "true",
 		service.SettingKeyUserSubscriptionsEnabled:      "true",
+		service.SettingKeyAdminSubscriptionsEnabled:     "true",
 		service.SettingKeyAdminPromoCodesEnabled:        "true",
 		service.SettingKeyAdminChannelManagementEnabled: "true",
 	}}
@@ -76,6 +80,7 @@ func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testin
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, "false", repo.values[service.SettingKeyUserChannelStatusEnabled])
 	require.Equal(t, "true", repo.values[service.SettingKeyUserSubscriptionsEnabled])
+	require.Equal(t, "true", repo.values[service.SettingKeyAdminSubscriptionsEnabled])
 	require.Equal(t, "false", repo.values[service.SettingKeyAdminPromoCodesEnabled])
 	require.Equal(t, "true", repo.values[service.SettingKeyAdminChannelManagementEnabled])
 
@@ -84,6 +89,7 @@ func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testin
 	require.Equal(t, 0, resp.Code)
 	require.False(t, resp.Data.UserChannelStatusEnabled)
 	require.True(t, resp.Data.UserSubscriptionsEnabled)
+	require.True(t, resp.Data.AdminSubscriptionsEnabled)
 	require.False(t, resp.Data.AdminPromoCodesEnabled)
 	require.True(t, resp.Data.AdminChannelManagementEnabled)
 }
@@ -92,6 +98,7 @@ func TestDiffSettings_IncludesPageVisibility(t *testing.T) {
 	before := &service.SystemSettings{
 		UserChannelStatusEnabled:      true,
 		UserSubscriptionsEnabled:      true,
+		AdminSubscriptionsEnabled:     true,
 		AdminPromoCodesEnabled:        true,
 		AdminChannelManagementEnabled: true,
 	}
@@ -102,6 +109,7 @@ func TestDiffSettings_IncludesPageVisibility(t *testing.T) {
 	require.ElementsMatch(t, []string{
 		"user_channel_status_enabled",
 		"user_subscriptions_enabled",
+		"admin_subscriptions_enabled",
 		"admin_promo_codes_enabled",
 		"admin_channel_management_enabled",
 	}, changed)

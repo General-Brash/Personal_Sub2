@@ -62,10 +62,19 @@ describe('AppSidebar daily check-in navigation', () => {
   })
 })
 
+describe('AppSidebar bank navigation', () => {
+  it('adds bank to the shared user navigation builder for users and administrators', () => {
+    expect(componentSource).toContain("{ path: '/bank', label: t('bank.title'), icon: CreditCardIcon }")
+    expect(componentSource).toContain('buildSelfNavItems(true)')
+    expect(componentSource).toContain('buildSelfNavItems(false)')
+  })
+})
+
 describe('AppSidebar page visibility navigation', () => {
   it('binds user entries to their opt-out page flags', () => {
     expect(componentSource).toContain('const flagUserChannelStatus = makeSidebarFlag(FeatureFlags.userChannelStatus)')
     expect(componentSource).toContain('const flagUserSubscriptions = makeSidebarFlag(FeatureFlags.userSubscriptions)')
+    expect(componentSource).toContain('const flagAdminSubscriptions = makeSidebarFlag(FeatureFlags.adminSubscriptions)')
     expect(componentSource).toContain('const flagVisibleChannelStatus = () => flagChannelMonitor() && flagUserChannelStatus()')
     expect(componentSource).toContain("{ path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagVisibleChannelStatus }")
     expect(componentSource).toContain("{ path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagUserSubscriptions }")
@@ -83,5 +92,6 @@ describe('AppSidebar page visibility navigation', () => {
     expect(channelGroup).toContain('featureFlag: flagChannelMonitor')
 
     expect(componentSource).toContain("{ path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true, featureFlag: flagAdminPromoCodes }")
+    expect(componentSource).toContain("{ path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagAdminSubscriptions }")
   })
 })

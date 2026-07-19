@@ -19,6 +19,15 @@ func ProvideTemporaryCreditService(repo TemporaryCreditRepository, availableCred
 	return NewTemporaryCreditServiceWithAvailableCreditInvalidator(repo, availableCreditInvalidator)
 }
 
+// ProvideBankService wires and starts the bank debt settlement worker. The
+// billing cache is also the post-commit invalidation boundary for bank balance
+// and available-credit changes.
+func ProvideBankService(db *sql.DB, temporaryCreditRepo TemporaryCreditRepository, billingCache BillingCache) *BankService {
+	svc := NewBankService(db, temporaryCreditRepo, billingCache)
+	svc.Start()
+	return svc
+}
+
 func ProvideAffiliateRebateWorker(
 	client *dbent.Client,
 	affiliateService *AffiliateService,
@@ -647,8 +656,11 @@ func ProvideBillingCacheService(
 	rateRepo UserGroupRateRepository,
 	cfg *config.Config,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	permanentBalanceChecker PermanentBalanceEligibilityChecker,
 ) *BillingCacheService {
-	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, userPlatformQuotaRepo)
+	svc := NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, userPlatformQuotaRepo)
+	svc.SetPermanentBalanceEligibilityChecker(permanentBalanceChecker)
+	return svc
 }
 
 // ProvideAPIKeyService wires APIKeyService and connects rate-limit cache invalidation.
@@ -661,11 +673,13 @@ func ProvideAPIKeyService(
 	cache APIKeyCache,
 	cfg *config.Config,
 	billingCacheService *BillingCacheService,
+	permanentBalanceChecker PermanentBalanceEligibilityChecker,
 	concurrencyService *ConcurrencyService,
 ) *APIKeyService {
 	svc := NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, cache, cfg)
 	svc.SetRateLimitCacheInvalidator(billingCacheService)
 	svc.SetAvailableCreditEligibilityChecker(billingCacheService)
+	svc.SetPermanentBalanceEligibilityChecker(permanentBalanceChecker)
 	svc.SetConcurrencyService(concurrencyService)
 	return svc
 }
@@ -676,6 +690,8 @@ var ProviderSet = wire.NewSet(
 	NewAuthService,
 	NewUserService,
 	ProvideTemporaryCreditService,
+	ProvideBankService,
+	wire.Bind(new(PermanentBalanceEligibilityChecker), new(*BankService)),
 	NewAdminTemporaryCreditService,
 	NewCheckinService,
 	wire.Bind(new(DailyCheckinPolicyProvider), new(*SettingService)),

@@ -29,6 +29,9 @@
             {{ formatCredit(status.next_reward_amount) }}
           </p>
           <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.rewardDay', { day: status.next_reward_day }) }}</p>
+          <p data-test="dashboard-permanent-reward" class="mt-1 min-w-0 max-w-full break-all text-xs font-semibold leading-5 text-indigo-600 dark:text-indigo-400">
+            +{{ formatCredit(status.next_permanent_reward_amount || '0.00000000') }} {{ t('checkin.permanentReward') }}
+          </p>
         </div>
         <div class="min-w-0 rounded-lg bg-gray-50 p-3 dark:bg-dark-800">
           <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.temporaryCreditAvailable') }}</p>

@@ -62,12 +62,18 @@
         <h3 class="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('checkin.admin.rewardTiers') }}
         </h3>
-        <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600">
-          <div
-            v-for="tier in visibleRewardTiers"
-            :key="tier.day"
-            class="grid min-h-14 grid-cols-[minmax(7rem,0.7fr)_minmax(10rem,1fr)] items-center gap-4 border-b border-gray-100 px-4 py-3 last:border-b-0 dark:border-dark-700"
-          >
+        <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-dark-600">
+          <div class="min-w-[34rem]">
+            <div class="grid grid-cols-[minmax(6rem,0.6fr)_minmax(10rem,1fr)_minmax(10rem,1fr)] items-center gap-4 border-b border-gray-200 bg-gray-50 px-4 py-2 text-xs font-medium text-gray-500 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-400">
+              <span>{{ t('checkin.admin.rewardDayColumn') }}</span>
+              <span>{{ t('checkin.admin.temporaryCredit') }}</span>
+              <span>{{ t('checkin.admin.permanentCredit') }}</span>
+            </div>
+            <div
+              v-for="tier in visibleRewardTiers"
+              :key="tier.day"
+              class="grid min-h-14 grid-cols-[minmax(6rem,0.6fr)_minmax(10rem,1fr)_minmax(10rem,1fr)] items-center gap-4 border-b border-gray-100 px-4 py-3 last:border-b-0 dark:border-dark-700"
+            >
             <label
               :for="`daily-checkin-tier-${tier.day}`"
               class="text-sm text-gray-700 dark:text-gray-300"
@@ -85,6 +91,19 @@
               class="input font-mono"
               @keydown.enter.prevent="saveSettings"
             />
+            <input
+              :id="`daily-checkin-permanent-tier-${tier.day}`"
+              v-model="tier.permanent_amount"
+              :data-testid="`checkin-permanent-tier-${tier.day}`"
+              :aria-label="`${t('checkin.admin.permanentCredit')} ${t('checkin.admin.tierDay', { day: tier.day })}`"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              required
+              class="input font-mono"
+              @keydown.enter.prevent="saveSettings"
+            />
+            </div>
           </div>
         </div>
       </div>
@@ -120,15 +139,20 @@ const MAX_REWARD_DAY = 365
 const { t } = useI18n()
 const appStore = useAppStore()
 
+type CheckinSettingsForm = Omit<CheckinSettings, 'reward_tiers'> & {
+  reward_tiers: Array<{ day: number; amount: string; permanent_amount: string }>
+}
+
 const loading = ref(true)
 const saving = ref(false)
 const loadError = ref(false)
-const form = reactive<CheckinSettings>({
+const form = reactive<CheckinSettingsForm>({
   enabled: false,
   max_reward_day: 7,
   reward_tiers: Array.from({ length: 7 }, (_, index) => ({
     day: index + 1,
     amount: '1.00000000',
+    permanent_amount: '0.00000000',
   })),
 })
 
@@ -146,6 +170,7 @@ watch(
       form.reward_tiers.push({
         day: form.reward_tiers.length + 1,
         amount: '1.00000000',
+        permanent_amount: '0.00000000',
       })
     }
     form.reward_tiers.forEach((tier, index) => {
@@ -161,6 +186,7 @@ function applySettings(settings: CheckinSettings) {
   form.reward_tiers = settings.reward_tiers.map((tier) => ({
     day: tier.day,
     amount: tier.amount,
+    permanent_amount: tier.permanent_amount || '0.00000000',
   }))
 }
 
@@ -168,6 +194,10 @@ function isValidPositiveAmount(value: string): boolean {
   if (!amountPattern.test(value)) return false
   const [integer, fraction = ''] = value.split('.')
   return integer !== '0' || /[1-9]/.test(fraction)
+}
+
+function isValidNonNegativeAmount(value: string): boolean {
+  return amountPattern.test(value)
 }
 
 function isValidMaxRewardDay(value: unknown): value is number {
@@ -203,7 +233,10 @@ async function saveSettings() {
   if (
     rewardTiers.length !== form.max_reward_day ||
     rewardTiers.some(
-      (tier, index) => tier.day !== index + 1 || !isValidPositiveAmount(tier.amount),
+      (tier, index) =>
+        tier.day !== index + 1 ||
+        !isValidPositiveAmount(tier.amount) ||
+        !isValidNonNegativeAmount(tier.permanent_amount),
     )
   ) {
     appStore.showError(t('checkin.admin.invalidRewardAmount'))
@@ -218,6 +251,7 @@ async function saveSettings() {
       reward_tiers: rewardTiers.map((tier) => ({
         day: tier.day,
         amount: tier.amount,
+        permanent_amount: tier.permanent_amount,
       })),
     })
     applySettings(saved)

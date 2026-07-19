@@ -34,6 +34,7 @@ function mountSection() {
     props: {
       userChannelStatusEnabled: true,
       userSubscriptionsEnabled: false,
+      adminSubscriptionsEnabled: true,
       adminPromoCodesEnabled: true,
       adminChannelManagementEnabled: false,
     },
@@ -46,14 +47,25 @@ function mountSection() {
 }
 
 describe('PageVisibilitySettingsSection', () => {
-  it('renders two un-nested page groups with four toggles', () => {
+  it('renders two un-nested page groups with five toggles', () => {
     const wrapper = mountSection()
 
     expect(wrapper.findAll('.card')).toHaveLength(1)
     expect(wrapper.find('.card .card').exists()).toBe(false)
-    expect(wrapper.findAll('[role="switch"]')).toHaveLength(4)
+    expect(wrapper.findAll('[role="switch"]')).toHaveLength(5)
     expect(wrapper.text()).toContain('admin.settings.features.pageVisibility.userPages')
     expect(wrapper.text()).toContain('admin.settings.features.pageVisibility.adminPages')
+  })
+
+  it('places administrator subscriptions only in the administrator page group', () => {
+    const wrapper = mountSection()
+    const userGroup = wrapper.get('[data-test="user-pages-group"]')
+    const adminGroup = wrapper.get('[data-test="admin-pages-group"]')
+    const label = 'admin.settings.features.pageVisibility.adminSubscriptions.label'
+
+    expect(userGroup.text()).not.toContain(label)
+    expect(adminGroup.text()).toContain(label)
+    expect(adminGroup.find(`[aria-label="${label}"]`).exists()).toBe(true)
   })
 
   it('emits each named v-model update', async () => {
@@ -66,6 +78,7 @@ describe('PageVisibilitySettingsSection', () => {
 
     expect(wrapper.emitted('update:userChannelStatusEnabled')).toEqual([[false]])
     expect(wrapper.emitted('update:userSubscriptionsEnabled')).toEqual([[true]])
+    expect(wrapper.emitted('update:adminSubscriptionsEnabled')).toEqual([[false]])
     expect(wrapper.emitted('update:adminPromoCodesEnabled')).toEqual([[false]])
     expect(wrapper.emitted('update:adminChannelManagementEnabled')).toEqual([[true]])
   })

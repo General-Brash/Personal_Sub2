@@ -469,6 +469,7 @@ const baseSettingsResponse = {
   account_quota_notify_emails: [],
   user_channel_status_enabled: true,
   user_subscriptions_enabled: true,
+  admin_subscriptions_enabled: true,
   admin_promo_codes_enabled: true,
   admin_channel_management_enabled: true,
   // 平台限额嵌套字段（新后端契约）
@@ -658,6 +659,7 @@ describe("admin SettingsView payment visible method controls", () => {
       expect.objectContaining({
         user_channel_status_enabled: true,
         user_subscriptions_enabled: true,
+        admin_subscriptions_enabled: true,
         admin_promo_codes_enabled: true,
         admin_channel_management_enabled: true,
       }),

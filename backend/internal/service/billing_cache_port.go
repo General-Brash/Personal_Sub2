@@ -20,6 +20,12 @@ type AvailableCreditInvalidator interface {
 	InvalidateAvailableCredit(ctx context.Context, userID int64) error
 }
 
+// PermanentBalanceEligibilityChecker settles any due bank debt before
+// rejecting accounts whose permanent balance has fallen below zero.
+type PermanentBalanceEligibilityChecker interface {
+	CheckPermanentBalanceEligibility(ctx context.Context, userID int64) error
+}
+
 // AvailableCreditSnapshot is the database-backed source used to rebuild and
 // revalidate the available-credit cache.
 type AvailableCreditSnapshot struct {
@@ -29,6 +35,12 @@ type AvailableCreditSnapshot struct {
 }
 
 func (s AvailableCreditSnapshot) Total() float64 {
+	// A negative permanent balance is a hard account-level block. Encode the
+	// block in the scalar precheck cache as a non-positive value so a positive
+	// temporary balance cannot accidentally make the request eligible.
+	if s.PermanentBalance < 0 {
+		return -1
+	}
 	total := s.PermanentBalance + s.TemporaryCredit
 	normalized, err := normalizeDerivedLedgerAmount(total)
 	if err != nil {

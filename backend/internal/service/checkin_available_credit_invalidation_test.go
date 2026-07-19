@@ -30,10 +30,7 @@ func TestCheckinServiceCheckInInvalidatesAvailableCreditOnlyAfterCommit(t *testi
 		mock.ExpectBegin()
 		expectCheckinUserLock(mock, 42)
 		mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").WithArgs(int64(42)).WillReturnError(sql.ErrNoRows)
-		mock.ExpectQuery("INSERT INTO daily_checkins").
-			WithArgs(int64(42), "2026-07-13", 1, 1, "1.25000000").
-			WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount"}).
-				AddRow(int64(7), "2026-07-13", 1, 1, "1.25000000"))
+		expectCheckinInsert(mock, 42, "2026-07-13", 1, 1, "1.25000000", "0.00000000")
 		mock.ExpectCommit()
 
 		_, err = svc.checkIn(context.Background(), 42, nil)
@@ -56,10 +53,7 @@ func TestCheckinServiceCheckInInvalidatesAvailableCreditOnlyAfterCommit(t *testi
 		mock.ExpectBegin()
 		expectCheckinUserLock(mock, 42)
 		mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").WithArgs(int64(42)).WillReturnError(sql.ErrNoRows)
-		mock.ExpectQuery("INSERT INTO daily_checkins").
-			WithArgs(int64(42), "2026-07-13", 1, 1, "1.25000000").
-			WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount"}).
-				AddRow(int64(7), "2026-07-13", 1, 1, "1.25000000"))
+		expectCheckinInsert(mock, 42, "2026-07-13", 1, 1, "1.25000000", "0.00000000")
 		mock.ExpectCommit().WillReturnError(errors.New("commit failed"))
 
 		_, err = svc.checkIn(context.Background(), 42, nil)

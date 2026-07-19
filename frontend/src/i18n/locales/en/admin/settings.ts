@@ -27,6 +27,10 @@ export default {
             label: 'My Subscriptions',
             hint: 'Controls the My Subscriptions page in the user sidebar.',
           },
+          adminSubscriptions: {
+            label: 'Subscription Management',
+            hint: 'Controls the Subscription Management page in the administrator sidebar.',
+          },
           adminPromoCodes: {
             label: 'Promo Code Management',
             hint: 'Controls the Promo Codes page in the administrator sidebar.',

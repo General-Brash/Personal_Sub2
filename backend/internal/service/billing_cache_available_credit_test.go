@@ -130,6 +130,12 @@ func TestAvailableCreditSnapshotTotalAllowsAggregateAboveSingleAmountLimit(t *te
 	require.True(t, math.IsNaN(AvailableCreditSnapshot{PermanentBalance: math.NaN()}.Total()))
 }
 
+func TestAvailableCreditSnapshotTotalRejectsNegativePermanentBalanceEvenWithTemporaryCredit(t *testing.T) {
+	snapshot := AvailableCreditSnapshot{PermanentBalance: -1, TemporaryCredit: 20}
+
+	require.Equal(t, float64(-1), snapshot.Total())
+}
+
 func TestAvailableCreditInvalidationRemovesIndependentCacheEntry(t *testing.T) {
 	cache := &availableCreditCacheStub{}
 	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{}, nil)

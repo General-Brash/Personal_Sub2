@@ -208,6 +208,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/bank',
+    name: 'Bank',
+    component: () => import('@/views/user/BankView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Bank',
+      titleKey: 'bank.title',
+      descriptionKey: 'bank.description'
+    }
+  },
+  {
     path: '/keys',
     name: 'Keys',
     component: () => import('@/views/user/KeysView.vue'),
@@ -522,7 +534,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Subscription Management',
       titleKey: 'admin.subscriptions.title',
-      descriptionKey: 'admin.subscriptions.description'
+      descriptionKey: 'admin.subscriptions.description',
+      requiredFeatureFlag: FeatureFlags.adminSubscriptions
     }
   },
   {

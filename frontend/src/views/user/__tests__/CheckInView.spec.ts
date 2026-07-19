@@ -4,9 +4,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { CheckinResult, CheckinStatus } from '@/api/checkin'
 import CheckInView from '../CheckInView.vue'
 
-const { checkIn, getCheckinStatus, showError, showSuccess } = vi.hoisted(() => ({
+const { checkIn, getCheckinStatus, refreshUser, showError, showSuccess } = vi.hoisted(() => ({
   checkIn: vi.fn(),
   getCheckinStatus: vi.fn(),
+  refreshUser: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
 }))
@@ -18,6 +19,10 @@ vi.mock('@/api/checkin', () => ({
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ showError, showSuccess }),
+}))
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ refreshUser }),
 }))
 
 vi.mock('vue-i18n', async () => {
@@ -37,15 +42,18 @@ const baseStatus = (overrides: Partial<CheckinStatus> = {}): CheckinStatus => ({
   current_streak_day: 8,
   next_reward_day: 7,
   next_reward_amount: '2.50000000',
+  next_permanent_reward_amount: '0.25000000',
   temporary_credit_available: '5.25000000',
   temporary_credit_earliest_expires_at: '2026-07-14T16:00:00Z',
   monthly_reward_total: '12.50000000',
+  monthly_permanent_reward_total: '0.75000000',
   calendar: [
     {
       checkin_date: '2026-07-03',
       streak_day: 3,
       reward_day: 3,
       reward_amount: '1.25000000',
+      permanent_reward_amount: '0.12500000',
     },
   ],
   ...overrides,
@@ -57,6 +65,7 @@ const checkinResult: CheckinResult = {
   streak_day: 8,
   reward_day: 7,
   reward_amount: '2.50000000',
+  permanent_reward_amount: '0.25000000',
   temporary_credit_grant_id: 42,
   expires_at: '2026-07-14T16:00:00Z',
 }
@@ -89,9 +98,11 @@ describe('CheckInView', () => {
     localStorage.clear()
     checkIn.mockReset()
     getCheckinStatus.mockReset()
+    refreshUser.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
     getCheckinStatus.mockResolvedValue(baseStatus())
+    refreshUser.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -105,11 +116,14 @@ describe('CheckInView', () => {
     expect(wrapper.get('[data-test="current-streak"]').text()).toContain('8')
     expect(wrapper.get('[data-test="next-reward"]').text()).toContain('7')
     expect(wrapper.get('[data-test="next-reward"]').text()).toContain('$2.50')
+    expect(wrapper.get('[data-test="next-permanent-reward"]').text()).toContain('$0.25')
     expect(wrapper.get('[data-test="temporary-credit"]').text()).toContain('$5.25')
     expect(wrapper.get('[data-test="monthly-reward-total"]').text()).toContain('$12.50')
+    expect(wrapper.get('[data-test="monthly-permanent-reward-total"]').text()).toContain('$0.75')
 
     const checkedDay = wrapper.get('[data-test="calendar-cell"][data-date="2026-07-03"]')
     expect(checkedDay.text()).toContain('$1.25')
+    expect(checkedDay.text()).toContain('$0.13')
   })
 
   it('rounds calendar rewards to two places and keeps them constrained inside narrow cells', async () => {
@@ -122,6 +136,7 @@ describe('CheckInView', () => {
           streak_day: 4,
           reward_day: 4,
           reward_amount: upperBoundReward,
+          permanent_reward_amount: '0.00000000',
         },
       ],
     }))
@@ -129,8 +144,8 @@ describe('CheckInView', () => {
 
     const regularCell = wrapper.get('[data-test="calendar-cell"][data-date="2026-07-03"]')
     const upperBoundCell = wrapper.get('[data-test="calendar-cell"][data-date="2026-07-04"]')
-    expect(regularCell.get('[data-test="calendar-reward"]').text()).toBe('$1.25')
-    expect(upperBoundCell.get('[data-test="calendar-reward"]').text()).toBe('$1000000000000.00')
+    expect(regularCell.get('[data-test="calendar-reward"]').text()).toContain('$1.25')
+    expect(upperBoundCell.get('[data-test="calendar-reward"]').text()).toContain('$1000000000000.00')
 
     for (const cell of [regularCell, upperBoundCell]) {
       const reward = cell.get('[data-test="calendar-reward"]')
@@ -209,6 +224,7 @@ describe('CheckInView', () => {
         streak_day: 9,
         reward_day: 7,
         reward_amount: '9.00000000',
+        permanent_reward_amount: '0.00000000',
       }],
     }))
     await flushPromises()
@@ -222,6 +238,7 @@ describe('CheckInView', () => {
         streak_day: 8,
         reward_day: 7,
         reward_amount: '8.00000000',
+        permanent_reward_amount: '0.00000000',
       }],
     }))
     await flushPromises()
@@ -243,6 +260,7 @@ describe('CheckInView', () => {
           streak_day: checkinResult.streak_day,
           reward_day: checkinResult.reward_day,
           reward_amount: checkinResult.reward_amount,
+          permanent_reward_amount: checkinResult.permanent_reward_amount,
         },
       ],
     })
@@ -261,11 +279,28 @@ describe('CheckInView', () => {
     expect(getCheckinStatus).toHaveBeenNthCalledWith(2, '2026-07')
     expect(wrapper.get('[data-test="check-in-button"]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-test="calendar-cell"][data-date="2026-07-14"]').text()).toContain('$2.50')
+    expect(wrapper.get('[data-test="checkin-result-temporary"]').text()).toContain('$2.50')
+    expect(wrapper.get('[data-test="checkin-result-permanent"]').text()).toContain('$0.25')
     expect(wrapper.get('[data-test="temporary-credit"]').text()).toContain('$5.25')
+    expect(refreshUser).toHaveBeenCalledTimes(1)
 
     refresh.resolve(refreshed)
     await flushPromises()
     expect(wrapper.get('[data-test="temporary-credit"]').text()).toContain('$7.75')
     expect(showSuccess).toHaveBeenCalled()
+  })
+
+  it('keeps the successful result when refreshing the header user fails', async () => {
+    checkIn.mockResolvedValue(checkinResult)
+    refreshUser.mockRejectedValueOnce(new Error('profile unavailable'))
+    const wrapper = await mountView()
+
+    await wrapper.get('[data-test="check-in-button"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="checkin-result-temporary"]').text()).toContain('$2.50')
+    expect(wrapper.get('[data-test="checkin-result-permanent"]').text()).toContain('$0.25')
+    expect(showSuccess).toHaveBeenCalled()
+    expect(showError).not.toHaveBeenCalled()
   })
 })

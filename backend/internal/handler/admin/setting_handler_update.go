@@ -308,6 +308,7 @@ type UpdateSettingsRequest struct {
 	// Page visibility (UI only)
 	UserChannelStatusEnabled      *bool `json:"user_channel_status_enabled"`
 	UserSubscriptionsEnabled      *bool `json:"user_subscriptions_enabled"`
+	AdminSubscriptionsEnabled     *bool `json:"admin_subscriptions_enabled"`
 	AdminPromoCodesEnabled        *bool `json:"admin_promo_codes_enabled"`
 	AdminChannelManagementEnabled *bool `json:"admin_channel_management_enabled"`
 
@@ -1549,6 +1550,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.UserSubscriptionsEnabled
 		}(),
+		AdminSubscriptionsEnabled: func() bool {
+			if req.AdminSubscriptionsEnabled != nil {
+				return *req.AdminSubscriptionsEnabled
+			}
+			return previousSettings.AdminSubscriptionsEnabled
+		}(),
 		AdminPromoCodesEnabled: func() bool {
 			if req.AdminPromoCodesEnabled != nil {
 				return *req.AdminPromoCodesEnabled
@@ -1946,6 +1953,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 
 		UserChannelStatusEnabled:      updatedSettings.UserChannelStatusEnabled,
 		UserSubscriptionsEnabled:      updatedSettings.UserSubscriptionsEnabled,
+		AdminSubscriptionsEnabled:     updatedSettings.AdminSubscriptionsEnabled,
 		AdminPromoCodesEnabled:        updatedSettings.AdminPromoCodesEnabled,
 		AdminChannelManagementEnabled: updatedSettings.AdminChannelManagementEnabled,
 

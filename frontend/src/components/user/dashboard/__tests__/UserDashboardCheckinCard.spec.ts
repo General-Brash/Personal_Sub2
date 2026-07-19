@@ -27,9 +27,11 @@ const status: CheckinStatus = {
   current_streak_day: 8,
   next_reward_day: 7,
   next_reward_amount: '2.50000000',
+  next_permanent_reward_amount: '0.25000000',
   temporary_credit_available: '5.25000000',
   temporary_credit_earliest_expires_at: '2026-07-14T16:00:00Z',
   monthly_reward_total: '12.50000000',
+  monthly_permanent_reward_total: '0.75000000',
   calendar: [],
 }
 
@@ -59,6 +61,7 @@ describe('UserDashboardCheckinCard', () => {
     expect(wrapper.get('[data-test="today-status"]').text()).toContain('checkin.checkIn')
     expect(wrapper.get('[data-test="dashboard-streak"]').text()).toContain('8')
     expect(wrapper.get('[data-test="dashboard-reward"]').text()).toContain('$2.50')
+    expect(wrapper.get('[data-test="dashboard-permanent-reward"]').text()).toContain('$0.25')
     expect(wrapper.get('[data-test="dashboard-temporary-credit"]').text()).toContain('$5.25')
     expect(wrapper.get('[data-test="dashboard-earliest-expiry"]').attributes('data-expires-at')).toBe('2026-07-14T16:00:00Z')
     expect(wrapper.get('[data-test="checkin-details-link"]').attributes('href')).toBe('/check-in')

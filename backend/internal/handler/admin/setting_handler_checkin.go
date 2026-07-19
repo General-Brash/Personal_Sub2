@@ -16,8 +16,9 @@ type updateDailyCheckinSettingsRequest struct {
 }
 
 type dailyCheckinRewardTierDTO struct {
-	Day    int    `json:"day"`
-	Amount string `json:"amount"`
+	Day             int    `json:"day"`
+	Amount          string `json:"amount"`
+	PermanentAmount string `json:"permanent_amount"`
 }
 
 type dailyCheckinPolicyDTO struct {
@@ -37,9 +38,17 @@ func (r updateDailyCheckinSettingsRequest) toPolicy() (*service.DailyCheckinPoli
 		if err != nil {
 			return nil, service.ErrDailyCheckinPolicyInvalid
 		}
+		permanentAmount := 0.0
+		if tier.PermanentAmount != "" {
+			permanentAmount, err = service.ParseStrictLedgerAmount(tier.PermanentAmount)
+			if err != nil {
+				return nil, service.ErrDailyCheckinPolicyInvalid
+			}
+		}
 		rewardTiers[index] = service.DailyCheckinRewardTier{
-			Day:    tier.Day,
-			Amount: amount,
+			Day:             tier.Day,
+			Amount:          amount,
+			PermanentAmount: permanentAmount,
 		}
 	}
 
@@ -58,8 +67,9 @@ func newDailyCheckinPolicyDTO(policy *service.DailyCheckinPolicy) *dailyCheckinP
 	rewardTiers := make([]dailyCheckinRewardTierDTO, len(policy.RewardTiers))
 	for index, tier := range policy.RewardTiers {
 		rewardTiers[index] = dailyCheckinRewardTierDTO{
-			Day:    tier.Day,
-			Amount: strconv.FormatFloat(tier.Amount, 'f', 8, 64),
+			Day:             tier.Day,
+			Amount:          strconv.FormatFloat(tier.Amount, 'f', 8, 64),
+			PermanentAmount: strconv.FormatFloat(tier.PermanentAmount, 'f', 8, 64),
 		}
 	}
 

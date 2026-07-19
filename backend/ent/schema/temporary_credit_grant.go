@@ -28,7 +28,7 @@ func (TemporaryCreditGrant) Mixin() []ent.Mixin {
 func (TemporaryCreditGrant) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("user_id"),
-		field.Enum("source").Values("checkin", "admin_grant"),
+		field.Enum("source").Values("checkin", "admin_grant", "bank_advance", "bank_exchange"),
 		field.Int64("checkin_id").Optional().Nillable(),
 		field.Float("amount").
 			SchemaType(map[string]string{dialect.Postgres: "numeric(20,8)"}),

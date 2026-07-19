@@ -511,6 +511,8 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
 		adminSettings.GET("/checkin", h.Admin.Setting.GetDailyCheckinSettings)
 		adminSettings.PUT("/checkin", h.Admin.Setting.UpdateDailyCheckinSettings)
+		adminSettings.GET("/bank", h.Admin.Bank.GetPolicy)
+		adminSettings.PUT("/bank", h.Admin.Bank.UpdatePolicy)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)

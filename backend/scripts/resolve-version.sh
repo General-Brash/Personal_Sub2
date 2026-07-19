@@ -15,7 +15,7 @@ if command -v git >/dev/null 2>&1; then
     true
   )"
   if [ -n "$TAG" ]; then
-    printf '%s\n' "${TAG#v}"
+    printf '%s\n' "$TAG"
     exit 0
   fi
 fi

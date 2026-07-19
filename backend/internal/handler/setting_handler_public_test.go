@@ -88,6 +88,7 @@ func TestSettingHandler_GetPublicSettings_ExposesPageVisibility(t *testing.T) {
 	repo := &settingHandlerPublicRepoStub{values: map[string]string{
 		service.SettingKeyUserChannelStatusEnabled:      "false",
 		service.SettingKeyUserSubscriptionsEnabled:      "true",
+		service.SettingKeyAdminSubscriptionsEnabled:     "true",
 		service.SettingKeyAdminPromoCodesEnabled:        "false",
 		service.SettingKeyAdminChannelManagementEnabled: "true",
 	}}
@@ -105,6 +106,7 @@ func TestSettingHandler_GetPublicSettings_ExposesPageVisibility(t *testing.T) {
 		Data struct {
 			UserChannelStatusEnabled      bool `json:"user_channel_status_enabled"`
 			UserSubscriptionsEnabled      bool `json:"user_subscriptions_enabled"`
+			AdminSubscriptionsEnabled     bool `json:"admin_subscriptions_enabled"`
 			AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
 			AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
 		} `json:"data"`
@@ -113,6 +115,7 @@ func TestSettingHandler_GetPublicSettings_ExposesPageVisibility(t *testing.T) {
 	require.Equal(t, 0, resp.Code)
 	require.False(t, resp.Data.UserChannelStatusEnabled)
 	require.True(t, resp.Data.UserSubscriptionsEnabled)
+	require.True(t, resp.Data.AdminSubscriptionsEnabled)
 	require.False(t, resp.Data.AdminPromoCodesEnabled)
 	require.True(t, resp.Data.AdminChannelManagementEnabled)
 }

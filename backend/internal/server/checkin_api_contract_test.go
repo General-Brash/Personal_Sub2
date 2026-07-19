@@ -30,6 +30,7 @@ func TestCheckinAndTemporaryCreditHTTPContract(t *testing.T) {
 			StreakDay:              3,
 			RewardDay:              3,
 			RewardAmount:           "3.25000000",
+			PermanentRewardAmount:  "0.50000000",
 			TemporaryCreditGrantID: 77,
 			ExpiresAt:              expiresAt,
 		},
@@ -90,12 +91,13 @@ func TestCheckinAndTemporaryCreditHTTPContract(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
 	require.Zero(t, envelope.Code)
-	require.Len(t, envelope.Data, 7)
+	require.Len(t, envelope.Data, 8)
 	require.Equal(t, json.RawMessage("false"), envelope.Data["already_checked_in"])
 	require.Equal(t, json.RawMessage(`"2026-07-18"`), envelope.Data["checkin_date"])
 	require.Equal(t, json.RawMessage("3"), envelope.Data["streak_day"])
 	require.Equal(t, json.RawMessage("3"), envelope.Data["reward_day"])
 	require.Equal(t, json.RawMessage(`"3.25000000"`), envelope.Data["reward_amount"])
+	require.Equal(t, json.RawMessage(`"0.50000000"`), envelope.Data["permanent_reward_amount"])
 	require.Equal(t, json.RawMessage("77"), envelope.Data["temporary_credit_grant_id"])
 	require.Equal(t, json.RawMessage(`"2026-07-18T16:00:00Z"`), envelope.Data["expires_at"])
 	_, hasAvailable := envelope.Data["temporary_credit_available"]

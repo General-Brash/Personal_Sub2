@@ -16,7 +16,7 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/general-brash/personal_sub2
-  VERSION: v0.1.160-personal.2
+  VERSION: v0.1.6-P1
 
 jobs:
   publish:

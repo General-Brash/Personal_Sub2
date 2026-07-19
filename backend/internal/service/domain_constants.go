@@ -272,6 +272,7 @@ const (
 	// 页面可见性设置（仅控制前端入口和页面访问，不改变对应业务能力）
 	SettingKeyUserChannelStatusEnabled      = "user_channel_status_enabled"
 	SettingKeyUserSubscriptionsEnabled      = "user_subscriptions_enabled"
+	SettingKeyAdminSubscriptionsEnabled     = "admin_subscriptions_enabled"
 	SettingKeyAdminPromoCodesEnabled        = "admin_promo_codes_enabled"
 	SettingKeyAdminChannelManagementEnabled = "admin_channel_management_enabled"
 

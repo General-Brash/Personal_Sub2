@@ -80,14 +80,19 @@ export function formatCurrency(
 }
 
 /**
- * 将十进制金额精确四舍五入为固定两位小数。
+ * 将十进制金额精确四舍五入为固定小数位。
  * 字符串金额全程按十进制位处理，避免先转成 Number 丢失精度。
  */
 export function formatMoneyDisplay(
-  amount: string | number | null | undefined
+  amount: string | number | null | undefined,
+  fractionDigits = 2,
 ): string {
+  if (!Number.isInteger(fractionDigits) || fractionDigits < 0 || fractionDigits > 100) {
+    fractionDigits = 2
+  }
+
   const normalized = normalizeDecimalAmount(amount)
-  if (!normalized) return '0.00'
+  if (!normalized) return fractionDigits === 0 ? '0' : `0.${'0'.repeat(fractionDigits)}`
 
   const negative = normalized.startsWith('-')
   const unsigned = negative || normalized.startsWith('+')
@@ -95,16 +100,22 @@ export function formatMoneyDisplay(
     : normalized
   const [rawInteger = '0', rawFraction = ''] = unsigned.split('.')
   const integer = rawInteger.replace(/^0+(?=\d)/, '') || '0'
-  const fraction = rawFraction.padEnd(3, '0')
-  const retainedFraction = fraction.slice(0, 2)
-  const shouldRoundUp = fraction.charCodeAt(2) >= 53
+  const fraction = rawFraction.padEnd(fractionDigits + 1, '0')
+  const retainedFraction = fraction.slice(0, fractionDigits)
+  const shouldRoundUp = fraction.charCodeAt(fractionDigits) >= 53
 
   let scaled = `${integer}${retainedFraction}`.replace(/^0+(?=\d)/, '') || '0'
   if (shouldRoundUp) scaled = incrementDecimalDigits(scaled)
 
-  const padded = scaled.padStart(3, '0')
-  const formatted = `${padded.slice(0, -2)}.${padded.slice(-2)}`
-  return negative && !/^0\.00$/.test(formatted) ? `-${formatted}` : formatted
+  if (fractionDigits === 0) {
+    return negative && scaled !== '0' ? `-${scaled}` : scaled
+  }
+
+  const padded = scaled.padStart(fractionDigits + 1, '0')
+  const formatted = `${padded.slice(0, -fractionDigits)}.${padded.slice(-fractionDigits)}`
+  return negative && !new RegExp(`^0\\.${'0'.repeat(fractionDigits)}$`).test(formatted)
+    ? `-${formatted}`
+    : formatted
 }
 
 // Backward-compatible alias for existing credit-ledger displays.

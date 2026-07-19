@@ -115,6 +115,7 @@ type BillingCacheService struct {
 	cfg                   *config.Config
 	circuitBreaker        *billingCircuitBreaker
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	permanentBalanceCheck PermanentBalanceEligibilityChecker
 
 	cacheWriteChan     chan cacheWriteTask
 	cacheWriteWg       sync.WaitGroup
@@ -128,6 +129,14 @@ type BillingCacheService struct {
 	cacheWriteDropFullLastLog   int64
 	cacheWriteDropClosedCount   uint64
 	cacheWriteDropClosedLastLog int64
+}
+
+func (s *BillingCacheService) SetPermanentBalanceEligibilityChecker(checker PermanentBalanceEligibilityChecker) {
+	s.permanentBalanceCheck = checker
+}
+
+func (s *BillingCacheService) HasPermanentBalanceEligibilityChecker() bool {
+	return s != nil && s.permanentBalanceCheck != nil
 }
 
 // NewBillingCacheService 创建计费缓存服务
@@ -824,6 +833,11 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	}
 	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
 		return ErrBillingServiceUnavailable
+	}
+	if s.permanentBalanceCheck != nil {
+		if err := s.permanentBalanceCheck.CheckPermanentBalanceEligibility(ctx, user.ID); err != nil {
+			return err
+		}
 	}
 
 	// 判断计费模式

@@ -114,6 +114,11 @@ export const FeatureFlags = {
     mode: 'opt-out',
     label: 'User Subscriptions',
   }),
+  adminSubscriptions: defineFlag({
+    key: 'admin_subscriptions_enabled',
+    mode: 'opt-out',
+    label: 'Admin Subscriptions',
+  }),
   adminPromoCodes: defineFlag({
     key: 'admin_promo_codes_enabled',
     mode: 'opt-out',

@@ -19,6 +19,7 @@ func TestCheckinPolicy_Defaults(t *testing.T) {
 	for day, tier := range policy.RewardTiers {
 		require.Equal(t, day+1, tier.Day)
 		require.Equal(t, 1.0, tier.Amount)
+		require.Equal(t, 0.0, tier.PermanentAmount)
 	}
 }
 
@@ -62,6 +63,11 @@ func TestCheckinPolicy_StreakAndRewardCap(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 7, rewardDay)
 	require.Equal(t, 1.0, amount)
+	rewardDay, amount, permanentAmount, err := policy.RewardForStreakAmounts(8)
+	require.NoError(t, err)
+	require.Equal(t, 7, rewardDay)
+	require.Equal(t, 1.0, amount)
+	require.Equal(t, 0.0, permanentAmount)
 }
 
 func TestCheckinPolicy_AcceptsMaximumRewardDay(t *testing.T) {
@@ -140,6 +146,20 @@ func TestCheckinPolicy_RejectsInvalidPolicies(t *testing.T) {
 				RewardTiers:  []DailyCheckinRewardTier{{Day: 1, Amount: maxLedgerAmount}},
 			},
 		},
+		{
+			name: "permanent reward amount cannot be negative",
+			policy: DailyCheckinPolicy{
+				MaxRewardDay: 1,
+				RewardTiers:  []DailyCheckinRewardTier{{Day: 1, Amount: 1, PermanentAmount: -1}},
+			},
+		},
+		{
+			name: "permanent reward amount cannot exceed numeric max",
+			policy: DailyCheckinPolicy{
+				MaxRewardDay: 1,
+				RewardTiers:  []DailyCheckinRewardTier{{Day: 1, Amount: 1, PermanentAmount: maxLedgerAmount}},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -168,7 +188,7 @@ func TestSettingService_UpdateSettings_DailyCheckinPolicyUsesSingleAtomicWrite(t
 	require.Equal(t, 1, repo.setMultipleCalls)
 	require.Equal(t, "true", repo.updates[SettingKeyDailyCheckinEnabled])
 	require.Equal(t, "2", repo.updates[SettingKeyDailyCheckinMaxRewardDay])
-	require.JSONEq(t, `[{"day":1,"amount":"1.25000000"},{"day":2,"amount":"2.50000000"}]`, repo.updates[SettingKeyDailyCheckinRewardTiers])
+	require.JSONEq(t, `[{"day":1,"amount":"1.25000000","permanent_amount":"0.00000000"},{"day":2,"amount":"2.50000000","permanent_amount":"0.00000000"}]`, repo.updates[SettingKeyDailyCheckinRewardTiers])
 }
 
 func TestSettingService_UpdateSettings_DailyCheckinPolicyRejectsInvalidWithoutWriting(t *testing.T) {
@@ -205,6 +225,18 @@ func TestSettingService_GetDailyCheckinPolicyDefaultsAndRejectsPartialStoredConf
 		_, err := svc.GetDailyCheckinPolicy(context.Background())
 		require.Error(t, err)
 		require.Equal(t, "INVALID_DAILY_CHECKIN_POLICY", infraerrors.Reason(err))
+	})
+
+	t.Run("legacy reward tiers default permanent amount to zero", func(t *testing.T) {
+		svc := NewSettingService(&dailyCheckinPolicyRepoStub{values: map[string]string{
+			SettingKeyDailyCheckinEnabled:      "true",
+			SettingKeyDailyCheckinMaxRewardDay: "1",
+			SettingKeyDailyCheckinRewardTiers:  `[{"day":1,"amount":"1.00000000"}]`,
+		}}, &config.Config{})
+
+		policy, err := svc.GetDailyCheckinPolicy(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, 0.0, policy.RewardTiers[0].PermanentAmount)
 	})
 }
 
@@ -250,6 +282,15 @@ func TestParseDailyCheckinRewardTiers_RejectsNonCanonicalAmounts(t *testing.T) {
 			require.ErrorIs(t, err, ErrDailyCheckinPolicyInvalid)
 		})
 	}
+}
+
+func TestParseDailyCheckinRewardTiersAcceptsZeroAndRejectsNegativePermanentAmounts(t *testing.T) {
+	tiers, err := parseDailyCheckinRewardTiers(`[{"day":1,"amount":"1.00000000","permanent_amount":"0.00000000"}]`)
+	require.NoError(t, err)
+	require.Equal(t, 0.0, tiers[0].PermanentAmount)
+
+	_, err = parseDailyCheckinRewardTiers(`[{"day":1,"amount":"1.00000000","permanent_amount":"-0.00000001"}]`)
+	require.ErrorIs(t, err, ErrDailyCheckinPolicyInvalid)
 }
 
 func TestSettingService_GetAllSettingsIgnoresDailyCheckinPolicy(t *testing.T) {

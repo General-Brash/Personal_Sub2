@@ -71,6 +71,23 @@ func enabledCheckinPolicy(amount string) *DailyCheckinPolicy {
 	}
 }
 
+func enabledCheckinPolicyWithPermanent(amount, permanentAmount string) *DailyCheckinPolicy {
+	policy := enabledCheckinPolicy(amount)
+	parsed, err := ParseStrictLedgerAmount(permanentAmount)
+	if err != nil {
+		panic(err)
+	}
+	policy.RewardTiers[0].PermanentAmount = parsed
+	return policy
+}
+
+func expectCheckinInsert(mock sqlmock.Sqlmock, userID int64, date string, streakDay, rewardDay int, rewardAmount, permanentAmount string) {
+	mock.ExpectQuery("INSERT INTO daily_checkins").
+		WithArgs(userID, date, streakDay, rewardDay, rewardAmount, permanentAmount).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount", "permanent_reward_amount"}).
+			AddRow(int64(7), date, streakDay, rewardDay, rewardAmount, permanentAmount))
+}
+
 func TestCheckinService_CheckInCreatesCheckinAndGrantInOneTransaction(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -94,10 +111,7 @@ func TestCheckinService_CheckInCreatesCheckinAndGrantInOneTransaction(t *testing
 	mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").
 		WithArgs(int64(42)).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery("INSERT INTO daily_checkins").
-		WithArgs(int64(42), "2026-07-13", 1, 1, "1.25000000").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount"}).
-			AddRow(int64(7), "2026-07-13", 1, 1, "1.25000000"))
+	expectCheckinInsert(mock, 42, "2026-07-13", 1, 1, "1.25000000", "0.00000000")
 	mock.ExpectCommit()
 
 	result, err := service.checkIn(context.Background(), 42, nil)
@@ -140,10 +154,7 @@ func TestCheckinService_CheckInRollsBackWhenAtomicSuccessPersistenceFails(t *tes
 	mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").
 		WithArgs(int64(42)).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery("INSERT INTO daily_checkins").
-		WithArgs(int64(42), "2026-07-13", 1, 1, "1.25000000").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount"}).
-			AddRow(int64(7), "2026-07-13", 1, 1, "1.25000000"))
+	expectCheckinInsert(mock, 42, "2026-07-13", 1, 1, "1.25000000", "0.00000000")
 	mock.ExpectExec("UPDATE idempotency_records").
 		WillReturnError(errors.New("idempotency persistence failed"))
 	mock.ExpectRollback()
@@ -178,10 +189,7 @@ func TestCheckinService_CheckInPreservesEightDecimalReward(t *testing.T) {
 	mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").
 		WithArgs(int64(42)).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery("INSERT INTO daily_checkins").
-		WithArgs(int64(42), "2026-07-13", 1, 1, "999999.99999999").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount"}).
-			AddRow(int64(7), "2026-07-13", 1, 1, "999999.99999999"))
+	expectCheckinInsert(mock, 42, "2026-07-13", 1, 1, "999999.99999999", "0.00000000")
 	mock.ExpectCommit()
 
 	result, err := service.checkIn(context.Background(), 42, nil)
@@ -220,10 +228,7 @@ func TestCheckinService_CheckInUsesCapturedBusinessInstantForGrantExpiry(t *test
 	mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").
 		WithArgs(int64(42)).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery("INSERT INTO daily_checkins").
-		WithArgs(int64(42), "2026-07-13", 1, 1, "1.00000000").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount"}).
-			AddRow(int64(7), "2026-07-13", 1, 1, "1.00000000"))
+	expectCheckinInsert(mock, 42, "2026-07-13", 1, 1, "1.00000000", "0.00000000")
 	mock.ExpectCommit()
 
 	result, err := service.checkIn(context.Background(), 42, nil)
@@ -251,10 +256,7 @@ func TestCheckinService_CheckInSamplesDatabaseClockAfterUserLock(t *testing.T) {
 	mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").
 		WithArgs(int64(42)).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery("INSERT INTO daily_checkins").
-		WithArgs(int64(42), "2026-07-17", 1, 1, "1.00000000").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount"}).
-			AddRow(int64(7), "2026-07-17", 1, 1, "1.00000000"))
+	expectCheckinInsert(mock, 42, "2026-07-17", 1, 1, "1.00000000", "0.00000000")
 	mock.ExpectCommit()
 
 	result, err := service.checkIn(context.Background(), 42, nil)
@@ -285,10 +287,10 @@ func TestCheckinService_CheckInReturnsExistingCheckinWithoutCreatingSecondGrant(
 	mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"checkin_date", "streak_day"}).AddRow("2026-07-13", 3))
-	mock.ExpectQuery("SELECT id, checkin_date::text, streak_day, reward_day, reward_amount FROM daily_checkins").
+	mock.ExpectQuery("SELECT id, checkin_date::text, streak_day, reward_day, reward_amount, permanent_reward_amount FROM daily_checkins").
 		WithArgs(int64(42), "2026-07-13").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount"}).
-			AddRow(int64(7), "2026-07-13", 3, 1, "1.25000000"))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "checkin_date", "streak_day", "reward_day", "reward_amount", "permanent_reward_amount"}).
+			AddRow(int64(7), "2026-07-13", 3, 1, "1.25000000", "0.75000000"))
 	mock.ExpectQuery("SELECT id, expires_at FROM temporary_credit_grants").
 		WithArgs(int64(7)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "expires_at"}).AddRow(int64(91), NextBeijingMidnight(now)))
@@ -297,6 +299,7 @@ func TestCheckinService_CheckInReturnsExistingCheckinWithoutCreatingSecondGrant(
 	result, err := service.checkIn(context.Background(), 42, nil)
 	require.NoError(t, err)
 	require.True(t, result.AlreadyCheckedIn)
+	require.Equal(t, "0.75000000", result.PermanentRewardAmount)
 	require.Equal(t, int64(91), result.TemporaryCreditGrantID)
 	require.Empty(t, creditRepo.created)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -325,13 +328,13 @@ func TestCheckinService_GetStatusReturnsShanghaiMonthCalendarAndNextReward(t *te
 	mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"checkin_date", "streak_day"}).AddRow("2026-07-13", 7))
-	mock.ExpectQuery("SELECT checkin_date::text, streak_day, reward_day, reward_amount FROM daily_checkins").
+	mock.ExpectQuery("SELECT checkin_date::text, streak_day, reward_day, reward_amount, permanent_reward_amount FROM daily_checkins").
 		WithArgs(int64(42), "2026-07-01", "2026-08-01").
-		WillReturnRows(sqlmock.NewRows([]string{"checkin_date", "streak_day", "reward_day", "reward_amount"}).
-			AddRow("2026-07-13", 7, 7, "1.00000000"))
-	mock.ExpectQuery("SELECT COALESCE\\(SUM\\(reward_amount\\), 0\\) FROM daily_checkins").
+		WillReturnRows(sqlmock.NewRows([]string{"checkin_date", "streak_day", "reward_day", "reward_amount", "permanent_reward_amount"}).
+			AddRow("2026-07-13", 7, 7, "1.00000000", "0.50000000"))
+	mock.ExpectQuery("SELECT COALESCE\\(SUM\\(reward_amount\\), 0\\), COALESCE\\(SUM\\(permanent_reward_amount\\), 0\\) FROM daily_checkins").
 		WithArgs(int64(42), "2026-07-01", "2026-08-01").
-		WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow("7.00000000"))
+		WillReturnRows(sqlmock.NewRows([]string{"temporary_sum", "permanent_sum"}).AddRow("7.00000000", "2.50000000"))
 
 	status, err := service.GetStatus(context.Background(), 42, "2026-07")
 	require.NoError(t, err)
@@ -343,7 +346,68 @@ func TestCheckinService_GetStatusReturnsShanghaiMonthCalendarAndNextReward(t *te
 	require.Equal(t, "3.50000000", status.TemporaryCreditAvailable)
 	require.Equal(t, expiresAt.UTC(), *status.TemporaryCreditEarliestExpiresAt)
 	require.Equal(t, "7.00000000", status.MonthlyRewardTotal)
+	require.Equal(t, "2.50000000", status.MonthlyPermanentRewardTotal)
 	require.Len(t, status.Calendar, 1)
 	require.Equal(t, "2026-07-13", status.Calendar[0].CheckinDate)
+	require.Equal(t, "0.50000000", status.Calendar[0].PermanentRewardAmount)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCheckinService_CheckInAddsPermanentRewardInSameTransaction(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	now := time.Date(2026, time.July, 13, 12, 0, 0, 0, beijingLocation)
+	creditRepo := &checkinTemporaryCreditRepositoryStub{}
+	svc := NewCheckinServiceWithClock(
+		db,
+		checkinPolicyProviderStub{policy: enabledCheckinPolicyWithPermanent("1.25000000", "0.50000000")},
+		NewTemporaryCreditServiceWithClock(creditRepo, func() time.Time { return now }),
+		func() time.Time { return now },
+	)
+
+	mock.ExpectBegin()
+	expectCheckinUserLock(mock, 42)
+	mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").WithArgs(int64(42)).WillReturnError(sql.ErrNoRows)
+	expectCheckinInsert(mock, 42, "2026-07-13", 1, 1, "1.25000000", "0.50000000")
+	mock.ExpectExec("UPDATE users SET balance = balance \\+ \\$1").
+		WithArgs("0.50000000", int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	result, err := svc.checkIn(context.Background(), 42, nil)
+	require.NoError(t, err)
+	require.Equal(t, "0.50000000", result.PermanentRewardAmount)
+	require.Len(t, creditRepo.created, 1)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCheckinService_CheckInRollsBackWhenPermanentRewardFails(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	now := time.Date(2026, time.July, 13, 12, 0, 0, 0, beijingLocation)
+	creditRepo := &checkinTemporaryCreditRepositoryStub{}
+	svc := NewCheckinServiceWithClock(
+		db,
+		checkinPolicyProviderStub{policy: enabledCheckinPolicyWithPermanent("1.25000000", "0.50000000")},
+		NewTemporaryCreditServiceWithClock(creditRepo, func() time.Time { return now }),
+		func() time.Time { return now },
+	)
+
+	mock.ExpectBegin()
+	expectCheckinUserLock(mock, 42)
+	mock.ExpectQuery("SELECT checkin_date::text, streak_day FROM daily_checkins").WithArgs(int64(42)).WillReturnError(sql.ErrNoRows)
+	expectCheckinInsert(mock, 42, "2026-07-13", 1, 1, "1.25000000", "0.50000000")
+	mock.ExpectExec("UPDATE users SET balance = balance \\+ \\$1").
+		WithArgs("0.50000000", int64(42)).
+		WillReturnError(errors.New("balance write failed"))
+	mock.ExpectRollback()
+
+	_, err = svc.checkIn(context.Background(), 42, nil)
+	require.ErrorContains(t, err, "add daily checkin permanent balance")
+	require.Empty(t, creditRepo.created)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

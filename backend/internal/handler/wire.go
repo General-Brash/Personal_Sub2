@@ -14,6 +14,7 @@ func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
 	temporaryCreditHandler *admin.TemporaryCreditHandler,
+	bankHandler *admin.BankHandler,
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
 	announcementHandler *admin.AnnouncementHandler,
@@ -53,6 +54,7 @@ func ProvideAdminHandlers(
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
 		TemporaryCredit:        temporaryCreditHandler,
+		Bank:                   bankHandler,
 		Group:                  groupHandler,
 		Account:                accountHandler,
 		Announcement:           announcementHandler,
@@ -158,6 +160,14 @@ func ProvideCheckinHandler(checkinService *service.CheckinService) *CheckinHandl
 	return NewCheckinHandler(checkinService)
 }
 
+func ProvideBankHandler(bankService *service.BankService) *BankHandler {
+	return NewBankHandler(bankService)
+}
+
+func ProvideAdminBankHandler(bankService *service.BankService) *admin.BankHandler {
+	return admin.NewBankHandler(bankService)
+}
+
 func ProvideAdminTemporaryCreditHandler(temporaryCreditService *service.AdminTemporaryCreditService) *admin.TemporaryCreditHandler {
 	return admin.NewTemporaryCreditHandler(temporaryCreditService)
 }
@@ -190,6 +200,7 @@ func ProvideHandlers(
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
 	checkinHandler *CheckinHandler,
+	bankHandler *BankHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -213,6 +224,7 @@ func ProvideHandlers(
 		AsyncImage:       asyncImageHandler,
 		BatchImage:       batchImageHandler,
 		Checkin:          checkinHandler,
+		Bank:             bankHandler,
 	}
 }
 
@@ -237,11 +249,13 @@ var ProviderSet = wire.NewSet(
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
 	ProvideCheckinHandler,
+	ProvideBankHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
 	admin.NewUserHandler,
 	ProvideAdminTemporaryCreditHandler,
+	ProvideAdminBankHandler,
 	admin.NewGroupHandler,
 	admin.ProvideAccountHandler,
 	admin.NewAnnouncementHandler,

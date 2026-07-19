@@ -31,13 +31,17 @@ type updateServiceGitHubClientStub struct {
 	release        *GitHubRelease
 	recentReleases []*GitHubRelease
 	recentErr      error
+	latestRepo     string
+	recentRepo     string
 }
 
-func (s *updateServiceGitHubClientStub) FetchLatestRelease(context.Context, string) (*GitHubRelease, error) {
+func (s *updateServiceGitHubClientStub) FetchLatestRelease(_ context.Context, repo string) (*GitHubRelease, error) {
+	s.latestRepo = repo
 	return s.release, nil
 }
 
-func (s *updateServiceGitHubClientStub) FetchRecentReleases(context.Context, string, int) ([]*GitHubRelease, error) {
+func (s *updateServiceGitHubClientStub) FetchRecentReleases(_ context.Context, repo string, _ int) ([]*GitHubRelease, error) {
+	s.recentRepo = repo
 	return s.recentReleases, s.recentErr
 }
 
@@ -67,6 +71,83 @@ func TestUpdateServicePerformUpdateNoUpdateReturnsSentinel(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, errors.Is(err, ErrNoUpdateAvailable))
 	require.ErrorIs(t, err, ErrNoUpdateAvailable)
+}
+
+func TestUpdateServiceUsesPersonalReleaseRepository(t *testing.T) {
+	client := &updateServiceGitHubClientStub{
+		release: &GitHubRelease{TagName: "v0.1.161"},
+		recentReleases: []*GitHubRelease{
+			{TagName: "v0.1.159"},
+		},
+	}
+	svc := NewUpdateService(
+		&updateServiceCacheStub{},
+		client,
+		"0.1.160",
+		"release",
+	)
+
+	_, err := svc.CheckUpdate(context.Background(), true)
+	require.NoError(t, err)
+	_, err = svc.ListRollbackVersions(context.Background())
+	require.NoError(t, err)
+
+	require.Equal(t, githubRepo, client.latestRepo)
+	require.Equal(t, githubRepo, client.recentRepo)
+}
+
+func TestUpdateServiceIgnoresCacheFromAnotherRepository(t *testing.T) {
+	cache := &updateServiceCacheStub{
+		data: `{"repository":"Wei-Shaw/sub2api","latest":"9.9.9","timestamp":4102444800}`,
+	}
+	client := &updateServiceGitHubClientStub{
+		release: &GitHubRelease{TagName: "v0.1.161"},
+	}
+	svc := NewUpdateService(cache, client, "0.1.160", "release")
+
+	info, err := svc.CheckUpdate(context.Background(), false)
+
+	require.NoError(t, err)
+	require.Equal(t, githubRepo, client.latestRepo)
+	require.Equal(t, "0.1.161", info.LatestVersion)
+	require.NotContains(t, cache.data, "Wei-Shaw/sub2api")
+	require.Contains(t, cache.data, `"repository":"`+githubRepo+`"`)
+}
+
+func TestUpdateServiceComparesPersonalReleaseChannel(t *testing.T) {
+	tests := []struct {
+		name    string
+		current string
+		latest  string
+		want    int
+	}{
+		{name: "same personal tag", current: "v0.1.6-P1", latest: "v0.1.6-P1", want: 0},
+		{name: "next personal sequence", current: "v0.1.6-P1", latest: "v0.1.6-P2", want: -1},
+		{name: "older personal sequence", current: "v0.1.6-P2", latest: "v0.1.6-P1", want: 1},
+		{name: "personal channel outranks legacy version", current: "0.1.160-personal.2", latest: "v0.1.6-P1", want: -1},
+		{name: "legacy personal sequence remains comparable", current: "0.1.160-personal.2", latest: "0.1.160-personal.3", want: -1},
+		{name: "plain legacy versions remain compatible", current: "0.1.160", latest: "0.1.161", want: -1},
+		{name: "plain legacy equality remains compatible", current: "v0.1.160", latest: "0.1.160", want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, compareVersions(tt.current, tt.latest))
+		})
+	}
+}
+
+func TestUpdateServiceRecognizesPersonalReleaseUpdate(t *testing.T) {
+	client := &updateServiceGitHubClientStub{
+		release: &GitHubRelease{TagName: "v0.1.6-P2"},
+	}
+	svc := NewUpdateService(&updateServiceCacheStub{}, client, "v0.1.6-P1", "release")
+
+	info, err := svc.CheckUpdate(context.Background(), true)
+
+	require.NoError(t, err)
+	require.True(t, info.HasUpdate)
+	require.Equal(t, "0.1.6-P2", info.LatestVersion)
 }
 
 func newRollbackTestService(current string, releases []*GitHubRelease) *UpdateService {

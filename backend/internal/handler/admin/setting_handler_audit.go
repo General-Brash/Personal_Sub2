@@ -522,6 +522,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.UserSubscriptionsEnabled != after.UserSubscriptionsEnabled {
 		changed = append(changed, "user_subscriptions_enabled")
 	}
+	if before.AdminSubscriptionsEnabled != after.AdminSubscriptionsEnabled {
+		changed = append(changed, "admin_subscriptions_enabled")
+	}
 	if before.AdminPromoCodesEnabled != after.AdminPromoCodesEnabled {
 		changed = append(changed, "admin_promo_codes_enabled")
 	}

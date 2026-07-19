@@ -62,6 +62,14 @@ func RegisterUserRoutes(
 			}
 		}
 
+		// 银行额度管理（用户可见）
+		bank := authenticated.Group("/bank")
+		{
+			bank.GET("/status", h.Bank.GetStatus)
+			bank.POST("/advance", h.Bank.Advance)
+			bank.POST("/exchange", h.Bank.Exchange)
+		}
+
 		// API Key管理
 		keys := authenticated.Group("/keys")
 		{

@@ -36,7 +36,35 @@
       </div>
 
       <template v-else-if="status">
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <section
+          v-if="lastCheckinResult"
+          data-test="checkin-result"
+          class="card border-l-4 border-l-primary-500 p-5"
+        >
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+            {{ t('checkin.resultTitle') }}
+          </h2>
+          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                {{ t('checkin.temporaryReward') }}
+              </p>
+              <p data-test="checkin-result-temporary" class="mt-1 break-all font-mono text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                {{ formatCredit(lastCheckinResult.reward_amount) }}
+              </p>
+            </div>
+            <div>
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                {{ t('checkin.permanentReward') }}
+              </p>
+              <p data-test="checkin-result-permanent" class="mt-1 break-all font-mono text-lg font-semibold text-indigo-600 dark:text-indigo-400">
+                {{ formatCredit(lastCheckinResult.permanent_reward_amount || '0.00000000') }}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-7">
           <div class="card min-w-0 p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.currentStreak') }}</p>
             <p data-test="current-streak" class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
@@ -47,6 +75,18 @@
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.nextReward') }}</p>
             <p data-test="next-reward" class="mt-2 min-w-0 break-all text-lg font-semibold text-primary-600 dark:text-primary-400">
               {{ t('checkin.rewardDay', { day: status.next_reward_day }) }} / {{ formatCredit(status.next_reward_amount) }}
+            </p>
+          </div>
+          <div class="card p-4">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.permanentReward') }}</p>
+            <p data-test="next-permanent-reward" class="mt-2 min-w-0 break-all text-lg font-semibold text-indigo-600 dark:text-indigo-400">
+              {{ t('checkin.rewardDay', { day: status.next_reward_day }) }} / {{ formatCredit(status.next_permanent_reward_amount || '0.00000000') }}
+            </p>
+          </div>
+          <div class="card p-4">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.monthlyPermanentRewardTotal') }}</p>
+            <p data-test="monthly-permanent-reward-total" class="mt-2 min-w-0 break-all text-lg font-semibold text-indigo-600 dark:text-indigo-400">
+              {{ formatCredit(status.monthly_permanent_reward_total || '0.00000000') }}
             </p>
           </div>
           <div class="card min-w-0 p-4">
@@ -114,7 +154,8 @@
                   data-test="calendar-reward"
                   class="block w-full min-w-0 max-w-full break-all rounded-md bg-primary-50 px-1 py-0.5 text-[10px] font-medium leading-tight text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
                 >
-                  {{ formatCredit(cell.entry.reward_amount) }}
+                  <span>{{ formatCredit(cell.entry.reward_amount) }}</span>
+                  <span class="text-indigo-600 dark:text-indigo-300">+{{ formatCredit(cell.entry.permanent_reward_amount || '0.00000000') }}</span>
                 </span>
               </div>
             </div>
@@ -132,6 +173,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { checkIn, getCheckinStatus, type CheckinCalendarEntry, type CheckinResult, type CheckinStatus } from '@/api/checkin'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { formatDecimalAmount } from '@/utils/format'
 
 interface CalendarCell {
@@ -146,7 +188,9 @@ const idempotencyDateStorage = 'daily-checkin-idempotency-date'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const status = ref<CheckinStatus | null>(null)
+const lastCheckinResult = ref<CheckinResult | null>(null)
 const loading = ref(true)
 const loadFailed = ref(false)
 const submitting = ref(false)
@@ -216,13 +260,22 @@ async function handleCheckIn() {
   try {
     const result = await checkIn(getOrCreateIdempotencyKey())
     applyCheckinResult(result)
+    lastCheckinResult.value = result
     appStore.showSuccess(t(result.already_checked_in ? 'checkin.alreadyCheckedIn' : 'checkin.checkInSucceeded'))
-    await loadStatus()
+    await Promise.all([loadStatus(), refreshUserSilently()])
   } catch (error) {
     console.error('Failed to complete daily check-in:', error)
     appStore.showError(t('checkin.failedToCheckIn'))
   } finally {
     submitting.value = false
+  }
+}
+
+async function refreshUserSilently(): Promise<void> {
+  try {
+    await authStore.refreshUser()
+  } catch (error) {
+    console.error('Failed to refresh user after daily check-in:', error)
   }
 }
 
@@ -237,6 +290,7 @@ function applyCheckinResult(result: CheckinResult) {
           streak_day: result.streak_day,
           reward_day: result.reward_day,
           reward_amount: result.reward_amount,
+          permanent_reward_amount: result.permanent_reward_amount || '0.00000000',
         },
       ].sort((left, right) => left.checkin_date.localeCompare(right.checkin_date))
     : status.value.calendar

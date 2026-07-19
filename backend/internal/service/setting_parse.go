@@ -65,6 +65,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyCustomEndpoints:                           "[]",
 		SettingKeyUserChannelStatusEnabled:                  "true",
 		SettingKeyUserSubscriptionsEnabled:                  "true",
+		SettingKeyAdminSubscriptionsEnabled:                 "true",
 		SettingKeyAdminPromoCodesEnabled:                    "true",
 		SettingKeyAdminChannelManagementEnabled:             "true",
 		SettingKeyWeChatConnectEnabled:                      "false",
@@ -728,6 +729,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// Page visibility defaults to enabled so existing installations keep all pages visible.
 	result.UserChannelStatusEnabled = !isFalseSettingValue(settings[SettingKeyUserChannelStatusEnabled])
 	result.UserSubscriptionsEnabled = !isFalseSettingValue(settings[SettingKeyUserSubscriptionsEnabled])
+	result.AdminSubscriptionsEnabled = !isFalseSettingValue(settings[SettingKeyAdminSubscriptionsEnabled])
 	result.AdminPromoCodesEnabled = !isFalseSettingValue(settings[SettingKeyAdminPromoCodesEnabled])
 	result.AdminChannelManagementEnabled = !isFalseSettingValue(settings[SettingKeyAdminChannelManagementEnabled])
 

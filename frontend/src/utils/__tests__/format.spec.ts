@@ -31,6 +31,11 @@ describe('formatMoneyDisplay', () => {
       '90071992547409931234567890.13',
     )
   })
+
+  it('supports fixed eight-place usage-cost output', () => {
+    expect(formatMoneyDisplay('0.092883', 8)).toBe('0.09288300')
+    expect(formatMoneyDisplay('1.234567895', 8)).toBe('1.23456790')
+  })
 })
 
 describe('formatDecimalAmount', () => {
