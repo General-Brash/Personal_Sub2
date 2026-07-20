@@ -356,14 +356,6 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = clock_times
 	return nil
 }
 
-func parseBankAmount(raw string) (float64, error) {
-	amount, err := ParseStrictPositiveLedgerAmount(strings.TrimSpace(raw))
-	if err != nil || math.IsNaN(amount) || math.IsInf(amount, 0) {
-		return 0, ErrBankAmountInvalid
-	}
-	return amount, nil
-}
-
 func bankExchangeInMaintenanceWindow(now time.Time) bool {
 	beijingNow := now.In(beijingLocation)
 	secondsSinceMidnight := beijingNow.Hour()*60*60 + beijingNow.Minute()*60 + beijingNow.Second()

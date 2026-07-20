@@ -626,7 +626,10 @@ func (s *ContentModerationService) callSecondaryReview(ctx context.Context, cfg 
 	if cfg.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+cfg.Token)
 	}
-	client := s.intentHTTPClient
+	var client *http.Client
+	if s != nil {
+		client = s.intentHTTPClient
+	}
 	if client == nil {
 		client = newSecondaryReviewHTTPClient()
 	}
@@ -768,7 +771,11 @@ func decodeSecondaryReviewJSON(contentType string, body []byte, target any) erro
 }
 
 func newSecondaryReviewHTTPClient() *http.Client {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	baseTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok || baseTransport == nil {
+		baseTransport = &http.Transport{}
+	}
+	transport := baseTransport.Clone()
 	transport.Proxy = nil
 	return servertiming.InstrumentClient(&http.Client{
 		Transport: transport,

@@ -424,6 +424,26 @@ func TestContentModerationSecondaryReview_DoesNotFollowRedirect(t *testing.T) {
 	require.Zero(t, redirectedCalls.Load())
 }
 
+func TestContentModerationSecondaryReview_CallSupportsNilService(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeSecondaryReviewTestResponse(t, w, secondaryReviewResponse{
+			SchemaVersion: secondaryReviewSchemaVersion,
+			Label:         ContentModerationSecondaryReviewLabelBenign,
+			Score:         0,
+			ModelVersion:  "intent-v1",
+		})
+	}))
+	defer server.Close()
+
+	review := secondaryReviewTestConfig(server.URL, ContentModerationSecondaryReviewModeShadow, ContentModerationSecondaryReviewOnErrorAllowAndLog).SecondaryReview
+	var svc *ContentModerationService
+	result, err := svc.callSecondaryReview(context.Background(), review, ContentModerationCheckInput{}, "benign text", "probe")
+
+	require.NoError(t, err)
+	require.Equal(t, ContentModerationSecondaryReviewLabelBenign, result.Label)
+	require.Equal(t, "intent-v1", result.ModelVersion)
+}
+
 func TestContentModerationSecondaryReview_ClassifierForbiddenIsNotAClassifierBlock(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
