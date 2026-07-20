@@ -4,7 +4,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 
 import RiskControlView from '../RiskControlView.vue'
-import type { ContentModerationConfig, UpdateContentModerationConfig } from '@/api/admin/riskControl'
+import type {
+  ContentModerationConfig,
+  ContentModerationLog,
+  UpdateContentModerationConfig,
+} from '@/api/admin/riskControl'
 
 const {
   getConfig,
@@ -138,6 +142,38 @@ const runtimeStatus = () => ({
   last_cleanup_deleted_non_hit: 0,
 })
 
+const logForAction = (id: number, action: string, error = ''): ContentModerationLog => ({
+  id,
+  request_id: `request-${id}`,
+  user_id: 1,
+  user_email: 'user@example.com',
+  api_key_id: 1,
+  api_key_name: 'test-key',
+  group_id: 1,
+  group_name: 'default',
+  endpoint: '/v1/responses',
+  provider: 'openai',
+  model: 'gpt-test',
+  mode: 'pre_block',
+  action,
+  flagged: action === 'intent_block',
+  highest_category: 'actionable_probe',
+  highest_score: 0.92,
+  matched_keyword: '探测',
+  category_scores: { actionable_probe: 0.92 },
+  threshold_snapshot: { intent_review: 0.6, intent_block: 0.9 },
+  review_metadata: {},
+  input_excerpt: 'test input',
+  upstream_latency_ms: 24,
+  error,
+  violation_count: 0,
+  auto_banned: false,
+  email_sent: false,
+  user_status: 'active',
+  queue_delay_ms: null,
+  created_at: '2026-07-20T00:00:00Z',
+})
+
 const AppLayoutStub = { template: '<div><slot /></div>' }
 const BaseDialogStub = defineComponent({
   props: {
@@ -173,6 +209,35 @@ const ModelWhitelistSelectorStub = defineComponent({
         value: (props.modelValue as string[]).join('\n'),
         onInput,
       })
+  },
+})
+
+const SelectStub = defineComponent({
+  inheritAttrs: false,
+  props: {
+    modelValue: {
+      type: [String, Number, Boolean],
+      default: '',
+    },
+    options: {
+      type: Array,
+      default: () => [],
+    },
+  },
+  emits: ['update:modelValue', 'change'],
+  setup(props, { attrs, emit }) {
+    const onChange = (event: Event) => {
+      const rawValue = (event.target as HTMLSelectElement).value
+      const option = (props.options as Array<{ value: unknown; label: string }>).find(
+        (item) => String(item.value) === rawValue,
+      )
+      emit('update:modelValue', option?.value ?? rawValue)
+      emit('change', option?.value ?? rawValue, option ?? null)
+    }
+    return () => h('select', { ...attrs, value: String(props.modelValue ?? ''), onChange },
+      (props.options as Array<{ value: unknown; label: string }>).map((option) => h('option', {
+        value: String(option.value),
+      }, option.label)))
   },
 })
 
@@ -403,5 +468,102 @@ describe('admin RiskControlView', () => {
       'max-h-[280px]',
       'overflow-y-auto',
     ]))
+  })
+
+  it('renders secondary-review audit actions with their actual allow, review, block, shadow, and error semantics', async () => {
+    const reviewLog = logForAction(2, 'intent_review')
+    listLogs.mockResolvedValue({
+      items: [
+        logForAction(1, 'intent_allow'),
+        reviewLog,
+        logForAction(3, 'intent_block'),
+        logForAction(4, 'intent_shadow'),
+        logForAction(5, 'intent_error', 'timeout'),
+        logForAction(6, 'intent_error_block', 'timeout'),
+      ],
+      total: 6,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+
+    const wrapper = mount(RiskControlView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          BaseDialog: BaseDialogStub,
+          Icon: true,
+          Select: SelectStub,
+          Toggle: true,
+          Pagination: true,
+          ModelWhitelistSelector: ModelWhitelistSelectorStub,
+        },
+      },
+    })
+    await flushPromises()
+
+    const badge = (action: string) => wrapper.get(`[data-test="result-badge"][data-action="${action}"]`)
+    expect(badge('intent_allow').text()).toBe('admin.riskControl.action.intentAllow')
+    expect(badge('intent_allow').classes()).toContain('bg-green-100')
+    expect(badge('intent_review').text()).toBe('admin.riskControl.action.intentReview')
+    expect(badge('intent_review').classes()).toContain('bg-amber-100')
+    expect(badge('intent_block').text()).toBe('admin.riskControl.action.intentBlock')
+    expect(badge('intent_block').classes()).toContain('bg-red-100')
+    expect(badge('intent_shadow').text()).toBe('admin.riskControl.action.intentShadow')
+    expect(badge('intent_shadow').classes()).toContain('bg-sky-100')
+    expect(badge('intent_error').text()).toBe('admin.riskControl.action.intentError')
+    expect(badge('intent_error').classes()).toContain('bg-amber-100')
+    expect(badge('intent_error_block').text()).toBe('admin.riskControl.action.intentErrorBlock')
+    expect(badge('intent_error_block').classes()).toContain('bg-red-100')
+
+    expect(reviewLog.flagged).toBe(false)
+    expect(reviewLog.violation_count).toBe(0)
+    expect(reviewLog.auto_banned).toBe(false)
+    const resultFilter = wrapper.get<HTMLSelectElement>('[data-test="result-filter"]')
+    expect(resultFilter.find('option[value="intent_review"]').text()).toBe('admin.riskControl.result.intentReview')
+    await resultFilter.setValue('intent_review')
+    await flushPromises()
+    expect(listLogs).toHaveBeenLastCalledWith(expect.objectContaining({ result: 'intent_review' }))
+  })
+
+  it('shows only non-empty secondary-review metadata in the input detail', async () => {
+    const reviewLog = logForAction(7, 'intent_error')
+    reviewLog.review_metadata = {
+      model_version: 'intent-model-v20260720-with-a-long-version-suffix',
+      trace_id: '   ',
+      review_mode: 'enforce',
+      fallback: 'allow_and_log',
+    }
+    listLogs.mockResolvedValue({
+      items: [reviewLog],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+
+    const wrapper = mount(RiskControlView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          BaseDialog: BaseDialogStub,
+          Icon: true,
+          Select: SelectStub,
+          Toggle: true,
+          Pagination: true,
+          ModelWhitelistSelector: ModelWhitelistSelectorStub,
+        },
+      },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-test="input-detail-button"]').trigger('click')
+
+    const modelVersion = wrapper.get('[data-test="review-model-version"]')
+    expect(modelVersion.text()).toContain('intent-model-v20260720-with-a-long-version-suffix')
+    expect(modelVersion.get('p:last-child').classes()).toContain('break-all')
+    expect(wrapper.find('[data-test="review-trace-id"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="review-mode"]').text()).toContain('admin.riskControl.secondaryReviewModeValues.enforce')
+    expect(wrapper.get('[data-test="review-fallback"]').text()).toContain('admin.riskControl.secondaryReviewFallbackValues.allow_and_log')
   })
 })

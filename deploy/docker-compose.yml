@@ -168,6 +168,8 @@ services:
       - GATEWAY_IMAGE_CONCURRENCY_WAIT_TIMEOUT_SECONDS=${GATEWAY_IMAGE_CONCURRENCY_WAIT_TIMEOUT_SECONDS:-30}
       - GATEWAY_IMAGE_CONCURRENCY_MAX_WAITING_REQUESTS=${GATEWAY_IMAGE_CONCURRENCY_MAX_WAITING_REQUESTS:-100}
     depends_on:
+      intent-classifier:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -190,6 +192,47 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # ===========================================================================
+  # Intent Classifier (internal secondary-review service)
+  # ===========================================================================
+  intent-classifier:
+    image: ${INTENT_CLASSIFIER_IMAGE:-ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.6-P1.2}
+    build:
+      context: ${INTENT_CLASSIFIER_BUILD_CONTEXT:-../services/intent-classifier}
+      dockerfile: Dockerfile
+    container_name: sub2api-intent-classifier
+    restart: unless-stopped
+    expose:
+      - "8080"
+    volumes:
+      - type: bind
+        source: ${INTENT_CLASSIFIER_MODEL_DIR:-./intent-models}
+        target: /models
+        read_only: true
+      - intent_classifier_state:/state
+    environment:
+      - INTENT_CLASSIFIER_HOST=0.0.0.0
+      - INTENT_CLASSIFIER_PORT=8080
+      - INTENT_CLASSIFIER_MODEL_ROOT=/models
+      - INTENT_CLASSIFIER_STATE_DIR=/state
+      - INTENT_CLASSIFIER_ACTIVE_VERSION=${INTENT_CLASSIFIER_ACTIVE_VERSION:-}
+      - INTENT_CLASSIFIER_MODEL_VERSION=${INTENT_CLASSIFIER_MODEL_VERSION:-}
+      - INTENT_CLASSIFIER_API_TOKEN=${INTENT_CLASSIFIER_API_TOKEN:-}
+      - INTENT_CLASSIFIER_ADMIN_TOKEN=${INTENT_CLASSIFIER_ADMIN_TOKEN:?INTENT_CLASSIFIER_ADMIN_TOKEN is required}
+      - INTENT_CLASSIFIER_MAX_CONCURRENCY=${INTENT_CLASSIFIER_MAX_CONCURRENCY:-4}
+      - INTENT_CLASSIFIER_MAX_REQUEST_BYTES=${INTENT_CLASSIFIER_MAX_REQUEST_BYTES:-65536}
+      - INTENT_CLASSIFIER_INFERENCE_TIMEOUT_MS=${INTENT_CLASSIFIER_INFERENCE_TIMEOUT_MS:-250}
+      - INTENT_CLASSIFIER_LOG_LEVEL=${INTENT_CLASSIFIER_LOG_LEVEL:-INFO}
+      - INTENT_CLASSIFIER_ADMIN_URL=http://127.0.0.1:8080
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # ===========================================================================
   # PostgreSQL Database
@@ -271,6 +314,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  intent_classifier_state:
     driver: local
 
 # =============================================================================

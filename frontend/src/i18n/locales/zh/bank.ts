@@ -2,6 +2,7 @@ export default {
   bank: {
     title: '银行',
     description: '管理临时额度预支、永久额度兑换和账户负债。',
+    operationMode: '银行操作类型',
     actions: {
       settings: '设置',
       reloadStatus: '重新加载银行信息',
@@ -18,6 +19,10 @@ export default {
       earliestExpiry: '最早过期：{date}',
       temporaryDebt: '临时额度负债',
       debtDueAt: '永久额度结算日：{date}',
+    },
+    wallet: {
+      title: '钱包',
+      available: '当前可用临时额度',
     },
     advance: {
       title: '预支临时额度',
@@ -43,6 +48,8 @@ export default {
       description: '1 永久额度可兑换 {rate} 临时额度，所得额度次日 0 点过期且不产生负债。',
       amount: '使用永久额度',
       estimate: '预计获得 {amount} 临时额度。',
+      rate: '汇率 1 : {rate}',
+      preview: '预计获取额度',
       submitting: '兑换中',
       confirm: '确认兑换',
     },

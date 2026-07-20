@@ -122,8 +122,12 @@ func TestUpdateServiceComparesPersonalReleaseChannel(t *testing.T) {
 		want    int
 	}{
 		{name: "same personal tag", current: "v0.1.6-P1", latest: "v0.1.6-P1", want: 0},
-		{name: "next personal sequence", current: "v0.1.6-P1", latest: "v0.1.6-P2", want: -1},
-		{name: "older personal sequence", current: "v0.1.6-P2", latest: "v0.1.6-P1", want: 1},
+		{name: "personal patch sequence", current: "v0.1.6-P1", latest: "v0.1.6-P1.2", want: -1},
+		{name: "personal numeric patch sequence", current: "v0.1.6-P1.2", latest: "v0.1.6-P1.10", want: -1},
+		{name: "older personal patch sequence", current: "v0.1.6-P1.10", latest: "v0.1.6-P1.2", want: 1},
+		{name: "next personal sequence", current: "v0.1.6-P1.10", latest: "v0.1.6-P2", want: -1},
+		{name: "older personal sequence", current: "v0.1.6-P2", latest: "v0.1.6-P1.10", want: 1},
+		{name: "invalid personal suffix keeps legacy behavior", current: "v0.1.6-P1", latest: "v0.1.6-P1.invalid", want: 1},
 		{name: "personal channel outranks legacy version", current: "0.1.160-personal.2", latest: "v0.1.6-P1", want: -1},
 		{name: "legacy personal sequence remains comparable", current: "0.1.160-personal.2", latest: "0.1.160-personal.3", want: -1},
 		{name: "plain legacy versions remain compatible", current: "0.1.160", latest: "0.1.161", want: -1},
@@ -139,7 +143,7 @@ func TestUpdateServiceComparesPersonalReleaseChannel(t *testing.T) {
 
 func TestUpdateServiceRecognizesPersonalReleaseUpdate(t *testing.T) {
 	client := &updateServiceGitHubClientStub{
-		release: &GitHubRelease{TagName: "v0.1.6-P2"},
+		release: &GitHubRelease{TagName: "v0.1.6-P1.2"},
 	}
 	svc := NewUpdateService(&updateServiceCacheStub{}, client, "v0.1.6-P1", "release")
 
@@ -147,7 +151,7 @@ func TestUpdateServiceRecognizesPersonalReleaseUpdate(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, info.HasUpdate)
-	require.Equal(t, "0.1.6-P2", info.LatestVersion)
+	require.Equal(t, "0.1.6-P1.2", info.LatestVersion)
 }
 
 func newRollbackTestService(current string, releases []*GitHubRelease) *UpdateService {

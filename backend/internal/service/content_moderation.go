@@ -138,33 +138,34 @@ func ContentModerationCategories() []string {
 }
 
 type ContentModerationConfig struct {
-	Enabled              bool                         `json:"enabled"`
-	Mode                 string                       `json:"mode"`
-	BaseURL              string                       `json:"base_url"`
-	Model                string                       `json:"model"`
-	APIKey               string                       `json:"api_key,omitempty"`
-	APIKeys              []string                     `json:"api_keys,omitempty"`
-	TimeoutMS            int                          `json:"timeout_ms"`
-	SampleRate           int                          `json:"sample_rate"`
-	AllGroups            bool                         `json:"all_groups"`
-	GroupIDs             []int64                      `json:"group_ids"`
-	RecordNonHits        bool                         `json:"record_non_hits"`
-	Thresholds           map[string]float64           `json:"thresholds"`
-	WorkerCount          int                          `json:"worker_count"`
-	QueueSize            int                          `json:"queue_size"`
-	BlockStatus          int                          `json:"block_status"`
-	BlockMessage         string                       `json:"block_message"`
-	EmailOnHit           bool                         `json:"email_on_hit"`
-	AutoBanEnabled       bool                         `json:"auto_ban_enabled"`
-	BanThreshold         int                          `json:"ban_threshold"`
-	ViolationWindowHours int                          `json:"violation_window_hours"`
-	RetryCount           int                          `json:"retry_count"`
-	HitRetentionDays     int                          `json:"hit_retention_days"`
-	NonHitRetentionDays  int                          `json:"non_hit_retention_days"`
-	PreHashCheckEnabled  bool                         `json:"pre_hash_check_enabled"`
-	BlockedKeywords      []string                     `json:"blocked_keywords"`
-	KeywordBlockingMode  string                       `json:"keyword_blocking_mode"`
-	ModelFilter          ContentModerationModelFilter `json:"model_filter"`
+	Enabled              bool                                   `json:"enabled"`
+	Mode                 string                                 `json:"mode"`
+	BaseURL              string                                 `json:"base_url"`
+	Model                string                                 `json:"model"`
+	APIKey               string                                 `json:"api_key,omitempty"`
+	APIKeys              []string                               `json:"api_keys,omitempty"`
+	TimeoutMS            int                                    `json:"timeout_ms"`
+	SampleRate           int                                    `json:"sample_rate"`
+	AllGroups            bool                                   `json:"all_groups"`
+	GroupIDs             []int64                                `json:"group_ids"`
+	RecordNonHits        bool                                   `json:"record_non_hits"`
+	Thresholds           map[string]float64                     `json:"thresholds"`
+	WorkerCount          int                                    `json:"worker_count"`
+	QueueSize            int                                    `json:"queue_size"`
+	BlockStatus          int                                    `json:"block_status"`
+	BlockMessage         string                                 `json:"block_message"`
+	EmailOnHit           bool                                   `json:"email_on_hit"`
+	AutoBanEnabled       bool                                   `json:"auto_ban_enabled"`
+	BanThreshold         int                                    `json:"ban_threshold"`
+	ViolationWindowHours int                                    `json:"violation_window_hours"`
+	RetryCount           int                                    `json:"retry_count"`
+	HitRetentionDays     int                                    `json:"hit_retention_days"`
+	NonHitRetentionDays  int                                    `json:"non_hit_retention_days"`
+	PreHashCheckEnabled  bool                                   `json:"pre_hash_check_enabled"`
+	BlockedKeywords      []string                               `json:"blocked_keywords"`
+	KeywordBlockingMode  string                                 `json:"keyword_blocking_mode"`
+	ModelFilter          ContentModerationModelFilter           `json:"model_filter"`
+	SecondaryReview      ContentModerationSecondaryReviewConfig `json:"secondary_review"`
 	// CyberPolicyExcludeFromBanCount 为 true 时，cyber_policy 命中不参与自动封号计数：
 	// 当次不判定封号，且历史 cyber 行在 CountFlaggedByUserSince 中被排除。
 	// 默认 false（计入，与历史行为一致；旧配置 JSON 无此字段时反序列化为 false）。
@@ -397,6 +398,7 @@ type ContentModerationLog struct {
 	MatchedKeyword    string             `json:"matched_keyword"`
 	CategoryScores    map[string]float64 `json:"category_scores"`
 	ThresholdSnapshot map[string]float64 `json:"threshold_snapshot"`
+	ReviewMetadata    map[string]string  `json:"review_metadata"`
 	InputExcerpt      string             `json:"input_excerpt"`
 	UpstreamLatencyMS *int               `json:"upstream_latency_ms,omitempty"`
 	Error             string             `json:"error"`
@@ -498,6 +500,8 @@ type ContentModerationService struct {
 	authCacheInvalidator     APIKeyAuthCacheInvalidator
 	emailService             *EmailService
 	httpClient               *http.Client
+	intentHTTPClient         *http.Client
+	intentBulkhead           chan struct{}
 	asyncQueue               chan contentModerationTask
 	workerCount              int
 	apiKeyCursor             atomic.Uint64
@@ -539,6 +543,7 @@ type contentModerationTask struct {
 	config           *ContentModerationConfig
 	recordHash       bool
 	applySideEffects bool
+	intentKeyword    string
 	enqueuedAt       time.Time
 }
 
@@ -578,6 +583,8 @@ func NewContentModerationService(
 		authCacheInvalidator: authCacheInvalidator,
 		emailService:         emailService,
 		httpClient:           servertiming.InstrumentClient(nil),
+		intentHTTPClient:     newSecondaryReviewHTTPClient(),
+		intentBulkhead:       make(chan struct{}, maxSecondaryReviewConcurrentCalls),
 		workerCount:          maxContentModerationWorkerCount,
 		asyncQueue:           make(chan contentModerationTask, maxContentModerationQueueSize),
 		keyHealth:            make(map[string]*contentModerationKeyHealth),
@@ -903,30 +910,9 @@ func (s *ContentModerationService) Check(ctx context.Context, input ContentModer
 	if cfg.Mode == ContentModerationModePreBlock {
 		if cfg.KeywordBlockingMode != ContentModerationKeywordModeAPIOnly && len(cfg.BlockedKeywords) > 0 {
 			if keyword, hit := runtimeSnapshot.matchBlockedKeyword(content.Text); hit {
-				s.recordPreBlockSyncMetric(0, ContentModerationActionKeywordBlock)
-				slog.Info("content_moderation.keyword_block",
-					"user_id", input.UserID,
-					"api_key_id", input.APIKeyID,
-					"group_id", contentModerationLogGroupID(input.GroupID),
-					"endpoint", input.Endpoint,
-					"protocol", input.Protocol,
-					"keyword_blocking_mode", cfg.KeywordBlockingMode,
-					"keyword", keyword)
-				scores := map[string]float64{contentModerationKeywordCategory: 1.0}
-				log := s.buildLog(input, cfg, ContentModerationActionKeywordBlock, true, contentModerationKeywordCategory, 1.0, scores, content.ExcerptText(), nil, nil, "")
-				log.MatchedKeyword = keyword
-				s.enqueueRecord(input, cfg, log, hashText, false, true)
-				return &ContentModerationDecision{
-					Allowed:         false,
-					Blocked:         true,
-					Flagged:         true,
-					Message:         cfg.BlockMessage,
-					StatusCode:      cfg.BlockStatus,
-					HighestCategory: contentModerationKeywordCategory,
-					HighestScore:    1.0,
-					CategoryScores:  scores,
-					Action:          ContentModerationActionKeywordBlock,
-				}, nil
+				if decision, continuePipeline := s.handleMatchedKeyword(ctx, input, cfg, content, hashText, keyword); !continuePipeline {
+					return decision, nil
+				}
 			}
 		}
 		if cfg.KeywordBlockingMode == ContentModerationKeywordModeKeywordOnly {
@@ -1117,7 +1103,8 @@ func (s *ContentModerationService) recordPreBlockSyncMetric(latencyMS int, actio
 	}
 	s.preBlockLatencyTotalMS.Add(int64(latencyMS))
 	switch action {
-	case ContentModerationActionBlock, ContentModerationActionHashBlock, ContentModerationActionKeywordBlock:
+	case ContentModerationActionBlock, ContentModerationActionHashBlock, ContentModerationActionKeywordBlock,
+		ContentModerationActionIntentBlock, ContentModerationActionIntentErrorBlock:
 		s.preBlockBlocked.Add(1)
 	case ContentModerationActionError:
 		s.preBlockErrors.Add(1)
@@ -1224,6 +1211,13 @@ func (s *ContentModerationService) worker(id int) {
 					taskCfg = cfg
 				}
 				s.persistContentModerationLog(ctx, taskCfg, task.log, task.inputHash, task.recordHash, task.applySideEffects)
+				s.asyncProcessed.Add(1)
+				return
+			}
+			if task.intentKeyword != "" {
+				s.asyncActive.Add(1)
+				defer s.asyncActive.Add(-1)
+				s.runSecondaryReviewShadow(ctx, task)
 				s.asyncProcessed.Add(1)
 				return
 			}
@@ -1637,6 +1631,16 @@ func (s *ContentModerationService) validateConfig(ctx context.Context, cfg *Cont
 	if cfg.ModelFilter.Type != ContentModerationModelFilterAll && len(cfg.ModelFilter.Models) == 0 {
 		return infraerrors.BadRequest("INVALID_CONTENT_MODERATION_MODEL_FILTER", "指定或排除模型时至少需要配置 1 个模型")
 	}
+	if err := validateContentModerationSecondaryReviewConfig(cfg.SecondaryReview); err != nil {
+		return err
+	}
+	if cfg.SecondaryReview.Mode != ContentModerationSecondaryReviewModeOff &&
+		(!cfg.Enabled || cfg.Mode != ContentModerationModePreBlock || cfg.KeywordBlockingMode == ContentModerationKeywordModeAPIOnly || len(cfg.BlockedKeywords) == 0) {
+		return infraerrors.BadRequest("INVALID_SECONDARY_REVIEW_RUNTIME_SCOPE", "二次审核启用时要求开启内容审核和前置拦截、配置关键词，且关键词策略不能为仅 API")
+	}
+	if cfg.SecondaryReview.Mode == ContentModerationSecondaryReviewModeEnforce && cfg.SecondaryReview.ExpectedModelVersion == "" {
+		return infraerrors.BadRequest("INVALID_SECONDARY_REVIEW_MODEL_VERSION", "二次审核强制模式要求配置预期模型版本")
+	}
 	if !cfg.AllGroups && len(cfg.GroupIDs) > 0 && s.groupRepo != nil {
 		for _, groupID := range cfg.GroupIDs {
 			if _, err := s.groupRepo.GetByIDLite(ctx, groupID); err != nil {
@@ -1777,6 +1781,7 @@ func (s *ContentModerationService) buildLog(input ContentModerationCheckInput, c
 		HighestScore:      highestScore,
 		CategoryScores:    cloneFloatMap(scores),
 		ThresholdSnapshot: cloneFloatMap(cfg.Thresholds),
+		ReviewMetadata:    map[string]string{},
 		InputExcerpt:      trimRunes(redactContentModerationSecrets(text), maxModerationExcerptRunes),
 		UpstreamLatencyMS: latency,
 		QueueDelayMS:      queueDelay,
@@ -2004,6 +2009,7 @@ func defaultContentModerationConfig() *ContentModerationConfig {
 			Type:   ContentModerationModelFilterAll,
 			Models: []string{},
 		},
+		SecondaryReview:                defaultContentModerationSecondaryReviewConfig(),
 		CyberPolicyExcludeFromBanCount: false,
 	}
 }
@@ -2102,6 +2108,7 @@ func (cfg *ContentModerationConfig) normalize() {
 	cfg.BlockedKeywords = normalizeBlockedKeywords(cfg.BlockedKeywords)
 	cfg.KeywordBlockingMode = normalizeKeywordBlockingMode(cfg.KeywordBlockingMode)
 	cfg.ModelFilter = normalizeContentModerationModelFilter(cfg.ModelFilter)
+	cfg.SecondaryReview.normalize()
 }
 
 func (cfg *ContentModerationConfig) includesGroup(groupID *int64) bool {
@@ -2745,13 +2752,22 @@ func matchBlockedKeyword(text string, keywords []string) (string, bool) {
 	if text == "" || len(keywords) == 0 {
 		return "", false
 	}
-	lower := strings.ToLower(text)
+	lower := []byte(strings.ToLower(text))
 	for _, kw := range keywords {
 		if kw == "" {
 			continue
 		}
-		if strings.Contains(lower, strings.ToLower(kw)) {
-			return kw, true
+		rule := newContentModerationKeywordRule(kw)
+		for offset := 0; offset <= len(lower)-len(rule.lower); {
+			relative := bytes.Index(lower[offset:], rule.lower)
+			if relative < 0 {
+				break
+			}
+			start := offset + relative
+			if contentModerationKeywordRuleMatchesAt(lower, start, rule) {
+				return kw, true
+			}
+			offset = start + 1
 		}
 	}
 	return "", false

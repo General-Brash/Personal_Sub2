@@ -26,6 +26,9 @@ This directory contains files for deploying Sub2API on Linux servers and Apple-s
 | `sub2api.service` | Systemd service unit file |
 | `sub2api-datamanagementd.service` | datamanagementd systemd service unit file |
 | `DATAMANAGEMENTD_CN.md` | datamanagementd 部署与联动说明（中文） |
+| `intent-classifier.service` | Secondary-review classifier systemd unit |
+| `intent-classifier.env.example` | Bare-metal classifier environment template |
+| `INTENT_CLASSIFIER.md` | Model upload, activation, health, and rollback runbook |
 | `config.example.yaml` | Example configuration file |
 
 ---
@@ -64,22 +67,22 @@ chmod +x docker-deploy.sh
 ```
 
 **What the script does:**
-- Downloads `docker-compose.local.yml` and `.env.example`
-- Automatically generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
+- Downloads `docker-compose.local.yml`, `.env.example`, and the intent-classifier build context
+- Automatically generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD, classifier admin token)
 - Creates `.env` file with generated secrets
-- Creates necessary data directories (data/, postgres_data/, redis_data/)
+- Creates necessary data and model directories (data/, postgres_data/, redis_data/, intent-models/)
 - **Displays generated credentials** (POSTGRES_PASSWORD, JWT_SECRET, etc.)
 
 **After running the script:**
 ```bash
 # Start services
-docker compose -f docker-compose.local.yml up -d
+docker compose up -d
 
 # View logs
-docker compose -f docker-compose.local.yml logs -f sub2api
+docker compose logs -f sub2api
 
 # If admin password was auto-generated, find it in logs:
-docker compose -f docker-compose.local.yml logs sub2api | grep "admin password"
+docker compose logs sub2api | grep "admin password"
 
 # Access Web UI
 # http://localhost:8080
@@ -177,6 +180,10 @@ SELECT
 - Docker 场景下需把宿主机 Socket 挂载到容器内同路径
 - 详细步骤见：`deploy/DATAMANAGEMENTD_CN.md`
 
+### Intent Classifier（关键词命中后二次审核）
+
+四套 Docker Compose 配置均包含不对宿主机发布端口的 `intent-classifier` 服务。模型目录只读挂载，活动/上一版本指针保存在独立可写卷。上传模型、离线校验、预加载、激活、健康检查和回滚流程见 [`INTENT_CLASSIFIER.md`](./INTENT_CLASSIFIER.md)。
+
 ### Commands
 
 For **local directory version** (docker-compose.local.yml):
@@ -236,6 +243,11 @@ docker compose down -v
 | `SERVER_PORT` | No | `8080` | Server port |
 | `ADMIN_EMAIL` | No | `admin@sub2api.local` | Admin email |
 | `ADMIN_PASSWORD` | No | *(auto-generated)* | Admin password |
+| `INTENT_CLASSIFIER_ADMIN_TOKEN` | **Yes** | - | Loopback model-management token; use a dedicated random value |
+| `INTENT_CLASSIFIER_API_TOKEN` | Recommended | *(empty)* | Classification token; save the same value in Secondary Review settings |
+| `INTENT_CLASSIFIER_MODEL_DIR` | No | `./intent-models` | Host directory mounted into the classifier read-only |
+| `INTENT_CLASSIFIER_ACTIVE_VERSION` | No | *(persisted state)* | Explicit startup override; leave empty to restore the active pointer |
+| `INTENT_CLASSIFIER_INFERENCE_TIMEOUT_MS` | No | `250` | Per-inference timeout; keep below the Secondary Review request timeout |
 | `TZ` | No | `Asia/Shanghai` | Timezone |
 | `GEMINI_OAUTH_CLIENT_ID` | No | *(builtin)* | Google OAuth client ID (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
 | `GEMINI_OAUTH_CLIENT_SECRET` | No | *(builtin)* | Google OAuth client secret (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |

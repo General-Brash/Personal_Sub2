@@ -2,6 +2,7 @@ export default {
   bank: {
     title: 'Bank',
     description: 'Manage temporary credit advances, permanent credit exchanges, and account debt.',
+    operationMode: 'Bank operation type',
     actions: {
       settings: 'Settings',
       reloadStatus: 'Reload bank information',
@@ -18,6 +19,10 @@ export default {
       earliestExpiry: 'Earliest expiry: {date}',
       temporaryDebt: 'Temporary credit debt',
       debtDueAt: 'Permanent credit settlement: {date}',
+    },
+    wallet: {
+      title: 'Wallet',
+      available: 'Current temporary credit',
     },
     advance: {
       title: 'Advance temporary credit',
@@ -43,6 +48,8 @@ export default {
       description: '1 permanent credit exchanges for {rate} temporary credit; the result expires at 00:00 the next day without creating debt.',
       amount: 'Permanent credit to use',
       estimate: 'Estimated temporary credit: {amount}.',
+      rate: 'Rate 1 : {rate}',
+      preview: 'Estimated credit received',
       submitting: 'Exchanging',
       confirm: 'Confirm exchange',
     },

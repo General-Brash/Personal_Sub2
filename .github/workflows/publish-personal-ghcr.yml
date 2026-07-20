@@ -16,7 +16,6 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/general-brash/personal_sub2
-  VERSION: v0.1.6-P1
 
 jobs:
   publish:
@@ -27,6 +26,17 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
+      - name: Resolve image version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(tr -d '\r\n' < backend/cmd/server/VERSION)"
+          if [[ -z "$VERSION" ]]; then
+            echo "backend/cmd/server/VERSION must not be empty" >&2
+            exit 1
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -45,11 +55,11 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
-            type=raw,value=${{ env.VERSION }}
+            type=raw,value=${{ steps.version.outputs.value }}
             type=sha,prefix=sha-,format=long
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.version=${{ steps.version.outputs.value }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       - name: Build and push image
@@ -62,7 +72,7 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           build-args: |
-            VERSION=${{ env.VERSION }}
+            VERSION=${{ steps.version.outputs.value }}
             COMMIT=${{ github.sha }}
           cache-from: type=gha,scope=personal-sub2-amd64
           cache-to: type=gha,mode=max,scope=personal-sub2-amd64

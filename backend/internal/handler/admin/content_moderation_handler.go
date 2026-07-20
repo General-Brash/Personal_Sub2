@@ -68,6 +68,11 @@ type contentModerationHashRequest struct {
 	InputHash string `json:"input_hash"`
 }
 
+type contentModerationSecondaryReviewTestRequest struct {
+	Text           string `json:"text"`
+	MatchedKeyword string `json:"matched_keyword"`
+}
+
 func (h *ContentModerationHandler) GetConfig(c *gin.Context) {
 	cfg, err := h.service.GetConfig(c.Request.Context())
 	if err != nil {
@@ -121,6 +126,55 @@ func (h *ContentModerationHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 	response.Success(c, cfg)
+}
+
+func (h *ContentModerationHandler) GetSecondaryReviewConfig(c *gin.Context) {
+	cfg, err := h.service.GetSecondaryReviewConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, cfg)
+}
+
+func (h *ContentModerationHandler) GetSecondaryReviewStatus(c *gin.Context) {
+	status, err := h.service.GetSecondaryReviewStatus(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, status)
+}
+
+func (h *ContentModerationHandler) UpdateSecondaryReviewConfig(c *gin.Context) {
+	var req service.UpdateContentModerationSecondaryReviewConfigInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	cfg, err := h.service.UpdateSecondaryReviewConfig(c.Request.Context(), req)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, cfg)
+}
+
+func (h *ContentModerationHandler) TestSecondaryReview(c *gin.Context) {
+	var req contentModerationSecondaryReviewTestRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	result, err := h.service.TestSecondaryReview(c.Request.Context(), service.TestContentModerationSecondaryReviewInput{
+		Text:           req.Text,
+		MatchedKeyword: req.MatchedKeyword,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
 }
 
 func (h *ContentModerationHandler) TestAPIKeys(c *gin.Context) {

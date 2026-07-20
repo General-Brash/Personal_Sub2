@@ -32,6 +32,14 @@ func (r *contentModerationRepository) CreateLog(ctx context.Context, log *servic
 	if err != nil {
 		return fmt.Errorf("marshal moderation thresholds: %w", err)
 	}
+	reviewMetadataValue := log.ReviewMetadata
+	if reviewMetadataValue == nil {
+		reviewMetadataValue = map[string]string{}
+	}
+	reviewMetadata, err := json.Marshal(reviewMetadataValue)
+	if err != nil {
+		return fmt.Errorf("marshal moderation review metadata: %w", err)
+	}
 	var userID any
 	if log.UserID != nil {
 		userID = *log.UserID
@@ -52,17 +60,17 @@ func (r *contentModerationRepository) CreateLog(ctx context.Context, log *servic
 INSERT INTO content_moderation_logs (
     request_id, user_id, user_email, api_key_id, api_key_name, group_id, group_name,
     endpoint, provider, model, mode, action, flagged, highest_category, highest_score,
-    category_scores, threshold_snapshot, input_excerpt, upstream_latency_ms, error,
+    category_scores, threshold_snapshot, review_metadata, input_excerpt, upstream_latency_ms, error,
     violation_count, auto_banned, email_sent, queue_delay_ms, matched_keyword
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7,
     $8, $9, $10, $11, $12, $13, $14, $15,
-    $16::jsonb, $17::jsonb, $18, $19, $20,
-    $21, $22, $23, $24, $25
+    $16::jsonb, $17::jsonb, $18::jsonb, $19, $20, $21,
+    $22, $23, $24, $25, $26
 ) RETURNING id, created_at`,
 		log.RequestID, userID, log.UserEmail, apiKeyID, log.APIKeyName, groupID, log.GroupName,
 		log.Endpoint, log.Provider, log.Model, log.Mode, log.Action, log.Flagged, log.HighestCategory, log.HighestScore,
-		string(categoryScores), string(thresholdSnapshot), log.InputExcerpt, latency, log.Error,
+		string(categoryScores), string(thresholdSnapshot), string(reviewMetadata), log.InputExcerpt, latency, log.Error,
 		log.ViolationCount, log.AutoBanned, log.EmailSent, nullableIntPtr(log.QueueDelayMS), log.MatchedKeyword,
 	).Scan(&log.ID, &log.CreatedAt)
 	if err != nil {
@@ -96,7 +104,7 @@ func (r *contentModerationRepository) ListLogs(ctx context.Context, filter servi
 SELECT
     l.id, l.request_id, l.user_id, l.user_email, l.api_key_id, l.api_key_name, l.group_id, l.group_name,
     l.endpoint, l.provider, l.model, l.mode, l.action, l.flagged, l.highest_category, l.highest_score,
-    l.category_scores, l.threshold_snapshot, l.input_excerpt, l.upstream_latency_ms, l.error,
+    l.category_scores, l.threshold_snapshot, l.review_metadata, l.input_excerpt, l.upstream_latency_ms, l.error,
     l.violation_count, l.auto_banned, l.email_sent, COALESCE(u.status, ''), l.queue_delay_ms, l.matched_keyword, l.created_at
 FROM content_moderation_logs l
 LEFT JOIN users u ON u.id = l.user_id `+whereSQL+`
@@ -113,7 +121,7 @@ LIMIT $`+fmt.Sprint(len(queryArgs)-1)+` OFFSET $`+fmt.Sprint(len(queryArgs)),
 	for rows.Next() {
 		var item service.ContentModerationLog
 		var userID, apiKeyID, groupID, latency, queueDelay sql.NullInt64
-		var scoresRaw, thresholdsRaw []byte
+		var scoresRaw, thresholdsRaw, reviewMetadataRaw []byte
 		if err := rows.Scan(
 			&item.ID,
 			&item.RequestID,
@@ -133,6 +141,7 @@ LIMIT $`+fmt.Sprint(len(queryArgs)-1)+` OFFSET $`+fmt.Sprint(len(queryArgs)),
 			&item.HighestScore,
 			&scoresRaw,
 			&thresholdsRaw,
+			&reviewMetadataRaw,
 			&item.InputExcerpt,
 			&latency,
 			&item.Error,
@@ -170,6 +179,11 @@ LIMIT $`+fmt.Sprint(len(queryArgs)-1)+` OFFSET $`+fmt.Sprint(len(queryArgs)),
 		_ = json.Unmarshal(scoresRaw, &item.CategoryScores)
 		item.ThresholdSnapshot = map[string]float64{}
 		_ = json.Unmarshal(thresholdsRaw, &item.ThresholdSnapshot)
+		item.ReviewMetadata = map[string]string{}
+		_ = json.Unmarshal(reviewMetadataRaw, &item.ReviewMetadata)
+		if item.ReviewMetadata == nil {
+			item.ReviewMetadata = map[string]string{}
+		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -258,11 +272,13 @@ func buildContentModerationLogWhere(filter service.ContentModerationLogFilter) (
 	case "hit", "flagged":
 		where = append(where, "l.flagged = TRUE")
 	case "blocked", "block":
-		where = append(where, "l.action IN ('block', 'keyword_block', 'hash_block')")
+		where = append(where, "l.action IN ('block', 'keyword_block', 'hash_block', 'intent_block', 'intent_error_block')")
 	case "pass", "allow":
 		where = append(where, "l.flagged = FALSE AND l.error = ''")
 	case "error":
 		where = append(where, "l.error <> ''")
+	case "intent_review":
+		where = append(where, "l.action = 'intent_review'")
 	}
 	if filter.GroupID != nil {
 		add("l.group_id = $%d", *filter.GroupID)

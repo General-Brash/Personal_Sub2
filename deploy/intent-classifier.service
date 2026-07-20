@@ -1,0 +1,33 @@
+[Unit]
+Description=Sub2API Intent Classifier
+Documentation=https://github.com/General-Brash/Personal_Sub2
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sub2api
+Group=sub2api
+WorkingDirectory=/opt/sub2api/intent-classifier
+EnvironmentFile=/etc/sub2api/intent-classifier.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/bin/sh -c 'test -n "$INTENT_CLASSIFIER_ADMIN_TOKEN"'
+ExecStart=/opt/sub2api/intent-classifier/.venv/bin/intent-classifier serve
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=intent-classifier
+
+# Security hardening. Model packages are immutable at runtime; only the
+# active/previous pointer state is writable.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/var/lib/sub2api/intent-models
+ReadWritePaths=/var/lib/sub2api/intent-classifier-state
+
+[Install]
+WantedBy=multi-user.target

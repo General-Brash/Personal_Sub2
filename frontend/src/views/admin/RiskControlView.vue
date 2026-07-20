@@ -264,7 +264,7 @@
             </div>
 
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-              <Select v-model="filters.result" :options="resultOptions" @change="reloadLogsFromFirstPage" />
+              <Select v-model="filters.result" :options="resultOptions" data-test="result-filter" @change="reloadLogsFromFirstPage" />
               <Select v-model="filters.group_id" :options="groupFilterOptions" @change="reloadLogsFromFirstPage" />
               <Select v-model="filters.endpoint" :options="endpointOptions" @change="reloadLogsFromFirstPage" />
               <input v-model.trim="filters.search" type="search" class="input" :placeholder="t('admin.riskControl.filters.search')" @keyup.enter="reloadLogsFromFirstPage" />
@@ -310,7 +310,12 @@
                       <div class="text-xs text-gray-400">{{ row.provider || '-' }} / {{ row.model || '-' }}</div>
                     </td>
                     <td class="whitespace-nowrap px-5 py-4">
-                      <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="resultBadgeClass(row)">
+                      <span
+                        class="inline-flex rounded-md px-2 py-1 text-xs font-medium"
+                        :class="resultBadgeClass(row)"
+                        :data-action="row.action"
+                        data-test="result-badge"
+                      >
                         {{ resultLabel(row) }}
                       </span>
                     </td>
@@ -347,6 +352,7 @@
                     <td class="w-[320px] max-w-sm px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
                       <button
                         type="button"
+                        data-test="input-detail-button"
                         class="group flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
                         :title="inputSummaryText(row)"
                         @click="openInputDetail(row)"
@@ -1085,6 +1091,22 @@
               <p class="text-xs font-medium text-red-500 dark:text-red-300">{{ t('admin.riskControl.matchedKeyword') }}</p>
               <p class="mt-1 truncate text-sm font-semibold text-red-700 dark:text-red-200" :title="inputDetailRow.matched_keyword">{{ inputDetailRow.matched_keyword }}</p>
             </div>
+            <div v-if="inputDetailReviewMetadata.modelVersion" data-test="review-model-version" class="min-w-0 rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/70">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.secondaryReviewModelVersion') }}</p>
+              <p class="mt-1 break-all text-sm font-semibold text-gray-900 dark:text-white">{{ inputDetailReviewMetadata.modelVersion }}</p>
+            </div>
+            <div v-if="inputDetailReviewMetadata.traceId" data-test="review-trace-id" class="min-w-0 rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/70">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.secondaryReviewTraceId') }}</p>
+              <p class="mt-1 break-all text-sm font-semibold text-gray-900 dark:text-white">{{ inputDetailReviewMetadata.traceId }}</p>
+            </div>
+            <div v-if="inputDetailReviewMetadata.reviewMode" data-test="review-mode" class="min-w-0 rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/70">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.secondaryReviewMode') }}</p>
+              <p class="mt-1 break-all text-sm font-semibold text-gray-900 dark:text-white">{{ secondaryReviewModeText(inputDetailReviewMetadata.reviewMode) }}</p>
+            </div>
+            <div v-if="inputDetailReviewMetadata.fallback" data-test="review-fallback" class="min-w-0 rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/70">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.secondaryReviewFallback') }}</p>
+              <p class="mt-1 break-all text-sm font-semibold text-gray-900 dark:text-white">{{ secondaryReviewFallbackText(inputDetailReviewMetadata.fallback) }}</p>
+            </div>
           </div>
 
           <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800">
@@ -1380,6 +1402,7 @@ const resultOptions = computed<SelectOption[]>(() => [
   { value: '', label: t('admin.riskControl.result.all') },
   { value: 'hit', label: t('admin.riskControl.result.hit') },
   { value: 'blocked', label: t('admin.riskControl.result.blocked') },
+  { value: 'intent_review', label: t('admin.riskControl.result.intentReview') },
   { value: 'pass', label: t('admin.riskControl.result.pass') },
   { value: 'error', label: t('admin.riskControl.result.error') },
 ])
@@ -1579,6 +1602,16 @@ const riskThresholdRows = computed<RiskThresholdRow[]>(() => (
 const inputDetailText = computed(() => {
   if (!inputDetailRow.value) return '-'
   return inputDetailRow.value.input_excerpt || inputDetailRow.value.error || '-'
+})
+
+const inputDetailReviewMetadata = computed(() => {
+  const metadata = inputDetailRow.value?.review_metadata
+  return {
+    modelVersion: metadata?.model_version?.trim() ?? '',
+    traceId: metadata?.trace_id?.trim() ?? '',
+    reviewMode: metadata?.review_mode?.trim() ?? '',
+    fallback: metadata?.fallback?.trim() ?? '',
+  }
 })
 
 const queueUsagePercent = computed(() => `${Math.min(100, Math.max(0, status.value?.queue_usage_percent ?? 0)).toFixed(1)}%`)
@@ -1870,6 +1903,20 @@ function inputSummaryText(row: ContentModerationLog): string {
   return row.input_excerpt || row.error || '-'
 }
 
+function secondaryReviewModeText(value: string): string {
+  if (value === 'off' || value === 'shadow' || value === 'enforce') {
+    return t(`admin.riskControl.secondaryReviewModeValues.${value}`)
+  }
+  return value
+}
+
+function secondaryReviewFallbackText(value: string): string {
+  if (value === 'none' || value === 'keyword_block' || value === 'allow_and_log') {
+    return t(`admin.riskControl.secondaryReviewFallbackValues.${value}`)
+  }
+  return value
+}
+
 function openInputDetail(row: ContentModerationLog) {
   inputDetailRow.value = row
 }
@@ -2118,14 +2165,22 @@ function resultLabel(row: ContentModerationLog): string {
   if (row.action === 'cyber_policy') return t('admin.riskControl.action.cyberPolicy')
   if (row.action === 'keyword_block') return t('admin.riskControl.action.keywordBlock')
   if (row.action === 'block') return t('admin.riskControl.action.block')
+  if (row.action === 'intent_allow') return t('admin.riskControl.action.intentAllow')
+  if (row.action === 'intent_review') return t('admin.riskControl.action.intentReview')
+  if (row.action === 'intent_block') return t('admin.riskControl.action.intentBlock')
+  if (row.action === 'intent_shadow') return t('admin.riskControl.action.intentShadow')
+  if (row.action === 'intent_error') return t('admin.riskControl.action.intentError')
+  if (row.action === 'intent_error_block') return t('admin.riskControl.action.intentErrorBlock')
   if (row.action === 'error' || row.error) return t('admin.riskControl.action.error')
   if (row.flagged) return t('admin.riskControl.result.hit')
   return t('admin.riskControl.result.pass')
 }
 
 function resultBadgeClass(row: ContentModerationLog): string {
-  if (row.action === 'block' || row.action === 'keyword_block' || row.action === 'cyber_policy') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-  if (row.action === 'error' || row.error) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+  if (row.action === 'block' || row.action === 'keyword_block' || row.action === 'cyber_policy' || row.action === 'intent_block' || row.action === 'intent_error_block') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+  if (row.action === 'intent_review') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+  if (row.action === 'intent_shadow') return 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+  if (row.action === 'error' || row.action === 'intent_error' || row.error) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
   if (row.flagged) return 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300'
   return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
 }

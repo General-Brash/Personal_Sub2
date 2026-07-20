@@ -158,6 +158,10 @@ func registerContentModerationRoutes(admin *gin.RouterGroup, h *handler.Handlers
 	{
 		risk.GET("/config", h.Admin.ContentModeration.GetConfig)
 		risk.PUT("/config", h.Admin.ContentModeration.UpdateConfig)
+		risk.GET("/secondary-review/config", h.Admin.ContentModeration.GetSecondaryReviewConfig)
+		risk.GET("/secondary-review/status", h.Admin.ContentModeration.GetSecondaryReviewStatus)
+		risk.PUT("/secondary-review/config", h.Admin.ContentModeration.UpdateSecondaryReviewConfig)
+		risk.POST("/secondary-review/test", h.Admin.ContentModeration.TestSecondaryReview)
 		risk.POST("/api-keys/test", h.Admin.ContentModeration.TestAPIKeys)
 		risk.GET("/status", h.Admin.ContentModeration.GetStatus)
 		risk.GET("/logs", h.Admin.ContentModeration.ListLogs)

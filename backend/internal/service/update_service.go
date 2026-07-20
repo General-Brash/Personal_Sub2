@@ -667,11 +667,8 @@ func compareVersions(current, latest string) int {
 	}
 
 	if currentVersion.personal {
-		if currentVersion.personalSequence < latestVersion.personalSequence {
-			return -1
-		}
-		if currentVersion.personalSequence > latestVersion.personalSequence {
-			return 1
+		if comparison := compareVersionSegments(currentVersion.personalSequence, latestVersion.personalSequence); comparison != 0 {
+			return comparison
 		}
 	}
 	if currentVersion.legacyPersonal != latestVersion.legacyPersonal {
@@ -694,7 +691,7 @@ func compareVersions(current, latest string) int {
 type parsedVersion struct {
 	core             [3]int
 	personal         bool
-	personalSequence int
+	personalSequence []int
 	legacyPersonal   bool
 	legacySequence   int
 }
@@ -704,7 +701,7 @@ func parseVersion(v string) parsedVersion {
 	result := parsedVersion{}
 
 	if suffixIndex := strings.LastIndex(v, "-P"); suffixIndex >= 0 {
-		if sequence, err := strconv.Atoi(v[suffixIndex+2:]); err == nil && sequence >= 0 {
+		if sequence, ok := parseVersionSegments(v[suffixIndex+2:]); ok {
 			result.personal = true
 			result.personalSequence = sequence
 			v = v[:suffixIndex]
@@ -731,4 +728,43 @@ func parseVersion(v string) parsedVersion {
 		}
 	}
 	return result
+}
+
+func parseVersionSegments(value string) ([]int, bool) {
+	parts := strings.Split(value, ".")
+	if len(parts) == 0 {
+		return nil, false
+	}
+
+	segments := make([]int, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			return nil, false
+		}
+		segment, err := strconv.Atoi(part)
+		if err != nil || segment < 0 {
+			return nil, false
+		}
+		segments = append(segments, segment)
+	}
+	return segments, true
+}
+
+func compareVersionSegments(current, latest []int) int {
+	sharedLength := min(len(current), len(latest))
+	for i := 0; i < sharedLength; i++ {
+		if current[i] < latest[i] {
+			return -1
+		}
+		if current[i] > latest[i] {
+			return 1
+		}
+	}
+	if len(current) < len(latest) {
+		return -1
+	}
+	if len(current) > len(latest) {
+		return 1
+	}
+	return 0
 }

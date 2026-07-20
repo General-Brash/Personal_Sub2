@@ -128,22 +128,101 @@
           </dl>
         </section>
 
-        <section class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <article class="card p-5 sm:p-6">
+        <section data-test="bank-operation-card" class="card p-5 sm:p-6">
+          <div class="flex flex-col gap-5">
             <div class="flex items-start gap-3">
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300">
-                <Icon name="download" size="md" />
+              <span
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+                :class="activeBankMode === 'advance'
+                  ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300'
+                  : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300'"
+              >
+                <Icon :name="activeBankMode === 'advance' ? 'download' : 'swap'" size="md" />
               </span>
-              <div>
-                <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('bank.advance.title') }}</h2>
+              <div class="min-w-0">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                  {{ activeBankMode === 'advance' ? t('bank.advance.title') : t('bank.exchange.title') }}
+                </h2>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('bank.advance.description') }}
+                  {{ activeBankMode === 'advance'
+                    ? t('bank.advance.description')
+                    : t('bank.exchange.description', { rate: formatAmount(status.policy.exchange_rate) }) }}
+                </p>
+                <p
+                  v-if="activeBankMode === 'exchange' && exchangeMaintenanceActive"
+                  data-test="exchange-maintenance"
+                  class="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400"
+                >
+                  {{ t('bank.exchangeMaintenance') }}
                 </p>
               </div>
             </div>
 
-            <form class="mt-5 space-y-4" @submit.prevent="submitAdvance">
-              <div>
+            <div
+              data-test="bank-mode-selector"
+              role="tablist"
+              aria-orientation="horizontal"
+              :aria-label="t('bank.operationMode')"
+              class="relative grid min-h-11 grid-cols-2 overflow-hidden rounded-lg bg-gray-100 p-1 dark:bg-dark-700"
+            >
+              <span
+                data-test="bank-mode-indicator"
+                aria-hidden="true"
+                class="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-white shadow-sm transition-transform duration-200 ease-out dark:bg-dark-800"
+                :class="activeBankMode === 'exchange' ? 'translate-x-full' : 'translate-x-0'"
+                style="width: calc(50% - 0.25rem)"
+              />
+              <button
+                id="bank-mode-advance"
+                data-test="bank-mode-advance"
+                ref="advanceModeTab"
+                type="button"
+                role="tab"
+                class="relative z-10 min-w-0 px-3 py-2 text-sm font-medium transition-colors"
+                :class="activeBankMode === 'advance'
+                  ? 'text-primary-700 dark:text-primary-300'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+                :aria-selected="activeBankMode === 'advance'"
+                :tabindex="activeBankMode === 'advance' ? 0 : -1"
+                aria-controls="bank-panel-advance"
+                @keydown="handleBankModeKeydown($event, 'advance')"
+                @click="selectBankMode('advance', true)"
+              >
+                {{ t('bank.advance.title') }}
+              </button>
+              <button
+                id="bank-mode-exchange"
+                data-test="bank-mode-exchange"
+                ref="exchangeModeTab"
+                type="button"
+                role="tab"
+                class="relative z-10 min-w-0 px-3 py-2 text-sm font-medium transition-colors"
+                :class="activeBankMode === 'exchange'
+                  ? 'text-primary-700 dark:text-primary-300'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+                :aria-selected="activeBankMode === 'exchange'"
+                :tabindex="activeBankMode === 'exchange' ? 0 : -1"
+                aria-controls="bank-panel-exchange"
+                @keydown="handleBankModeKeydown($event, 'exchange')"
+                @click="selectBankMode('exchange', true)"
+              >
+                {{ t('bank.exchange.title') }}
+              </button>
+            </div>
+          </div>
+
+          <form
+            id="bank-panel-advance"
+            data-test="advance-flow"
+            role="tabpanel"
+            aria-labelledby="bank-mode-advance"
+            :hidden="activeBankMode !== 'advance'"
+            :aria-hidden="activeBankMode !== 'advance'"
+            class="mt-5 space-y-4"
+            @submit.prevent="submitAdvance"
+          >
+            <div class="grid grid-cols-1 items-stretch gap-3 min-[390px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[390px]:gap-2 sm:gap-4">
+              <div class="min-w-0 rounded-lg border border-gray-200 bg-gray-50/60 p-3 dark:border-dark-600 dark:bg-dark-900/30 sm:p-4">
                 <label for="bank-advance-amount" class="input-label">{{ t('bank.advance.amount') }}</label>
                 <input
                   id="bank-advance-amount"
@@ -152,7 +231,7 @@
                   type="text"
                   inputmode="decimal"
                   autocomplete="off"
-                  class="input mt-1 font-mono"
+                  class="input mt-2 min-w-0 font-mono"
                   :class="advanceError ? 'input-error ring-2 ring-red-500/20' : ''"
                   :disabled="advanceSubmitting || Boolean(status.active_advance) || hasNegativePermanentBalance"
                   :placeholder="`${formatAmount(status.policy.advance_min_amount)} - ${formatAmount(status.policy.advance_max_amount)}`"
@@ -166,46 +245,64 @@
                   }) }}
                 </p>
               </div>
-              <button
-                data-test="advance-submit"
-                type="submit"
-                class="btn btn-primary inline-flex min-h-10 w-full items-center justify-center gap-2"
-                :disabled="!canSubmitAdvance"
-              >
-                <Icon v-if="advanceSubmitting" name="refresh" size="sm" class="animate-spin" />
-                <Icon v-else name="download" size="sm" />
-                {{ advanceSubmitting
-                  ? t('bank.advance.submitting')
-                  : status.active_advance
-                    ? t('bank.advance.activeButton')
-                    : t('bank.advance.confirm') }}
-              </button>
-            </form>
-          </article>
 
-          <article class="card p-5 sm:p-6">
-            <div class="flex items-start gap-3">
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
-                <Icon name="swap" size="md" />
-              </span>
-              <div>
-                <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('bank.exchange.title') }}</h2>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('bank.exchange.description', { rate: formatAmount(status.policy.exchange_rate) }) }}
-                </p>
-                <p
-                  v-if="exchangeMaintenanceActive"
-                  data-test="exchange-maintenance"
-                  class="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400"
-                >
-                  {{ t('bank.exchangeMaintenance') }}
-                </p>
+              <div class="flex min-w-8 items-center justify-center sm:min-w-12">
+                <span class="flex h-9 w-9 rotate-90 items-center justify-center rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300 min-[390px]:rotate-0">
+                  <Icon name="arrowRight" size="sm" />
+                </span>
+              </div>
+
+              <div
+                data-test="advance-wallet"
+                class="flex min-w-0 flex-col justify-between rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/20 sm:p-4"
+              >
+                <div class="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                  <Icon name="creditCard" size="sm" />
+                  <p class="text-sm font-semibold">{{ t('bank.wallet.title') }}</p>
+                </div>
+                <div class="mt-4 min-w-0">
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('bank.wallet.available') }}</p>
+                  <p data-test="advance-wallet-balance" class="mt-1 break-all font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">
+                    {{ formatAmount(status.temporary_credit_available) }}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <form class="mt-5 space-y-4" @submit.prevent="submitExchange">
-              <div>
-                <label for="bank-exchange-amount" class="input-label">{{ t('bank.exchange.amount') }}</label>
+            <button
+              data-test="advance-submit"
+              type="submit"
+              class="btn btn-primary inline-flex min-h-10 w-full items-center justify-center gap-2"
+              :disabled="!canSubmitAdvance"
+            >
+              <Icon v-if="advanceSubmitting" name="refresh" size="sm" class="animate-spin" />
+              <Icon v-else name="download" size="sm" />
+              {{ advanceSubmitting
+                ? t('bank.advance.submitting')
+                : status.active_advance
+                  ? t('bank.advance.activeButton')
+                  : t('bank.advance.confirm') }}
+            </button>
+          </form>
+
+          <form
+            id="bank-panel-exchange"
+            data-test="exchange-flow"
+            role="tabpanel"
+            aria-labelledby="bank-mode-exchange"
+            :hidden="activeBankMode !== 'exchange'"
+            :aria-hidden="activeBankMode !== 'exchange'"
+            class="mt-5 space-y-4"
+            @submit.prevent="submitExchange"
+          >
+            <div
+              data-test="exchange-flow-grid"
+              class="grid grid-cols-1 items-stretch gap-3 min-[390px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[390px]:gap-2 sm:gap-4"
+            >
+              <div data-test="exchange-input-card" class="min-w-0 rounded-lg border border-gray-200 bg-gray-50/60 p-3 dark:border-dark-600 dark:bg-dark-900/30 sm:p-4">
+                <label for="bank-exchange-amount" data-test="exchange-input-label" class="input-label min-w-0 break-words">
+                  {{ t('bank.exchange.amount') }}
+                </label>
                 <input
                   id="bank-exchange-amount"
                   v-model.trim="exchangeAmount"
@@ -213,29 +310,50 @@
                   type="text"
                   inputmode="decimal"
                   autocomplete="off"
-                  class="input mt-1 font-mono"
+                  class="input mt-2 min-w-0 font-mono"
                   :class="exchangeError ? 'input-error ring-2 ring-red-500/20' : ''"
                   :disabled="exchangeSubmitting || hasNegativePermanentBalance || exchangeMaintenanceActive"
-                  placeholder="0.00000000"
+                  placeholder="0.00"
                   @input="exchangeTouched = true"
                 />
                 <p v-if="exchangeError" data-test="exchange-error" class="input-error-text mt-1.5">{{ exchangeError }}</p>
-                <p v-else class="input-hint mt-1.5">
-                  {{ t('bank.exchange.estimate', { amount: estimatedTemporaryAmount }) }}
-                </p>
               </div>
-              <button
-                data-test="exchange-submit"
-                type="submit"
-                class="btn btn-primary inline-flex min-h-10 w-full items-center justify-center gap-2"
-                :disabled="!canSubmitExchange"
+
+              <div class="flex min-w-12 flex-col items-center justify-center gap-2 sm:min-w-20">
+                <p data-test="exchange-rate" class="max-w-full break-words text-center text-xs font-medium text-gray-500 dark:text-gray-400 min-[390px]:max-w-20">
+                  {{ t('bank.exchange.rate', { rate: formatAmount(status.policy.exchange_rate) }) }}
+                </p>
+                <span class="flex h-9 w-9 rotate-90 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300 min-[390px]:rotate-0">
+                  <Icon name="arrowRight" size="sm" />
+                </span>
+              </div>
+
+              <output
+                for="bank-exchange-amount"
+                data-test="exchange-preview"
+                aria-live="polite"
+                class="flex min-w-0 flex-col justify-center rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/20 sm:p-4"
               >
-                <Icon v-if="exchangeSubmitting" name="refresh" size="sm" class="animate-spin" />
-                <Icon v-else name="swap" size="sm" />
-                {{ exchangeSubmitting ? t('bank.exchange.submitting') : t('bank.exchange.confirm') }}
-              </button>
-            </form>
-          </article>
+                <p data-test="exchange-preview-label" class="min-w-0 break-words text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('bank.exchange.preview') }}
+                </p>
+                <p data-test="exchange-preview-amount" class="mt-2 break-all font-mono text-lg font-semibold text-indigo-700 dark:text-indigo-300">
+                  {{ formatAmount(estimatedTemporaryAmount) }}
+                </p>
+              </output>
+            </div>
+
+            <button
+              data-test="exchange-submit"
+              type="submit"
+              class="btn btn-primary inline-flex min-h-10 w-full items-center justify-center gap-2"
+              :disabled="!canSubmitExchange"
+            >
+              <Icon v-if="exchangeSubmitting" name="refresh" size="sm" class="animate-spin" />
+              <Icon v-else name="swap" size="sm" />
+              {{ exchangeSubmitting ? t('bank.exchange.submitting') : t('bank.exchange.confirm') }}
+            </button>
+          </form>
         </section>
 
         <section class="card overflow-hidden">
@@ -349,7 +467,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   exchangePermanentForTemporary,
@@ -365,6 +483,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { formatMoneyDisplay } from '@/utils/format'
 
 interface SettingsForm {
   advance_min_amount: string
@@ -393,6 +512,11 @@ const status = ref<BankStatus | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)
 const loadFailed = ref(false)
+type BankMode = 'advance' | 'exchange'
+
+const activeBankMode = ref<BankMode>('advance')
+const advanceModeTab = ref<HTMLButtonElement | null>(null)
+const exchangeModeTab = ref<HTMLButtonElement | null>(null)
 const advanceAmount = ref('')
 const exchangeAmount = ref('')
 const advanceTouched = ref(false)
@@ -633,31 +757,27 @@ function parseScaledAmount(value: string | null | undefined): bigint | null {
 }
 
 function formatAmount(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return zeroAmount
-  const raw = String(value).trim()
-  const match = raw.match(/^([+-]?)(\d+)(?:\.(\d*))?$/)
-  if (!match) return zeroAmount
-  const sign = match[1] === '-' ? '-' : ''
-  const integer = match[2].replace(/^0+(?=\d)/, '') || '0'
-  const fraction = (match[3] || '').slice(0, 8).padEnd(8, '0')
-  const isZero = /^0+$/.test(integer) && /^0+$/.test(fraction)
-  return `${isZero ? '' : sign}${integer}.${fraction}`
+  return formatMoneyDisplay(value, 2)
 }
 
 function formatSignedAmount(value: string | number | null | undefined): string {
   const formatted = formatAmount(value)
-  return !formatted.startsWith('-') && formatted !== zeroAmount ? `+${formatted}` : formatted
+  return !formatted.startsWith('-') && formatted !== '0.00' ? `+${formatted}` : formatted
 }
 
 function isNegative(value: string | number | null | undefined): boolean {
-  return String(value ?? '').trim().startsWith('-') && formatAmount(value) !== zeroAmount
+  const raw = String(value ?? '').trim()
+  return /^-\d+(?:\.\d*)?$/.test(raw) && /[1-9]/.test(raw)
 }
 
 function deltaClass(value: string, debt = false): string {
-  const amount = Number(value)
-  if (!Number.isFinite(amount) || amount === 0) return 'text-gray-500 dark:text-gray-400'
-  if (debt) return amount > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
-  return amount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+  const raw = value.trim()
+  if (!/^[+-]?\d+(?:\.\d*)?$/.test(raw) || !/[1-9]/.test(raw)) {
+    return 'text-gray-500 dark:text-gray-400'
+  }
+  const positive = !raw.startsWith('-')
+  if (debt) return positive ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
+  return positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
 }
 
 function multiplyAmounts(left: string, right: string | undefined): string {
@@ -748,6 +868,28 @@ function isExchangeMaintenanceWindow(now = new Date()): boolean {
 
 function updateExchangeMaintenanceState(now = new Date()): void {
   exchangeMaintenanceActive.value = isExchangeMaintenanceWindow(now)
+}
+
+function selectBankMode(mode: BankMode, focusTab = false): void {
+  activeBankMode.value = mode
+  if (!focusTab) return
+
+  void nextTick(() => {
+    const tab = mode === 'advance' ? advanceModeTab.value : exchangeModeTab.value
+    tab?.focus()
+  })
+}
+
+function handleBankModeKeydown(event: KeyboardEvent, currentMode: BankMode): void {
+  let nextMode: BankMode | null = null
+  if (event.key === 'Home') nextMode = 'advance'
+  else if (event.key === 'End') nextMode = 'exchange'
+  else if (event.key === 'ArrowRight') nextMode = currentMode === 'advance' ? 'exchange' : 'advance'
+  else if (event.key === 'ArrowLeft') nextMode = currentMode === 'advance' ? 'exchange' : 'advance'
+  if (!nextMode) return
+
+  event.preventDefault()
+  selectBankMode(nextMode, true)
 }
 
 function scheduleExchangeMaintenanceRefresh(): void {

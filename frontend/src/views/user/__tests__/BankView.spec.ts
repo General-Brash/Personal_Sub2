@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 
 import type { BankPolicy, BankStatus } from '@/api/bank'
 import BankView from '../BankView.vue'
@@ -7,11 +7,13 @@ import BankView from '../BankView.vue'
 enableAutoUnmount(afterEach)
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
 const {
   authState,
+  englishBankLabels,
   exchangePermanentForTemporary,
   getBankSettings,
   getBankStatus,
@@ -22,6 +24,10 @@ const {
   updateBankSettings,
 } = vi.hoisted(() => ({
   authState: { isAdmin: false, refreshUser: vi.fn() },
+  englishBankLabels: {
+    'bank.exchange.amount': 'Permanent credit to use',
+    'bank.exchange.preview': 'Estimated credit received',
+  },
   exchangePermanentForTemporary: vi.fn(),
   getBankSettings: vi.fn(),
   getBankStatus: vi.fn(),
@@ -54,8 +60,10 @@ vi.mock('vue-i18n', async () => {
     ...actual,
     useI18n: () => ({
       locale: { value: 'zh' },
-      t: (key: string, values?: Record<string, string | number>) =>
-        [key, ...Object.values(values ?? {})].join(':'),
+      t: (key: string, values?: Record<string, string | number>) => {
+        const englishLabel = (englishBankLabels as Record<string, string>)[key]
+        return englishLabel ?? [key, ...Object.values(values ?? {})].join(':')
+      },
     }),
   }
 })
@@ -91,8 +99,9 @@ const baseStatus = (overrides: Partial<BankStatus> = {}): BankStatus => ({
   ...overrides,
 })
 
-const mountView = async () => {
+const mountView = async (attachTo?: Element) => {
   const wrapper = mount(BankView, {
+    ...(attachTo ? { attachTo } : {}),
     global: {
       stubs: {
         AppLayout: { template: '<main><slot /></main>' },
@@ -106,6 +115,10 @@ const mountView = async () => {
   })
   await flushPromises()
   return wrapper
+}
+
+const showExchangeMode = async (wrapper: VueWrapper) => {
+  await wrapper.get('[data-test="bank-mode-exchange"]').trigger('click')
 }
 
 describe('BankView', () => {
@@ -131,7 +144,7 @@ describe('BankView', () => {
     updateBankSettings.mockResolvedValue(policy)
   })
 
-  it('renders all balances and ledger deltas with exactly eight decimals', async () => {
+  it('renders all visible balances and ledger deltas with exactly two decimals', async () => {
     getBankStatus.mockResolvedValueOnce(baseStatus({
       permanent_balance: '12.3',
       temporary_credit_available: '3.5',
@@ -140,11 +153,105 @@ describe('BankView', () => {
 
     const wrapper = await mountView()
 
-    expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('12.30000000')
-    expect(wrapper.get('[data-test="temporary-balance"]').text()).toBe('3.50000000')
-    expect(wrapper.get('[data-test="temporary-debt"]').text()).toBe('1.00000000')
-    expect(wrapper.get('[data-test="ledger-row"]').text()).toContain('-1.25000000')
-    expect(wrapper.get('[data-test="ledger-row"]').text()).toContain('+2.50000000')
+    expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('12.30')
+    expect(wrapper.get('[data-test="temporary-balance"]').text()).toBe('3.50')
+    expect(wrapper.get('[data-test="temporary-debt"]').text()).toBe('1.00')
+    expect(wrapper.get('[data-test="ledger-row"]').text()).toContain('-1.25')
+    expect(wrapper.get('[data-test="ledger-row"]').text()).toContain('+2.50')
+  })
+
+  it('switches both operations inside one segmented card and renders directional flow targets', async () => {
+    const wrapper = await mountView()
+    const advanceTab = wrapper.get('[data-test="bank-mode-advance"]')
+    const exchangeTab = wrapper.get('[data-test="bank-mode-exchange"]')
+    const advancePanel = wrapper.get(`#${advanceTab.attributes('aria-controls')}`)
+    const exchangePanel = wrapper.get(`#${exchangeTab.attributes('aria-controls')}`)
+
+    expect(wrapper.findAll('[data-test="bank-operation-card"]')).toHaveLength(1)
+    expect(advanceTab.attributes('aria-selected')).toBe('true')
+    expect(exchangeTab.attributes('aria-selected')).toBe('false')
+    expect(wrapper.get('[data-test="bank-mode-indicator"]').classes()).toContain('translate-x-0')
+    expect(advancePanel.attributes('aria-hidden')).toBe('false')
+    expect(exchangePanel.attributes('aria-hidden')).toBe('true')
+    expect(advancePanel.attributes('hidden')).toBeUndefined()
+    expect(wrapper.get('[data-test="advance-wallet-balance"]').text()).toBe('3.50')
+    expect(exchangePanel.attributes('hidden')).toBeDefined()
+
+    await showExchangeMode(wrapper)
+
+    expect(advanceTab.attributes('aria-selected')).toBe('false')
+    expect(exchangeTab.attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-test="bank-mode-indicator"]').classes()).toContain('translate-x-full')
+    expect(advancePanel.attributes('aria-hidden')).toBe('true')
+    expect(exchangePanel.attributes('aria-hidden')).toBe('false')
+    expect(advancePanel.attributes('hidden')).toBeDefined()
+    expect(exchangePanel.attributes('hidden')).toBeUndefined()
+    expect(wrapper.get('[data-test="exchange-rate"]').text()).toContain('2.00')
+    expect(wrapper.get('[data-test="exchange-preview"]').element.tagName).toBe('OUTPUT')
+    expect(wrapper.get('[data-test="exchange-preview-amount"]').text()).toBe('0.00')
+  })
+
+  it('keeps roving focus and selection synchronized for click and every tab navigation key', async () => {
+    const wrapper = await mountView(document.body)
+    const advanceTab = wrapper.get('[data-test="bank-mode-advance"]')
+    const exchangeTab = wrapper.get('[data-test="bank-mode-exchange"]')
+
+    expect(advanceTab.attributes('tabindex')).toBe('0')
+    expect(exchangeTab.attributes('tabindex')).toBe('-1')
+
+    await exchangeTab.trigger('click')
+    await flushPromises()
+    expect(exchangeTab.attributes('aria-selected')).toBe('true')
+    expect(advanceTab.attributes('tabindex')).toBe('-1')
+    expect(exchangeTab.attributes('tabindex')).toBe('0')
+    expect(document.activeElement).toBe(exchangeTab.element)
+
+    await exchangeTab.trigger('keydown', { key: 'ArrowLeft' })
+    await flushPromises()
+    expect(advanceTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(advanceTab.element)
+
+    await advanceTab.trigger('keydown', { key: 'ArrowLeft' })
+    await flushPromises()
+    expect(exchangeTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(exchangeTab.element)
+
+    await exchangeTab.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(advanceTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(advanceTab.element)
+
+    await advanceTab.trigger('keydown', { key: 'End' })
+    await flushPromises()
+    expect(exchangeTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(exchangeTab.element)
+
+    await exchangeTab.trigger('keydown', { key: 'Home' })
+    await flushPromises()
+    expect(advanceTab.attributes('aria-selected')).toBe('true')
+    expect(advanceTab.attributes('tabindex')).toBe('0')
+    expect(exchangeTab.attributes('tabindex')).toBe('-1')
+    expect(document.activeElement).toBe(advanceTab.element)
+  })
+
+  it('stacks the English exchange flow below 390px without constraining long labels or input width', async () => {
+    vi.stubGlobal('innerWidth', 320)
+    const wrapper = await mountView()
+    await showExchangeMode(wrapper)
+
+    const flowGrid = wrapper.get('[data-test="exchange-flow-grid"]')
+    const inputLabel = wrapper.get('[data-test="exchange-input-label"]')
+    const previewLabel = wrapper.get('[data-test="exchange-preview-label"]')
+
+    expect(window.innerWidth).toBe(320)
+    expect(flowGrid.classes()).toContain('grid-cols-1')
+    expect(flowGrid.classes()).toContain('min-[390px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]')
+    expect(wrapper.get('[data-test="exchange-input-card"]').classes()).toContain('min-w-0')
+    expect(wrapper.get('[data-test="exchange-input"]').classes()).toContain('min-w-0')
+    expect(inputLabel.text()).toBe('Permanent credit to use')
+    expect(inputLabel.classes()).toContain('break-words')
+    expect(previewLabel.text()).toBe('Estimated credit received')
+    expect(previewLabel.classes()).toContain('break-words')
   })
 
   it('hides bank settings from non-admin users', async () => {
@@ -159,7 +266,7 @@ describe('BankView', () => {
     const input = wrapper.get('[data-test="advance-input"]')
 
     await input.setValue('4.99999999')
-    expect(wrapper.get('[data-test="advance-error"]').text()).toContain('5.00000000')
+    expect(wrapper.get('[data-test="advance-error"]').text()).toContain('5.00')
     expect(wrapper.get('[data-test="advance-submit"]').attributes('disabled')).toBeDefined()
 
     await input.setValue('5.00000000')
@@ -195,18 +302,19 @@ describe('BankView', () => {
 
   it('shows insufficient permanent balance and exchanges a valid amount', async () => {
     const wrapper = await mountView()
+    await showExchangeMode(wrapper)
     const input = wrapper.get('[data-test="exchange-input"]')
 
     await input.setValue('12.34567891')
     expect(wrapper.get('[data-test="exchange-error"]').text()).toContain('bank.validation.insufficientPermanent')
     expect(wrapper.get('[data-test="exchange-submit"]').attributes('disabled')).toBeDefined()
 
-    await input.setValue('1.25000000')
-    expect(wrapper.text()).toContain('2.50000000')
+    await input.setValue('1.23456789')
+    expect(wrapper.get('[data-test="exchange-preview-amount"]').text()).toBe('2.47')
     await wrapper.get('[data-test="exchange-submit"]').trigger('submit')
     await flushPromises()
 
-    expect(exchangePermanentForTemporary).toHaveBeenCalledWith('1.25000000', expect.stringMatching(/^bank-exchange-/))
+    expect(exchangePermanentForTemporary).toHaveBeenCalledWith('1.23456789', expect.stringMatching(/^bank-exchange-/))
     expect(showSuccess).toHaveBeenCalledWith('bank.messages.exchangeSucceeded')
     expect(refreshUser).toHaveBeenCalledTimes(2)
   })
@@ -220,6 +328,7 @@ describe('BankView', () => {
     vi.setSystemTime(new Date(timestamp))
 
     const wrapper = await mountView()
+    await showExchangeMode(wrapper)
     const input = wrapper.get('[data-test="exchange-input"]')
 
     expect(input.attributes('disabled') !== undefined).toBe(blocked)
@@ -235,6 +344,7 @@ describe('BankView', () => {
   it('rechecks the exchange window immediately before submitting', async () => {
     vi.setSystemTime(new Date('2026-07-19T15:54:59.000Z'))
     const wrapper = await mountView()
+    await showExchangeMode(wrapper)
     const input = wrapper.get('[data-test="exchange-input"]')
 
     await input.setValue('1.00000000')
@@ -256,6 +366,7 @@ describe('BankView', () => {
       message: 'server-only message',
     })
     const wrapper = await mountView()
+    await showExchangeMode(wrapper)
 
     await wrapper.get('[data-test="exchange-input"]').setValue('1.00000000')
     await wrapper.get('[data-test="exchange-submit"]').trigger('submit')
@@ -270,6 +381,7 @@ describe('BankView', () => {
       permanent_balance: '999999999999.99999998',
     }))
     const wrapper = await mountView()
+    await showExchangeMode(wrapper)
 
     await wrapper.get('[data-test="exchange-input"]').setValue('999999999999.99999999')
 
@@ -282,8 +394,9 @@ describe('BankView', () => {
 
     const wrapper = await mountView()
 
-    expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('-0.00000001')
+    expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('0.00')
     expect(wrapper.get('[data-test="advance-input"]').attributes('disabled')).toBeDefined()
+    await showExchangeMode(wrapper)
     expect(wrapper.get('[data-test="exchange-input"]').attributes('disabled')).toBeDefined()
   })
 
@@ -325,7 +438,7 @@ describe('BankView', () => {
     await flushPromises()
 
     expect(getBankStatus).toHaveBeenCalledTimes(2)
-    expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('12.34567890')
+    expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('12.35')
   })
 
   it('reuses an advance idempotency key after a lost response and rotates it after success', async () => {
@@ -358,7 +471,7 @@ describe('BankView', () => {
 
     const wrapper = await mountView()
 
-    expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('12.34567890')
+    expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('12.35')
     expect(showError).not.toHaveBeenCalled()
   })
 })

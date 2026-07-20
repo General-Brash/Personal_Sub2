@@ -15,6 +15,8 @@ docker run -d \
 
 ## Docker Compose
 
+The repository Compose files also include the internal intent classifier used for keyword-triggered secondary review. Its model directory is mounted read-only, its lifecycle state uses a persistent volume, and port `8080` is not published to the host. See [`INTENT_CLASSIFIER.md`](./INTENT_CLASSIFIER.md) for model validation, activation, readiness, and rollback commands.
+
 ```yaml
 version: '3.8'
 

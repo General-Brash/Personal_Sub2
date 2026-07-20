@@ -3,6 +3,84 @@ import { apiClient } from '../client'
 export type ModerationMode = 'off' | 'observe' | 'pre_block'
 export type KeywordBlockingMode = 'keyword_only' | 'keyword_and_api' | 'api_only'
 export type ContentModerationModelFilterType = 'all' | 'include' | 'exclude'
+export type SecondaryReviewMode = 'off' | 'shadow' | 'enforce'
+export type SecondaryReviewOnError = 'keyword_block' | 'allow_and_log'
+export type SecondaryReviewLabel = 'benign' | 'actionable_probe'
+export type SecondaryReviewStatusCode =
+  | 'ready'
+  | 'not_configured'
+  | 'model_not_ready'
+  | 'model_version_mismatch'
+  | 'http_401'
+  | 'http_403'
+  | 'upstream_4xx'
+  | 'upstream_5xx'
+  | 'timeout'
+  | 'invalid_response'
+  | 'busy'
+  | 'unavailable'
+export type SecondaryReviewTestFailureReason =
+  | 'SECONDARY_REVIEW_HTTP_401'
+  | 'SECONDARY_REVIEW_HTTP_403'
+  | 'SECONDARY_REVIEW_UPSTREAM_4XX'
+  | 'SECONDARY_REVIEW_UPSTREAM_5XX'
+  | 'SECONDARY_REVIEW_TIMEOUT'
+  | 'SECONDARY_REVIEW_INVALID_RESPONSE'
+  | 'SECONDARY_REVIEW_BUSY'
+  | 'SECONDARY_REVIEW_UNAVAILABLE'
+
+export interface SecondaryReviewConfig {
+  mode: SecondaryReviewMode
+  endpoint: string
+  token_configured: boolean
+  token_masked: string
+  expected_model_version: string
+  timeout_ms: number
+  review_threshold: number
+  block_threshold: number
+  on_error: SecondaryReviewOnError
+}
+
+export interface UpdateSecondaryReviewConfig {
+  mode?: SecondaryReviewMode
+  endpoint?: string
+  token?: string
+  clear_token?: boolean
+  expected_model_version?: string
+  timeout_ms?: number
+  review_threshold?: number
+  block_threshold?: number
+  on_error?: SecondaryReviewOnError
+}
+
+export interface TestSecondaryReviewPayload {
+  text: string
+  matched_keyword: string
+}
+
+export interface SecondaryReviewTestResult {
+  label: SecondaryReviewLabel
+  score: number
+  model_version: string
+  trace_id?: string
+  latency_ms: number
+  would_review: boolean
+  would_block: boolean
+}
+
+export interface SecondaryReviewTestFailure {
+  reason: SecondaryReviewTestFailureReason
+  message: string
+}
+
+export interface SecondaryReviewStatus {
+  live: boolean
+  ready: boolean
+  code: SecondaryReviewStatusCode
+  active_model_version: string | null
+  preprocessing_version: string | null
+  latency_ms: number
+}
 
 export interface ContentModerationModelFilter {
   type: ContentModerationModelFilterType
@@ -185,6 +263,7 @@ export interface ContentModerationLog {
   matched_keyword: string
   category_scores: Record<string, number>
   threshold_snapshot: Record<string, number>
+  review_metadata: Record<string, string>
   input_excerpt: string
   upstream_latency_ms: number | null
   error: string
@@ -281,6 +360,36 @@ export async function clearFlaggedHashes(): Promise<ClearFlaggedHashesResponse> 
   return data
 }
 
+export async function getSecondaryReviewConfig(): Promise<SecondaryReviewConfig> {
+  const { data } = await apiClient.get<SecondaryReviewConfig>('/admin/risk-control/secondary-review/config')
+  return data
+}
+
+export async function getSecondaryReviewStatus(): Promise<SecondaryReviewStatus> {
+  const { data } = await apiClient.get<SecondaryReviewStatus>('/admin/risk-control/secondary-review/status')
+  return data
+}
+
+export async function updateSecondaryReviewConfig(
+  payload: UpdateSecondaryReviewConfig
+): Promise<SecondaryReviewConfig> {
+  const { data } = await apiClient.put<SecondaryReviewConfig>(
+    '/admin/risk-control/secondary-review/config',
+    payload
+  )
+  return data
+}
+
+export async function testSecondaryReview(
+  payload: TestSecondaryReviewPayload
+): Promise<SecondaryReviewTestResult> {
+  const { data } = await apiClient.post<SecondaryReviewTestResult>(
+    '/admin/risk-control/secondary-review/test',
+    payload
+  )
+  return data
+}
+
 export const riskControlAPI = {
   getConfig,
   updateConfig,
@@ -290,6 +399,10 @@ export const riskControlAPI = {
   unbanUser,
   deleteFlaggedHash,
   clearFlaggedHashes,
+  getSecondaryReviewConfig,
+  getSecondaryReviewStatus,
+  updateSecondaryReviewConfig,
+  testSecondaryReview,
 }
 
 export default riskControlAPI

@@ -120,4 +120,19 @@ export type {
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
-export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
+export type {
+  ContentModerationConfig,
+  ContentModerationLog,
+  ModerationMode,
+  SecondaryReviewConfig,
+  SecondaryReviewLabel,
+  SecondaryReviewMode,
+  SecondaryReviewOnError,
+  SecondaryReviewStatus,
+  SecondaryReviewStatusCode,
+  SecondaryReviewTestFailure,
+  SecondaryReviewTestFailureReason,
+  SecondaryReviewTestResult,
+  TestSecondaryReviewPayload,
+  UpdateSecondaryReviewConfig,
+} from './riskControl'

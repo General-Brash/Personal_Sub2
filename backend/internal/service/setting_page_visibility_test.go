@@ -74,6 +74,7 @@ func TestSettingService_GetAllSettings_PageVisibilityHonorsExplicitFalse(t *test
 	svc := NewSettingService(&settingGetAllRepoStub{values: map[string]string{
 		SettingKeyUserChannelStatusEnabled:      "false",
 		SettingKeyUserSubscriptionsEnabled:      "false",
+		SettingKeyAdminSubscriptionsEnabled:     "false",
 		SettingKeyAdminPromoCodesEnabled:        "false",
 		SettingKeyAdminChannelManagementEnabled: "false",
 	}}, &config.Config{})

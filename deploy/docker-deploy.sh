@@ -3,9 +3,9 @@
 # Sub2API Docker Deployment Preparation Script
 # =============================================================================
 # This script prepares deployment files for Sub2API:
-#   - Downloads docker-compose.local.yml and .env.example
-#   - Generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
-#   - Creates necessary data directories
+#   - Downloads docker-compose.local.yml, .env.example, and classifier source
+#   - Generates secure application and classifier secrets
+#   - Creates application data and classifier model directories
 #
 # After running this script, you can start services with:
 #   docker-compose up -d
@@ -22,6 +22,7 @@ NC='\033[0m' # No Color
 
 # GitHub raw content base URL
 GITHUB_RAW_URL="https://raw.githubusercontent.com/General-Brash/Personal_Sub2/main/deploy"
+GITHUB_ARCHIVE_URL="https://github.com/General-Brash/Personal_Sub2/archive/refs/heads/main.tar.gz"
 
 # Print colored message
 print_info() {
@@ -63,6 +64,10 @@ main() {
         print_error "openssl is not installed. Please install openssl first."
         exit 1
     fi
+    if ! command_exists tar; then
+        print_error "tar is not installed. Please install tar first."
+        exit 1
+    fi
 
     # Check if deployment already exists
     if [ -f "docker-compose.yml" ] && [ -f ".env" ]; then
@@ -96,6 +101,25 @@ main() {
     fi
     print_success "Downloaded .env.example"
 
+    # Download the classifier build context required by docker-compose.yml.
+    print_info "Downloading intent classifier source..."
+    CLASSIFIER_TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/sub2api-classifier.XXXXXX")
+    trap 'rm -rf "${CLASSIFIER_TEMP_DIR}"' EXIT
+    if command_exists curl; then
+        curl -fsSL "${GITHUB_ARCHIVE_URL}" -o "${CLASSIFIER_TEMP_DIR}/repo.tar.gz"
+    else
+        wget -q "${GITHUB_ARCHIVE_URL}" -O "${CLASSIFIER_TEMP_DIR}/repo.tar.gz"
+    fi
+    tar -xzf "${CLASSIFIER_TEMP_DIR}/repo.tar.gz" -C "${CLASSIFIER_TEMP_DIR}"
+    CLASSIFIER_SOURCE=$(find "${CLASSIFIER_TEMP_DIR}" -type d -path '*/services/intent-classifier' -print -quit)
+    if [ -z "${CLASSIFIER_SOURCE}" ]; then
+        print_error "Intent classifier source was not found in the downloaded archive."
+        exit 1
+    fi
+    mkdir -p services/intent-classifier
+    cp -R "${CLASSIFIER_SOURCE}/." services/intent-classifier/
+    print_success "Downloaded intent classifier source"
+
     # Generate .env file with auto-generated secrets
     print_info "Generating secure secrets..."
     echo ""
@@ -104,6 +128,7 @@ main() {
     JWT_SECRET=$(generate_secret)
     TOTP_ENCRYPTION_KEY=$(generate_secret)
     POSTGRES_PASSWORD=$(generate_secret)
+    INTENT_CLASSIFIER_ADMIN_TOKEN=$(generate_secret)
 
     # Create .env from .env.example
     cp .env.example .env
@@ -114,16 +139,20 @@ main() {
         sed -i "s/^JWT_SECRET=.*/JWT_SECRET=${JWT_SECRET}/" .env
         sed -i "s/^TOTP_ENCRYPTION_KEY=.*/TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}/" .env
         sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${POSTGRES_PASSWORD}/" .env
+        sed -i "s/^INTENT_CLASSIFIER_ADMIN_TOKEN=.*/INTENT_CLASSIFIER_ADMIN_TOKEN=${INTENT_CLASSIFIER_ADMIN_TOKEN}/" .env
+        sed -i "s|^INTENT_CLASSIFIER_BUILD_CONTEXT=.*|INTENT_CLASSIFIER_BUILD_CONTEXT=./services/intent-classifier|" .env
     else
         # BSD sed (macOS)
         sed -i '' "s/^JWT_SECRET=.*/JWT_SECRET=${JWT_SECRET}/" .env
         sed -i '' "s/^TOTP_ENCRYPTION_KEY=.*/TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}/" .env
         sed -i '' "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${POSTGRES_PASSWORD}/" .env
+        sed -i '' "s/^INTENT_CLASSIFIER_ADMIN_TOKEN=.*/INTENT_CLASSIFIER_ADMIN_TOKEN=${INTENT_CLASSIFIER_ADMIN_TOKEN}/" .env
+        sed -i '' "s|^INTENT_CLASSIFIER_BUILD_CONTEXT=.*|INTENT_CLASSIFIER_BUILD_CONTEXT=./services/intent-classifier|" .env
     fi
 
     # Create data directories
     print_info "Creating data directories..."
-    mkdir -p data postgres_data redis_data
+    mkdir -p data postgres_data redis_data intent-models
     print_success "Created data directories"
 
     # Set secure permissions for .env file (readable/writable only by owner)
@@ -150,6 +179,8 @@ main() {
     echo "  data/                     - Application data (will be created on first run)"
     echo "  postgres_data/            - PostgreSQL data"
     echo "  redis_data/               - Redis data"
+    echo "  intent-models/            - Versioned classifier model packages (read-only in container)"
+    echo "  services/intent-classifier/ - Classifier image build context"
     echo ""
     echo "Next steps:"
     echo "  1. (Optional) Edit .env to customize configuration"

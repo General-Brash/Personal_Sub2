@@ -9,13 +9,21 @@ type contentModerationKeywordMatcher struct {
 	edges           []contentModerationKeywordEdge
 	rootTransitions [256]int32
 	keywords        []string
+	keywordRules    []contentModerationKeywordRule
 }
 
 type contentModerationKeywordNode struct {
-	failure     int32
-	bestKeyword int32
-	edgeStart   uint32
-	edgeCount   uint16
+	failure         int32
+	terminalKeyword int32
+	bestKeyword     int32
+	edgeStart       uint32
+	edgeCount       uint16
+}
+
+type contentModerationKeywordRule struct {
+	lower                []byte
+	requireLeftBoundary  bool
+	requireRightBoundary bool
 }
 
 type contentModerationKeywordEdge struct {
@@ -37,13 +45,16 @@ func newContentModerationKeywordMatcher(keywords []string) *contentModerationKey
 	buildNodes := []contentModerationKeywordNode{newContentModerationKeywordNode()}
 	buildEdges := make([]contentModerationKeywordBuildEdge, 0)
 	originalKeywords := append([]string(nil), keywords...)
+	keywordRules := make([]contentModerationKeywordRule, len(keywords))
 
 	for keywordIndex, keyword := range keywords {
 		if keyword == "" {
 			continue
 		}
+		rule := newContentModerationKeywordRule(keyword)
+		keywordRules[keywordIndex] = rule
 		state := int32(0)
-		for _, label := range []byte(strings.ToLower(keyword)) {
+		for _, label := range rule.lower {
 			next := contentModerationKeywordBuildTransition(buildNodes, buildEdges, state, label)
 			if next < 0 {
 				next = int32(len(buildNodes))
@@ -57,7 +68,8 @@ func newContentModerationKeywordMatcher(keywords []string) *contentModerationKey
 			}
 			state = next
 		}
-		if current := buildNodes[state].bestKeyword; current < 0 || int32(keywordIndex) < current {
+		if current := buildNodes[state].terminalKeyword; current < 0 || int32(keywordIndex) < current {
+			buildNodes[state].terminalKeyword = int32(keywordIndex)
 			buildNodes[state].bestKeyword = int32(keywordIndex)
 		}
 	}
@@ -123,11 +135,12 @@ func newContentModerationKeywordMatcher(keywords []string) *contentModerationKey
 		edges:           edges,
 		rootTransitions: rootTransitions,
 		keywords:        originalKeywords,
+		keywordRules:    keywordRules,
 	}
 }
 
 func newContentModerationKeywordNode() contentModerationKeywordNode {
-	return contentModerationKeywordNode{bestKeyword: -1}
+	return contentModerationKeywordNode{terminalKeyword: -1, bestKeyword: -1}
 }
 
 func contentModerationKeywordBuildFirstEdge(node contentModerationKeywordNode) int32 {
@@ -168,11 +181,10 @@ func (m *contentModerationKeywordMatcher) Match(text string) (string, bool) {
 	if m == nil || text == "" || len(m.nodes) == 0 || len(m.keywords) == 0 {
 		return "", false
 	}
-	lower := strings.ToLower(text)
+	lowerBytes := []byte(strings.ToLower(text))
 	state := int32(0)
 	bestKeyword := int32(-1)
-	for index := 0; index < len(lower); index++ {
-		label := lower[index]
+	for index, label := range lowerBytes {
 		for {
 			next := m.next(state, label)
 			if next != 0 {
@@ -184,7 +196,14 @@ func (m *contentModerationKeywordMatcher) Match(text string) (string, bool) {
 			}
 			state = m.nodes[state].failure
 		}
-		bestKeyword = minKeywordIndex(bestKeyword, m.nodes[state].bestKeyword)
+		candidate := m.nodes[state].bestKeyword
+		if candidate >= 0 && (bestKeyword < 0 || candidate < bestKeyword) {
+			if m.keywordMatchesAt(candidate, lowerBytes, index) {
+				bestKeyword = candidate
+			} else {
+				bestKeyword = m.bestBoundaryMatch(state, lowerBytes, index, bestKeyword)
+			}
+		}
 		if bestKeyword == 0 {
 			return m.keywords[0], true
 		}
@@ -193,6 +212,64 @@ func (m *contentModerationKeywordMatcher) Match(text string) (string, bool) {
 		return "", false
 	}
 	return m.keywords[bestKeyword], true
+}
+
+func (m *contentModerationKeywordMatcher) bestBoundaryMatch(
+	state int32,
+	text []byte,
+	end int,
+	bestKeyword int32,
+) int32 {
+	for state != 0 {
+		candidate := m.nodes[state].terminalKeyword
+		if candidate >= 0 && (bestKeyword < 0 || candidate < bestKeyword) && m.keywordMatchesAt(candidate, text, end) {
+			bestKeyword = candidate
+		}
+		state = m.nodes[state].failure
+	}
+	return bestKeyword
+}
+
+func (m *contentModerationKeywordMatcher) keywordMatchesAt(keywordIndex int32, text []byte, end int) bool {
+	if keywordIndex < 0 || int(keywordIndex) >= len(m.keywordRules) {
+		return false
+	}
+	rule := m.keywordRules[keywordIndex]
+	start := end + 1 - len(rule.lower)
+	return contentModerationKeywordRuleMatchesAt(text, start, rule)
+}
+
+func newContentModerationKeywordRule(keyword string) contentModerationKeywordRule {
+	lower := []byte(strings.ToLower(keyword))
+	rule := contentModerationKeywordRule{lower: lower}
+	if len(lower) == 0 {
+		return rule
+	}
+	// ASCII terms use word boundaries; non-ASCII endpoints retain substring matching.
+	rule.requireLeftBoundary = isASCIIWordByte(lower[0])
+	rule.requireRightBoundary = isASCIIWordByte(lower[len(lower)-1])
+	return rule
+}
+
+func contentModerationKeywordRuleMatchesAt(text []byte, start int, rule contentModerationKeywordRule) bool {
+	if len(rule.lower) == 0 || start < 0 || start+len(rule.lower) > len(text) {
+		return false
+	}
+	end := start + len(rule.lower)
+	if rule.requireLeftBoundary && start > 0 && isASCIIWordByte(text[start-1]) {
+		return false
+	}
+	if rule.requireRightBoundary && end < len(text) && isASCIIWordByte(text[end]) {
+		return false
+	}
+	return true
+}
+
+func isASCIIWordByte(value byte) bool {
+	return value >= 'a' && value <= 'z' ||
+		value >= 'A' && value <= 'Z' ||
+		value >= '0' && value <= '9' ||
+		value == '_'
 }
 
 func (m *contentModerationKeywordMatcher) next(state int32, label byte) int32 {

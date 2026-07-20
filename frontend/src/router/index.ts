@@ -638,6 +638,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/secondary-review',
+    name: 'AdminSecondaryReview',
+    component: () => import('@/views/admin/SecondaryReviewView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Secondary Review',
+      titleKey: 'admin.secondaryReview.title',
+      descriptionKey: 'admin.secondaryReview.description',
+      requiresRiskControl: true
+    }
+  },
+  {
     path: '/admin/usage',
     name: 'AdminUsage',
     component: () => import('@/views/admin/UsageView.vue'),

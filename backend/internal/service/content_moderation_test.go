@@ -429,10 +429,21 @@ func TestNormalizeBlockedKeywords_TrimsDedupesAndCaps(t *testing.T) {
 	require.Equal(t, []string{"foo", "bar", "baz"}, out)
 }
 
-func TestMatchBlockedKeyword_CaseInsensitiveSubstring(t *testing.T) {
+func TestMatchBlockedKeyword_CaseInsensitiveBoundaries(t *testing.T) {
 	keyword, hit := matchBlockedKeyword("Please ignore the BadWord here", []string{"badword"})
 	require.True(t, hit)
 	require.Equal(t, "badword", keyword)
+
+	_, hit = matchBlockedKeyword("review the history", []string{"hi"})
+	require.False(t, hit)
+
+	keyword, hit = matchBlockedKeyword("say HI!", []string{"hi"})
+	require.True(t, hit)
+	require.Equal(t, "hi", keyword)
+
+	keyword, hit = matchBlockedKeyword("这是敏感词", []string{"敏感"})
+	require.True(t, hit)
+	require.Equal(t, "敏感", keyword)
 
 	_, hit = matchBlockedKeyword("clean prompt", []string{"badword"})
 	require.False(t, hit)
@@ -489,6 +500,48 @@ func TestContentModerationCheck_PreBlockKeywordHitSkipsUpstreamCall(t *testing.T
 	require.Equal(t, ContentModerationActionKeywordBlock, logs[0].Action)
 	require.Equal(t, contentModerationKeywordCategory, logs[0].HighestCategory)
 	require.Equal(t, "secret-token", logs[0].MatchedKeyword, "blocked log must record which keyword was hit")
+}
+
+func TestContentModerationCheck_KeywordBoundaryAvoidsWordSubstringFalsePositive(t *testing.T) {
+	cfg := defaultContentModerationConfig()
+	cfg.Enabled = true
+	cfg.Mode = ContentModerationModePreBlock
+	cfg.KeywordBlockingMode = ContentModerationKeywordModeKeywordOnly
+	cfg.BlockedKeywords = []string{"hi"}
+	rawCfg, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	repo := &contentModerationTestRepo{}
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyRiskControlEnabled:      "true",
+			SettingKeyContentModerationConfig: string(rawCfg),
+		}},
+		repo,
+		&contentModerationTestHashCache{},
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+
+	decision, err := svc.Check(context.Background(), ContentModerationCheckInput{
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"please review history"}]}`),
+	})
+	require.NoError(t, err)
+	require.True(t, decision.Allowed)
+	require.False(t, decision.Blocked)
+
+	decision, err = svc.Check(context.Background(), ContentModerationCheckInput{
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"please say HI!"}]}`),
+	})
+	require.NoError(t, err)
+	require.True(t, decision.Blocked)
+	require.Equal(t, ContentModerationActionKeywordBlock, decision.Action)
+	logs := requireContentModerationLogCount(t, repo, 1)
+	require.Equal(t, "hi", logs[0].MatchedKeyword)
 }
 
 func TestContentModerationCheck_KeywordsIgnoredInObserveMode(t *testing.T) {
