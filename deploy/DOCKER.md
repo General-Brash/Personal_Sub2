@@ -1,6 +1,6 @@
-# Sub2API Docker Image
+# Personal_Sub2 Container Image
 
-Sub2API is an AI API Gateway Platform for distributing and managing AI product subscription API quotas.
+Personal_Sub2 is a personally developed and maintained edition based on the `1.6.0` codebase.
 
 ## Quick Start
 
@@ -10,7 +10,7 @@ docker run -d \
   -p 8080:8080 \
   -e DATABASE_URL="postgres://user:pass@host:5432/sub2api" \
   -e REDIS_URL="redis://host:6379" \
-  weishaw/sub2api:latest
+  ghcr.io/general-brash/personal_sub2:latest
 ```
 
 ## Docker Compose
@@ -22,7 +22,7 @@ version: '3.8'
 
 services:
   sub2api:
-    image: weishaw/sub2api:latest
+    image: ghcr.io/general-brash/personal_sub2:latest
     ports:
       - "8080:8080"
     environment:
@@ -67,12 +67,11 @@ volumes:
 
 ## Tags
 
-- `latest` - Latest stable release
-- `x.y.z` - Specific version
-- `x.y` - Latest patch of minor version
-- `x` - Latest minor of major version
+- `latest` - Latest personal-edition image
+- `v0.1.6-Pn` - Personal release image
+- `sha-<commit>` - Image built from a specific commit
 
 ## Links
 
-- [GitHub Repository](https://github.com/weishaw/sub2api)
-- [Documentation](https://github.com/weishaw/sub2api#readme)
+- [GitHub Repository](https://github.com/General-Brash/Personal_Sub2)
+- [Documentation](https://github.com/General-Brash/Personal_Sub2#readme)

@@ -1,4 +1,4 @@
-# sub2api 项目开发指南
+# Personal_Sub2 项目开发指南
 
 > 本文档记录项目环境配置、常见坑点和注意事项，供 Claude Code 和团队成员参考。
 
@@ -6,8 +6,7 @@
 
 | 项目 | 说明 |
 |------|------|
-| **上游仓库** | Wei-Shaw/sub2api |
-| **Fork 仓库** | bayma888/sub2api-bmai |
+| **项目定位** | Personal_Sub2，基于 `1.6.0` 代码基线开发并独立维护 |
 | **技术栈** | Go 后端 (Ent ORM + Gin) + Vue3 前端 (pnpm) |
 | **数据库** | PostgreSQL 16 + Redis |
 | **包管理** | 后端: go modules, 前端: **pnpm**（不是 npm） |
@@ -34,8 +33,8 @@
 ### 开发工具
 
 ```bash
-# golangci-lint v2.7
-go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7
+# golangci-lint v2.9
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.9
 
 # pnpm (前端包管理)
 npm install -g pnpm
@@ -47,13 +46,13 @@ npm install -g pnpm
 
 | Workflow | 触发条件 | 检查内容 |
 |----------|----------|----------|
-| **backend-ci.yml** | push, pull_request | 单元测试 + 集成测试 + golangci-lint v2.7 |
+| **backend-ci.yml** | push, pull_request | 单元测试 + 集成测试 + golangci-lint v2.9 |
 | **security-scan.yml** | push, pull_request, 每周一 | govulncheck + gosec + pnpm audit |
 | **release.yml** | tag `v*` | 构建发布（PR 不触发） |
 
 ### CI 要求
 
-- Go 版本必须是 **1.25.7**
+- Go 版本必须是 **1.26.5**
 - 前端使用 `pnpm install --frozen-lockfile`，必须提交 `pnpm-lock.yaml`
 
 ### 本地测试命令
@@ -78,7 +77,7 @@ cd frontend && pnpm install
 
 **问题**：`package.json` 新增依赖后，CI 的 `pnpm install --frozen-lockfile` 失败。
 
-**原因**：上游 CI 使用 pnpm，lock 文件不同步会报错。
+**原因**：项目 CI 使用 pnpm，lock 文件不同步会报错。
 
 **解决**：
 ```bash
@@ -227,7 +226,7 @@ git add ent/       # 生成的文件也要提交
 
 **关键经验**：
 - 如果某模型已被软件内置默认映射覆盖，通常不需要额外再加透传；
-- 但当上游模型更新快于本仓库默认映射时，**手动批量添加透传映射**是最简单、最低风险的临时兜底方案；
+- 但当外部模型更新快于本仓库默认映射时，**手动批量添加透传映射**是最简单、最低风险的临时兜底方案；
 - 批量操作前尽量按平台分组，不要混选不同平台账号。
 
 ---
@@ -264,18 +263,17 @@ psql -U sub2api -h 127.0.0.1 -d sub2api -f migration.sql
 ### Git 操作
 
 ```bash
-# 同步上游
-git fetch upstream
+# 同步个人仓库 main
+git fetch origin
 git checkout main
-git merge upstream/main
-git push origin main
+git pull --ff-only origin main
 
 # 创建功能分支
 git checkout -b feature/xxx
 
 # Rebase 到最新 main
-git fetch upstream
-git rebase upstream/main
+git fetch origin
+git rebase origin/main
 ```
 
 ### 前端操作
@@ -313,7 +311,7 @@ golangci-lint run ./...
 ## 六、项目结构速览
 
 ```
-sub2api-bmai/
+Personal_Sub2/
 ├── backend/
 │   ├── cmd/server/          # 主程序入口
 │   ├── ent/                 # Ent ORM 生成代码
@@ -334,13 +332,11 @@ sub2api-bmai/
 │   │   └── i18n/            # 国际化
 │   ├── package.json         # 依赖配置
 │   └── pnpm-lock.yaml       # pnpm 锁文件（必须提交）
-└── .claude/
-    └── CLAUDE.md            # 本文档
+└── DEV_GUIDE.md             # 本文档
 ```
 
 ## 七、参考资源
 
-- [上游仓库](https://github.com/Wei-Shaw/sub2api)
 - [Ent 文档](https://entgo.io/docs/getting-started)
 - [Vue3 文档](https://vuejs.org/)
 - [pnpm 文档](https://pnpm.io/)

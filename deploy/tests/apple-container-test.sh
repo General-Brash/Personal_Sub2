@@ -36,6 +36,8 @@ mkdir -p "${STATE_DIR}"
 "${SCRIPT}" init
 [[ "$(stat -f '%Lp' "${ENV_FILE}")" == "600" ]] || fail "init did not create a mode-600 env file"
 grep -q '^POSTGRES_PASSWORD=change_this_secure_password$' "${ENV_FILE}" && fail "init retained the placeholder password"
+grep -q '^APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/general-brash/personal_sub2:latest$' "${ENV_FILE}" || \
+    fail "init did not retain the Personal_Sub2 image default"
 
 chmod 644 "${ENV_FILE}"
 if "${SCRIPT}" up >/dev/null 2>&1; then

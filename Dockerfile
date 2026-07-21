@@ -94,9 +94,12 @@ FROM ${POSTGRES_IMAGE} AS pg-client
 FROM ${ALPINE_IMAGE}
 
 # Labels
-LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"
-LABEL description="Sub2API - AI API Gateway Platform"
-LABEL org.opencontainers.image.source="https://github.com/Wei-Shaw/sub2api"
+LABEL maintainer="General-Brash <github.com/General-Brash>"
+LABEL org.opencontainers.image.title="Personal_Sub2"
+LABEL org.opencontainers.image.description="Personal_Sub2 - personal edition based on the 1.6.0 codebase"
+LABEL org.opencontainers.image.source="https://github.com/General-Brash/Personal_Sub2"
+LABEL org.opencontainers.image.documentation="https://github.com/General-Brash/Personal_Sub2#readme"
+LABEL org.opencontainers.image.url="https://github.com/General-Brash/Personal_Sub2"
 
 # Install runtime dependencies
 RUN apk add --no-cache \
