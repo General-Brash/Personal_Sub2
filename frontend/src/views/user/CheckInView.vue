@@ -64,7 +64,7 @@
           </div>
         </section>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-7">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <div class="card min-w-0 p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.currentStreak') }}</p>
             <p data-test="current-streak" class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
@@ -72,21 +72,15 @@
             </p>
           </div>
           <div class="card p-4">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.nextReward') }}</p>
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.nextDayReward') }}</p>
             <p data-test="next-reward" class="mt-2 min-w-0 break-all text-lg font-semibold text-primary-600 dark:text-primary-400">
-              {{ t('checkin.rewardDay', { day: status.next_reward_day }) }} / {{ formatCredit(status.next_reward_amount) }}
+              {{ t('checkin.rewardDay', { day: status.next_reward_day }) }} / {{ formatCredit(status.next_reward_amount) }}+{{ formatCredit(status.next_permanent_reward_amount || '0.00000000') }}
             </p>
           </div>
           <div class="card p-4">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.permanentReward') }}</p>
-            <p data-test="next-permanent-reward" class="mt-2 min-w-0 break-all text-lg font-semibold text-indigo-600 dark:text-indigo-400">
-              {{ t('checkin.rewardDay', { day: status.next_reward_day }) }} / {{ formatCredit(status.next_permanent_reward_amount || '0.00000000') }}
-            </p>
-          </div>
-          <div class="card p-4">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.monthlyPermanentRewardTotal') }}</p>
-            <p data-test="monthly-permanent-reward-total" class="mt-2 min-w-0 break-all text-lg font-semibold text-indigo-600 dark:text-indigo-400">
-              {{ formatCredit(status.monthly_permanent_reward_total || '0.00000000') }}
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.monthlyCumulativeReward') }}</p>
+            <p data-test="monthly-reward-total" class="mt-2 min-w-0 break-all text-lg font-semibold text-gray-900 dark:text-white">
+              {{ formatCredit(status.monthly_reward_total) }}+{{ formatCredit(status.monthly_permanent_reward_total || '0.00000000') }}
             </p>
           </div>
           <div class="card min-w-0 p-4">
@@ -99,12 +93,6 @@
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.expiresAt') }}</p>
             <p class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
               {{ formatExpiry(status.temporary_credit_earliest_expires_at) }}
-            </p>
-          </div>
-          <div class="card p-4">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.monthlyRewardTotal') }}</p>
-            <p data-test="monthly-reward-total" class="mt-2 min-w-0 break-all text-lg font-semibold text-gray-900 dark:text-white">
-              {{ formatCredit(status.monthly_reward_total) }}
             </p>
           </div>
         </div>

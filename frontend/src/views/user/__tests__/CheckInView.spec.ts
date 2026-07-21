@@ -114,12 +114,11 @@ describe('CheckInView', () => {
 
     expect(wrapper.findAll('[data-test="calendar-cell"]')).toHaveLength(42)
     expect(wrapper.get('[data-test="current-streak"]').text()).toContain('8')
-    expect(wrapper.get('[data-test="next-reward"]').text()).toContain('7')
-    expect(wrapper.get('[data-test="next-reward"]').text()).toContain('$2.50')
-    expect(wrapper.get('[data-test="next-permanent-reward"]').text()).toContain('$0.25')
+    expect(wrapper.get('[data-test="next-reward"]').text()).toBe('checkin.rewardDay:7 / $2.50+$0.25')
     expect(wrapper.get('[data-test="temporary-credit"]').text()).toContain('$5.25')
-    expect(wrapper.get('[data-test="monthly-reward-total"]').text()).toContain('$12.50')
-    expect(wrapper.get('[data-test="monthly-permanent-reward-total"]').text()).toContain('$0.75')
+    expect(wrapper.get('[data-test="monthly-reward-total"]').text()).toBe('$12.50+$0.75')
+    expect(wrapper.find('[data-test="next-permanent-reward"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="monthly-permanent-reward-total"]').exists()).toBe(false)
 
     const checkedDay = wrapper.get('[data-test="calendar-cell"][data-date="2026-07-03"]')
     expect(checkedDay.text()).toContain('$1.25')

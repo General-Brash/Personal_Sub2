@@ -10,6 +10,8 @@ describe('check-in locales', () => {
     expect(messages.checkin).toMatchObject({
       title: 'Daily Check-in',
       checkIn: 'Check in',
+      nextDayReward: 'Next-day reward',
+      monthlyCumulativeReward: 'Monthly cumulative rewards',
       previousMonth: 'Previous month',
       nextMonth: 'Next month',
     })
@@ -25,6 +27,8 @@ describe('check-in locales', () => {
     expect(messages.checkin).toMatchObject({
       title: '每日签到',
       checkIn: '立即签到',
+      nextDayReward: '次日奖励',
+      monthlyCumulativeReward: '本月累计奖励',
       previousMonth: '上个月',
       nextMonth: '下个月',
     })

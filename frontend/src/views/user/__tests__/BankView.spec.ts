@@ -279,6 +279,28 @@ describe('BankView', () => {
     expect(refreshUser).toHaveBeenCalledTimes(2)
   })
 
+  it('previews a valid advance beside the current wallet balance', async () => {
+    const wrapper = await mountView()
+    const input = wrapper.get('[data-test="advance-input"]')
+    const walletBalance = wrapper.get('[data-test="advance-wallet-balance"]')
+
+    expect(walletBalance.text()).toBe('3.50')
+    expect(wrapper.find('[data-test="advance-wallet-addition"]').exists()).toBe(false)
+
+    await input.setValue('5')
+    expect(walletBalance.text()).toBe('3.50+5.00')
+    expect(wrapper.get('[data-test="advance-wallet-addition"]').text()).toBe('+5.00')
+
+    await input.setValue('4.99999999')
+    expect(walletBalance.text()).toBe('3.50')
+
+    await input.setValue('invalid')
+    expect(walletBalance.text()).toBe('3.50')
+
+    await input.setValue('')
+    expect(walletBalance.text()).toBe('3.50')
+  })
+
   it('blocks another advance while one is active', async () => {
     getBankStatus.mockResolvedValueOnce(baseStatus({
       temporary_debt: '5.00000000',

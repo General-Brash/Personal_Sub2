@@ -688,6 +688,7 @@ export default {
         requestErrorRateMaxPercentHint: '请求错误率高于此值时显示为红色（默认：5%）',
         upstreamErrorRateMaxPercent: '上游错误率最大值（%）',
         upstreamErrorRateMaxPercentHint: '上游错误率高于此值时显示为红色（默认：5%）',
+        dataCleanup: '数据清理',
         advancedSettings: '高级设置',
         dataRetention: '数据保留策略',
         enableCleanup: '启用数据清理',

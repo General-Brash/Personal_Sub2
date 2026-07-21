@@ -263,7 +263,7 @@
                 <div class="mt-4 min-w-0">
                   <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('bank.wallet.available') }}</p>
                   <p data-test="advance-wallet-balance" class="mt-1 break-all font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">
-                    {{ formatAmount(status.temporary_credit_available) }}
+                    <span>{{ formatAmount(status.temporary_credit_available) }}</span><span v-if="advanceWalletAddition" data-test="advance-wallet-addition">+{{ advanceWalletAddition }}</span>
                   </p>
                 </div>
               </div>
@@ -575,6 +575,12 @@ const canSubmitAdvance = computed(() => Boolean(
   && advanceAmount.value
   && !advanceError.value,
 ))
+
+const advanceWalletAddition = computed(() => {
+  const value = parseScaledAmount(advanceAmount.value)
+  if (value === null || value <= 0n || advanceError.value) return ''
+  return formatAmount(advanceAmount.value)
+})
 
 const canSubmitExchange = computed(() => Boolean(
   status.value

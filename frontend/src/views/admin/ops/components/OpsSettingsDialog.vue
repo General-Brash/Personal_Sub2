@@ -430,8 +430,66 @@ async function saveAllSettings() {
         </div>
       </div>
 
+      <!-- 数据清理（独立入口；高级设置中的原入口暂时保留） -->
+      <details data-testid="ops-data-cleanup-section" class="rounded-2xl bg-gray-50 dark:bg-dark-700/50">
+        <summary class="cursor-pointer p-4 text-sm font-semibold text-gray-900 dark:text-white">
+          {{ t('admin.ops.settings.dataCleanup') }}
+        </summary>
+        <div class="space-y-3 px-4 pb-4">
+          <div class="flex items-center justify-between">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.ops.settings.enableCleanup') }}</label>
+            <Toggle v-model="advancedSettings.data_retention.cleanup_enabled" />
+          </div>
+
+          <div v-if="advancedSettings.data_retention.cleanup_enabled">
+            <label class="input-label">{{ t('admin.ops.settings.cleanupSchedule') }}</label>
+            <input
+              v-model="advancedSettings.data_retention.cleanup_schedule"
+              type="text"
+              class="input"
+              placeholder="0 2 * * *"
+            />
+            <p class="mt-1 text-xs text-gray-500">{{ t('admin.ops.settings.cleanupScheduleHint') }}</p>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.errorLogRetentionDays') }}</label>
+              <input
+                v-model.number="advancedSettings.data_retention.error_log_retention_days"
+                type="number"
+                min="0"
+                max="365"
+                class="input"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.minuteMetricsRetentionDays') }}</label>
+              <input
+                v-model.number="advancedSettings.data_retention.minute_metrics_retention_days"
+                type="number"
+                min="0"
+                max="365"
+                class="input"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.hourlyMetricsRetentionDays') }}</label>
+              <input
+                v-model.number="advancedSettings.data_retention.hourly_metrics_retention_days"
+                type="number"
+                min="0"
+                max="365"
+                class="input"
+              />
+            </div>
+          </div>
+          <p class="text-xs text-gray-500">{{ t('admin.ops.settings.retentionDaysHint') }}</p>
+        </div>
+      </details>
+
       <!-- 高级设置 -->
-      <details class="rounded-2xl bg-gray-50 dark:bg-dark-700/50">
+      <details data-testid="ops-advanced-settings" class="rounded-2xl bg-gray-50 dark:bg-dark-700/50">
         <summary class="cursor-pointer p-4 text-sm font-semibold text-gray-900 dark:text-white">
           {{ t('admin.ops.settings.advancedSettings') }}
         </summary>

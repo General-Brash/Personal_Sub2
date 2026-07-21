@@ -688,6 +688,7 @@ export default {
         requestErrorRateMaxPercentHint: 'Request error rate above this value will be displayed in red (default: 5%)',
         upstreamErrorRateMaxPercent: 'Upstream Error Rate Maximum (%)',
         upstreamErrorRateMaxPercentHint: 'Upstream error rate above this value will be displayed in red (default: 5%)',
+        dataCleanup: 'Data Cleanup',
         advancedSettings: 'Advanced Settings',
         dataRetention: 'Data Retention Policy',
         enableCleanup: 'Enable Data Cleanup',
