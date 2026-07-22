@@ -859,7 +859,7 @@ func (s *BankService) RepayAtomic(
 		return nil, err
 	}
 	if unusedProcessed || forcedSettled {
-		balance, debt, dueAt, err = lockBankUser(ctx, tx, userID)
+		balance, debt, _, err = lockBankUser(ctx, tx, userID)
 		if err != nil {
 			return nil, err
 		}

@@ -187,10 +187,6 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	return plan, nil
 }
 
-func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
-	return s.createOrderInTxWithProduct(ctx, req, user, plan, nil, cfg, orderAmount, limitAmount, feeRate, payAmount, sel)
-}
-
 func (s *PaymentService) createOrderInTxWithProduct(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, product *dbent.CurrencyProduct, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {

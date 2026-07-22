@@ -171,16 +171,30 @@ RETURNING reserved_count, consumed_count`,
 	if err != nil {
 		return fmt.Errorf("reserve purchase counter: %w", err)
 	}
-	defer rows.Close()
+	closeRows := func() error {
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close reserved purchase counter rows: %w", err)
+		}
+		return nil
+	}
 	if rows.Next() {
 		var reserved, consumed int
 		if err := rows.Scan(&reserved, &consumed); err != nil {
+			_ = rows.Close()
 			return fmt.Errorf("scan reserved purchase counter: %w", err)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("reserve purchase counter: %w", err)
+		}
+		return closeRows()
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
 		return fmt.Errorf("reserve purchase counter: %w", err)
+	}
+	if err := closeRows(); err != nil {
+		return err
 	}
 	code := "TOTAL_PURCHASE_LIMIT_EXCEEDED"
 	if periodType == purchasePeriodDaily {
@@ -230,16 +244,30 @@ RETURNING consumed_count`, userID, productType, productID, periodType, periodSta
 	if err != nil {
 		return fmt.Errorf("consume immediate purchase counter: %w", err)
 	}
-	defer rows.Close()
+	closeRows := func() error {
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close immediate purchase counter rows: %w", err)
+		}
+		return nil
+	}
 	if rows.Next() {
 		var consumed int
 		if err := rows.Scan(&consumed); err != nil {
+			_ = rows.Close()
 			return fmt.Errorf("scan immediate purchase counter: %w", err)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("consume immediate purchase counter: %w", err)
+		}
+		return closeRows()
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
 		return fmt.Errorf("consume immediate purchase counter: %w", err)
+	}
+	if err := closeRows(); err != nil {
+		return err
 	}
 	code := "TOTAL_PURCHASE_LIMIT_EXCEEDED"
 	if periodType == purchasePeriodDaily {
@@ -272,18 +300,35 @@ RETURNING user_id, product_type, product_id, daily_period_start`
 	if err != nil {
 		return nil, fmt.Errorf("transition purchase reservation: %w", err)
 	}
-	defer rows.Close()
+	closeRows := func() error {
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close purchase reservation transition rows: %w", err)
+		}
+		return nil
+	}
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
+			_ = rows.Close()
 			return nil, fmt.Errorf("transition purchase reservation: %w", err)
+		}
+		if err := closeRows(); err != nil {
+			return nil, err
 		}
 		return nil, nil
 	}
 	record := &purchaseReservationRecord{}
 	if err := rows.Scan(&record.userID, &record.productType, &record.productID, &record.dailyPeriodStart); err != nil {
+		_ = rows.Close()
 		return nil, fmt.Errorf("scan purchase reservation transition: %w", err)
 	}
-	return record, rows.Err()
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, fmt.Errorf("transition purchase reservation: %w", err)
+	}
+	if err := closeRows(); err != nil {
+		return nil, err
+	}
+	return record, nil
 }
 
 func updatePurchaseCounter(ctx context.Context, db paymentPurchaseSQL, record *purchaseReservationRecord, periodType string, reservedDelta, consumedDelta int) error {
@@ -538,18 +583,22 @@ WHERE user_id = $1
 	if err != nil {
 		return nil, fmt.Errorf("query purchase limit usage: %w", err)
 	}
-	defer rows.Close()
 	used := make(map[purchaseCounterKey]int)
 	for rows.Next() {
 		var key purchaseCounterKey
 		var count int
 		if err := rows.Scan(&key.productType, &key.productID, &key.periodType, &count); err != nil {
+			_ = rows.Close()
 			return nil, fmt.Errorf("scan purchase limit usage: %w", err)
 		}
 		used[key] = count
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
 		return nil, fmt.Errorf("query purchase limit usage: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close purchase limit usage rows: %w", err)
 	}
 	result := make(map[string]ProductPurchaseLimitUsage)
 	for key, count := range used {

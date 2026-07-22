@@ -65,7 +65,7 @@ func TestCreateOrderInTx_WritesProviderSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := &PaymentService{entClient: client}
-	order, err := svc.createOrderInTx(
+	order, err := svc.createOrderInTxWithProduct(
 		ctx,
 		CreateOrderRequest{
 			UserID:      user.ID,
@@ -79,6 +79,7 @@ func TestCreateOrderInTx_WritesProviderSnapshot(t *testing.T) {
 			Email:    user.Email,
 			Username: user.Username,
 		},
+		nil,
 		nil,
 		&PaymentConfig{
 			MaxPendingOrders: 3,

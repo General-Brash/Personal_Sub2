@@ -71,11 +71,14 @@ func TestTemporaryCreditRepositoryCreateGrantNeverRunsGenericDebtOffset(t *testi
 			// The grant insert is the only expected SQL. Any generic debt, loan,
 			// or bank-ledger mutation makes this test fail as an unexpected call.
 			mock.ExpectBegin()
-			mock.ExpectQuery("INSERT INTO temporary_credit_grants").
+			mock.ExpectQuery(`(?s)INSERT INTO temporary_credit_grants\s+\(user_id, source, checkin_id, mall_purchase_id, daily_subscription_id, scheduled_date,\s+amount, remaining_amount, available_at, expires_at, notes, granted_by\)\s+VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$7, \$8, \$9, \$10, \$11\)`).
 				WithArgs(
 					userID,
 					tt.input.Source,
 					tt.checkinID,
+					nil,
+					nil,
+					nil,
 					"4.00000000",
 					now,
 					sqlmock.AnyArg(),
