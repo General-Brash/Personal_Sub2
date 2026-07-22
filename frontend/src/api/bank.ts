@@ -13,6 +13,9 @@ export interface BankPolicy {
   debt_grace_days: number
   debt_conversion_ratio: BankAmount
   exchange_rate: BankAmount
+  unused_advance_debt_reduction_ratio: BankAmount
+  early_repay_temporary_ratio: BankAmount
+  early_repay_permanent_ratio: BankAmount
 }
 
 export interface BankAdvance {
@@ -67,6 +70,17 @@ export interface BankExchangeResult {
   expires_at: string
 }
 
+export type BankRepaySource = 'temporary' | 'permanent'
+
+export interface BankRepayResult {
+  source: BankRepaySource
+  credit_spent: BankAmount
+  debt_reduced: BankAmount
+  temporary_debt: BankAmount
+  temporary_credit_available: BankAmount
+  permanent_balance: BankAmount
+}
+
 export async function getBankStatus(): Promise<BankStatus> {
   const response = await apiClient.get<BankStatus>('/bank/status')
   return response.data
@@ -96,6 +110,19 @@ export async function exchangePermanentForTemporary(
   return response.data
 }
 
+export async function repayBankDebt(
+  source: BankRepaySource,
+  amount: BankAmount,
+  idempotencyKey: string,
+): Promise<BankRepayResult> {
+  const response = await apiClient.post<BankRepayResult>(
+    '/bank/repay',
+    { source, amount },
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  )
+  return response.data
+}
+
 export async function getBankSettings(): Promise<BankPolicy> {
   const response = await apiClient.get<BankPolicy>('/admin/settings/bank')
   return response.data
@@ -117,6 +144,7 @@ export const bankAPI = {
   getStatus: getBankStatus,
   advance: requestBankAdvance,
   exchange: exchangePermanentForTemporary,
+  repay: repayBankDebt,
   getSettings: getBankSettings,
   updateSettings: updateBankSettings,
 }

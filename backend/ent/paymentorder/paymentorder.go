@@ -50,6 +50,18 @@ const (
 	FieldSubscriptionGroupID = "subscription_group_id"
 	// FieldSubscriptionDays holds the string denoting the subscription_days field in the database.
 	FieldSubscriptionDays = "subscription_days"
+	// FieldCurrencyProductID holds the string denoting the currency_product_id field in the database.
+	FieldCurrencyProductID = "currency_product_id"
+	// FieldCurrencyProductName holds the string denoting the currency_product_name field in the database.
+	FieldCurrencyProductName = "currency_product_name"
+	// FieldCurrencyProductPaymentPrice holds the string denoting the currency_product_payment_price field in the database.
+	FieldCurrencyProductPaymentPrice = "currency_product_payment_price"
+	// FieldCurrencyProductCreditedAmount holds the string denoting the currency_product_credited_amount field in the database.
+	FieldCurrencyProductCreditedAmount = "currency_product_credited_amount"
+	// FieldDailyPurchaseLimitSnapshot holds the string denoting the daily_purchase_limit_snapshot field in the database.
+	FieldDailyPurchaseLimitSnapshot = "daily_purchase_limit_snapshot"
+	// FieldTotalPurchaseLimitSnapshot holds the string denoting the total_purchase_limit_snapshot field in the database.
+	FieldTotalPurchaseLimitSnapshot = "total_purchase_limit_snapshot"
 	// FieldProviderInstanceID holds the string denoting the provider_instance_id field in the database.
 	FieldProviderInstanceID = "provider_instance_id"
 	// FieldProviderKey holds the string denoting the provider_key field in the database.
@@ -126,6 +138,12 @@ var Columns = []string{
 	FieldPlanID,
 	FieldSubscriptionGroupID,
 	FieldSubscriptionDays,
+	FieldCurrencyProductID,
+	FieldCurrencyProductName,
+	FieldCurrencyProductPaymentPrice,
+	FieldCurrencyProductCreditedAmount,
+	FieldDailyPurchaseLimitSnapshot,
+	FieldTotalPurchaseLimitSnapshot,
 	FieldProviderInstanceID,
 	FieldProviderKey,
 	FieldProviderSnapshot,
@@ -180,6 +198,16 @@ var (
 	DefaultOrderType string
 	// OrderTypeValidator is a validator for the "order_type" field. It is called by the builders before save.
 	OrderTypeValidator func(string) error
+	// CurrencyProductNameValidator is a validator for the "currency_product_name" field. It is called by the builders before save.
+	CurrencyProductNameValidator func(string) error
+	// DefaultDailyPurchaseLimitSnapshot holds the default value on creation for the "daily_purchase_limit_snapshot" field.
+	DefaultDailyPurchaseLimitSnapshot int
+	// DailyPurchaseLimitSnapshotValidator is a validator for the "daily_purchase_limit_snapshot" field. It is called by the builders before save.
+	DailyPurchaseLimitSnapshotValidator func(int) error
+	// DefaultTotalPurchaseLimitSnapshot holds the default value on creation for the "total_purchase_limit_snapshot" field.
+	DefaultTotalPurchaseLimitSnapshot int
+	// TotalPurchaseLimitSnapshotValidator is a validator for the "total_purchase_limit_snapshot" field. It is called by the builders before save.
+	TotalPurchaseLimitSnapshotValidator func(int) error
 	// ProviderInstanceIDValidator is a validator for the "provider_instance_id" field. It is called by the builders before save.
 	ProviderInstanceIDValidator func(string) error
 	// ProviderKeyValidator is a validator for the "provider_key" field. It is called by the builders before save.
@@ -302,6 +330,36 @@ func BySubscriptionGroupID(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionDays orders the results by the subscription_days field.
 func BySubscriptionDays(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionDays, opts...).ToFunc()
+}
+
+// ByCurrencyProductID orders the results by the currency_product_id field.
+func ByCurrencyProductID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCurrencyProductID, opts...).ToFunc()
+}
+
+// ByCurrencyProductName orders the results by the currency_product_name field.
+func ByCurrencyProductName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCurrencyProductName, opts...).ToFunc()
+}
+
+// ByCurrencyProductPaymentPrice orders the results by the currency_product_payment_price field.
+func ByCurrencyProductPaymentPrice(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCurrencyProductPaymentPrice, opts...).ToFunc()
+}
+
+// ByCurrencyProductCreditedAmount orders the results by the currency_product_credited_amount field.
+func ByCurrencyProductCreditedAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCurrencyProductCreditedAmount, opts...).ToFunc()
+}
+
+// ByDailyPurchaseLimitSnapshot orders the results by the daily_purchase_limit_snapshot field.
+func ByDailyPurchaseLimitSnapshot(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailyPurchaseLimitSnapshot, opts...).ToFunc()
+}
+
+// ByTotalPurchaseLimitSnapshot orders the results by the total_purchase_limit_snapshot field.
+func ByTotalPurchaseLimitSnapshot(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalPurchaseLimitSnapshot, opts...).ToFunc()
 }
 
 // ByProviderInstanceID orders the results by the provider_instance_id field.

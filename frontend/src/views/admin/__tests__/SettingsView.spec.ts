@@ -658,6 +658,7 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         user_channel_status_enabled: true,
+        mall_enabled: true,
         user_subscriptions_enabled: true,
         admin_subscriptions_enabled: true,
         admin_promo_codes_enabled: true,

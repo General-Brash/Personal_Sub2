@@ -135,18 +135,18 @@
                 class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
                 :class="activeBankMode === 'advance'
                   ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300'
-                  : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300'"
+                  : activeBankMode === 'exchange'
+                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300'
+                    : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300'"
               >
-                <Icon :name="activeBankMode === 'advance' ? 'download' : 'swap'" size="md" />
+                <Icon :name="activeBankModeIcon" size="md" />
               </span>
               <div class="min-w-0">
                 <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-                  {{ activeBankMode === 'advance' ? t('bank.advance.title') : t('bank.exchange.title') }}
+                  {{ activeBankModeTitle }}
                 </h2>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {{ activeBankMode === 'advance'
-                    ? t('bank.advance.description')
-                    : t('bank.exchange.description', { rate: formatAmount(status.policy.exchange_rate) }) }}
+                  {{ activeBankModeDescription }}
                 </p>
                 <p
                   v-if="activeBankMode === 'exchange' && exchangeMaintenanceActive"
@@ -163,14 +163,13 @@
               role="tablist"
               aria-orientation="horizontal"
               :aria-label="t('bank.operationMode')"
-              class="relative grid min-h-11 grid-cols-2 overflow-hidden rounded-lg bg-gray-100 p-1 dark:bg-dark-700"
+              class="relative grid min-h-11 grid-cols-3 overflow-hidden rounded-lg bg-gray-100 p-1 dark:bg-dark-700"
             >
               <span
                 data-test="bank-mode-indicator"
                 aria-hidden="true"
                 class="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-white shadow-sm transition-transform duration-200 ease-out dark:bg-dark-800"
-                :class="activeBankMode === 'exchange' ? 'translate-x-full' : 'translate-x-0'"
-                style="width: calc(50% - 0.25rem)"
+                :style="bankModeIndicatorStyle"
               />
               <button
                 id="bank-mode-advance"
@@ -208,6 +207,24 @@
               >
                 {{ t('bank.exchange.title') }}
               </button>
+              <button
+                id="bank-mode-repay"
+                data-test="bank-mode-repay"
+                ref="repayModeTab"
+                type="button"
+                role="tab"
+                class="relative z-10 min-w-0 px-3 py-2 text-sm font-medium transition-colors"
+                :class="activeBankMode === 'repay'
+                  ? 'text-primary-700 dark:text-primary-300'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+                :aria-selected="activeBankMode === 'repay'"
+                :tabindex="activeBankMode === 'repay' ? 0 : -1"
+                aria-controls="bank-panel-repay"
+                @keydown="handleBankModeKeydown($event, 'repay')"
+                @click="selectBankMode('repay', true)"
+              >
+                {{ t('bank.repay.title') }}
+              </button>
             </div>
           </div>
 
@@ -233,7 +250,7 @@
                   autocomplete="off"
                   class="input mt-2 min-w-0 font-mono"
                   :class="advanceError ? 'input-error ring-2 ring-red-500/20' : ''"
-                  :disabled="advanceSubmitting || Boolean(status.active_advance) || hasNegativePermanentBalance"
+                  :disabled="advanceSubmitting || Boolean(status.active_advance) || hasInvalidPermanentBalance"
                   :placeholder="`${formatAmount(status.policy.advance_min_amount)} - ${formatAmount(status.policy.advance_max_amount)}`"
                   @input="advanceTouched = true"
                 />
@@ -312,7 +329,7 @@
                   autocomplete="off"
                   class="input mt-2 min-w-0 font-mono"
                   :class="exchangeError ? 'input-error ring-2 ring-red-500/20' : ''"
-                  :disabled="exchangeSubmitting || hasNegativePermanentBalance || exchangeMaintenanceActive"
+                  :disabled="exchangeSubmitting || hasInvalidPermanentBalance || exchangeMaintenanceActive"
                   placeholder="0.00"
                   @input="exchangeTouched = true"
                 />
@@ -352,6 +369,93 @@
               <Icon v-if="exchangeSubmitting" name="refresh" size="sm" class="animate-spin" />
               <Icon v-else name="swap" size="sm" />
               {{ exchangeSubmitting ? t('bank.exchange.submitting') : t('bank.exchange.confirm') }}
+            </button>
+          </form>
+
+          <form
+            id="bank-panel-repay"
+            data-test="repay-flow"
+            role="tabpanel"
+            aria-labelledby="bank-mode-repay"
+            :hidden="activeBankMode !== 'repay'"
+            :aria-hidden="activeBankMode !== 'repay'"
+            class="mt-5 space-y-4"
+            @submit.prevent="submitRepay"
+          >
+            <div>
+              <p class="input-label">{{ t('bank.repay.source') }}</p>
+              <div class="mt-2 grid grid-cols-2 rounded-lg bg-gray-100 p-1 dark:bg-dark-700" role="radiogroup" :aria-label="t('bank.repay.source')">
+                <button
+                  v-for="source in repaySources"
+                  :key="source"
+                  type="button"
+                  role="radio"
+                  :data-test="`repay-source-${source}`"
+                  class="rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                  :class="repaySource === source
+                    ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-800 dark:text-primary-300'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+                  :aria-checked="repaySource === source"
+                  @click="selectRepaySource(source)"
+                >
+                  {{ t(`bank.repay.${source}`) }}
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 items-stretch gap-3 min-[390px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[390px]:gap-2 sm:gap-4">
+              <div class="min-w-0 rounded-lg border border-gray-200 bg-gray-50/60 p-3 dark:border-dark-600 dark:bg-dark-900/30 sm:p-4">
+                <label for="bank-repay-amount" class="input-label">{{ t('bank.repay.amount') }}</label>
+                <input
+                  id="bank-repay-amount"
+                  v-model.trim="repayAmount"
+                  data-test="repay-input"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  class="input mt-2 min-w-0 font-mono"
+                  :class="repayError ? 'input-error ring-2 ring-red-500/20' : ''"
+                  :disabled="repaySubmitting || !hasTemporaryDebt || hasInvalidRepaySourceBalance"
+                  placeholder="0.00"
+                  @input="repayTouched = true"
+                />
+                <p v-if="repayError" data-test="repay-error" class="input-error-text mt-1.5">{{ repayError }}</p>
+                <p v-else class="input-hint mt-1.5">
+                  {{ t('bank.repay.ratio', { rate: formatAmount(activeRepayRatio) }) }}
+                </p>
+              </div>
+
+              <div class="flex min-w-12 items-center justify-center sm:min-w-16">
+                <span class="flex h-9 w-9 rotate-90 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300 min-[390px]:rotate-0">
+                  <Icon name="arrowRight" size="sm" />
+                </span>
+              </div>
+
+              <output
+                for="bank-repay-amount"
+                data-test="repay-preview"
+                aria-live="polite"
+                class="flex min-w-0 flex-col justify-center rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/20 sm:p-4"
+              >
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('bank.repay.preview') }}</p>
+                <p data-test="repay-preview-amount" class="mt-2 break-all font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">
+                  {{ formatAmount(estimatedDebtReduction) }}
+                </p>
+                <p data-test="repay-debt-remaining" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('bank.repay.debtRemaining') }}: {{ formatAmount(estimatedDebtRemaining) }}
+                </p>
+              </output>
+            </div>
+
+            <button
+              data-test="repay-submit"
+              type="submit"
+              class="btn btn-primary inline-flex min-h-10 w-full items-center justify-center gap-2"
+              :disabled="!canSubmitRepay"
+            >
+              <Icon v-if="repaySubmitting" name="refresh" size="sm" class="animate-spin" />
+              <Icon v-else name="dollar" size="sm" />
+              {{ repaySubmitting ? t('bank.repay.submitting') : t('bank.repay.confirm') }}
             </button>
           </form>
         </section>
@@ -445,6 +549,23 @@
           <input id="bank-exchange-rate" v-model.trim="settingsForm.exchange_rate" data-test="settings-exchange-rate" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
           <p class="input-hint mt-1.5">{{ t('bank.settings.exchangeRateHint') }}</p>
         </div>
+        <div>
+          <label for="bank-unused-advance-ratio" class="input-label">{{ t('bank.settings.unusedAdvanceRatio') }}</label>
+          <input id="bank-unused-advance-ratio" v-model.trim="settingsForm.unused_advance_debt_reduction_ratio" data-test="settings-unused-advance-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
+          <p class="input-hint mt-1.5">{{ t('bank.settings.unusedAdvanceRatioHint') }}</p>
+        </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label for="bank-early-temporary-ratio" class="input-label">{{ t('bank.settings.earlyTemporaryRatio') }}</label>
+            <input id="bank-early-temporary-ratio" v-model.trim="settingsForm.early_repay_temporary_ratio" data-test="settings-early-temporary-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
+            <p class="input-hint mt-1.5">{{ t('bank.settings.earlyTemporaryRatioHint') }}</p>
+          </div>
+          <div>
+            <label for="bank-early-permanent-ratio" class="input-label">{{ t('bank.settings.earlyPermanentRatio') }}</label>
+            <input id="bank-early-permanent-ratio" v-model.trim="settingsForm.early_repay_permanent_ratio" data-test="settings-early-permanent-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
+            <p class="input-hint mt-1.5">{{ t('bank.settings.earlyPermanentRatioHint') }}</p>
+          </div>
+        </div>
         <p v-if="settingsError" data-test="settings-error" class="input-error-text">{{ settingsError }}</p>
       </form>
       <template #footer>
@@ -473,8 +594,10 @@ import {
   exchangePermanentForTemporary,
   getBankSettings,
   getBankStatus,
+  repayBankDebt,
   requestBankAdvance,
   updateBankSettings,
+  type BankRepaySource,
   type BankPolicy,
   type BankStatus,
 } from '@/api/bank'
@@ -491,6 +614,9 @@ interface SettingsForm {
   debt_grace_days: string
   debt_conversion_ratio: string
   exchange_rate: string
+  unused_advance_debt_reduction_ratio: string
+  early_repay_temporary_ratio: string
+  early_repay_permanent_ratio: string
 }
 
 const decimalAmountPattern = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,8})?$/
@@ -512,17 +638,23 @@ const status = ref<BankStatus | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)
 const loadFailed = ref(false)
-type BankMode = 'advance' | 'exchange'
+type BankMode = 'advance' | 'exchange' | 'repay'
 
 const activeBankMode = ref<BankMode>('advance')
 const advanceModeTab = ref<HTMLButtonElement | null>(null)
 const exchangeModeTab = ref<HTMLButtonElement | null>(null)
+const repayModeTab = ref<HTMLButtonElement | null>(null)
 const advanceAmount = ref('')
 const exchangeAmount = ref('')
+const repayAmount = ref('')
+const repaySource = ref<BankRepaySource>('temporary')
+const repaySources: BankRepaySource[] = ['temporary', 'permanent']
 const advanceTouched = ref(false)
 const exchangeTouched = ref(false)
+const repayTouched = ref(false)
 const advanceSubmitting = ref(false)
 const exchangeSubmitting = ref(false)
+const repaySubmitting = ref(false)
 const exchangeMaintenanceActive = ref(isExchangeMaintenanceWindow())
 const showSettingsDialog = ref(false)
 const settingsLoading = ref(false)
@@ -538,9 +670,35 @@ const settingsForm = reactive<SettingsForm>({
   debt_grace_days: '3',
   debt_conversion_ratio: '',
   exchange_rate: '',
+  unused_advance_debt_reduction_ratio: '',
+  early_repay_temporary_ratio: '',
+  early_repay_permanent_ratio: '',
 })
 
-const hasNegativePermanentBalance = computed(() => isNegative(status.value?.permanent_balance))
+const hasInvalidPermanentBalance = computed(() => Boolean(
+  status.value && parseScaledAmount(status.value.permanent_balance) === null,
+))
+const hasTemporaryDebt = computed(() => {
+  const debt = parseScaledAmount(status.value?.temporary_debt)
+  return debt !== null && debt > 0n
+})
+const repaySourceBalance = computed(() => repaySource.value === 'temporary'
+  ? status.value?.temporary_credit_available
+  : status.value?.permanent_balance)
+const hasInvalidRepaySourceBalance = computed(() => Boolean(
+  status.value && parseScaledAmount(repaySourceBalance.value) === null,
+))
+const activeBankModeIcon = computed<'download' | 'swap' | 'dollar'>(() => activeBankMode.value === 'advance' ? 'download' : activeBankMode.value === 'exchange' ? 'swap' : 'dollar')
+const activeBankModeTitle = computed(() => activeBankMode.value === 'advance' ? t('bank.advance.title') : activeBankMode.value === 'exchange' ? t('bank.exchange.title') : t('bank.repay.title'))
+const activeBankModeDescription = computed(() => activeBankMode.value === 'advance'
+  ? t('bank.advance.description')
+  : activeBankMode.value === 'exchange'
+    ? t('bank.exchange.description', { rate: formatAmount(status.value?.policy.exchange_rate) })
+    : t('bank.repay.description'))
+const bankModeIndicatorStyle = computed(() => ({
+  width: 'calc(33.333333% - 0.166667rem)',
+  transform: `translateX(${activeBankMode.value === 'advance' ? '0' : activeBankMode.value === 'exchange' ? '100%' : '200%'})`,
+}))
 
 const advanceError = computed(() => {
   if (!advanceTouched.value && !advanceAmount.value) return ''
@@ -570,7 +728,7 @@ const exchangeError = computed(() => {
 const canSubmitAdvance = computed(() => Boolean(
   status.value
   && !status.value.active_advance
-  && !hasNegativePermanentBalance.value
+  && !hasInvalidPermanentBalance.value
   && !advanceSubmitting.value
   && advanceAmount.value
   && !advanceError.value,
@@ -584,7 +742,7 @@ const advanceWalletAddition = computed(() => {
 
 const canSubmitExchange = computed(() => Boolean(
   status.value
-  && !hasNegativePermanentBalance.value
+  && !hasInvalidPermanentBalance.value
   && !exchangeMaintenanceActive.value
   && !exchangeSubmitting.value
   && exchangeAmount.value
@@ -594,6 +752,47 @@ const canSubmitExchange = computed(() => Boolean(
 const estimatedTemporaryAmount = computed(() => multiplyAmounts(
   exchangeAmount.value,
   status.value?.policy.exchange_rate,
+))
+
+const activeRepayRatio = computed(() => status.value?.policy[
+  repaySource.value === 'temporary' ? 'early_repay_temporary_ratio' : 'early_repay_permanent_ratio'
+] ?? zeroAmount)
+
+const repayError = computed(() => {
+  if (!repayTouched.value && !repayAmount.value) return ''
+  if (!hasTemporaryDebt.value) return t('bank.validation.noDebt')
+  const value = parseScaledAmount(repayAmount.value)
+  if (value === null || value <= 0n) return t('bank.validation.positiveAmount')
+  const balance = parseScaledAmount(repaySourceBalance.value)
+  if (balance !== null && value > balance) {
+    return t(repaySource.value === 'temporary' ? 'bank.validation.insufficientTemporary' : 'bank.validation.insufficientPermanent')
+  }
+  return ''
+})
+
+const estimatedDebtReduction = computed(() => {
+  const reduced = multiplyAmounts(repayAmount.value, activeRepayRatio.value)
+  const reducedScaled = parseScaledAmount(reduced)
+  const debtScaled = parseScaledAmount(status.value?.temporary_debt)
+  if (reducedScaled === null || debtScaled === null) return zeroAmount
+  return formatScaledAmount(reducedScaled > debtScaled ? debtScaled : reducedScaled)
+})
+
+const estimatedDebtRemaining = computed(() => {
+  const debtScaled = parseScaledAmount(status.value?.temporary_debt)
+  const reducedScaled = parseScaledAmount(estimatedDebtReduction.value)
+  if (debtScaled === null) return zeroAmount
+  if (reducedScaled === null) return formatScaledAmount(debtScaled)
+  return formatScaledAmount(reducedScaled >= debtScaled ? 0n : debtScaled - reducedScaled)
+})
+
+const canSubmitRepay = computed(() => Boolean(
+  status.value
+  && hasTemporaryDebt.value
+  && !hasInvalidRepaySourceBalance.value
+  && !repaySubmitting.value
+  && repayAmount.value
+  && !repayError.value,
 ))
 
 async function loadStatus(background = false, refreshUserAfter = true): Promise<void> {
@@ -670,6 +869,37 @@ async function submitExchange(): Promise<void> {
   }
 }
 
+function selectRepaySource(source: BankRepaySource): void {
+  if (repaySource.value === source) return
+  repaySource.value = source
+  repayAmount.value = ''
+  repayTouched.value = false
+}
+
+async function submitRepay(): Promise<void> {
+  repayTouched.value = true
+  if (!canSubmitRepay.value) return
+  repaySubmitting.value = true
+  const payloadKey = `${repaySource.value}:${repayAmount.value}`
+  try {
+    await repayBankDebt(
+      repaySource.value,
+      repayAmount.value,
+      getOrCreateMutationIdempotencyKey('repay', payloadKey),
+    )
+    clearMutationIdempotencyKey('repay')
+    repayAmount.value = ''
+    repayTouched.value = false
+    appStore.showSuccess(t('bank.messages.repaySucceeded'))
+    await Promise.all([loadStatus(true, false), refreshUserSilently()])
+  } catch (error) {
+    console.error('Failed to repay bank debt:', error)
+    appStore.showError(errorMessage(error, t('bank.errors.repayFailed')))
+  } finally {
+    repaySubmitting.value = false
+  }
+}
+
 async function openSettings(): Promise<void> {
   if (!authStore.isAdmin) return
   showSettingsDialog.value = true
@@ -724,6 +954,9 @@ function validatedSettingsPolicy(): BankPolicy | null {
     settingsForm.advance_max_amount,
     settingsForm.debt_conversion_ratio,
     settingsForm.exchange_rate,
+    settingsForm.unused_advance_debt_reduction_ratio,
+    settingsForm.early_repay_temporary_ratio,
+    settingsForm.early_repay_permanent_ratio,
   ]
   const values = fields.map(parseScaledAmount)
   if (values.some((value) => value === null || value <= 0n)) {
@@ -745,6 +978,9 @@ function validatedSettingsPolicy(): BankPolicy | null {
     debt_grace_days: graceDays,
     debt_conversion_ratio: settingsForm.debt_conversion_ratio,
     exchange_rate: settingsForm.exchange_rate,
+    unused_advance_debt_reduction_ratio: settingsForm.unused_advance_debt_reduction_ratio,
+    early_repay_temporary_ratio: settingsForm.early_repay_temporary_ratio,
+    early_repay_permanent_ratio: settingsForm.early_repay_permanent_ratio,
   }
 }
 
@@ -754,12 +990,21 @@ function applyPolicyToForm(policy: BankPolicy): void {
   settingsForm.debt_grace_days = String(policy.debt_grace_days)
   settingsForm.debt_conversion_ratio = policy.debt_conversion_ratio
   settingsForm.exchange_rate = policy.exchange_rate
+  settingsForm.unused_advance_debt_reduction_ratio = policy.unused_advance_debt_reduction_ratio
+  settingsForm.early_repay_temporary_ratio = policy.early_repay_temporary_ratio
+  settingsForm.early_repay_permanent_ratio = policy.early_repay_permanent_ratio
 }
 
 function parseScaledAmount(value: string | null | undefined): bigint | null {
   if (!value || !decimalAmountPattern.test(value)) return null
   const [integer, fraction = ''] = value.split('.')
   return BigInt(integer) * amountScale + BigInt(fraction.padEnd(8, '0'))
+}
+
+function formatScaledAmount(value: bigint): string {
+  const integer = value / amountScale
+  const fraction = String(value % amountScale).padStart(8, '0')
+  return `${integer}.${fraction}`
 }
 
 function formatAmount(value: string | number | null | undefined): string {
@@ -817,6 +1062,9 @@ function operationLabel(operation: string): string {
     exchange: 'bank.operations.exchange',
     debt_offset: 'bank.operations.debtOffset',
     permanent_settlement: 'bank.operations.permanentSettlement',
+    unused_advance_repayment: 'bank.operations.unusedAdvanceRepayment',
+    early_repay_temporary: 'bank.operations.earlyRepayTemporary',
+    early_repay_permanent: 'bank.operations.earlyRepayPermanent',
   } as Record<string, string>)[operation]
   return key ? t(key) : operation
 }
@@ -830,11 +1078,13 @@ function advanceStatusLabel(statusValue: string): string {
   return key ? t(key) : statusValue
 }
 
-function mutationStorageKey(scope: 'advance' | 'exchange', field: 'payload' | 'key'): string {
+type BankMutationScope = 'advance' | 'exchange' | 'repay'
+
+function mutationStorageKey(scope: BankMutationScope, field: 'payload' | 'key'): string {
   return `bank-${scope}-idempotency-${field}`
 }
 
-function getOrCreateMutationIdempotencyKey(scope: 'advance' | 'exchange', payload: string): string {
+function getOrCreateMutationIdempotencyKey(scope: BankMutationScope, payload: string): string {
   const normalizedPayload = payload.trim()
   const payloadKey = mutationStorageKey(scope, 'payload')
   const idempotencyKey = mutationStorageKey(scope, 'key')
@@ -848,7 +1098,7 @@ function getOrCreateMutationIdempotencyKey(scope: 'advance' | 'exchange', payloa
   return nextKey
 }
 
-function clearMutationIdempotencyKey(scope: 'advance' | 'exchange'): void {
+function clearMutationIdempotencyKey(scope: BankMutationScope): void {
   localStorage.removeItem(mutationStorageKey(scope, 'payload'))
   localStorage.removeItem(mutationStorageKey(scope, 'key'))
 }
@@ -881,17 +1131,19 @@ function selectBankMode(mode: BankMode, focusTab = false): void {
   if (!focusTab) return
 
   void nextTick(() => {
-    const tab = mode === 'advance' ? advanceModeTab.value : exchangeModeTab.value
+    const tab = mode === 'advance' ? advanceModeTab.value : mode === 'exchange' ? exchangeModeTab.value : repayModeTab.value
     tab?.focus()
   })
 }
 
 function handleBankModeKeydown(event: KeyboardEvent, currentMode: BankMode): void {
   let nextMode: BankMode | null = null
+  const modes: BankMode[] = ['advance', 'exchange', 'repay']
+  const currentIndex = modes.indexOf(currentMode)
   if (event.key === 'Home') nextMode = 'advance'
-  else if (event.key === 'End') nextMode = 'exchange'
-  else if (event.key === 'ArrowRight') nextMode = currentMode === 'advance' ? 'exchange' : 'advance'
-  else if (event.key === 'ArrowLeft') nextMode = currentMode === 'advance' ? 'exchange' : 'advance'
+  else if (event.key === 'End') nextMode = 'repay'
+  else if (event.key === 'ArrowRight') nextMode = modes[(currentIndex + 1) % modes.length]
+  else if (event.key === 'ArrowLeft') nextMode = modes[(currentIndex - 1 + modes.length) % modes.length]
   if (!nextMode) return
 
   event.preventDefault()

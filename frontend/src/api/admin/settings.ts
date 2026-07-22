@@ -654,6 +654,7 @@ export interface SystemSettings {
 
   // Page visibility switches
   user_channel_status_enabled: boolean;
+  mall_enabled: boolean;
   user_subscriptions_enabled: boolean;
   admin_subscriptions_enabled: boolean;
   admin_promo_codes_enabled: boolean;
@@ -928,6 +929,7 @@ export interface UpdateSettingsRequest {
 
   // Page visibility switches
   user_channel_status_enabled?: boolean;
+  mall_enabled?: boolean;
   user_subscriptions_enabled?: boolean;
   admin_subscriptions_enabled?: boolean;
   admin_promo_codes_enabled?: boolean;

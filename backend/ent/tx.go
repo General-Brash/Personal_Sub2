@@ -48,6 +48,8 @@ type Tx struct {
 	ChannelMonitorHistory *ChannelMonitorHistoryClient
 	// ChannelMonitorRequestTemplate is the client for interacting with the ChannelMonitorRequestTemplate builders.
 	ChannelMonitorRequestTemplate *ChannelMonitorRequestTemplateClient
+	// CurrencyProduct is the client for interacting with the CurrencyProduct builders.
+	CurrencyProduct *CurrencyProductClient
 	// DailyCheckin is the client for interacting with the DailyCheckin builders.
 	DailyCheckin *DailyCheckinClient
 	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
@@ -58,12 +60,20 @@ type Tx struct {
 	IdempotencyRecord *IdempotencyRecordClient
 	// IdentityAdoptionDecision is the client for interacting with the IdentityAdoptionDecision builders.
 	IdentityAdoptionDecision *IdentityAdoptionDecisionClient
+	// MallDailyCreditSubscription is the client for interacting with the MallDailyCreditSubscription builders.
+	MallDailyCreditSubscription *MallDailyCreditSubscriptionClient
+	// MallPurchase is the client for interacting with the MallPurchase builders.
+	MallPurchase *MallPurchaseClient
 	// PaymentAuditLog is the client for interacting with the PaymentAuditLog builders.
 	PaymentAuditLog *PaymentAuditLogClient
 	// PaymentOrder is the client for interacting with the PaymentOrder builders.
 	PaymentOrder *PaymentOrderClient
 	// PaymentProviderInstance is the client for interacting with the PaymentProviderInstance builders.
 	PaymentProviderInstance *PaymentProviderInstanceClient
+	// PaymentPurchaseCounter is the client for interacting with the PaymentPurchaseCounter builders.
+	PaymentPurchaseCounter *PaymentPurchaseCounterClient
+	// PaymentPurchaseReservation is the client for interacting with the PaymentPurchaseReservation builders.
+	PaymentPurchaseReservation *PaymentPurchaseReservationClient
 	// PendingAuthSession is the client for interacting with the PendingAuthSession builders.
 	PendingAuthSession *PendingAuthSessionClient
 	// PromoCode is the client for interacting with the PromoCode builders.
@@ -250,14 +260,19 @@ func (tx *Tx) init() {
 	tx.ChannelMonitorDailyRollup = NewChannelMonitorDailyRollupClient(tx.config)
 	tx.ChannelMonitorHistory = NewChannelMonitorHistoryClient(tx.config)
 	tx.ChannelMonitorRequestTemplate = NewChannelMonitorRequestTemplateClient(tx.config)
+	tx.CurrencyProduct = NewCurrencyProductClient(tx.config)
 	tx.DailyCheckin = NewDailyCheckinClient(tx.config)
 	tx.ErrorPassthroughRule = NewErrorPassthroughRuleClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.IdempotencyRecord = NewIdempotencyRecordClient(tx.config)
 	tx.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(tx.config)
+	tx.MallDailyCreditSubscription = NewMallDailyCreditSubscriptionClient(tx.config)
+	tx.MallPurchase = NewMallPurchaseClient(tx.config)
 	tx.PaymentAuditLog = NewPaymentAuditLogClient(tx.config)
 	tx.PaymentOrder = NewPaymentOrderClient(tx.config)
 	tx.PaymentProviderInstance = NewPaymentProviderInstanceClient(tx.config)
+	tx.PaymentPurchaseCounter = NewPaymentPurchaseCounterClient(tx.config)
+	tx.PaymentPurchaseReservation = NewPaymentPurchaseReservationClient(tx.config)
 	tx.PendingAuthSession = NewPendingAuthSessionClient(tx.config)
 	tx.PromoCode = NewPromoCodeClient(tx.config)
 	tx.PromoCodeUsage = NewPromoCodeUsageClient(tx.config)

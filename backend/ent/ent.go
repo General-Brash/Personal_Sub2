@@ -29,14 +29,19 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/currencyproduct"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/malldailycreditsubscription"
+	"github.com/Wei-Shaw/sub2api/ent/mallpurchase"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -133,14 +138,19 @@ func checkColumn(t, c string) error {
 			channelmonitordailyrollup.Table:      channelmonitordailyrollup.ValidColumn,
 			channelmonitorhistory.Table:          channelmonitorhistory.ValidColumn,
 			channelmonitorrequesttemplate.Table:  channelmonitorrequesttemplate.ValidColumn,
+			currencyproduct.Table:                currencyproduct.ValidColumn,
 			dailycheckin.Table:                   dailycheckin.ValidColumn,
 			errorpassthroughrule.Table:           errorpassthroughrule.ValidColumn,
 			group.Table:                          group.ValidColumn,
 			idempotencyrecord.Table:              idempotencyrecord.ValidColumn,
 			identityadoptiondecision.Table:       identityadoptiondecision.ValidColumn,
+			malldailycreditsubscription.Table:    malldailycreditsubscription.ValidColumn,
+			mallpurchase.Table:                   mallpurchase.ValidColumn,
 			paymentauditlog.Table:                paymentauditlog.ValidColumn,
 			paymentorder.Table:                   paymentorder.ValidColumn,
 			paymentproviderinstance.Table:        paymentproviderinstance.ValidColumn,
+			paymentpurchasecounter.Table:         paymentpurchasecounter.ValidColumn,
+			paymentpurchasereservation.Table:     paymentpurchasereservation.ValidColumn,
 			pendingauthsession.Table:             pendingauthsession.ValidColumn,
 			promocode.Table:                      promocode.ValidColumn,
 			promocodeusage.Table:                 promocodeusage.ValidColumn,

@@ -19,14 +19,14 @@ func TestTemporaryCreditAuditRepositoryUsesStableSortFixedAmountsAndUTC(t *testi
 	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM temporary_credit_grants WHERE user_id = \\$1").
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
-	mock.ExpectQuery("ORDER BY created_at DESC, id DESC").
+	mock.ExpectQuery(`(?s)WHEN available_at > clock_timestamp\(\) THEN 'unused'.*WHEN remaining_amount = 0 THEN 'depleted'.*WHEN expires_at <= clock_timestamp\(\) THEN 'expired'.*ORDER BY created_at DESC, id DESC`).
 		WithArgs(int64(42), 20, int64(20)).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "user_id", "source", "checkin_id", "amount", "remaining_amount",
-			"expires_at", "notes", "granted_by", "created_at", "updated_at",
+			"available_at", "expires_at", "status", "notes", "granted_by", "created_at", "updated_at",
 		}).
-			AddRow(9, 42, "admin_grant", nil, "2.00000000", "1.50000000", createdAt.Add(time.Hour), "campaign", 99, createdAt, createdAt).
-			AddRow(8, 42, "checkin", 7, "1.00000000", "0.00000000", createdAt.Add(time.Hour), "", nil, createdAt, createdAt))
+			AddRow(9, 42, "admin_grant", nil, "2.00000000", "1.50000000", createdAt, createdAt.Add(time.Hour), "active", "campaign", 99, createdAt, createdAt).
+			AddRow(8, 42, "checkin", 7, "1.00000000", "0.00000000", createdAt, createdAt.Add(time.Hour), "depleted", "", nil, createdAt, createdAt))
 
 	repo := NewTemporaryCreditAuditRepository(db)
 	items, total, err := repo.ListByUser(context.Background(), 42, 2, 20)
@@ -40,6 +40,8 @@ func TestTemporaryCreditAuditRepositoryUsesStableSortFixedAmountsAndUTC(t *testi
 	require.Equal(t, int64(99), *items[0].GrantedBy)
 	require.Nil(t, items[0].CheckinID)
 	require.Equal(t, time.UTC, items[0].ExpiresAt.Location())
+	require.Equal(t, time.UTC, items[0].AvailableAt.Location())
+	require.Equal(t, "active", string(items[0].Status))
 	require.Equal(t, time.UTC, items[0].CreatedAt.Location())
 	require.Equal(t, "", items[1].Notes)
 	require.Equal(t, int64(7), *items[1].CheckinID)
@@ -58,7 +60,7 @@ func TestTemporaryCreditAuditRepositoryReturnsEmptyArray(t *testing.T) {
 		WithArgs(int64(42), 20, int64(0)).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "user_id", "source", "checkin_id", "amount", "remaining_amount",
-			"expires_at", "notes", "granted_by", "created_at", "updated_at",
+			"available_at", "expires_at", "status", "notes", "granted_by", "created_at", "updated_at",
 		}))
 
 	items, total, err := NewTemporaryCreditAuditRepository(db).ListByUser(context.Background(), 42, 1, 20)

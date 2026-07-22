@@ -37,4 +37,14 @@ describe('bank locales', () => {
       collectKeys((zh as Record<string, any>).bank).sort(),
     )
   })
+
+  it('keeps commerce purchase and shelf-limit copy aligned', () => {
+    const enCommerce = (en as Record<string, any>).commerce
+    const zhCommerce = (zh as Record<string, any>).commerce
+
+    expect(enCommerce.paymentDisabled.title).toBeTruthy()
+    expect(zhCommerce.paymentDisabled.title).toBeTruthy()
+    expect(enCommerce.shelf.dailyPurchaseLimitHint).toContain('00:00 Beijing time')
+    expect(zhCommerce.shelf.dailyPurchaseLimitHint).toContain('北京时间每日 0 点')
+  })
 })

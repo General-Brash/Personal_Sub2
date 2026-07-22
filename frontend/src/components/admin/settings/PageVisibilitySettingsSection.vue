@@ -34,6 +34,22 @@
           <div class="flex items-start justify-between gap-4">
             <div class="min-w-0">
               <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.features.pageVisibility.mall.label') }}
+              </p>
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.features.pageVisibility.mall.hint') }}
+              </p>
+            </div>
+            <Toggle
+              :model-value="mallEnabled"
+              :aria-label="t('admin.settings.features.pageVisibility.mall.label')"
+              @update:model-value="emit('update:mallEnabled', $event)"
+            />
+          </div>
+
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('admin.settings.features.pageVisibility.userSubscriptions.label') }}
               </p>
               <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
@@ -114,6 +130,7 @@ import Toggle from '@/components/common/Toggle.vue'
 
 defineProps<{
   userChannelStatusEnabled: boolean
+  mallEnabled: boolean
   userSubscriptionsEnabled: boolean
   adminSubscriptionsEnabled: boolean
   adminPromoCodesEnabled: boolean
@@ -122,6 +139,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:userChannelStatusEnabled', value: boolean): void
+  (event: 'update:mallEnabled', value: boolean): void
   (event: 'update:userSubscriptionsEnabled', value: boolean): void
   (event: 'update:adminSubscriptionsEnabled', value: boolean): void
   (event: 'update:adminPromoCodesEnabled', value: boolean): void

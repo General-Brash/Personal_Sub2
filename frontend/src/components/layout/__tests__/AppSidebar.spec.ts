@@ -62,9 +62,14 @@ describe('AppSidebar daily check-in navigation', () => {
   })
 })
 
-describe('AppSidebar bank navigation', () => {
-  it('adds bank to the shared user navigation builder for users and administrators', () => {
-    expect(componentSource).toContain("{ path: '/bank', label: t('bank.title'), icon: CreditCardIcon }")
+describe('AppSidebar commerce navigation', () => {
+  it('keeps mall and bank as separate entries while preserving the purchase alias', () => {
+    expect(componentSource).toContain("path: '/mall'")
+    expect(componentSource).toContain("label: t('commerce.title')")
+    expect(componentSource).toContain("activePaths: ['/purchase']")
+    expect(componentSource).toContain('featureFlag: flagMall')
+    expect(componentSource).toContain("{ path: '/bank', label: t('bank.title')")
+    expect(componentSource).not.toContain("{ path: '/purchase', label: t('nav.buySubscription')")
     expect(componentSource).toContain('buildSelfNavItems(true)')
     expect(componentSource).toContain('buildSelfNavItems(false)')
   })

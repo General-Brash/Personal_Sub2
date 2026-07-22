@@ -118,6 +118,9 @@ func expectUsageServiceTemporaryCreditWrites(mock interface {
 	mock.ExpectExec(`INSERT INTO usage_logs`).
 		WithArgs(requestID).
 		WillReturnResult(sqlmock.NewResult(100, 1))
+	mock.ExpectQuery(`(?s)SELECT id\s+FROM users\s+WHERE id = \$1 AND deleted_at IS NULL\s+FOR UPDATE`).
+		WithArgs(int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
 	mock.ExpectQuery(`SELECT id, remaining_amount`).
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "remaining_amount"}).AddRow(int64(11), amount))

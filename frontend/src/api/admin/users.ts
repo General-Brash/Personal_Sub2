@@ -304,7 +304,9 @@ export interface TemporaryCreditAuditItem {
   checkin_id: number | null
   amount: string
   remaining_amount: string
+  available_at: string
   expires_at: string
+  status: 'unused' | 'active' | 'depleted' | 'expired'
   notes: string
   granted_by: number | null
   created_at: string

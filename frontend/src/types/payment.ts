@@ -66,6 +66,8 @@ export interface CheckoutInfoResponse {
   global_min: number
   global_max: number
   plans: SubscriptionPlan[]
+  currency_products?: CurrencyProduct[]
+  balance?: MallBalanceSummary
   balance_disabled: boolean
   balance_recharge_multiplier: number
   /** Subscription CNY conversion rate (1 USD = X CNY); 0 = disabled, plan price is charged as-is */
@@ -106,6 +108,14 @@ export interface PaymentOrder {
 
 // ==================== Plans & Channels ====================
 
+export type CreditType = 'permanent' | 'temporary'
+export type SubscriptionBenefitType = 'sub2' | 'daily_temporary_credit'
+
+export interface MallBalanceSummary {
+  permanent_balance: string
+  temporary_credit_available: string
+}
+
 export interface SubscriptionPlan {
   id: number
   group_id: number
@@ -123,6 +133,9 @@ export interface SubscriptionPlan {
   name: string
   description: string
   price: number
+  benefit_type?: SubscriptionBenefitType
+  payment_credit_type?: CreditType
+  daily_temporary_credit_amount?: number
   original_price?: number
   /** Display-only ISO 4217 currency label (e.g. "NZD"); empty means no label */
   currency?: string
@@ -132,6 +145,65 @@ export interface SubscriptionPlan {
   features: string[]
   for_sale: boolean
   sort_order: number
+  daily_purchase_limit?: number
+  daily_purchase_remaining?: number
+  total_purchase_limit?: number
+  total_purchase_remaining?: number
+}
+
+export interface PurchaseLimitFields {
+  daily_purchase_limit?: number
+  daily_purchase_remaining?: number
+  total_purchase_limit?: number
+  total_purchase_remaining?: number
+}
+
+export interface CurrencyProduct extends PurchaseLimitFields {
+  id: number
+  name: string
+  description: string
+  payment_price: number
+  payment_credit_type?: CreditType
+  credited_type?: CreditType
+  credited_amount?: number
+  /** Legacy compatibility field. New mall clients use credited_amount. */
+  credited_permanent_amount?: number
+  sort_order: number
+  is_active?: boolean
+  for_sale?: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface CurrencyProductInput {
+  name: string
+  description: string
+  payment_price: number
+  payment_credit_type: CreditType
+  credited_type: CreditType
+  credited_amount: number
+  sort_order: number
+  is_active: boolean
+  for_sale: boolean
+  daily_purchase_limit: number
+  total_purchase_limit: number
+}
+
+export interface MallPurchaseRequest {
+  product_type: 'currency' | 'subscription'
+  product_id: number
+}
+
+export interface MallPurchaseResult extends MallBalanceSummary {
+  purchase_id: number
+  product_type: 'currency' | 'subscription'
+  product_id: number
+  payment_credit_type: CreditType
+  price: string
+  credited_type?: CreditType
+  credited_amount?: string
+  benefit_type?: SubscriptionBenefitType
+  subscription_expires_at?: string
 }
 
 export interface PaymentChannel {
@@ -165,10 +237,11 @@ export interface ProviderInstance {
 // ==================== Request / Response ====================
 
 export interface CreateOrderRequest {
-  amount: number
+  amount?: number
   payment_type: string
   order_type: string
   plan_id?: number
+  product_id?: number
   return_url?: string
   payment_source?: string
   openid?: string

@@ -23,6 +23,12 @@ const (
 	FieldPrice = "price"
 	// FieldOriginalPrice holds the string denoting the original_price field in the database.
 	FieldOriginalPrice = "original_price"
+	// FieldBenefitType holds the string denoting the benefit_type field in the database.
+	FieldBenefitType = "benefit_type"
+	// FieldPaymentCreditType holds the string denoting the payment_credit_type field in the database.
+	FieldPaymentCreditType = "payment_credit_type"
+	// FieldDailyTemporaryCreditAmount holds the string denoting the daily_temporary_credit_amount field in the database.
+	FieldDailyTemporaryCreditAmount = "daily_temporary_credit_amount"
 	// FieldCurrency holds the string denoting the currency field in the database.
 	FieldCurrency = "currency"
 	// FieldValidityDays holds the string denoting the validity_days field in the database.
@@ -37,6 +43,10 @@ const (
 	FieldForSale = "for_sale"
 	// FieldSortOrder holds the string denoting the sort_order field in the database.
 	FieldSortOrder = "sort_order"
+	// FieldDailyPurchaseLimit holds the string denoting the daily_purchase_limit field in the database.
+	FieldDailyPurchaseLimit = "daily_purchase_limit"
+	// FieldTotalPurchaseLimit holds the string denoting the total_purchase_limit field in the database.
+	FieldTotalPurchaseLimit = "total_purchase_limit"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -53,6 +63,9 @@ var Columns = []string{
 	FieldDescription,
 	FieldPrice,
 	FieldOriginalPrice,
+	FieldBenefitType,
+	FieldPaymentCreditType,
+	FieldDailyTemporaryCreditAmount,
 	FieldCurrency,
 	FieldValidityDays,
 	FieldValidityUnit,
@@ -60,6 +73,8 @@ var Columns = []string{
 	FieldProductName,
 	FieldForSale,
 	FieldSortOrder,
+	FieldDailyPurchaseLimit,
+	FieldTotalPurchaseLimit,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -79,6 +94,16 @@ var (
 	NameValidator func(string) error
 	// DefaultDescription holds the default value on creation for the "description" field.
 	DefaultDescription string
+	// DefaultBenefitType holds the default value on creation for the "benefit_type" field.
+	DefaultBenefitType string
+	// BenefitTypeValidator is a validator for the "benefit_type" field. It is called by the builders before save.
+	BenefitTypeValidator func(string) error
+	// DefaultPaymentCreditType holds the default value on creation for the "payment_credit_type" field.
+	DefaultPaymentCreditType string
+	// PaymentCreditTypeValidator is a validator for the "payment_credit_type" field. It is called by the builders before save.
+	PaymentCreditTypeValidator func(string) error
+	// DefaultDailyTemporaryCreditAmount holds the default value on creation for the "daily_temporary_credit_amount" field.
+	DefaultDailyTemporaryCreditAmount float64
 	// DefaultCurrency holds the default value on creation for the "currency" field.
 	DefaultCurrency string
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
@@ -99,6 +124,14 @@ var (
 	DefaultForSale bool
 	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
 	DefaultSortOrder int
+	// DefaultDailyPurchaseLimit holds the default value on creation for the "daily_purchase_limit" field.
+	DefaultDailyPurchaseLimit int
+	// DailyPurchaseLimitValidator is a validator for the "daily_purchase_limit" field. It is called by the builders before save.
+	DailyPurchaseLimitValidator func(int) error
+	// DefaultTotalPurchaseLimit holds the default value on creation for the "total_purchase_limit" field.
+	DefaultTotalPurchaseLimit int
+	// TotalPurchaseLimitValidator is a validator for the "total_purchase_limit" field. It is called by the builders before save.
+	TotalPurchaseLimitValidator func(int) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -140,6 +173,21 @@ func ByOriginalPrice(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOriginalPrice, opts...).ToFunc()
 }
 
+// ByBenefitType orders the results by the benefit_type field.
+func ByBenefitType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBenefitType, opts...).ToFunc()
+}
+
+// ByPaymentCreditType orders the results by the payment_credit_type field.
+func ByPaymentCreditType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPaymentCreditType, opts...).ToFunc()
+}
+
+// ByDailyTemporaryCreditAmount orders the results by the daily_temporary_credit_amount field.
+func ByDailyTemporaryCreditAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailyTemporaryCreditAmount, opts...).ToFunc()
+}
+
 // ByCurrency orders the results by the currency field.
 func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
@@ -173,6 +221,16 @@ func ByForSale(opts ...sql.OrderTermOption) OrderOption {
 // BySortOrder orders the results by the sort_order field.
 func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSortOrder, opts...).ToFunc()
+}
+
+// ByDailyPurchaseLimit orders the results by the daily_purchase_limit field.
+func ByDailyPurchaseLimit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailyPurchaseLimit, opts...).ToFunc()
+}
+
+// ByTotalPurchaseLimit orders the results by the total_purchase_limit field.
+func ByTotalPurchaseLimit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalPurchaseLimit, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

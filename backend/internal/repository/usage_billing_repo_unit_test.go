@@ -104,7 +104,8 @@ func TestApplyUsageBillingEffects_FlagsBalanceOverdraft(t *testing.T) {
 	mock.ExpectBegin()
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	mock.ExpectQuery(`(?s)SELECT id, remaining_amount\s+FROM temporary_credit_grants\s+WHERE user_id = \$1 AND remaining_amount > 0 AND expires_at > clock_timestamp\(\)\s+ORDER BY expires_at ASC, id ASC\s+FOR UPDATE`).
+	expectTemporaryCreditUserLock(mock, 42)
+	mock.ExpectQuery(`(?s)SELECT id, remaining_amount\s+FROM temporary_credit_grants\s+WHERE user_id = \$1 AND remaining_amount > 0 AND available_at <= clock_timestamp\(\) AND expires_at > clock_timestamp\(\)\s+ORDER BY expires_at ASC, id ASC\s+FOR UPDATE`).
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "remaining_amount"}))
 	mock.ExpectQuery(conditionalBalanceDeductSQL).
@@ -140,10 +141,11 @@ func TestApplyUsageBillingEffects_ConsumesTemporaryCreditBeforePermanentBalance(
 	mock.ExpectBegin()
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	mock.ExpectQuery(`(?s)SELECT id, remaining_amount\s+FROM temporary_credit_grants\s+WHERE user_id = \$1 AND remaining_amount > 0 AND expires_at > clock_timestamp\(\)\s+ORDER BY expires_at ASC, id ASC\s+FOR UPDATE`).
+	expectTemporaryCreditUserLock(mock, 42)
+	mock.ExpectQuery(`(?s)SELECT id, remaining_amount\s+FROM temporary_credit_grants\s+WHERE user_id = \$1 AND remaining_amount > 0 AND available_at <= clock_timestamp\(\) AND expires_at > clock_timestamp\(\)\s+ORDER BY expires_at ASC, id ASC\s+FOR UPDATE`).
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "remaining_amount"}).AddRow(int64(7), "1.50000000"))
-	mock.ExpectQuery(`(?s)UPDATE temporary_credit_grants\s+SET remaining_amount = remaining_amount - \$1,\s+updated_at = clock_timestamp\(\)\s+WHERE id = \$2 AND remaining_amount >= \$1 AND expires_at > clock_timestamp\(\)\s+RETURNING \$1::numeric`).
+	mock.ExpectQuery(`(?s)UPDATE temporary_credit_grants\s+SET remaining_amount = remaining_amount - \$1,\s+updated_at = clock_timestamp\(\)\s+WHERE id = \$2 AND remaining_amount >= \$1 AND available_at <= clock_timestamp\(\) AND expires_at > clock_timestamp\(\)\s+RETURNING \$1::numeric`).
 		WithArgs("1.50000000", int64(7)).
 		WillReturnRows(sqlmock.NewRows([]string{"?column?"}).AddRow("1.50000000"))
 	mock.ExpectExec(`(?s)INSERT INTO temporary_credit_consumptions \(grant_id, usage_log_id, request_id, amount\)\s+VALUES \(\$1, \$2, \$3, \$4\)`).
@@ -175,6 +177,7 @@ func TestApplyUsageBillingEffects_UsesUsageLogIDWithoutRawRequestID(t *testing.T
 	mock.ExpectBegin()
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
+	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`SELECT id, remaining_amount`).
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "remaining_amount"}).AddRow(int64(7), "1.50000000"))
@@ -301,6 +304,7 @@ func TestUsageBillingRepositoryApply_RollsBackUsageLogAndTemporaryCreditWhenPerm
 	mock.ExpectQuery(`SELECT request_fingerprint\s+FROM usage_billing_dedup_archive`).
 		WithArgs("req-permanent-failure", int64(9)).
 		WillReturnError(sql.ErrNoRows)
+	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`SELECT id, remaining_amount`).
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "remaining_amount"}).AddRow(int64(7), "0.25000000"))

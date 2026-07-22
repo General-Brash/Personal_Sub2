@@ -80,6 +80,48 @@ func (_c *TemporaryCreditGrantCreate) SetNillableCheckinID(v *int64) *TemporaryC
 	return _c
 }
 
+// SetMallPurchaseID sets the "mall_purchase_id" field.
+func (_c *TemporaryCreditGrantCreate) SetMallPurchaseID(v int64) *TemporaryCreditGrantCreate {
+	_c.mutation.SetMallPurchaseID(v)
+	return _c
+}
+
+// SetNillableMallPurchaseID sets the "mall_purchase_id" field if the given value is not nil.
+func (_c *TemporaryCreditGrantCreate) SetNillableMallPurchaseID(v *int64) *TemporaryCreditGrantCreate {
+	if v != nil {
+		_c.SetMallPurchaseID(*v)
+	}
+	return _c
+}
+
+// SetDailySubscriptionID sets the "daily_subscription_id" field.
+func (_c *TemporaryCreditGrantCreate) SetDailySubscriptionID(v int64) *TemporaryCreditGrantCreate {
+	_c.mutation.SetDailySubscriptionID(v)
+	return _c
+}
+
+// SetNillableDailySubscriptionID sets the "daily_subscription_id" field if the given value is not nil.
+func (_c *TemporaryCreditGrantCreate) SetNillableDailySubscriptionID(v *int64) *TemporaryCreditGrantCreate {
+	if v != nil {
+		_c.SetDailySubscriptionID(*v)
+	}
+	return _c
+}
+
+// SetScheduledDate sets the "scheduled_date" field.
+func (_c *TemporaryCreditGrantCreate) SetScheduledDate(v time.Time) *TemporaryCreditGrantCreate {
+	_c.mutation.SetScheduledDate(v)
+	return _c
+}
+
+// SetNillableScheduledDate sets the "scheduled_date" field if the given value is not nil.
+func (_c *TemporaryCreditGrantCreate) SetNillableScheduledDate(v *time.Time) *TemporaryCreditGrantCreate {
+	if v != nil {
+		_c.SetScheduledDate(*v)
+	}
+	return _c
+}
+
 // SetAmount sets the "amount" field.
 func (_c *TemporaryCreditGrantCreate) SetAmount(v float64) *TemporaryCreditGrantCreate {
 	_c.mutation.SetAmount(v)
@@ -89,6 +131,20 @@ func (_c *TemporaryCreditGrantCreate) SetAmount(v float64) *TemporaryCreditGrant
 // SetRemainingAmount sets the "remaining_amount" field.
 func (_c *TemporaryCreditGrantCreate) SetRemainingAmount(v float64) *TemporaryCreditGrantCreate {
 	_c.mutation.SetRemainingAmount(v)
+	return _c
+}
+
+// SetAvailableAt sets the "available_at" field.
+func (_c *TemporaryCreditGrantCreate) SetAvailableAt(v time.Time) *TemporaryCreditGrantCreate {
+	_c.mutation.SetAvailableAt(v)
+	return _c
+}
+
+// SetNillableAvailableAt sets the "available_at" field if the given value is not nil.
+func (_c *TemporaryCreditGrantCreate) SetNillableAvailableAt(v *time.Time) *TemporaryCreditGrantCreate {
+	if v != nil {
+		_c.SetAvailableAt(*v)
+	}
 	return _c
 }
 
@@ -228,6 +284,10 @@ func (_c *TemporaryCreditGrantCreate) defaults() {
 		v := temporarycreditgrant.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.AvailableAt(); !ok {
+		v := temporarycreditgrant.DefaultAvailableAt()
+		_c.mutation.SetAvailableAt(v)
+	}
 	if _, ok := _c.mutation.Notes(); !ok {
 		v := temporarycreditgrant.DefaultNotes
 		_c.mutation.SetNotes(v)
@@ -258,6 +318,9 @@ func (_c *TemporaryCreditGrantCreate) check() error {
 	}
 	if _, ok := _c.mutation.RemainingAmount(); !ok {
 		return &ValidationError{Name: "remaining_amount", err: errors.New(`ent: missing required field "TemporaryCreditGrant.remaining_amount"`)}
+	}
+	if _, ok := _c.mutation.AvailableAt(); !ok {
+		return &ValidationError{Name: "available_at", err: errors.New(`ent: missing required field "TemporaryCreditGrant.available_at"`)}
 	}
 	if _, ok := _c.mutation.ExpiresAt(); !ok {
 		return &ValidationError{Name: "expires_at", err: errors.New(`ent: missing required field "TemporaryCreditGrant.expires_at"`)}
@@ -307,6 +370,18 @@ func (_c *TemporaryCreditGrantCreate) createSpec() (*TemporaryCreditGrant, *sqlg
 		_spec.SetField(temporarycreditgrant.FieldSource, field.TypeEnum, value)
 		_node.Source = value
 	}
+	if value, ok := _c.mutation.MallPurchaseID(); ok {
+		_spec.SetField(temporarycreditgrant.FieldMallPurchaseID, field.TypeInt64, value)
+		_node.MallPurchaseID = &value
+	}
+	if value, ok := _c.mutation.DailySubscriptionID(); ok {
+		_spec.SetField(temporarycreditgrant.FieldDailySubscriptionID, field.TypeInt64, value)
+		_node.DailySubscriptionID = &value
+	}
+	if value, ok := _c.mutation.ScheduledDate(); ok {
+		_spec.SetField(temporarycreditgrant.FieldScheduledDate, field.TypeTime, value)
+		_node.ScheduledDate = &value
+	}
 	if value, ok := _c.mutation.Amount(); ok {
 		_spec.SetField(temporarycreditgrant.FieldAmount, field.TypeFloat64, value)
 		_node.Amount = value
@@ -314,6 +389,10 @@ func (_c *TemporaryCreditGrantCreate) createSpec() (*TemporaryCreditGrant, *sqlg
 	if value, ok := _c.mutation.RemainingAmount(); ok {
 		_spec.SetField(temporarycreditgrant.FieldRemainingAmount, field.TypeFloat64, value)
 		_node.RemainingAmount = value
+	}
+	if value, ok := _c.mutation.AvailableAt(); ok {
+		_spec.SetField(temporarycreditgrant.FieldAvailableAt, field.TypeTime, value)
+		_node.AvailableAt = value
 	}
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(temporarycreditgrant.FieldExpiresAt, field.TypeTime, value)
@@ -512,6 +591,72 @@ func (u *TemporaryCreditGrantUpsert) ClearCheckinID() *TemporaryCreditGrantUpser
 	return u
 }
 
+// SetMallPurchaseID sets the "mall_purchase_id" field.
+func (u *TemporaryCreditGrantUpsert) SetMallPurchaseID(v int64) *TemporaryCreditGrantUpsert {
+	u.Set(temporarycreditgrant.FieldMallPurchaseID, v)
+	return u
+}
+
+// UpdateMallPurchaseID sets the "mall_purchase_id" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsert) UpdateMallPurchaseID() *TemporaryCreditGrantUpsert {
+	u.SetExcluded(temporarycreditgrant.FieldMallPurchaseID)
+	return u
+}
+
+// AddMallPurchaseID adds v to the "mall_purchase_id" field.
+func (u *TemporaryCreditGrantUpsert) AddMallPurchaseID(v int64) *TemporaryCreditGrantUpsert {
+	u.Add(temporarycreditgrant.FieldMallPurchaseID, v)
+	return u
+}
+
+// ClearMallPurchaseID clears the value of the "mall_purchase_id" field.
+func (u *TemporaryCreditGrantUpsert) ClearMallPurchaseID() *TemporaryCreditGrantUpsert {
+	u.SetNull(temporarycreditgrant.FieldMallPurchaseID)
+	return u
+}
+
+// SetDailySubscriptionID sets the "daily_subscription_id" field.
+func (u *TemporaryCreditGrantUpsert) SetDailySubscriptionID(v int64) *TemporaryCreditGrantUpsert {
+	u.Set(temporarycreditgrant.FieldDailySubscriptionID, v)
+	return u
+}
+
+// UpdateDailySubscriptionID sets the "daily_subscription_id" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsert) UpdateDailySubscriptionID() *TemporaryCreditGrantUpsert {
+	u.SetExcluded(temporarycreditgrant.FieldDailySubscriptionID)
+	return u
+}
+
+// AddDailySubscriptionID adds v to the "daily_subscription_id" field.
+func (u *TemporaryCreditGrantUpsert) AddDailySubscriptionID(v int64) *TemporaryCreditGrantUpsert {
+	u.Add(temporarycreditgrant.FieldDailySubscriptionID, v)
+	return u
+}
+
+// ClearDailySubscriptionID clears the value of the "daily_subscription_id" field.
+func (u *TemporaryCreditGrantUpsert) ClearDailySubscriptionID() *TemporaryCreditGrantUpsert {
+	u.SetNull(temporarycreditgrant.FieldDailySubscriptionID)
+	return u
+}
+
+// SetScheduledDate sets the "scheduled_date" field.
+func (u *TemporaryCreditGrantUpsert) SetScheduledDate(v time.Time) *TemporaryCreditGrantUpsert {
+	u.Set(temporarycreditgrant.FieldScheduledDate, v)
+	return u
+}
+
+// UpdateScheduledDate sets the "scheduled_date" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsert) UpdateScheduledDate() *TemporaryCreditGrantUpsert {
+	u.SetExcluded(temporarycreditgrant.FieldScheduledDate)
+	return u
+}
+
+// ClearScheduledDate clears the value of the "scheduled_date" field.
+func (u *TemporaryCreditGrantUpsert) ClearScheduledDate() *TemporaryCreditGrantUpsert {
+	u.SetNull(temporarycreditgrant.FieldScheduledDate)
+	return u
+}
+
 // SetAmount sets the "amount" field.
 func (u *TemporaryCreditGrantUpsert) SetAmount(v float64) *TemporaryCreditGrantUpsert {
 	u.Set(temporarycreditgrant.FieldAmount, v)
@@ -545,6 +690,18 @@ func (u *TemporaryCreditGrantUpsert) UpdateRemainingAmount() *TemporaryCreditGra
 // AddRemainingAmount adds v to the "remaining_amount" field.
 func (u *TemporaryCreditGrantUpsert) AddRemainingAmount(v float64) *TemporaryCreditGrantUpsert {
 	u.Add(temporarycreditgrant.FieldRemainingAmount, v)
+	return u
+}
+
+// SetAvailableAt sets the "available_at" field.
+func (u *TemporaryCreditGrantUpsert) SetAvailableAt(v time.Time) *TemporaryCreditGrantUpsert {
+	u.Set(temporarycreditgrant.FieldAvailableAt, v)
+	return u
+}
+
+// UpdateAvailableAt sets the "available_at" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsert) UpdateAvailableAt() *TemporaryCreditGrantUpsert {
+	u.SetExcluded(temporarycreditgrant.FieldAvailableAt)
 	return u
 }
 
@@ -698,6 +855,83 @@ func (u *TemporaryCreditGrantUpsertOne) ClearCheckinID() *TemporaryCreditGrantUp
 	})
 }
 
+// SetMallPurchaseID sets the "mall_purchase_id" field.
+func (u *TemporaryCreditGrantUpsertOne) SetMallPurchaseID(v int64) *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.SetMallPurchaseID(v)
+	})
+}
+
+// AddMallPurchaseID adds v to the "mall_purchase_id" field.
+func (u *TemporaryCreditGrantUpsertOne) AddMallPurchaseID(v int64) *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.AddMallPurchaseID(v)
+	})
+}
+
+// UpdateMallPurchaseID sets the "mall_purchase_id" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsertOne) UpdateMallPurchaseID() *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.UpdateMallPurchaseID()
+	})
+}
+
+// ClearMallPurchaseID clears the value of the "mall_purchase_id" field.
+func (u *TemporaryCreditGrantUpsertOne) ClearMallPurchaseID() *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.ClearMallPurchaseID()
+	})
+}
+
+// SetDailySubscriptionID sets the "daily_subscription_id" field.
+func (u *TemporaryCreditGrantUpsertOne) SetDailySubscriptionID(v int64) *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.SetDailySubscriptionID(v)
+	})
+}
+
+// AddDailySubscriptionID adds v to the "daily_subscription_id" field.
+func (u *TemporaryCreditGrantUpsertOne) AddDailySubscriptionID(v int64) *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.AddDailySubscriptionID(v)
+	})
+}
+
+// UpdateDailySubscriptionID sets the "daily_subscription_id" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsertOne) UpdateDailySubscriptionID() *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.UpdateDailySubscriptionID()
+	})
+}
+
+// ClearDailySubscriptionID clears the value of the "daily_subscription_id" field.
+func (u *TemporaryCreditGrantUpsertOne) ClearDailySubscriptionID() *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.ClearDailySubscriptionID()
+	})
+}
+
+// SetScheduledDate sets the "scheduled_date" field.
+func (u *TemporaryCreditGrantUpsertOne) SetScheduledDate(v time.Time) *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.SetScheduledDate(v)
+	})
+}
+
+// UpdateScheduledDate sets the "scheduled_date" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsertOne) UpdateScheduledDate() *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.UpdateScheduledDate()
+	})
+}
+
+// ClearScheduledDate clears the value of the "scheduled_date" field.
+func (u *TemporaryCreditGrantUpsertOne) ClearScheduledDate() *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.ClearScheduledDate()
+	})
+}
+
 // SetAmount sets the "amount" field.
 func (u *TemporaryCreditGrantUpsertOne) SetAmount(v float64) *TemporaryCreditGrantUpsertOne {
 	return u.Update(func(s *TemporaryCreditGrantUpsert) {
@@ -737,6 +971,20 @@ func (u *TemporaryCreditGrantUpsertOne) AddRemainingAmount(v float64) *Temporary
 func (u *TemporaryCreditGrantUpsertOne) UpdateRemainingAmount() *TemporaryCreditGrantUpsertOne {
 	return u.Update(func(s *TemporaryCreditGrantUpsert) {
 		s.UpdateRemainingAmount()
+	})
+}
+
+// SetAvailableAt sets the "available_at" field.
+func (u *TemporaryCreditGrantUpsertOne) SetAvailableAt(v time.Time) *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.SetAvailableAt(v)
+	})
+}
+
+// UpdateAvailableAt sets the "available_at" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsertOne) UpdateAvailableAt() *TemporaryCreditGrantUpsertOne {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.UpdateAvailableAt()
 	})
 }
 
@@ -1063,6 +1311,83 @@ func (u *TemporaryCreditGrantUpsertBulk) ClearCheckinID() *TemporaryCreditGrantU
 	})
 }
 
+// SetMallPurchaseID sets the "mall_purchase_id" field.
+func (u *TemporaryCreditGrantUpsertBulk) SetMallPurchaseID(v int64) *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.SetMallPurchaseID(v)
+	})
+}
+
+// AddMallPurchaseID adds v to the "mall_purchase_id" field.
+func (u *TemporaryCreditGrantUpsertBulk) AddMallPurchaseID(v int64) *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.AddMallPurchaseID(v)
+	})
+}
+
+// UpdateMallPurchaseID sets the "mall_purchase_id" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsertBulk) UpdateMallPurchaseID() *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.UpdateMallPurchaseID()
+	})
+}
+
+// ClearMallPurchaseID clears the value of the "mall_purchase_id" field.
+func (u *TemporaryCreditGrantUpsertBulk) ClearMallPurchaseID() *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.ClearMallPurchaseID()
+	})
+}
+
+// SetDailySubscriptionID sets the "daily_subscription_id" field.
+func (u *TemporaryCreditGrantUpsertBulk) SetDailySubscriptionID(v int64) *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.SetDailySubscriptionID(v)
+	})
+}
+
+// AddDailySubscriptionID adds v to the "daily_subscription_id" field.
+func (u *TemporaryCreditGrantUpsertBulk) AddDailySubscriptionID(v int64) *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.AddDailySubscriptionID(v)
+	})
+}
+
+// UpdateDailySubscriptionID sets the "daily_subscription_id" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsertBulk) UpdateDailySubscriptionID() *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.UpdateDailySubscriptionID()
+	})
+}
+
+// ClearDailySubscriptionID clears the value of the "daily_subscription_id" field.
+func (u *TemporaryCreditGrantUpsertBulk) ClearDailySubscriptionID() *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.ClearDailySubscriptionID()
+	})
+}
+
+// SetScheduledDate sets the "scheduled_date" field.
+func (u *TemporaryCreditGrantUpsertBulk) SetScheduledDate(v time.Time) *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.SetScheduledDate(v)
+	})
+}
+
+// UpdateScheduledDate sets the "scheduled_date" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsertBulk) UpdateScheduledDate() *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.UpdateScheduledDate()
+	})
+}
+
+// ClearScheduledDate clears the value of the "scheduled_date" field.
+func (u *TemporaryCreditGrantUpsertBulk) ClearScheduledDate() *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.ClearScheduledDate()
+	})
+}
+
 // SetAmount sets the "amount" field.
 func (u *TemporaryCreditGrantUpsertBulk) SetAmount(v float64) *TemporaryCreditGrantUpsertBulk {
 	return u.Update(func(s *TemporaryCreditGrantUpsert) {
@@ -1102,6 +1427,20 @@ func (u *TemporaryCreditGrantUpsertBulk) AddRemainingAmount(v float64) *Temporar
 func (u *TemporaryCreditGrantUpsertBulk) UpdateRemainingAmount() *TemporaryCreditGrantUpsertBulk {
 	return u.Update(func(s *TemporaryCreditGrantUpsert) {
 		s.UpdateRemainingAmount()
+	})
+}
+
+// SetAvailableAt sets the "available_at" field.
+func (u *TemporaryCreditGrantUpsertBulk) SetAvailableAt(v time.Time) *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.SetAvailableAt(v)
+	})
+}
+
+// UpdateAvailableAt sets the "available_at" field to the value that was provided on create.
+func (u *TemporaryCreditGrantUpsertBulk) UpdateAvailableAt() *TemporaryCreditGrantUpsertBulk {
+	return u.Update(func(s *TemporaryCreditGrantUpsert) {
+		s.UpdateAvailableAt()
 	})
 }
 

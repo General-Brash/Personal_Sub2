@@ -29,10 +29,18 @@ type TemporaryCreditGrant struct {
 	Source temporarycreditgrant.Source `json:"source,omitempty"`
 	// CheckinID holds the value of the "checkin_id" field.
 	CheckinID *int64 `json:"checkin_id,omitempty"`
+	// MallPurchaseID holds the value of the "mall_purchase_id" field.
+	MallPurchaseID *int64 `json:"mall_purchase_id,omitempty"`
+	// DailySubscriptionID holds the value of the "daily_subscription_id" field.
+	DailySubscriptionID *int64 `json:"daily_subscription_id,omitempty"`
+	// ScheduledDate holds the value of the "scheduled_date" field.
+	ScheduledDate *time.Time `json:"scheduled_date,omitempty"`
 	// Amount holds the value of the "amount" field.
 	Amount float64 `json:"amount,omitempty"`
 	// RemainingAmount holds the value of the "remaining_amount" field.
 	RemainingAmount float64 `json:"remaining_amount,omitempty"`
+	// AvailableAt holds the value of the "available_at" field.
+	AvailableAt time.Time `json:"available_at,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
 	// Notes holds the value of the "notes" field.
@@ -120,11 +128,11 @@ func (*TemporaryCreditGrant) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case temporarycreditgrant.FieldAmount, temporarycreditgrant.FieldRemainingAmount:
 			values[i] = new(sql.NullFloat64)
-		case temporarycreditgrant.FieldID, temporarycreditgrant.FieldUserID, temporarycreditgrant.FieldCheckinID, temporarycreditgrant.FieldGrantedBy:
+		case temporarycreditgrant.FieldID, temporarycreditgrant.FieldUserID, temporarycreditgrant.FieldCheckinID, temporarycreditgrant.FieldMallPurchaseID, temporarycreditgrant.FieldDailySubscriptionID, temporarycreditgrant.FieldGrantedBy:
 			values[i] = new(sql.NullInt64)
 		case temporarycreditgrant.FieldSource, temporarycreditgrant.FieldNotes:
 			values[i] = new(sql.NullString)
-		case temporarycreditgrant.FieldCreatedAt, temporarycreditgrant.FieldUpdatedAt, temporarycreditgrant.FieldExpiresAt:
+		case temporarycreditgrant.FieldCreatedAt, temporarycreditgrant.FieldUpdatedAt, temporarycreditgrant.FieldScheduledDate, temporarycreditgrant.FieldAvailableAt, temporarycreditgrant.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -178,6 +186,27 @@ func (_m *TemporaryCreditGrant) assignValues(columns []string, values []any) err
 				_m.CheckinID = new(int64)
 				*_m.CheckinID = value.Int64
 			}
+		case temporarycreditgrant.FieldMallPurchaseID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field mall_purchase_id", values[i])
+			} else if value.Valid {
+				_m.MallPurchaseID = new(int64)
+				*_m.MallPurchaseID = value.Int64
+			}
+		case temporarycreditgrant.FieldDailySubscriptionID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field daily_subscription_id", values[i])
+			} else if value.Valid {
+				_m.DailySubscriptionID = new(int64)
+				*_m.DailySubscriptionID = value.Int64
+			}
+		case temporarycreditgrant.FieldScheduledDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field scheduled_date", values[i])
+			} else if value.Valid {
+				_m.ScheduledDate = new(time.Time)
+				*_m.ScheduledDate = value.Time
+			}
 		case temporarycreditgrant.FieldAmount:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
@@ -189,6 +218,12 @@ func (_m *TemporaryCreditGrant) assignValues(columns []string, values []any) err
 				return fmt.Errorf("unexpected type %T for field remaining_amount", values[i])
 			} else if value.Valid {
 				_m.RemainingAmount = value.Float64
+			}
+		case temporarycreditgrant.FieldAvailableAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field available_at", values[i])
+			} else if value.Valid {
+				_m.AvailableAt = value.Time
 			}
 		case temporarycreditgrant.FieldExpiresAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -287,11 +322,29 @@ func (_m *TemporaryCreditGrant) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
+	if v := _m.MallPurchaseID; v != nil {
+		builder.WriteString("mall_purchase_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.DailySubscriptionID; v != nil {
+		builder.WriteString("daily_subscription_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.ScheduledDate; v != nil {
+		builder.WriteString("scheduled_date=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Amount))
 	builder.WriteString(", ")
 	builder.WriteString("remaining_amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RemainingAmount))
+	builder.WriteString(", ")
+	builder.WriteString("available_at=")
+	builder.WriteString(_m.AvailableAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("expires_at=")
 	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))

@@ -29,6 +29,7 @@ func expectUsageServiceTemporaryOnlyCommit(mock sqlmock.Sqlmock, requestID, amou
 	mock.ExpectExec(`INSERT INTO usage_logs`).
 		WithArgs(requestID).
 		WillReturnResult(sqlmock.NewResult(100, 1))
+	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`SELECT id, remaining_amount`).
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "remaining_amount"}).AddRow(int64(11), amount))
@@ -84,6 +85,7 @@ func TestUsageServiceCreateInvalidatesAvailableCreditOnlyAfterCommittedCharge(t 
 		mock.ExpectExec(`INSERT INTO usage_logs`).
 			WithArgs("usage-available-credit-rollback").
 			WillReturnResult(sqlmock.NewResult(100, 1))
+		expectTemporaryCreditUserLock(mock, 42)
 		mock.ExpectQuery(`SELECT id, remaining_amount`).
 			WithArgs(int64(42)).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "remaining_amount"}).AddRow(int64(11), "0.25000000"))

@@ -31,7 +31,9 @@ type TemporaryCreditAuditItem struct {
 	CheckinID       *int64                `json:"checkin_id"`
 	Amount          string                `json:"amount"`
 	RemainingAmount string                `json:"remaining_amount"`
+	AvailableAt     time.Time             `json:"available_at"`
 	ExpiresAt       time.Time             `json:"expires_at"`
+	Status          TemporaryCreditStatus `json:"status"`
 	Notes           string                `json:"notes"`
 	GrantedBy       *int64                `json:"granted_by"`
 	CreatedAt       time.Time             `json:"created_at"`

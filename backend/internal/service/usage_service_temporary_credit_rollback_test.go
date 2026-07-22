@@ -52,6 +52,7 @@ func TestUsageServiceCreateRollsBackUsageAndTemporaryCreditWhenPermanentBalanceW
 	mock.ExpectExec(`INSERT INTO usage_logs`).
 		WithArgs("usage-request-42").
 		WillReturnResult(sqlmock.NewResult(100, 1))
+	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`SELECT id, remaining_amount`).
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "remaining_amount"}).AddRow(int64(11), "0.25000000"))

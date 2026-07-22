@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 
 	"entgo.io/ent"
@@ -28,12 +30,21 @@ func (TemporaryCreditGrant) Mixin() []ent.Mixin {
 func (TemporaryCreditGrant) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("user_id"),
-		field.Enum("source").Values("checkin", "admin_grant", "bank_advance", "bank_exchange"),
+		field.Enum("source").Values("checkin", "admin_grant", "bank_advance", "bank_exchange", "mall_product", "subscription"),
 		field.Int64("checkin_id").Optional().Nillable(),
+		field.Int64("mall_purchase_id").Optional().Nillable(),
+		field.Int64("daily_subscription_id").Optional().Nillable(),
+		field.Time("scheduled_date").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "date"}),
 		field.Float("amount").
 			SchemaType(map[string]string{dialect.Postgres: "numeric(20,8)"}),
 		field.Float("remaining_amount").
 			SchemaType(map[string]string{dialect.Postgres: "numeric(20,8)"}),
+		field.Time("available_at").
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}).
+			Default(time.Now),
 		field.Time("expires_at").
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.String("notes").

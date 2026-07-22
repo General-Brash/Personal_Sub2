@@ -37,4 +37,20 @@ describe('payment api', () => {
       resume_token: 'resume-token-123',
     })
   })
+
+  it('loads the read-only mall balance summary', async () => {
+    await paymentAPI.getMallBalance()
+
+    expect(get).toHaveBeenCalledWith('/mall/balance')
+  })
+
+  it('submits an internal mall purchase with the caller idempotency key', async () => {
+    await paymentAPI.purchaseMallProduct({ product_type: 'currency', product_id: 12 }, 'mall-purchase-12')
+
+    expect(post).toHaveBeenCalledWith(
+      '/mall/purchases',
+      { product_type: 'currency', product_id: 12 },
+      { headers: { 'Idempotency-Key': 'mall-purchase-12' } },
+    )
+  })
 })

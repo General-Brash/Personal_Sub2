@@ -5,6 +5,7 @@ import {
   decidePaymentLaunch,
   getVisibleMethods,
   readPaymentRecoverySnapshot,
+  subscriptionValidityDays,
   type PaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
 
@@ -70,6 +71,22 @@ describe('getVisibleMethods', () => {
       ldc: methodLimit({ single_min: 3 }),
       usdt_trc20: methodLimit({ fee_rate: 1 }),
     })
+  })
+})
+
+describe('subscriptionValidityDays', () => {
+  it.each([
+    ['day', 2, 2],
+    ['days', 2, 2],
+    ['week', 2, 14],
+    ['weeks', 2, 14],
+    ['month', 2, 60],
+    ['months', 2, 60],
+  ])('mirrors the backend conversion for %s', (validityUnit, validityDays, expected) => {
+    expect(subscriptionValidityDays({
+      validity_days: validityDays,
+      validity_unit: validityUnit,
+    })).toBe(expected)
   })
 })
 
@@ -265,6 +282,21 @@ describe('decidePaymentLaunch', () => {
 })
 
 describe('buildCreateOrderPayload', () => {
+  it('uses only the server-owned product id for fixed currency products', () => {
+    const payload = buildCreateOrderPayload({
+      amount: 9999,
+      productId: 12,
+      paymentType: 'alipay',
+      orderType: 'balance',
+      origin: 'https://app.example.com',
+      isMobile: false,
+      isWechatBrowser: false,
+    })
+
+    expect(payload).toMatchObject({ product_id: 12, order_type: 'balance' })
+    expect(payload).not.toHaveProperty('amount')
+  })
+
   it('normalizes visible method aliases and attaches a canonical result URL', () => {
     expect(buildCreateOrderPayload({
       amount: 88,

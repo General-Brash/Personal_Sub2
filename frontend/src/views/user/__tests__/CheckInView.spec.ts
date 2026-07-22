@@ -31,7 +31,7 @@ vi.mock('vue-i18n', async () => {
     ...actual,
     useI18n: () => ({
       t: (key: string, values?: Record<string, string | number>) =>
-        values?.count != null ? `${key}:${values.count}` : values?.day != null ? `${key}:${values.day}` : key,
+        values?.count != null ? `${key}:${values.count}` : values?.day != null ? `Day ${values.day}` : key,
     }),
   }
 })
@@ -114,7 +114,7 @@ describe('CheckInView', () => {
 
     expect(wrapper.findAll('[data-test="calendar-cell"]')).toHaveLength(42)
     expect(wrapper.get('[data-test="current-streak"]').text()).toContain('8')
-    expect(wrapper.get('[data-test="next-reward"]').text()).toBe('checkin.rewardDay:7 / $2.50+$0.25')
+    expect(wrapper.get('[data-test="next-reward"]').text()).toBe('Day 7 / $2.50+$0.25')
     expect(wrapper.get('[data-test="temporary-credit"]').text()).toContain('$5.25')
     expect(wrapper.get('[data-test="monthly-reward-total"]').text()).toBe('$12.50+$0.75')
     expect(wrapper.find('[data-test="next-permanent-reward"]').exists()).toBe(false)
@@ -123,6 +123,61 @@ describe('CheckInView', () => {
     const checkedDay = wrapper.get('[data-test="calendar-cell"][data-date="2026-07-03"]')
     expect(checkedDay.text()).toContain('$1.25')
     expect(checkedDay.text()).toContain('$0.13')
+  })
+
+  it('keeps the five summary cards equal-height and their primary values on one line', async () => {
+    const wrapper = await mountView()
+    const cards = wrapper.findAll('[data-test="checkin-stat-card"]')
+
+    expect(cards).toHaveLength(5)
+    for (const card of cards) {
+      expect(card.classes()).toEqual(expect.arrayContaining(['min-w-0', 'flex']))
+    }
+    for (const selector of [
+      '[data-test="current-streak"]',
+      '[data-test="next-reward"]',
+      '[data-test="monthly-reward-total"]',
+      '[data-test="temporary-credit"]',
+    ]) {
+      const value = wrapper.get(selector)
+      expect(value.classes()).toContain('whitespace-nowrap')
+      expect(value.classes()).not.toContain('break-all')
+    }
+  })
+
+  it('shrinks long summary amounts without truncating, hiding, or wrapping their full values', async () => {
+    const upperBoundReward = '999999999999.99999999'
+    getCheckinStatus.mockResolvedValueOnce(baseStatus({
+      next_reward_amount: upperBoundReward,
+      next_permanent_reward_amount: upperBoundReward,
+      monthly_reward_total: upperBoundReward,
+      monthly_permanent_reward_total: upperBoundReward,
+      temporary_credit_available: upperBoundReward,
+    }))
+    const wrapper = await mountView()
+    const expectedAmount = '$1000000000000.00'
+    const values = [
+      [wrapper.get('[data-test="next-reward"]'), `Day 7 / ${expectedAmount}+${expectedAmount}`, 14],
+      [wrapper.get('[data-test="monthly-reward-total"]'), `${expectedAmount}+${expectedAmount}`, 14],
+      [wrapper.get('[data-test="temporary-credit"]'), expectedAmount, 18],
+    ] as const
+
+    for (const [value, expectedText, preferredFontSize] of values) {
+      expect(value.text()).toBe(expectedText)
+      expect(value.classes()).toEqual(expect.arrayContaining(['max-w-full', 'whitespace-nowrap']))
+      for (const forbiddenClass of ['truncate', 'overflow-hidden', 'text-ellipsis']) {
+        expect(value.classes()).not.toContain(forbiddenClass)
+      }
+
+      const style = value.attributes('style')
+      const fittedFontSize = Number.parseFloat(style.match(/font-size:\s*([\d.]+)px/)?.[1] ?? '')
+      expect(fittedFontSize).toBeLessThan(preferredFontSize)
+      expect(style).not.toContain('vw')
+    }
+
+    const nextRewardStyle = values[0][0].attributes('style')
+    const nextRewardFontSize = Number.parseFloat(nextRewardStyle.match(/font-size:\s*([\d.]+)px/)?.[1] ?? '')
+    expect(nextRewardFontSize).toBeLessThanOrEqual(5)
   })
 
   it('rounds calendar rewards to two places and keeps them constrained inside narrow cells', async () => {

@@ -198,6 +198,7 @@ type SystemSettings struct {
 
 	// Backend 模式：禁用用户注册和自助服务，仅管理员可登录
 	BackendModeEnabled bool
+	MallEnabled        bool
 
 	// Gateway forwarding behavior
 	EnableFingerprintUnification           bool   // 是否统一 OAuth 账号的指纹头（默认 true）
@@ -319,6 +320,7 @@ type PublicSettings struct {
 	WeChatOAuthMPEnabled     bool
 	WeChatOAuthMobileEnabled bool
 	BackendModeEnabled       bool
+	MallEnabled              bool
 	PaymentEnabled           bool
 	OIDCOAuthEnabled         bool
 	OIDCOAuthProviderName    string

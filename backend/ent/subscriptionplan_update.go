@@ -125,6 +125,55 @@ func (_u *SubscriptionPlanUpdate) ClearOriginalPrice() *SubscriptionPlanUpdate {
 	return _u
 }
 
+// SetBenefitType sets the "benefit_type" field.
+func (_u *SubscriptionPlanUpdate) SetBenefitType(v string) *SubscriptionPlanUpdate {
+	_u.mutation.SetBenefitType(v)
+	return _u
+}
+
+// SetNillableBenefitType sets the "benefit_type" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableBenefitType(v *string) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetBenefitType(*v)
+	}
+	return _u
+}
+
+// SetPaymentCreditType sets the "payment_credit_type" field.
+func (_u *SubscriptionPlanUpdate) SetPaymentCreditType(v string) *SubscriptionPlanUpdate {
+	_u.mutation.SetPaymentCreditType(v)
+	return _u
+}
+
+// SetNillablePaymentCreditType sets the "payment_credit_type" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillablePaymentCreditType(v *string) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetPaymentCreditType(*v)
+	}
+	return _u
+}
+
+// SetDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field.
+func (_u *SubscriptionPlanUpdate) SetDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.ResetDailyTemporaryCreditAmount()
+	_u.mutation.SetDailyTemporaryCreditAmount(v)
+	return _u
+}
+
+// SetNillableDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableDailyTemporaryCreditAmount(v *float64) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetDailyTemporaryCreditAmount(*v)
+	}
+	return _u
+}
+
+// AddDailyTemporaryCreditAmount adds value to the "daily_temporary_credit_amount" field.
+func (_u *SubscriptionPlanUpdate) AddDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.AddDailyTemporaryCreditAmount(v)
+	return _u
+}
+
 // SetCurrency sets the "currency" field.
 func (_u *SubscriptionPlanUpdate) SetCurrency(v string) *SubscriptionPlanUpdate {
 	_u.mutation.SetCurrency(v)
@@ -237,6 +286,48 @@ func (_u *SubscriptionPlanUpdate) AddSortOrder(v int) *SubscriptionPlanUpdate {
 	return _u
 }
 
+// SetDailyPurchaseLimit sets the "daily_purchase_limit" field.
+func (_u *SubscriptionPlanUpdate) SetDailyPurchaseLimit(v int) *SubscriptionPlanUpdate {
+	_u.mutation.ResetDailyPurchaseLimit()
+	_u.mutation.SetDailyPurchaseLimit(v)
+	return _u
+}
+
+// SetNillableDailyPurchaseLimit sets the "daily_purchase_limit" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableDailyPurchaseLimit(v *int) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetDailyPurchaseLimit(*v)
+	}
+	return _u
+}
+
+// AddDailyPurchaseLimit adds value to the "daily_purchase_limit" field.
+func (_u *SubscriptionPlanUpdate) AddDailyPurchaseLimit(v int) *SubscriptionPlanUpdate {
+	_u.mutation.AddDailyPurchaseLimit(v)
+	return _u
+}
+
+// SetTotalPurchaseLimit sets the "total_purchase_limit" field.
+func (_u *SubscriptionPlanUpdate) SetTotalPurchaseLimit(v int) *SubscriptionPlanUpdate {
+	_u.mutation.ResetTotalPurchaseLimit()
+	_u.mutation.SetTotalPurchaseLimit(v)
+	return _u
+}
+
+// SetNillableTotalPurchaseLimit sets the "total_purchase_limit" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableTotalPurchaseLimit(v *int) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetTotalPurchaseLimit(*v)
+	}
+	return _u
+}
+
+// AddTotalPurchaseLimit adds value to the "total_purchase_limit" field.
+func (_u *SubscriptionPlanUpdate) AddTotalPurchaseLimit(v int) *SubscriptionPlanUpdate {
+	_u.mutation.AddTotalPurchaseLimit(v)
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *SubscriptionPlanUpdate) SetUpdatedAt(v time.Time) *SubscriptionPlanUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -291,6 +382,16 @@ func (_u *SubscriptionPlanUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BenefitType(); ok {
+		if err := subscriptionplan.BenefitTypeValidator(v); err != nil {
+			return &ValidationError{Name: "benefit_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.benefit_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PaymentCreditType(); ok {
+		if err := subscriptionplan.PaymentCreditTypeValidator(v); err != nil {
+			return &ValidationError{Name: "payment_credit_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.payment_credit_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Currency(); ok {
 		if err := subscriptionplan.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.currency": %w`, err)}
@@ -304,6 +405,16 @@ func (_u *SubscriptionPlanUpdate) check() error {
 	if v, ok := _u.mutation.ProductName(); ok {
 		if err := subscriptionplan.ProductNameValidator(v); err != nil {
 			return &ValidationError{Name: "product_name", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.product_name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DailyPurchaseLimit(); ok {
+		if err := subscriptionplan.DailyPurchaseLimitValidator(v); err != nil {
+			return &ValidationError{Name: "daily_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.daily_purchase_limit": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TotalPurchaseLimit(); ok {
+		if err := subscriptionplan.TotalPurchaseLimitValidator(v); err != nil {
+			return &ValidationError{Name: "total_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.total_purchase_limit": %w`, err)}
 		}
 	}
 	return nil
@@ -348,6 +459,18 @@ func (_u *SubscriptionPlanUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if _u.mutation.OriginalPriceCleared() {
 		_spec.ClearField(subscriptionplan.FieldOriginalPrice, field.TypeFloat64)
 	}
+	if value, ok := _u.mutation.BenefitType(); ok {
+		_spec.SetField(subscriptionplan.FieldBenefitType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PaymentCreditType(); ok {
+		_spec.SetField(subscriptionplan.FieldPaymentCreditType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DailyTemporaryCreditAmount(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyTemporaryCreditAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDailyTemporaryCreditAmount(); ok {
+		_spec.AddField(subscriptionplan.FieldDailyTemporaryCreditAmount, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(subscriptionplan.FieldCurrency, field.TypeString, value)
 	}
@@ -374,6 +497,18 @@ func (_u *SubscriptionPlanUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(subscriptionplan.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.DailyPurchaseLimit(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyPurchaseLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedDailyPurchaseLimit(); ok {
+		_spec.AddField(subscriptionplan.FieldDailyPurchaseLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TotalPurchaseLimit(); ok {
+		_spec.SetField(subscriptionplan.FieldTotalPurchaseLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTotalPurchaseLimit(); ok {
+		_spec.AddField(subscriptionplan.FieldTotalPurchaseLimit, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldUpdatedAt, field.TypeTime, value)
@@ -495,6 +630,55 @@ func (_u *SubscriptionPlanUpdateOne) ClearOriginalPrice() *SubscriptionPlanUpdat
 	return _u
 }
 
+// SetBenefitType sets the "benefit_type" field.
+func (_u *SubscriptionPlanUpdateOne) SetBenefitType(v string) *SubscriptionPlanUpdateOne {
+	_u.mutation.SetBenefitType(v)
+	return _u
+}
+
+// SetNillableBenefitType sets the "benefit_type" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableBenefitType(v *string) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetBenefitType(*v)
+	}
+	return _u
+}
+
+// SetPaymentCreditType sets the "payment_credit_type" field.
+func (_u *SubscriptionPlanUpdateOne) SetPaymentCreditType(v string) *SubscriptionPlanUpdateOne {
+	_u.mutation.SetPaymentCreditType(v)
+	return _u
+}
+
+// SetNillablePaymentCreditType sets the "payment_credit_type" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillablePaymentCreditType(v *string) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetPaymentCreditType(*v)
+	}
+	return _u
+}
+
+// SetDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field.
+func (_u *SubscriptionPlanUpdateOne) SetDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.ResetDailyTemporaryCreditAmount()
+	_u.mutation.SetDailyTemporaryCreditAmount(v)
+	return _u
+}
+
+// SetNillableDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableDailyTemporaryCreditAmount(v *float64) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetDailyTemporaryCreditAmount(*v)
+	}
+	return _u
+}
+
+// AddDailyTemporaryCreditAmount adds value to the "daily_temporary_credit_amount" field.
+func (_u *SubscriptionPlanUpdateOne) AddDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddDailyTemporaryCreditAmount(v)
+	return _u
+}
+
 // SetCurrency sets the "currency" field.
 func (_u *SubscriptionPlanUpdateOne) SetCurrency(v string) *SubscriptionPlanUpdateOne {
 	_u.mutation.SetCurrency(v)
@@ -607,6 +791,48 @@ func (_u *SubscriptionPlanUpdateOne) AddSortOrder(v int) *SubscriptionPlanUpdate
 	return _u
 }
 
+// SetDailyPurchaseLimit sets the "daily_purchase_limit" field.
+func (_u *SubscriptionPlanUpdateOne) SetDailyPurchaseLimit(v int) *SubscriptionPlanUpdateOne {
+	_u.mutation.ResetDailyPurchaseLimit()
+	_u.mutation.SetDailyPurchaseLimit(v)
+	return _u
+}
+
+// SetNillableDailyPurchaseLimit sets the "daily_purchase_limit" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableDailyPurchaseLimit(v *int) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetDailyPurchaseLimit(*v)
+	}
+	return _u
+}
+
+// AddDailyPurchaseLimit adds value to the "daily_purchase_limit" field.
+func (_u *SubscriptionPlanUpdateOne) AddDailyPurchaseLimit(v int) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddDailyPurchaseLimit(v)
+	return _u
+}
+
+// SetTotalPurchaseLimit sets the "total_purchase_limit" field.
+func (_u *SubscriptionPlanUpdateOne) SetTotalPurchaseLimit(v int) *SubscriptionPlanUpdateOne {
+	_u.mutation.ResetTotalPurchaseLimit()
+	_u.mutation.SetTotalPurchaseLimit(v)
+	return _u
+}
+
+// SetNillableTotalPurchaseLimit sets the "total_purchase_limit" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableTotalPurchaseLimit(v *int) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetTotalPurchaseLimit(*v)
+	}
+	return _u
+}
+
+// AddTotalPurchaseLimit adds value to the "total_purchase_limit" field.
+func (_u *SubscriptionPlanUpdateOne) AddTotalPurchaseLimit(v int) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddTotalPurchaseLimit(v)
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *SubscriptionPlanUpdateOne) SetUpdatedAt(v time.Time) *SubscriptionPlanUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -674,6 +900,16 @@ func (_u *SubscriptionPlanUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BenefitType(); ok {
+		if err := subscriptionplan.BenefitTypeValidator(v); err != nil {
+			return &ValidationError{Name: "benefit_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.benefit_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PaymentCreditType(); ok {
+		if err := subscriptionplan.PaymentCreditTypeValidator(v); err != nil {
+			return &ValidationError{Name: "payment_credit_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.payment_credit_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Currency(); ok {
 		if err := subscriptionplan.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.currency": %w`, err)}
@@ -687,6 +923,16 @@ func (_u *SubscriptionPlanUpdateOne) check() error {
 	if v, ok := _u.mutation.ProductName(); ok {
 		if err := subscriptionplan.ProductNameValidator(v); err != nil {
 			return &ValidationError{Name: "product_name", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.product_name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DailyPurchaseLimit(); ok {
+		if err := subscriptionplan.DailyPurchaseLimitValidator(v); err != nil {
+			return &ValidationError{Name: "daily_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.daily_purchase_limit": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TotalPurchaseLimit(); ok {
+		if err := subscriptionplan.TotalPurchaseLimitValidator(v); err != nil {
+			return &ValidationError{Name: "total_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.total_purchase_limit": %w`, err)}
 		}
 	}
 	return nil
@@ -748,6 +994,18 @@ func (_u *SubscriptionPlanUpdateOne) sqlSave(ctx context.Context) (_node *Subscr
 	if _u.mutation.OriginalPriceCleared() {
 		_spec.ClearField(subscriptionplan.FieldOriginalPrice, field.TypeFloat64)
 	}
+	if value, ok := _u.mutation.BenefitType(); ok {
+		_spec.SetField(subscriptionplan.FieldBenefitType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PaymentCreditType(); ok {
+		_spec.SetField(subscriptionplan.FieldPaymentCreditType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DailyTemporaryCreditAmount(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyTemporaryCreditAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDailyTemporaryCreditAmount(); ok {
+		_spec.AddField(subscriptionplan.FieldDailyTemporaryCreditAmount, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(subscriptionplan.FieldCurrency, field.TypeString, value)
 	}
@@ -774,6 +1032,18 @@ func (_u *SubscriptionPlanUpdateOne) sqlSave(ctx context.Context) (_node *Subscr
 	}
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(subscriptionplan.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.DailyPurchaseLimit(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyPurchaseLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedDailyPurchaseLimit(); ok {
+		_spec.AddField(subscriptionplan.FieldDailyPurchaseLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TotalPurchaseLimit(); ok {
+		_spec.SetField(subscriptionplan.FieldTotalPurchaseLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTotalPurchaseLimit(); ok {
+		_spec.AddField(subscriptionplan.FieldTotalPurchaseLimit, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldUpdatedAt, field.TypeTime, value)

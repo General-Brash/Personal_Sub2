@@ -55,7 +55,9 @@ const auditItem = {
   checkin_id: null,
   amount: '1.25000000',
   remaining_amount: '0.25000000',
+  available_at: '2026-07-16T00:00:00Z',
   expires_at: '2026-07-17T16:00:00Z',
+  status: 'active' as const,
   notes: 'support credit',
   granted_by: 3,
   created_at: '2026-07-16T03:00:00Z',
@@ -115,6 +117,68 @@ describe('UserBalanceHistoryModal', () => {
     expect(audit).toContain('support credit')
     expect(audit).toContain('#3')
     expect(audit).toContain('#18')
+    expect(wrapper.get('[data-testid="temporary-credit-status-18"]').text()).toContain('checkin.admin.temporaryStatus.active')
+    expect(audit).toContain('checkin.admin.availableAtLabel')
+  })
+
+  it('renders all four authoritative temporary-credit statuses without deriving them client-side', async () => {
+    const statuses = ['unused', 'active', 'depleted', 'expired'] as const
+    getTemporaryCredits.mockResolvedValue({
+      items: statuses.map((status, index) => ({
+        ...auditItem,
+        id: 30 + index,
+        status,
+      })),
+      total: statuses.length,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+    const wrapper = await mountAndOpen()
+
+    for (const [index, status] of statuses.entries()) {
+      expect(wrapper.get(`[data-testid="temporary-credit-status-${30 + index}"]`).text()).toContain(
+        `checkin.admin.temporaryStatus.${status}`,
+      )
+    }
+  })
+
+  it('localizes bank-generated temporary-credit sources', async () => {
+    getTemporaryCredits.mockResolvedValue({
+      items: [
+        { ...auditItem, id: 40, source: 'bank_advance' },
+        { ...auditItem, id: 41, source: 'bank_exchange' },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+
+    const wrapper = await mountAndOpen()
+    const audit = wrapper.get('[data-testid="temporary-credit-audit-list"]').text()
+
+    expect(audit).toContain('checkin.admin.sourceBankAdvance')
+    expect(audit).toContain('checkin.admin.sourceBankExchange')
+    expect(audit).not.toContain('bank_advance')
+    expect(audit).not.toContain('bank_exchange')
+  })
+
+  it.each([
+    ['mall_product', 'checkin.admin.sourceMallProduct'],
+    ['subscription', 'checkin.admin.sourceSubscription'],
+  ])('localizes %s temporary-credit source', async (source, key) => {
+    getTemporaryCredits.mockResolvedValue({
+      items: [{ ...auditItem, id: source === 'mall_product' ? 42 : 43, source }],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+
+    const wrapper = await mountAndOpen()
+    expect(wrapper.get('[data-testid="temporary-credit-audit-list"]').text()).toContain(key)
+    expect(wrapper.get('[data-testid="temporary-credit-audit-list"]').text()).not.toContain(source)
   })
 
   it('keeps permanent history on a separate request and view', async () => {

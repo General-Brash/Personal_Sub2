@@ -210,6 +210,33 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 	if err != nil {
 		return nil, nil, infraerrors.NotFound("NOT_FOUND", "order not found")
 	}
+	rejectedPurchaseRefund := s.hasAuditLog(ctx, oid, purchaseLimitRejectedPaymentAudit)
+	if o.Status == OrderStatusRefunding && rejectedPurchaseRefund {
+		handled, recoverErr := s.recoverRejectedProductRefund(ctx, o)
+		if recoverErr != nil {
+			return nil, nil, recoverErr
+		}
+		if handled {
+			o, err = s.entClient.PaymentOrder.Get(ctx, oid)
+			if err != nil {
+				return nil, nil, fmt.Errorf("reload recovered refund order: %w", err)
+			}
+			if o.Status == OrderStatusRefunding {
+				return nil, nil, infraerrors.Conflict("REFUND_IN_PROGRESS", "automatic refund is still in progress")
+			}
+		}
+	}
+	if rejectedPurchaseRefund {
+		switch o.Status {
+		case OrderStatusRefunded:
+			return nil, &RefundResult{Success: true}, nil
+		case OrderStatusRefundPending:
+			// The gateway has already accepted this automatic refund. The
+			// query endpoint must reconcile it; issuing Refund again can create
+			// a duplicate refund on providers without idempotency keys.
+			return nil, &RefundResult{Success: false, Warning: "gateway refund is pending confirmation"}, nil
+		}
+	}
 	ok := []string{OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundPending, OrderStatusRefundFailed}
 	if !psSliceContains(ok, o.Status) {
 		return nil, nil, infraerrors.BadRequest("INVALID_STATUS", "order status does not allow refund")
@@ -246,6 +273,10 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 		rr = fmt.Sprintf("refund order:%d", o.ID)
 	}
 	p := &RefundPlan{OrderID: oid, Order: o, RefundAmount: amt, GatewayAmount: ga, Reason: rr, Force: force, DeductBalance: deduct, DeductionType: payment.DeductionTypeNone}
+	if s.hasAuditLog(ctx, oid, purchaseLimitRejectedPaymentAudit) {
+		p.DeductBalance = false
+		return p, nil, nil
+	}
 	if deduct {
 		if er := s.prepDeduct(ctx, o, p, force); er != nil {
 			return nil, er, nil
@@ -406,6 +437,24 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 	if err != nil {
 		return nil, infraerrors.NotFound("NOT_FOUND", "order not found")
 	}
+	if o.Status == OrderStatusRefunding && s.hasAuditLog(ctx, oid, purchaseLimitRejectedPaymentAudit) {
+		handled, recoverErr := s.recoverRejectedProductRefund(ctx, o)
+		if recoverErr != nil {
+			return nil, recoverErr
+		}
+		if handled {
+			o, err = s.entClient.PaymentOrder.Get(ctx, oid)
+			if err != nil {
+				return nil, fmt.Errorf("reload recovered refund order: %w", err)
+			}
+			if o.Status == OrderStatusRefunded {
+				return &RefundResult{Success: true}, nil
+			}
+			if o.Status == OrderStatusRefunding {
+				return nil, infraerrors.Conflict("REFUND_IN_PROGRESS", "automatic refund is still in progress")
+			}
+		}
+	}
 	if o.Status != OrderStatusRefundPending {
 		return nil, infraerrors.BadRequest("INVALID_STATUS", "only refund pending orders can be finalized")
 	}
@@ -420,12 +469,18 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 	}
 
 	pendingDetail := s.latestRefundPendingDetail(ctx, oid)
+	gatewayRefundAmount := calculateGatewayRefundAmount(
+		o.Amount,
+		o.PayAmount,
+		o.RefundAmount,
+		PaymentOrderCurrency(o),
+	)
 	finishProviderCall := servertiming.ObserveDependency(ctx, "payment")
 	resp, err := queryProvider.QueryRefund(ctx, payment.RefundQueryRequest{
 		TradeNo:  o.PaymentTradeNo,
 		OrderID:  o.OutTradeNo,
 		RefundID: pendingDetail.RefundID,
-		Amount:   formatGatewayRefundAmount(o.RefundAmount, o),
+		Amount:   formatGatewayRefundAmount(gatewayRefundAmount, o),
 	})
 	finishProviderCall()
 	if err != nil {
@@ -483,7 +538,7 @@ func (s *PaymentService) refundFinalizePlan(o *dbent.PaymentOrder) *RefundPlan {
 }
 
 func (s *PaymentService) applyRefundFinalDeduction(ctx context.Context, p *RefundPlan) error {
-	if s.hasAuditLog(ctx, p.OrderID, "REFUND_SUCCESS") {
+	if s.hasAuditLog(ctx, p.OrderID, "REFUND_SUCCESS") || s.hasAuditLog(ctx, p.OrderID, purchaseLimitRejectedPaymentAudit) {
 		p.BalanceToDeduct = 0
 		p.SubDaysToDeduct = 0
 		return nil
@@ -564,9 +619,22 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 		fs = OrderStatusPartiallyRefunded
 	}
 	now := time.Now()
-	_, err := s.entClient.PaymentOrder.UpdateOneID(p.OrderID).SetStatus(fs).SetRefundAmount(p.RefundAmount).SetRefundReason(p.Reason).SetRefundAt(now).SetForceRefund(p.Force).Save(ctx)
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin mark refund: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, err = tx.PaymentOrder.UpdateOneID(p.OrderID).SetStatus(fs).SetRefundAmount(p.RefundAmount).SetRefundReason(p.Reason).SetRefundAt(now).SetForceRefund(p.Force).Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("mark refund: %w", err)
+	}
+	if fs == OrderStatusRefunded {
+		if err := releaseConsumedPurchaseTx(ctx, tx, p.OrderID); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit mark refund: %w", err)
 	}
 	s.writeAuditLog(ctx, p.OrderID, "REFUND_SUCCESS", "admin", map[string]any{"refundAmount": p.RefundAmount, "reason": p.Reason, "balanceDeducted": p.BalanceToDeduct, "force": p.Force})
 	return &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct}, nil

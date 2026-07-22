@@ -9,6 +9,9 @@ import type {
   SubscriptionPlan,
   MethodLimitsResponse,
   CheckoutInfoResponse,
+  MallBalanceSummary,
+  MallPurchaseRequest,
+  MallPurchaseResult,
   CreateOrderRequest,
   CreateOrderResult,
   PaymentOrder
@@ -37,6 +40,18 @@ export const paymentAPI = {
   /** Get all checkout page data in a single call */
   getCheckoutInfo() {
     return apiClient.get<CheckoutInfoResponse>('/payment/checkout-info')
+  },
+
+  /** Get the mall wallet summary without triggering bank settlement. */
+  getMallBalance() {
+    return apiClient.get<MallBalanceSummary>('/mall/balance')
+  },
+
+  /** Purchase a mall product with internal permanent or temporary credit. */
+  purchaseMallProduct(data: MallPurchaseRequest, idempotencyKey: string) {
+    return apiClient.post<MallPurchaseResult>('/mall/purchases', data, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    })
   },
 
   /** Get payment method limits and fee rates */

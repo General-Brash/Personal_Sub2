@@ -81,7 +81,7 @@
               v-else
               :to="item.path"
               class="sidebar-link mb-1"
-              :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
+              :class="{ 'sidebar-link-active': isActive(item), 'sidebar-link-collapsed': sidebarCollapsed }"
               :title="sidebarCollapsed ? item.label : undefined"
               :id="
                 item.path === '/admin/accounts'
@@ -114,7 +114,7 @@
             :key="item.path"
             :to="item.path"
             class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
+            :class="{ 'sidebar-link-active': isActive(item), 'sidebar-link-collapsed': sidebarCollapsed }"
             :title="sidebarCollapsed ? item.label : undefined"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
             @click="handleMenuItemClick(item.path)"
@@ -134,7 +134,7 @@
             :key="item.path"
             :to="item.path"
             class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
+            :class="{ 'sidebar-link-active': isActive(item), 'sidebar-link-collapsed': sidebarCollapsed }"
             :title="sidebarCollapsed ? item.label : undefined"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
             @click="handleMenuItemClick(item.path)"
@@ -203,6 +203,7 @@ interface NavItem {
   label: string
   icon: unknown
   iconSvg?: string
+  activePaths?: string[]
   hideInSimpleMode?: boolean
   children?: NavItem[]
   /**
@@ -684,6 +685,7 @@ const flagChannelMonitor = makeSidebarFlag(FeatureFlags.channelMonitor)
 const flagPayment = makeSidebarFlag(FeatureFlags.payment)
 const flagAvailableChannels = makeSidebarFlag(FeatureFlags.availableChannels)
 const flagUserChannelStatus = makeSidebarFlag(FeatureFlags.userChannelStatus)
+const flagMall = makeSidebarFlag(FeatureFlags.mall)
 const flagUserSubscriptions = makeSidebarFlag(FeatureFlags.userSubscriptions)
 const flagAdminSubscriptions = makeSidebarFlag(FeatureFlags.adminSubscriptions)
 const flagAdminPromoCodes = makeSidebarFlag(FeatureFlags.adminPromoCodes)
@@ -707,6 +709,13 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   }
   items.push(
     { path: '/check-in', label: t('checkin.title'), icon: GiftIcon },
+    {
+      path: '/mall',
+      label: t('commerce.title'),
+      icon: RechargeSubscriptionIcon,
+      activePaths: ['/purchase'],
+      featureFlag: flagMall,
+    },
     { path: '/bank', label: t('bank.title'), icon: CreditCardIcon },
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
@@ -714,7 +723,6 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagVisibleChannelStatus },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagUserSubscriptions },
-    { path: '/purchase', label: t('nav.buySubscription'), icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
@@ -879,8 +887,9 @@ function handleMenuItemClick(itemPath: string) {
   }
 }
 
-function isActive(path: string): boolean {
-  return route.path === path || route.path.startsWith(path + '/')
+function isActive(item: NavItem): boolean {
+  const paths = [item.path, ...(item.activePaths ?? [])]
+  return paths.some((path) => route.path === path || route.path.startsWith(path + '/'))
 }
 
 function isGroupActive(item: NavItem): boolean {

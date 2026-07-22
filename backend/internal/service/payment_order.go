@@ -36,7 +36,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if !cfg.Enabled {
 		return nil, infraerrors.Forbidden("PAYMENT_DISABLED", "payment system is disabled")
 	}
-	plan, err := s.validateOrderInput(ctx, req, cfg)
+	plan, product, err := s.validateOrderInput(ctx, req, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +58,9 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if plan != nil {
 		orderAmount = plan.Price
 		limitAmount = plan.Price
+	} else if product != nil {
+		orderAmount = product.CreditedPermanentAmount
+		limitAmount = product.PaymentPrice
 	} else if req.OrderType == payment.OrderTypeBalance {
 		orderAmount = calculateCreditedBalance(req.Amount, cfg.BalanceRechargeMultiplier)
 	}
@@ -100,35 +103,67 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if oauthResp != nil {
 		return oauthResp, nil
 	}
-	order, err := s.createOrderInTx(ctx, req, user, plan, cfg, orderAmount, limitAmount, feeRate, payAmount, sel)
+	order, err := s.createOrderInTxWithProduct(ctx, req, user, plan, product, cfg, orderAmount, limitAmount, feeRate, payAmount, sel)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := s.invokeProvider(ctx, order, req, cfg, limitAmount, payAmountStr, payAmount, plan, sel)
 	if err != nil {
-		_, _ = s.entClient.PaymentOrder.UpdateOneID(order.ID).
-			SetStatus(OrderStatusFailed).
-			Save(ctx)
+		if releaseErr := s.failPendingOrderAndReleasePurchase(ctx, order.ID); releaseErr != nil {
+			slog.Error("release purchase reservation after provider failure", "orderID", order.ID, "error", releaseErr)
+		}
 		return nil, err
 	}
 	return resp, nil
 }
 
-func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
+func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, *dbent.CurrencyProduct, error) {
+	switch req.OrderType {
+	case payment.OrderTypeBalance, payment.OrderTypeSubscription:
+	default:
+		return nil, nil, infraerrors.BadRequest("INVALID_ORDER_TYPE", "unsupported payment order type")
+	}
 	if req.OrderType == payment.OrderTypeBalance && cfg.BalanceDisabled {
-		return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
+		return nil, nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
 	}
 	if req.OrderType == payment.OrderTypeSubscription {
-		return s.validateSubOrder(ctx, req)
+		if req.ProductID != 0 {
+			return nil, nil, infraerrors.BadRequest("INVALID_INPUT", "subscription orders cannot include product_id")
+		}
+		plan, err := s.validateSubOrder(ctx, req)
+		return plan, nil, err
 	}
-	if math.IsNaN(req.Amount) || math.IsInf(req.Amount, 0) || req.Amount <= 0 {
-		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must be a positive number")
+	if req.ProductID != 0 {
+		if req.ProductID < 0 || req.PlanID != 0 || req.Amount != 0 {
+			return nil, nil, infraerrors.BadRequest("CURRENCY_PRODUCT_INPUT_INVALID", "fixed currency product orders accept only product_id")
+		}
+		product, err := s.configService.GetCurrencyProductForSale(ctx, req.ProductID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if product.CreditedType != string(MallCreditTypePermanent) {
+			return nil, nil, infraerrors.BadRequest("CURRENCY_PRODUCT_INTERNAL_ONLY", "temporary-credit products must use internal mall settlement")
+		}
+		return nil, product, nil
 	}
-	if (cfg.MinAmount > 0 && req.Amount < cfg.MinAmount) || (cfg.MaxAmount > 0 && req.Amount > cfg.MaxAmount) {
-		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount out of range").
+	if req.PlanID != 0 {
+		return nil, nil, infraerrors.BadRequest("INVALID_INPUT", "balance orders cannot include plan_id")
+	}
+	if err := validateBalanceOrderAmount(req.Amount, cfg); err != nil {
+		return nil, nil, err
+	}
+	return nil, nil, nil
+}
+
+func validateBalanceOrderAmount(amount float64, cfg *PaymentConfig) error {
+	if math.IsNaN(amount) || math.IsInf(amount, 0) || amount <= 0 {
+		return infraerrors.BadRequest("INVALID_AMOUNT", "amount must be a positive number")
+	}
+	if (cfg.MinAmount > 0 && amount < cfg.MinAmount) || (cfg.MaxAmount > 0 && amount > cfg.MaxAmount) {
+		return infraerrors.BadRequest("INVALID_AMOUNT", "amount out of range").
 			WithMetadata(map[string]string{"min": fmt.Sprintf("%.2f", cfg.MinAmount), "max": fmt.Sprintf("%.2f", cfg.MaxAmount)})
 	}
-	return nil, nil
+	return nil
 }
 
 func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRequest) (*dbent.SubscriptionPlan, error) {
@@ -138,6 +173,9 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	plan, err := s.configService.GetPlan(ctx, req.PlanID)
 	if err != nil || !plan.ForSale {
 		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan not found or not for sale")
+	}
+	if plan.BenefitType != string(SubscriptionBenefitSub2) {
+		return nil, infraerrors.BadRequest("SUBSCRIPTION_PLAN_INTERNAL_ONLY", "daily temporary credit plans must use internal mall settlement")
 	}
 	group, err := s.groupRepo.GetByID(ctx, plan.GroupID)
 	if err != nil || group.Status != payment.EntityStatusActive {
@@ -150,6 +188,10 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 }
 
 func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
+	return s.createOrderInTxWithProduct(ctx, req, user, plan, nil, cfg, orderAmount, limitAmount, feeRate, payAmount, sel)
+}
+
+func (s *PaymentService) createOrderInTxWithProduct(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, product *dbent.CurrencyProduct, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
@@ -165,7 +207,8 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	if tm <= 0 {
 		tm = defaultOrderTimeoutMin
 	}
-	exp := time.Now().Add(time.Duration(tm) * time.Minute)
+	createdAt := time.Now()
+	exp := createdAt.Add(time.Duration(tm) * time.Minute)
 	outTradeNo, err := s.allocateOutTradeNo(ctx, tx)
 	if err != nil {
 		return nil, err
@@ -191,6 +234,8 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		SetPaymentTradeNo("").
 		SetOrderType(req.OrderType).
 		SetStatus(OrderStatusPending).
+		SetDailyPurchaseLimitSnapshot(0).
+		SetTotalPurchaseLimitSnapshot(0).
 		SetExpiresAt(exp).
 		SetClientIP(req.ClientIP).
 		SetSrcHost(req.SrcHost)
@@ -207,11 +252,26 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		b.SetProviderSnapshot(providerSnapshot)
 	}
 	if plan != nil {
-		b.SetPlanID(plan.ID).SetSubscriptionGroupID(plan.GroupID).SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit))
+		b.SetPlanID(plan.ID).
+			SetSubscriptionGroupID(plan.GroupID).
+			SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)).
+			SetDailyPurchaseLimitSnapshot(plan.DailyPurchaseLimit).
+			SetTotalPurchaseLimitSnapshot(plan.TotalPurchaseLimit)
+	}
+	if product != nil {
+		b.SetCurrencyProductID(product.ID).
+			SetCurrencyProductName(product.Name).
+			SetCurrencyProductPaymentPrice(product.PaymentPrice).
+			SetCurrencyProductCreditedAmount(product.CreditedPermanentAmount).
+			SetDailyPurchaseLimitSnapshot(product.DailyPurchaseLimit).
+			SetTotalPurchaseLimitSnapshot(product.TotalPurchaseLimit)
 	}
 	order, err := b.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
+	}
+	if err := s.reservePurchaseTx(ctx, tx, order.ID, req.UserID, purchaseLimitSpecFor(plan, product), createdAt); err != nil {
+		return nil, err
 	}
 	code := fmt.Sprintf("PAY-%d-%d", order.ID, time.Now().UnixNano()%100000)
 	order, err = tx.PaymentOrder.UpdateOneID(order.ID).SetRechargeCode(code).Save(ctx)
@@ -414,6 +474,9 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 			WithMetadata(map[string]string{"provider": sel.ProviderKey, "instance_id": sel.InstanceID})
 	}
 	subject := s.buildPaymentSubject(plan, limitAmount, cfg, sel)
+	if order.CurrencyProductName != nil && strings.TrimSpace(*order.CurrencyProductName) != "" {
+		subject = applyPaymentProductNameAffix(*order.CurrencyProductName, cfg)
+	}
 	outTradeNo := order.OutTradeNo
 	canonicalReturnURL, err := CanonicalizeReturnURL(req.ReturnURL, req.SrcHost, req.SrcURL)
 	if err != nil {
@@ -468,12 +531,13 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		return nil, fmt.Errorf("update order with payment details: %w", err)
 	}
 	s.writeAuditLog(ctx, order.ID, "ORDER_CREATED", fmt.Sprintf("user:%d", req.UserID), map[string]any{
-		"paymentAmount":  req.Amount,
+		"paymentAmount":  limitAmount,
 		"creditedAmount": order.Amount,
 		"payAmount":      order.PayAmount,
 		"paymentType":    req.PaymentType,
 		"orderType":      req.OrderType,
 		"paymentSource":  NormalizePaymentSource(req.PaymentSource),
+		"productID":      req.ProductID,
 	})
 	resultType := pr.ResultType
 	if resultType == "" {
@@ -728,6 +792,7 @@ func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest,
 		Status:       OrderStatusPending,
 		ResultType:   resultType,
 		PaymentType:  req.PaymentType,
+		ProductID:    req.ProductID,
 		OutTradeNo:   order.OutTradeNo,
 		PayURL:       pr.PayURL,
 		QRCode:       pr.QRCode,
@@ -759,6 +824,9 @@ func buildWeChatPaymentOAuthStartURL(req CreateOrderRequest, scope string) (stri
 	}
 	if req.PlanID > 0 {
 		q.Set("plan_id", strconv.FormatInt(req.PlanID, 10))
+	}
+	if req.ProductID > 0 {
+		q.Set("product_id", strconv.FormatInt(req.ProductID, 10))
 	}
 	if scope = strings.TrimSpace(scope); scope != "" {
 		q.Set("scope", scope)

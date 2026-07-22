@@ -196,6 +196,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/mall',
+    name: 'Commerce',
+    component: () => import('@/views/user/PaymentView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Store',
+      titleKey: 'commerce.title',
+      descriptionKey: 'commerce.description',
+      requiredFeatureFlag: FeatureFlags.mall
+    }
+  },
+  {
     path: '/check-in',
     name: 'CheckIn',
     component: () => import('@/views/user/CheckInView.vue'),
@@ -320,15 +333,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/purchase',
     name: 'PurchaseSubscription',
-    component: () => import('@/views/user/PaymentView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: false,
-      title: 'Purchase Subscription',
-      titleKey: 'nav.buySubscription',
-      descriptionKey: 'purchase.description',
-      requiresPayment: true
-    }
+    redirect: (to) => ({ path: '/mall', query: to.query, hash: to.hash })
   },
   {
     path: '/orders',
@@ -730,6 +735,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/orders/shelves',
+    name: 'AdminPaymentShelves',
+    component: () => import('@/views/admin/orders/AdminCurrencyProductsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Storefront Shelf',
+      titleKey: 'commerce.shelf.title',
+      descriptionKey: 'commerce.shelf.description'
+    }
+  },
+  {
     path: '/admin/orders/plans',
     name: 'AdminPaymentPlans',
     component: () => import('@/views/admin/orders/AdminPaymentPlansView.vue'),
@@ -737,8 +754,7 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       requiresAdmin: true,
       title: 'Subscription Plans',
-      titleKey: 'nav.paymentPlans',
-      requiresPayment: true
+      titleKey: 'nav.paymentPlans'
     }
   },
 

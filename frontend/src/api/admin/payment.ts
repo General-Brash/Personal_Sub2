@@ -9,6 +9,8 @@ import type {
   PaymentOrder,
   PaymentChannel,
   SubscriptionPlan,
+  CurrencyProduct,
+  CurrencyProductInput,
   ProviderInstance
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
@@ -167,6 +169,24 @@ export const adminPaymentAPI = {
   /** Delete a subscription plan */
   deletePlan(id: number) {
     return apiClient.delete(`/admin/payment/plans/${id}`)
+  },
+
+  // ==================== Currency Products ====================
+
+  getCurrencyProducts() {
+    return apiClient.get<CurrencyProduct[]>('/admin/payment/currency-products')
+  },
+
+  createCurrencyProduct(data: CurrencyProductInput) {
+    return apiClient.post<CurrencyProduct>('/admin/payment/currency-products', data)
+  },
+
+  updateCurrencyProduct(id: number, data: Partial<CurrencyProductInput>) {
+    return apiClient.put<CurrencyProduct>(`/admin/payment/currency-products/${id}`, data)
+  },
+
+  deleteCurrencyProduct(id: number) {
+    return apiClient.delete(`/admin/payment/currency-products/${id}`)
   },
 
   // ==================== Provider Instances ====================

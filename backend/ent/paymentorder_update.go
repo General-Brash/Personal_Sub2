@@ -365,6 +365,149 @@ func (_u *PaymentOrderUpdate) ClearSubscriptionDays() *PaymentOrderUpdate {
 	return _u
 }
 
+// SetCurrencyProductID sets the "currency_product_id" field.
+func (_u *PaymentOrderUpdate) SetCurrencyProductID(v int64) *PaymentOrderUpdate {
+	_u.mutation.ResetCurrencyProductID()
+	_u.mutation.SetCurrencyProductID(v)
+	return _u
+}
+
+// SetNillableCurrencyProductID sets the "currency_product_id" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableCurrencyProductID(v *int64) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetCurrencyProductID(*v)
+	}
+	return _u
+}
+
+// AddCurrencyProductID adds value to the "currency_product_id" field.
+func (_u *PaymentOrderUpdate) AddCurrencyProductID(v int64) *PaymentOrderUpdate {
+	_u.mutation.AddCurrencyProductID(v)
+	return _u
+}
+
+// ClearCurrencyProductID clears the value of the "currency_product_id" field.
+func (_u *PaymentOrderUpdate) ClearCurrencyProductID() *PaymentOrderUpdate {
+	_u.mutation.ClearCurrencyProductID()
+	return _u
+}
+
+// SetCurrencyProductName sets the "currency_product_name" field.
+func (_u *PaymentOrderUpdate) SetCurrencyProductName(v string) *PaymentOrderUpdate {
+	_u.mutation.SetCurrencyProductName(v)
+	return _u
+}
+
+// SetNillableCurrencyProductName sets the "currency_product_name" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableCurrencyProductName(v *string) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetCurrencyProductName(*v)
+	}
+	return _u
+}
+
+// ClearCurrencyProductName clears the value of the "currency_product_name" field.
+func (_u *PaymentOrderUpdate) ClearCurrencyProductName() *PaymentOrderUpdate {
+	_u.mutation.ClearCurrencyProductName()
+	return _u
+}
+
+// SetCurrencyProductPaymentPrice sets the "currency_product_payment_price" field.
+func (_u *PaymentOrderUpdate) SetCurrencyProductPaymentPrice(v float64) *PaymentOrderUpdate {
+	_u.mutation.ResetCurrencyProductPaymentPrice()
+	_u.mutation.SetCurrencyProductPaymentPrice(v)
+	return _u
+}
+
+// SetNillableCurrencyProductPaymentPrice sets the "currency_product_payment_price" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableCurrencyProductPaymentPrice(v *float64) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetCurrencyProductPaymentPrice(*v)
+	}
+	return _u
+}
+
+// AddCurrencyProductPaymentPrice adds value to the "currency_product_payment_price" field.
+func (_u *PaymentOrderUpdate) AddCurrencyProductPaymentPrice(v float64) *PaymentOrderUpdate {
+	_u.mutation.AddCurrencyProductPaymentPrice(v)
+	return _u
+}
+
+// ClearCurrencyProductPaymentPrice clears the value of the "currency_product_payment_price" field.
+func (_u *PaymentOrderUpdate) ClearCurrencyProductPaymentPrice() *PaymentOrderUpdate {
+	_u.mutation.ClearCurrencyProductPaymentPrice()
+	return _u
+}
+
+// SetCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field.
+func (_u *PaymentOrderUpdate) SetCurrencyProductCreditedAmount(v float64) *PaymentOrderUpdate {
+	_u.mutation.ResetCurrencyProductCreditedAmount()
+	_u.mutation.SetCurrencyProductCreditedAmount(v)
+	return _u
+}
+
+// SetNillableCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableCurrencyProductCreditedAmount(v *float64) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetCurrencyProductCreditedAmount(*v)
+	}
+	return _u
+}
+
+// AddCurrencyProductCreditedAmount adds value to the "currency_product_credited_amount" field.
+func (_u *PaymentOrderUpdate) AddCurrencyProductCreditedAmount(v float64) *PaymentOrderUpdate {
+	_u.mutation.AddCurrencyProductCreditedAmount(v)
+	return _u
+}
+
+// ClearCurrencyProductCreditedAmount clears the value of the "currency_product_credited_amount" field.
+func (_u *PaymentOrderUpdate) ClearCurrencyProductCreditedAmount() *PaymentOrderUpdate {
+	_u.mutation.ClearCurrencyProductCreditedAmount()
+	return _u
+}
+
+// SetDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field.
+func (_u *PaymentOrderUpdate) SetDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpdate {
+	_u.mutation.ResetDailyPurchaseLimitSnapshot()
+	_u.mutation.SetDailyPurchaseLimitSnapshot(v)
+	return _u
+}
+
+// SetNillableDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableDailyPurchaseLimitSnapshot(v *int) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetDailyPurchaseLimitSnapshot(*v)
+	}
+	return _u
+}
+
+// AddDailyPurchaseLimitSnapshot adds value to the "daily_purchase_limit_snapshot" field.
+func (_u *PaymentOrderUpdate) AddDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpdate {
+	_u.mutation.AddDailyPurchaseLimitSnapshot(v)
+	return _u
+}
+
+// SetTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field.
+func (_u *PaymentOrderUpdate) SetTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpdate {
+	_u.mutation.ResetTotalPurchaseLimitSnapshot()
+	_u.mutation.SetTotalPurchaseLimitSnapshot(v)
+	return _u
+}
+
+// SetNillableTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableTotalPurchaseLimitSnapshot(v *int) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetTotalPurchaseLimitSnapshot(*v)
+	}
+	return _u
+}
+
+// AddTotalPurchaseLimitSnapshot adds value to the "total_purchase_limit_snapshot" field.
+func (_u *PaymentOrderUpdate) AddTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpdate {
+	_u.mutation.AddTotalPurchaseLimitSnapshot(v)
+	return _u
+}
+
 // SetProviderInstanceID sets the "provider_instance_id" field.
 func (_u *PaymentOrderUpdate) SetProviderInstanceID(v string) *PaymentOrderUpdate {
 	_u.mutation.SetProviderInstanceID(v)
@@ -803,6 +946,21 @@ func (_u *PaymentOrderUpdate) check() error {
 			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.order_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.CurrencyProductName(); ok {
+		if err := paymentorder.CurrencyProductNameValidator(v); err != nil {
+			return &ValidationError{Name: "currency_product_name", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.currency_product_name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DailyPurchaseLimitSnapshot(); ok {
+		if err := paymentorder.DailyPurchaseLimitSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "daily_purchase_limit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.daily_purchase_limit_snapshot": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TotalPurchaseLimitSnapshot(); ok {
+		if err := paymentorder.TotalPurchaseLimitSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "total_purchase_limit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.total_purchase_limit_snapshot": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ProviderInstanceID(); ok {
 		if err := paymentorder.ProviderInstanceIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_instance_id", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_instance_id": %w`, err)}
@@ -940,6 +1098,51 @@ func (_u *PaymentOrderUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.SubscriptionDaysCleared() {
 		_spec.ClearField(paymentorder.FieldSubscriptionDays, field.TypeInt)
+	}
+	if value, ok := _u.mutation.CurrencyProductID(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCurrencyProductID(); ok {
+		_spec.AddField(paymentorder.FieldCurrencyProductID, field.TypeInt64, value)
+	}
+	if _u.mutation.CurrencyProductIDCleared() {
+		_spec.ClearField(paymentorder.FieldCurrencyProductID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.CurrencyProductName(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductName, field.TypeString, value)
+	}
+	if _u.mutation.CurrencyProductNameCleared() {
+		_spec.ClearField(paymentorder.FieldCurrencyProductName, field.TypeString)
+	}
+	if value, ok := _u.mutation.CurrencyProductPaymentPrice(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductPaymentPrice, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedCurrencyProductPaymentPrice(); ok {
+		_spec.AddField(paymentorder.FieldCurrencyProductPaymentPrice, field.TypeFloat64, value)
+	}
+	if _u.mutation.CurrencyProductPaymentPriceCleared() {
+		_spec.ClearField(paymentorder.FieldCurrencyProductPaymentPrice, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.CurrencyProductCreditedAmount(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductCreditedAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedCurrencyProductCreditedAmount(); ok {
+		_spec.AddField(paymentorder.FieldCurrencyProductCreditedAmount, field.TypeFloat64, value)
+	}
+	if _u.mutation.CurrencyProductCreditedAmountCleared() {
+		_spec.ClearField(paymentorder.FieldCurrencyProductCreditedAmount, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.DailyPurchaseLimitSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldDailyPurchaseLimitSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedDailyPurchaseLimitSnapshot(); ok {
+		_spec.AddField(paymentorder.FieldDailyPurchaseLimitSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TotalPurchaseLimitSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldTotalPurchaseLimitSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTotalPurchaseLimitSnapshot(); ok {
+		_spec.AddField(paymentorder.FieldTotalPurchaseLimitSnapshot, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.ProviderInstanceID(); ok {
 		_spec.SetField(paymentorder.FieldProviderInstanceID, field.TypeString, value)
@@ -1428,6 +1631,149 @@ func (_u *PaymentOrderUpdateOne) ClearSubscriptionDays() *PaymentOrderUpdateOne 
 	return _u
 }
 
+// SetCurrencyProductID sets the "currency_product_id" field.
+func (_u *PaymentOrderUpdateOne) SetCurrencyProductID(v int64) *PaymentOrderUpdateOne {
+	_u.mutation.ResetCurrencyProductID()
+	_u.mutation.SetCurrencyProductID(v)
+	return _u
+}
+
+// SetNillableCurrencyProductID sets the "currency_product_id" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableCurrencyProductID(v *int64) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetCurrencyProductID(*v)
+	}
+	return _u
+}
+
+// AddCurrencyProductID adds value to the "currency_product_id" field.
+func (_u *PaymentOrderUpdateOne) AddCurrencyProductID(v int64) *PaymentOrderUpdateOne {
+	_u.mutation.AddCurrencyProductID(v)
+	return _u
+}
+
+// ClearCurrencyProductID clears the value of the "currency_product_id" field.
+func (_u *PaymentOrderUpdateOne) ClearCurrencyProductID() *PaymentOrderUpdateOne {
+	_u.mutation.ClearCurrencyProductID()
+	return _u
+}
+
+// SetCurrencyProductName sets the "currency_product_name" field.
+func (_u *PaymentOrderUpdateOne) SetCurrencyProductName(v string) *PaymentOrderUpdateOne {
+	_u.mutation.SetCurrencyProductName(v)
+	return _u
+}
+
+// SetNillableCurrencyProductName sets the "currency_product_name" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableCurrencyProductName(v *string) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetCurrencyProductName(*v)
+	}
+	return _u
+}
+
+// ClearCurrencyProductName clears the value of the "currency_product_name" field.
+func (_u *PaymentOrderUpdateOne) ClearCurrencyProductName() *PaymentOrderUpdateOne {
+	_u.mutation.ClearCurrencyProductName()
+	return _u
+}
+
+// SetCurrencyProductPaymentPrice sets the "currency_product_payment_price" field.
+func (_u *PaymentOrderUpdateOne) SetCurrencyProductPaymentPrice(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.ResetCurrencyProductPaymentPrice()
+	_u.mutation.SetCurrencyProductPaymentPrice(v)
+	return _u
+}
+
+// SetNillableCurrencyProductPaymentPrice sets the "currency_product_payment_price" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableCurrencyProductPaymentPrice(v *float64) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetCurrencyProductPaymentPrice(*v)
+	}
+	return _u
+}
+
+// AddCurrencyProductPaymentPrice adds value to the "currency_product_payment_price" field.
+func (_u *PaymentOrderUpdateOne) AddCurrencyProductPaymentPrice(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.AddCurrencyProductPaymentPrice(v)
+	return _u
+}
+
+// ClearCurrencyProductPaymentPrice clears the value of the "currency_product_payment_price" field.
+func (_u *PaymentOrderUpdateOne) ClearCurrencyProductPaymentPrice() *PaymentOrderUpdateOne {
+	_u.mutation.ClearCurrencyProductPaymentPrice()
+	return _u
+}
+
+// SetCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field.
+func (_u *PaymentOrderUpdateOne) SetCurrencyProductCreditedAmount(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.ResetCurrencyProductCreditedAmount()
+	_u.mutation.SetCurrencyProductCreditedAmount(v)
+	return _u
+}
+
+// SetNillableCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableCurrencyProductCreditedAmount(v *float64) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetCurrencyProductCreditedAmount(*v)
+	}
+	return _u
+}
+
+// AddCurrencyProductCreditedAmount adds value to the "currency_product_credited_amount" field.
+func (_u *PaymentOrderUpdateOne) AddCurrencyProductCreditedAmount(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.AddCurrencyProductCreditedAmount(v)
+	return _u
+}
+
+// ClearCurrencyProductCreditedAmount clears the value of the "currency_product_credited_amount" field.
+func (_u *PaymentOrderUpdateOne) ClearCurrencyProductCreditedAmount() *PaymentOrderUpdateOne {
+	_u.mutation.ClearCurrencyProductCreditedAmount()
+	return _u
+}
+
+// SetDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field.
+func (_u *PaymentOrderUpdateOne) SetDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpdateOne {
+	_u.mutation.ResetDailyPurchaseLimitSnapshot()
+	_u.mutation.SetDailyPurchaseLimitSnapshot(v)
+	return _u
+}
+
+// SetNillableDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableDailyPurchaseLimitSnapshot(v *int) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetDailyPurchaseLimitSnapshot(*v)
+	}
+	return _u
+}
+
+// AddDailyPurchaseLimitSnapshot adds value to the "daily_purchase_limit_snapshot" field.
+func (_u *PaymentOrderUpdateOne) AddDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpdateOne {
+	_u.mutation.AddDailyPurchaseLimitSnapshot(v)
+	return _u
+}
+
+// SetTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field.
+func (_u *PaymentOrderUpdateOne) SetTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpdateOne {
+	_u.mutation.ResetTotalPurchaseLimitSnapshot()
+	_u.mutation.SetTotalPurchaseLimitSnapshot(v)
+	return _u
+}
+
+// SetNillableTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableTotalPurchaseLimitSnapshot(v *int) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetTotalPurchaseLimitSnapshot(*v)
+	}
+	return _u
+}
+
+// AddTotalPurchaseLimitSnapshot adds value to the "total_purchase_limit_snapshot" field.
+func (_u *PaymentOrderUpdateOne) AddTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpdateOne {
+	_u.mutation.AddTotalPurchaseLimitSnapshot(v)
+	return _u
+}
+
 // SetProviderInstanceID sets the "provider_instance_id" field.
 func (_u *PaymentOrderUpdateOne) SetProviderInstanceID(v string) *PaymentOrderUpdateOne {
 	_u.mutation.SetProviderInstanceID(v)
@@ -1879,6 +2225,21 @@ func (_u *PaymentOrderUpdateOne) check() error {
 			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.order_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.CurrencyProductName(); ok {
+		if err := paymentorder.CurrencyProductNameValidator(v); err != nil {
+			return &ValidationError{Name: "currency_product_name", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.currency_product_name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DailyPurchaseLimitSnapshot(); ok {
+		if err := paymentorder.DailyPurchaseLimitSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "daily_purchase_limit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.daily_purchase_limit_snapshot": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TotalPurchaseLimitSnapshot(); ok {
+		if err := paymentorder.TotalPurchaseLimitSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "total_purchase_limit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.total_purchase_limit_snapshot": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ProviderInstanceID(); ok {
 		if err := paymentorder.ProviderInstanceIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_instance_id", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_instance_id": %w`, err)}
@@ -2033,6 +2394,51 @@ func (_u *PaymentOrderUpdateOne) sqlSave(ctx context.Context) (_node *PaymentOrd
 	}
 	if _u.mutation.SubscriptionDaysCleared() {
 		_spec.ClearField(paymentorder.FieldSubscriptionDays, field.TypeInt)
+	}
+	if value, ok := _u.mutation.CurrencyProductID(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCurrencyProductID(); ok {
+		_spec.AddField(paymentorder.FieldCurrencyProductID, field.TypeInt64, value)
+	}
+	if _u.mutation.CurrencyProductIDCleared() {
+		_spec.ClearField(paymentorder.FieldCurrencyProductID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.CurrencyProductName(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductName, field.TypeString, value)
+	}
+	if _u.mutation.CurrencyProductNameCleared() {
+		_spec.ClearField(paymentorder.FieldCurrencyProductName, field.TypeString)
+	}
+	if value, ok := _u.mutation.CurrencyProductPaymentPrice(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductPaymentPrice, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedCurrencyProductPaymentPrice(); ok {
+		_spec.AddField(paymentorder.FieldCurrencyProductPaymentPrice, field.TypeFloat64, value)
+	}
+	if _u.mutation.CurrencyProductPaymentPriceCleared() {
+		_spec.ClearField(paymentorder.FieldCurrencyProductPaymentPrice, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.CurrencyProductCreditedAmount(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductCreditedAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedCurrencyProductCreditedAmount(); ok {
+		_spec.AddField(paymentorder.FieldCurrencyProductCreditedAmount, field.TypeFloat64, value)
+	}
+	if _u.mutation.CurrencyProductCreditedAmountCleared() {
+		_spec.ClearField(paymentorder.FieldCurrencyProductCreditedAmount, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.DailyPurchaseLimitSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldDailyPurchaseLimitSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedDailyPurchaseLimitSnapshot(); ok {
+		_spec.AddField(paymentorder.FieldDailyPurchaseLimitSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TotalPurchaseLimitSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldTotalPurchaseLimitSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTotalPurchaseLimitSnapshot(); ok {
+		_spec.AddField(paymentorder.FieldTotalPurchaseLimitSnapshot, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.ProviderInstanceID(); ok {
 		_spec.SetField(paymentorder.FieldProviderInstanceID, field.TypeString, value)

@@ -14,6 +14,7 @@ import {
   exchangePermanentForTemporary,
   getBankSettings,
   getBankStatus,
+  repayBankDebt,
   requestBankAdvance,
   updateBankSettings,
   type BankPolicy,
@@ -26,6 +27,9 @@ describe('bank api', () => {
     debt_grace_days: 3,
     debt_conversion_ratio: '1.25000000',
     exchange_rate: '2.00000000',
+    unused_advance_debt_reduction_ratio: '0.75000000',
+    early_repay_temporary_ratio: '1.00000000',
+    early_repay_permanent_ratio: '2.00000000',
   }
 
   beforeEach(() => {
@@ -54,19 +58,27 @@ describe('bank api', () => {
     expect(result.permanent_balance).toBe('12.34567890')
   })
 
-  it('submits advance and exchange mutations with amount strings and idempotency keys', async () => {
+  it('submits bank mutations with amount strings and idempotency keys', async () => {
     post
       .mockResolvedValueOnce({ data: { amount: '5.00000000' } })
       .mockResolvedValueOnce({ data: { permanent_spent: '2.00000000' } })
+      .mockResolvedValueOnce({ data: { credit_spent: '1.00000000' } })
 
     await requestBankAdvance('5.00000000', 'advance-key')
     await exchangePermanentForTemporary('2.00000000', 'exchange-key')
+    await repayBankDebt('temporary', '1.00000000', 'repay-key')
 
     expect(post).toHaveBeenNthCalledWith(1, '/bank/advance', { amount: '5.00000000' }, {
       headers: { 'Idempotency-Key': 'advance-key' },
     })
     expect(post).toHaveBeenNthCalledWith(2, '/bank/exchange', { amount: '2.00000000' }, {
       headers: { 'Idempotency-Key': 'exchange-key' },
+    })
+    expect(post).toHaveBeenNthCalledWith(3, '/bank/repay', {
+      source: 'temporary',
+      amount: '1.00000000',
+    }, {
+      headers: { 'Idempotency-Key': 'repay-key' },
     })
   })
 

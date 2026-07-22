@@ -156,6 +156,12 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo Bui
 	return h
 }
 
+func ProvidePaymentHandler(paymentService *service.PaymentService, configService *service.PaymentConfigService, mallService *service.MallService) *PaymentHandler {
+	h := NewPaymentHandler(paymentService, configService)
+	h.SetMallService(mallService)
+	return h
+}
+
 func ProvideCheckinHandler(checkinService *service.CheckinService) *CheckinHandler {
 	return NewCheckinHandler(checkinService)
 }
@@ -243,7 +249,7 @@ var ProviderSet = wire.NewSet(
 	ProvideOpenAIGatewayHandler,
 	NewTotpHandler,
 	ProvideSettingHandler,
-	NewPaymentHandler,
+	ProvidePaymentHandler,
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
 	NewAsyncImageHandler,

@@ -29,14 +29,19 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/currencyproduct"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/malldailycreditsubscription"
+	"github.com/Wei-Shaw/sub2api/ent/mallpurchase"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
@@ -86,14 +91,19 @@ const (
 	TypeChannelMonitorDailyRollup      = "ChannelMonitorDailyRollup"
 	TypeChannelMonitorHistory          = "ChannelMonitorHistory"
 	TypeChannelMonitorRequestTemplate  = "ChannelMonitorRequestTemplate"
+	TypeCurrencyProduct                = "CurrencyProduct"
 	TypeDailyCheckin                   = "DailyCheckin"
 	TypeErrorPassthroughRule           = "ErrorPassthroughRule"
 	TypeGroup                          = "Group"
 	TypeIdempotencyRecord              = "IdempotencyRecord"
 	TypeIdentityAdoptionDecision       = "IdentityAdoptionDecision"
+	TypeMallDailyCreditSubscription    = "MallDailyCreditSubscription"
+	TypeMallPurchase                   = "MallPurchase"
 	TypePaymentAuditLog                = "PaymentAuditLog"
 	TypePaymentOrder                   = "PaymentOrder"
 	TypePaymentProviderInstance        = "PaymentProviderInstance"
+	TypePaymentPurchaseCounter         = "PaymentPurchaseCounter"
+	TypePaymentPurchaseReservation     = "PaymentPurchaseReservation"
 	TypePendingAuthSession             = "PendingAuthSession"
 	TypePromoCode                      = "PromoCode"
 	TypePromoCodeUsage                 = "PromoCodeUsage"
@@ -23659,6 +23669,1235 @@ func (m *ChannelMonitorRequestTemplateMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown ChannelMonitorRequestTemplate edge %s", name)
 }
 
+// CurrencyProductMutation represents an operation that mutates the CurrencyProduct nodes in the graph.
+type CurrencyProductMutation struct {
+	config
+	op                           Op
+	typ                          string
+	id                           *int64
+	name                         *string
+	description                  *string
+	payment_price                *float64
+	addpayment_price             *float64
+	payment_credit_type          *string
+	credited_type                *string
+	credited_amount              *float64
+	addcredited_amount           *float64
+	credited_permanent_amount    *float64
+	addcredited_permanent_amount *float64
+	sort_order                   *int
+	addsort_order                *int
+	is_active                    *bool
+	for_sale                     *bool
+	daily_purchase_limit         *int
+	adddaily_purchase_limit      *int
+	total_purchase_limit         *int
+	addtotal_purchase_limit      *int
+	created_at                   *time.Time
+	updated_at                   *time.Time
+	clearedFields                map[string]struct{}
+	done                         bool
+	oldValue                     func(context.Context) (*CurrencyProduct, error)
+	predicates                   []predicate.CurrencyProduct
+}
+
+var _ ent.Mutation = (*CurrencyProductMutation)(nil)
+
+// currencyproductOption allows management of the mutation configuration using functional options.
+type currencyproductOption func(*CurrencyProductMutation)
+
+// newCurrencyProductMutation creates new mutation for the CurrencyProduct entity.
+func newCurrencyProductMutation(c config, op Op, opts ...currencyproductOption) *CurrencyProductMutation {
+	m := &CurrencyProductMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCurrencyProduct,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCurrencyProductID sets the ID field of the mutation.
+func withCurrencyProductID(id int64) currencyproductOption {
+	return func(m *CurrencyProductMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CurrencyProduct
+		)
+		m.oldValue = func(ctx context.Context) (*CurrencyProduct, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CurrencyProduct.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCurrencyProduct sets the old CurrencyProduct of the mutation.
+func withCurrencyProduct(node *CurrencyProduct) currencyproductOption {
+	return func(m *CurrencyProductMutation) {
+		m.oldValue = func(context.Context) (*CurrencyProduct, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CurrencyProductMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CurrencyProductMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CurrencyProductMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CurrencyProductMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CurrencyProduct.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetName sets the "name" field.
+func (m *CurrencyProductMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *CurrencyProductMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *CurrencyProductMutation) ResetName() {
+	m.name = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *CurrencyProductMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *CurrencyProductMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *CurrencyProductMutation) ResetDescription() {
+	m.description = nil
+}
+
+// SetPaymentPrice sets the "payment_price" field.
+func (m *CurrencyProductMutation) SetPaymentPrice(f float64) {
+	m.payment_price = &f
+	m.addpayment_price = nil
+}
+
+// PaymentPrice returns the value of the "payment_price" field in the mutation.
+func (m *CurrencyProductMutation) PaymentPrice() (r float64, exists bool) {
+	v := m.payment_price
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaymentPrice returns the old "payment_price" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldPaymentPrice(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaymentPrice is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaymentPrice requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaymentPrice: %w", err)
+	}
+	return oldValue.PaymentPrice, nil
+}
+
+// AddPaymentPrice adds f to the "payment_price" field.
+func (m *CurrencyProductMutation) AddPaymentPrice(f float64) {
+	if m.addpayment_price != nil {
+		*m.addpayment_price += f
+	} else {
+		m.addpayment_price = &f
+	}
+}
+
+// AddedPaymentPrice returns the value that was added to the "payment_price" field in this mutation.
+func (m *CurrencyProductMutation) AddedPaymentPrice() (r float64, exists bool) {
+	v := m.addpayment_price
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPaymentPrice resets all changes to the "payment_price" field.
+func (m *CurrencyProductMutation) ResetPaymentPrice() {
+	m.payment_price = nil
+	m.addpayment_price = nil
+}
+
+// SetPaymentCreditType sets the "payment_credit_type" field.
+func (m *CurrencyProductMutation) SetPaymentCreditType(s string) {
+	m.payment_credit_type = &s
+}
+
+// PaymentCreditType returns the value of the "payment_credit_type" field in the mutation.
+func (m *CurrencyProductMutation) PaymentCreditType() (r string, exists bool) {
+	v := m.payment_credit_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaymentCreditType returns the old "payment_credit_type" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldPaymentCreditType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaymentCreditType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaymentCreditType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaymentCreditType: %w", err)
+	}
+	return oldValue.PaymentCreditType, nil
+}
+
+// ResetPaymentCreditType resets all changes to the "payment_credit_type" field.
+func (m *CurrencyProductMutation) ResetPaymentCreditType() {
+	m.payment_credit_type = nil
+}
+
+// SetCreditedType sets the "credited_type" field.
+func (m *CurrencyProductMutation) SetCreditedType(s string) {
+	m.credited_type = &s
+}
+
+// CreditedType returns the value of the "credited_type" field in the mutation.
+func (m *CurrencyProductMutation) CreditedType() (r string, exists bool) {
+	v := m.credited_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreditedType returns the old "credited_type" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldCreditedType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreditedType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreditedType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreditedType: %w", err)
+	}
+	return oldValue.CreditedType, nil
+}
+
+// ResetCreditedType resets all changes to the "credited_type" field.
+func (m *CurrencyProductMutation) ResetCreditedType() {
+	m.credited_type = nil
+}
+
+// SetCreditedAmount sets the "credited_amount" field.
+func (m *CurrencyProductMutation) SetCreditedAmount(f float64) {
+	m.credited_amount = &f
+	m.addcredited_amount = nil
+}
+
+// CreditedAmount returns the value of the "credited_amount" field in the mutation.
+func (m *CurrencyProductMutation) CreditedAmount() (r float64, exists bool) {
+	v := m.credited_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreditedAmount returns the old "credited_amount" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldCreditedAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreditedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreditedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreditedAmount: %w", err)
+	}
+	return oldValue.CreditedAmount, nil
+}
+
+// AddCreditedAmount adds f to the "credited_amount" field.
+func (m *CurrencyProductMutation) AddCreditedAmount(f float64) {
+	if m.addcredited_amount != nil {
+		*m.addcredited_amount += f
+	} else {
+		m.addcredited_amount = &f
+	}
+}
+
+// AddedCreditedAmount returns the value that was added to the "credited_amount" field in this mutation.
+func (m *CurrencyProductMutation) AddedCreditedAmount() (r float64, exists bool) {
+	v := m.addcredited_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCreditedAmount resets all changes to the "credited_amount" field.
+func (m *CurrencyProductMutation) ResetCreditedAmount() {
+	m.credited_amount = nil
+	m.addcredited_amount = nil
+}
+
+// SetCreditedPermanentAmount sets the "credited_permanent_amount" field.
+func (m *CurrencyProductMutation) SetCreditedPermanentAmount(f float64) {
+	m.credited_permanent_amount = &f
+	m.addcredited_permanent_amount = nil
+}
+
+// CreditedPermanentAmount returns the value of the "credited_permanent_amount" field in the mutation.
+func (m *CurrencyProductMutation) CreditedPermanentAmount() (r float64, exists bool) {
+	v := m.credited_permanent_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreditedPermanentAmount returns the old "credited_permanent_amount" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldCreditedPermanentAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreditedPermanentAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreditedPermanentAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreditedPermanentAmount: %w", err)
+	}
+	return oldValue.CreditedPermanentAmount, nil
+}
+
+// AddCreditedPermanentAmount adds f to the "credited_permanent_amount" field.
+func (m *CurrencyProductMutation) AddCreditedPermanentAmount(f float64) {
+	if m.addcredited_permanent_amount != nil {
+		*m.addcredited_permanent_amount += f
+	} else {
+		m.addcredited_permanent_amount = &f
+	}
+}
+
+// AddedCreditedPermanentAmount returns the value that was added to the "credited_permanent_amount" field in this mutation.
+func (m *CurrencyProductMutation) AddedCreditedPermanentAmount() (r float64, exists bool) {
+	v := m.addcredited_permanent_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCreditedPermanentAmount resets all changes to the "credited_permanent_amount" field.
+func (m *CurrencyProductMutation) ResetCreditedPermanentAmount() {
+	m.credited_permanent_amount = nil
+	m.addcredited_permanent_amount = nil
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (m *CurrencyProductMutation) SetSortOrder(i int) {
+	m.sort_order = &i
+	m.addsort_order = nil
+}
+
+// SortOrder returns the value of the "sort_order" field in the mutation.
+func (m *CurrencyProductMutation) SortOrder() (r int, exists bool) {
+	v := m.sort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSortOrder returns the old "sort_order" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldSortOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSortOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSortOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSortOrder: %w", err)
+	}
+	return oldValue.SortOrder, nil
+}
+
+// AddSortOrder adds i to the "sort_order" field.
+func (m *CurrencyProductMutation) AddSortOrder(i int) {
+	if m.addsort_order != nil {
+		*m.addsort_order += i
+	} else {
+		m.addsort_order = &i
+	}
+}
+
+// AddedSortOrder returns the value that was added to the "sort_order" field in this mutation.
+func (m *CurrencyProductMutation) AddedSortOrder() (r int, exists bool) {
+	v := m.addsort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSortOrder resets all changes to the "sort_order" field.
+func (m *CurrencyProductMutation) ResetSortOrder() {
+	m.sort_order = nil
+	m.addsort_order = nil
+}
+
+// SetIsActive sets the "is_active" field.
+func (m *CurrencyProductMutation) SetIsActive(b bool) {
+	m.is_active = &b
+}
+
+// IsActive returns the value of the "is_active" field in the mutation.
+func (m *CurrencyProductMutation) IsActive() (r bool, exists bool) {
+	v := m.is_active
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsActive returns the old "is_active" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldIsActive(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsActive is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsActive requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsActive: %w", err)
+	}
+	return oldValue.IsActive, nil
+}
+
+// ResetIsActive resets all changes to the "is_active" field.
+func (m *CurrencyProductMutation) ResetIsActive() {
+	m.is_active = nil
+}
+
+// SetForSale sets the "for_sale" field.
+func (m *CurrencyProductMutation) SetForSale(b bool) {
+	m.for_sale = &b
+}
+
+// ForSale returns the value of the "for_sale" field in the mutation.
+func (m *CurrencyProductMutation) ForSale() (r bool, exists bool) {
+	v := m.for_sale
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldForSale returns the old "for_sale" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldForSale(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldForSale is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldForSale requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldForSale: %w", err)
+	}
+	return oldValue.ForSale, nil
+}
+
+// ResetForSale resets all changes to the "for_sale" field.
+func (m *CurrencyProductMutation) ResetForSale() {
+	m.for_sale = nil
+}
+
+// SetDailyPurchaseLimit sets the "daily_purchase_limit" field.
+func (m *CurrencyProductMutation) SetDailyPurchaseLimit(i int) {
+	m.daily_purchase_limit = &i
+	m.adddaily_purchase_limit = nil
+}
+
+// DailyPurchaseLimit returns the value of the "daily_purchase_limit" field in the mutation.
+func (m *CurrencyProductMutation) DailyPurchaseLimit() (r int, exists bool) {
+	v := m.daily_purchase_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyPurchaseLimit returns the old "daily_purchase_limit" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldDailyPurchaseLimit(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyPurchaseLimit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyPurchaseLimit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyPurchaseLimit: %w", err)
+	}
+	return oldValue.DailyPurchaseLimit, nil
+}
+
+// AddDailyPurchaseLimit adds i to the "daily_purchase_limit" field.
+func (m *CurrencyProductMutation) AddDailyPurchaseLimit(i int) {
+	if m.adddaily_purchase_limit != nil {
+		*m.adddaily_purchase_limit += i
+	} else {
+		m.adddaily_purchase_limit = &i
+	}
+}
+
+// AddedDailyPurchaseLimit returns the value that was added to the "daily_purchase_limit" field in this mutation.
+func (m *CurrencyProductMutation) AddedDailyPurchaseLimit() (r int, exists bool) {
+	v := m.adddaily_purchase_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyPurchaseLimit resets all changes to the "daily_purchase_limit" field.
+func (m *CurrencyProductMutation) ResetDailyPurchaseLimit() {
+	m.daily_purchase_limit = nil
+	m.adddaily_purchase_limit = nil
+}
+
+// SetTotalPurchaseLimit sets the "total_purchase_limit" field.
+func (m *CurrencyProductMutation) SetTotalPurchaseLimit(i int) {
+	m.total_purchase_limit = &i
+	m.addtotal_purchase_limit = nil
+}
+
+// TotalPurchaseLimit returns the value of the "total_purchase_limit" field in the mutation.
+func (m *CurrencyProductMutation) TotalPurchaseLimit() (r int, exists bool) {
+	v := m.total_purchase_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalPurchaseLimit returns the old "total_purchase_limit" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldTotalPurchaseLimit(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalPurchaseLimit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalPurchaseLimit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalPurchaseLimit: %w", err)
+	}
+	return oldValue.TotalPurchaseLimit, nil
+}
+
+// AddTotalPurchaseLimit adds i to the "total_purchase_limit" field.
+func (m *CurrencyProductMutation) AddTotalPurchaseLimit(i int) {
+	if m.addtotal_purchase_limit != nil {
+		*m.addtotal_purchase_limit += i
+	} else {
+		m.addtotal_purchase_limit = &i
+	}
+}
+
+// AddedTotalPurchaseLimit returns the value that was added to the "total_purchase_limit" field in this mutation.
+func (m *CurrencyProductMutation) AddedTotalPurchaseLimit() (r int, exists bool) {
+	v := m.addtotal_purchase_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTotalPurchaseLimit resets all changes to the "total_purchase_limit" field.
+func (m *CurrencyProductMutation) ResetTotalPurchaseLimit() {
+	m.total_purchase_limit = nil
+	m.addtotal_purchase_limit = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CurrencyProductMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CurrencyProductMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CurrencyProductMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CurrencyProductMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CurrencyProductMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CurrencyProductMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the CurrencyProductMutation builder.
+func (m *CurrencyProductMutation) Where(ps ...predicate.CurrencyProduct) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CurrencyProductMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CurrencyProductMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CurrencyProduct, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CurrencyProductMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CurrencyProductMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CurrencyProduct).
+func (m *CurrencyProductMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CurrencyProductMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.name != nil {
+		fields = append(fields, currencyproduct.FieldName)
+	}
+	if m.description != nil {
+		fields = append(fields, currencyproduct.FieldDescription)
+	}
+	if m.payment_price != nil {
+		fields = append(fields, currencyproduct.FieldPaymentPrice)
+	}
+	if m.payment_credit_type != nil {
+		fields = append(fields, currencyproduct.FieldPaymentCreditType)
+	}
+	if m.credited_type != nil {
+		fields = append(fields, currencyproduct.FieldCreditedType)
+	}
+	if m.credited_amount != nil {
+		fields = append(fields, currencyproduct.FieldCreditedAmount)
+	}
+	if m.credited_permanent_amount != nil {
+		fields = append(fields, currencyproduct.FieldCreditedPermanentAmount)
+	}
+	if m.sort_order != nil {
+		fields = append(fields, currencyproduct.FieldSortOrder)
+	}
+	if m.is_active != nil {
+		fields = append(fields, currencyproduct.FieldIsActive)
+	}
+	if m.for_sale != nil {
+		fields = append(fields, currencyproduct.FieldForSale)
+	}
+	if m.daily_purchase_limit != nil {
+		fields = append(fields, currencyproduct.FieldDailyPurchaseLimit)
+	}
+	if m.total_purchase_limit != nil {
+		fields = append(fields, currencyproduct.FieldTotalPurchaseLimit)
+	}
+	if m.created_at != nil {
+		fields = append(fields, currencyproduct.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, currencyproduct.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CurrencyProductMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case currencyproduct.FieldName:
+		return m.Name()
+	case currencyproduct.FieldDescription:
+		return m.Description()
+	case currencyproduct.FieldPaymentPrice:
+		return m.PaymentPrice()
+	case currencyproduct.FieldPaymentCreditType:
+		return m.PaymentCreditType()
+	case currencyproduct.FieldCreditedType:
+		return m.CreditedType()
+	case currencyproduct.FieldCreditedAmount:
+		return m.CreditedAmount()
+	case currencyproduct.FieldCreditedPermanentAmount:
+		return m.CreditedPermanentAmount()
+	case currencyproduct.FieldSortOrder:
+		return m.SortOrder()
+	case currencyproduct.FieldIsActive:
+		return m.IsActive()
+	case currencyproduct.FieldForSale:
+		return m.ForSale()
+	case currencyproduct.FieldDailyPurchaseLimit:
+		return m.DailyPurchaseLimit()
+	case currencyproduct.FieldTotalPurchaseLimit:
+		return m.TotalPurchaseLimit()
+	case currencyproduct.FieldCreatedAt:
+		return m.CreatedAt()
+	case currencyproduct.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CurrencyProductMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case currencyproduct.FieldName:
+		return m.OldName(ctx)
+	case currencyproduct.FieldDescription:
+		return m.OldDescription(ctx)
+	case currencyproduct.FieldPaymentPrice:
+		return m.OldPaymentPrice(ctx)
+	case currencyproduct.FieldPaymentCreditType:
+		return m.OldPaymentCreditType(ctx)
+	case currencyproduct.FieldCreditedType:
+		return m.OldCreditedType(ctx)
+	case currencyproduct.FieldCreditedAmount:
+		return m.OldCreditedAmount(ctx)
+	case currencyproduct.FieldCreditedPermanentAmount:
+		return m.OldCreditedPermanentAmount(ctx)
+	case currencyproduct.FieldSortOrder:
+		return m.OldSortOrder(ctx)
+	case currencyproduct.FieldIsActive:
+		return m.OldIsActive(ctx)
+	case currencyproduct.FieldForSale:
+		return m.OldForSale(ctx)
+	case currencyproduct.FieldDailyPurchaseLimit:
+		return m.OldDailyPurchaseLimit(ctx)
+	case currencyproduct.FieldTotalPurchaseLimit:
+		return m.OldTotalPurchaseLimit(ctx)
+	case currencyproduct.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case currencyproduct.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CurrencyProduct field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CurrencyProductMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case currencyproduct.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case currencyproduct.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case currencyproduct.FieldPaymentPrice:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaymentPrice(v)
+		return nil
+	case currencyproduct.FieldPaymentCreditType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaymentCreditType(v)
+		return nil
+	case currencyproduct.FieldCreditedType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreditedType(v)
+		return nil
+	case currencyproduct.FieldCreditedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreditedAmount(v)
+		return nil
+	case currencyproduct.FieldCreditedPermanentAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreditedPermanentAmount(v)
+		return nil
+	case currencyproduct.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSortOrder(v)
+		return nil
+	case currencyproduct.FieldIsActive:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsActive(v)
+		return nil
+	case currencyproduct.FieldForSale:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetForSale(v)
+		return nil
+	case currencyproduct.FieldDailyPurchaseLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyPurchaseLimit(v)
+		return nil
+	case currencyproduct.FieldTotalPurchaseLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalPurchaseLimit(v)
+		return nil
+	case currencyproduct.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case currencyproduct.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CurrencyProduct field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CurrencyProductMutation) AddedFields() []string {
+	var fields []string
+	if m.addpayment_price != nil {
+		fields = append(fields, currencyproduct.FieldPaymentPrice)
+	}
+	if m.addcredited_amount != nil {
+		fields = append(fields, currencyproduct.FieldCreditedAmount)
+	}
+	if m.addcredited_permanent_amount != nil {
+		fields = append(fields, currencyproduct.FieldCreditedPermanentAmount)
+	}
+	if m.addsort_order != nil {
+		fields = append(fields, currencyproduct.FieldSortOrder)
+	}
+	if m.adddaily_purchase_limit != nil {
+		fields = append(fields, currencyproduct.FieldDailyPurchaseLimit)
+	}
+	if m.addtotal_purchase_limit != nil {
+		fields = append(fields, currencyproduct.FieldTotalPurchaseLimit)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CurrencyProductMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case currencyproduct.FieldPaymentPrice:
+		return m.AddedPaymentPrice()
+	case currencyproduct.FieldCreditedAmount:
+		return m.AddedCreditedAmount()
+	case currencyproduct.FieldCreditedPermanentAmount:
+		return m.AddedCreditedPermanentAmount()
+	case currencyproduct.FieldSortOrder:
+		return m.AddedSortOrder()
+	case currencyproduct.FieldDailyPurchaseLimit:
+		return m.AddedDailyPurchaseLimit()
+	case currencyproduct.FieldTotalPurchaseLimit:
+		return m.AddedTotalPurchaseLimit()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CurrencyProductMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case currencyproduct.FieldPaymentPrice:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPaymentPrice(v)
+		return nil
+	case currencyproduct.FieldCreditedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCreditedAmount(v)
+		return nil
+	case currencyproduct.FieldCreditedPermanentAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCreditedPermanentAmount(v)
+		return nil
+	case currencyproduct.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSortOrder(v)
+		return nil
+	case currencyproduct.FieldDailyPurchaseLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyPurchaseLimit(v)
+		return nil
+	case currencyproduct.FieldTotalPurchaseLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTotalPurchaseLimit(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CurrencyProduct numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CurrencyProductMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CurrencyProductMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CurrencyProductMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown CurrencyProduct nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CurrencyProductMutation) ResetField(name string) error {
+	switch name {
+	case currencyproduct.FieldName:
+		m.ResetName()
+		return nil
+	case currencyproduct.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case currencyproduct.FieldPaymentPrice:
+		m.ResetPaymentPrice()
+		return nil
+	case currencyproduct.FieldPaymentCreditType:
+		m.ResetPaymentCreditType()
+		return nil
+	case currencyproduct.FieldCreditedType:
+		m.ResetCreditedType()
+		return nil
+	case currencyproduct.FieldCreditedAmount:
+		m.ResetCreditedAmount()
+		return nil
+	case currencyproduct.FieldCreditedPermanentAmount:
+		m.ResetCreditedPermanentAmount()
+		return nil
+	case currencyproduct.FieldSortOrder:
+		m.ResetSortOrder()
+		return nil
+	case currencyproduct.FieldIsActive:
+		m.ResetIsActive()
+		return nil
+	case currencyproduct.FieldForSale:
+		m.ResetForSale()
+		return nil
+	case currencyproduct.FieldDailyPurchaseLimit:
+		m.ResetDailyPurchaseLimit()
+		return nil
+	case currencyproduct.FieldTotalPurchaseLimit:
+		m.ResetTotalPurchaseLimit()
+		return nil
+	case currencyproduct.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case currencyproduct.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CurrencyProduct field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CurrencyProductMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CurrencyProductMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CurrencyProductMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CurrencyProductMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CurrencyProductMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CurrencyProductMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CurrencyProductMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CurrencyProduct unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CurrencyProductMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CurrencyProduct edge %s", name)
+}
+
 // DailyCheckinMutation represents an operation that mutates the DailyCheckin nodes in the graph.
 type DailyCheckinMutation struct {
 	config
@@ -32195,6 +33434,2161 @@ func (m *IdentityAdoptionDecisionMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown IdentityAdoptionDecision edge %s", name)
 }
 
+// MallDailyCreditSubscriptionMutation represents an operation that mutates the MallDailyCreditSubscription nodes in the graph.
+type MallDailyCreditSubscriptionMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *int64
+	user_id         *int64
+	adduser_id      *int64
+	plan_id         *int64
+	addplan_id      *int64
+	starts_at       *time.Time
+	last_grant_date *time.Time
+	expires_at      *time.Time
+	status          *string
+	created_at      *time.Time
+	updated_at      *time.Time
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*MallDailyCreditSubscription, error)
+	predicates      []predicate.MallDailyCreditSubscription
+}
+
+var _ ent.Mutation = (*MallDailyCreditSubscriptionMutation)(nil)
+
+// malldailycreditsubscriptionOption allows management of the mutation configuration using functional options.
+type malldailycreditsubscriptionOption func(*MallDailyCreditSubscriptionMutation)
+
+// newMallDailyCreditSubscriptionMutation creates new mutation for the MallDailyCreditSubscription entity.
+func newMallDailyCreditSubscriptionMutation(c config, op Op, opts ...malldailycreditsubscriptionOption) *MallDailyCreditSubscriptionMutation {
+	m := &MallDailyCreditSubscriptionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMallDailyCreditSubscription,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMallDailyCreditSubscriptionID sets the ID field of the mutation.
+func withMallDailyCreditSubscriptionID(id int64) malldailycreditsubscriptionOption {
+	return func(m *MallDailyCreditSubscriptionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MallDailyCreditSubscription
+		)
+		m.oldValue = func(ctx context.Context) (*MallDailyCreditSubscription, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MallDailyCreditSubscription.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMallDailyCreditSubscription sets the old MallDailyCreditSubscription of the mutation.
+func withMallDailyCreditSubscription(node *MallDailyCreditSubscription) malldailycreditsubscriptionOption {
+	return func(m *MallDailyCreditSubscriptionMutation) {
+		m.oldValue = func(context.Context) (*MallDailyCreditSubscription, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MallDailyCreditSubscriptionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MallDailyCreditSubscriptionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MallDailyCreditSubscriptionMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MallDailyCreditSubscriptionMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MallDailyCreditSubscription.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUserID sets the "user_id" field.
+func (m *MallDailyCreditSubscriptionMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *MallDailyCreditSubscriptionMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the MallDailyCreditSubscription entity.
+// If the MallDailyCreditSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallDailyCreditSubscriptionMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *MallDailyCreditSubscriptionMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *MallDailyCreditSubscriptionMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *MallDailyCreditSubscriptionMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetPlanID sets the "plan_id" field.
+func (m *MallDailyCreditSubscriptionMutation) SetPlanID(i int64) {
+	m.plan_id = &i
+	m.addplan_id = nil
+}
+
+// PlanID returns the value of the "plan_id" field in the mutation.
+func (m *MallDailyCreditSubscriptionMutation) PlanID() (r int64, exists bool) {
+	v := m.plan_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlanID returns the old "plan_id" field's value of the MallDailyCreditSubscription entity.
+// If the MallDailyCreditSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallDailyCreditSubscriptionMutation) OldPlanID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlanID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlanID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlanID: %w", err)
+	}
+	return oldValue.PlanID, nil
+}
+
+// AddPlanID adds i to the "plan_id" field.
+func (m *MallDailyCreditSubscriptionMutation) AddPlanID(i int64) {
+	if m.addplan_id != nil {
+		*m.addplan_id += i
+	} else {
+		m.addplan_id = &i
+	}
+}
+
+// AddedPlanID returns the value that was added to the "plan_id" field in this mutation.
+func (m *MallDailyCreditSubscriptionMutation) AddedPlanID() (r int64, exists bool) {
+	v := m.addplan_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPlanID resets all changes to the "plan_id" field.
+func (m *MallDailyCreditSubscriptionMutation) ResetPlanID() {
+	m.plan_id = nil
+	m.addplan_id = nil
+}
+
+// SetStartsAt sets the "starts_at" field.
+func (m *MallDailyCreditSubscriptionMutation) SetStartsAt(t time.Time) {
+	m.starts_at = &t
+}
+
+// StartsAt returns the value of the "starts_at" field in the mutation.
+func (m *MallDailyCreditSubscriptionMutation) StartsAt() (r time.Time, exists bool) {
+	v := m.starts_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartsAt returns the old "starts_at" field's value of the MallDailyCreditSubscription entity.
+// If the MallDailyCreditSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallDailyCreditSubscriptionMutation) OldStartsAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartsAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartsAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartsAt: %w", err)
+	}
+	return oldValue.StartsAt, nil
+}
+
+// ResetStartsAt resets all changes to the "starts_at" field.
+func (m *MallDailyCreditSubscriptionMutation) ResetStartsAt() {
+	m.starts_at = nil
+}
+
+// SetLastGrantDate sets the "last_grant_date" field.
+func (m *MallDailyCreditSubscriptionMutation) SetLastGrantDate(t time.Time) {
+	m.last_grant_date = &t
+}
+
+// LastGrantDate returns the value of the "last_grant_date" field in the mutation.
+func (m *MallDailyCreditSubscriptionMutation) LastGrantDate() (r time.Time, exists bool) {
+	v := m.last_grant_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastGrantDate returns the old "last_grant_date" field's value of the MallDailyCreditSubscription entity.
+// If the MallDailyCreditSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallDailyCreditSubscriptionMutation) OldLastGrantDate(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastGrantDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastGrantDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastGrantDate: %w", err)
+	}
+	return oldValue.LastGrantDate, nil
+}
+
+// ResetLastGrantDate resets all changes to the "last_grant_date" field.
+func (m *MallDailyCreditSubscriptionMutation) ResetLastGrantDate() {
+	m.last_grant_date = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *MallDailyCreditSubscriptionMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *MallDailyCreditSubscriptionMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the MallDailyCreditSubscription entity.
+// If the MallDailyCreditSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallDailyCreditSubscriptionMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *MallDailyCreditSubscriptionMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *MallDailyCreditSubscriptionMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *MallDailyCreditSubscriptionMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the MallDailyCreditSubscription entity.
+// If the MallDailyCreditSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallDailyCreditSubscriptionMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *MallDailyCreditSubscriptionMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *MallDailyCreditSubscriptionMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *MallDailyCreditSubscriptionMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the MallDailyCreditSubscription entity.
+// If the MallDailyCreditSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallDailyCreditSubscriptionMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *MallDailyCreditSubscriptionMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *MallDailyCreditSubscriptionMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *MallDailyCreditSubscriptionMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the MallDailyCreditSubscription entity.
+// If the MallDailyCreditSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallDailyCreditSubscriptionMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *MallDailyCreditSubscriptionMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the MallDailyCreditSubscriptionMutation builder.
+func (m *MallDailyCreditSubscriptionMutation) Where(ps ...predicate.MallDailyCreditSubscription) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MallDailyCreditSubscriptionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MallDailyCreditSubscriptionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MallDailyCreditSubscription, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MallDailyCreditSubscriptionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MallDailyCreditSubscriptionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MallDailyCreditSubscription).
+func (m *MallDailyCreditSubscriptionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MallDailyCreditSubscriptionMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.user_id != nil {
+		fields = append(fields, malldailycreditsubscription.FieldUserID)
+	}
+	if m.plan_id != nil {
+		fields = append(fields, malldailycreditsubscription.FieldPlanID)
+	}
+	if m.starts_at != nil {
+		fields = append(fields, malldailycreditsubscription.FieldStartsAt)
+	}
+	if m.last_grant_date != nil {
+		fields = append(fields, malldailycreditsubscription.FieldLastGrantDate)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, malldailycreditsubscription.FieldExpiresAt)
+	}
+	if m.status != nil {
+		fields = append(fields, malldailycreditsubscription.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, malldailycreditsubscription.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, malldailycreditsubscription.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MallDailyCreditSubscriptionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case malldailycreditsubscription.FieldUserID:
+		return m.UserID()
+	case malldailycreditsubscription.FieldPlanID:
+		return m.PlanID()
+	case malldailycreditsubscription.FieldStartsAt:
+		return m.StartsAt()
+	case malldailycreditsubscription.FieldLastGrantDate:
+		return m.LastGrantDate()
+	case malldailycreditsubscription.FieldExpiresAt:
+		return m.ExpiresAt()
+	case malldailycreditsubscription.FieldStatus:
+		return m.Status()
+	case malldailycreditsubscription.FieldCreatedAt:
+		return m.CreatedAt()
+	case malldailycreditsubscription.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MallDailyCreditSubscriptionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case malldailycreditsubscription.FieldUserID:
+		return m.OldUserID(ctx)
+	case malldailycreditsubscription.FieldPlanID:
+		return m.OldPlanID(ctx)
+	case malldailycreditsubscription.FieldStartsAt:
+		return m.OldStartsAt(ctx)
+	case malldailycreditsubscription.FieldLastGrantDate:
+		return m.OldLastGrantDate(ctx)
+	case malldailycreditsubscription.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case malldailycreditsubscription.FieldStatus:
+		return m.OldStatus(ctx)
+	case malldailycreditsubscription.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case malldailycreditsubscription.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown MallDailyCreditSubscription field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MallDailyCreditSubscriptionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case malldailycreditsubscription.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case malldailycreditsubscription.FieldPlanID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlanID(v)
+		return nil
+	case malldailycreditsubscription.FieldStartsAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartsAt(v)
+		return nil
+	case malldailycreditsubscription.FieldLastGrantDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastGrantDate(v)
+		return nil
+	case malldailycreditsubscription.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case malldailycreditsubscription.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case malldailycreditsubscription.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case malldailycreditsubscription.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MallDailyCreditSubscription field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MallDailyCreditSubscriptionMutation) AddedFields() []string {
+	var fields []string
+	if m.adduser_id != nil {
+		fields = append(fields, malldailycreditsubscription.FieldUserID)
+	}
+	if m.addplan_id != nil {
+		fields = append(fields, malldailycreditsubscription.FieldPlanID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MallDailyCreditSubscriptionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case malldailycreditsubscription.FieldUserID:
+		return m.AddedUserID()
+	case malldailycreditsubscription.FieldPlanID:
+		return m.AddedPlanID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MallDailyCreditSubscriptionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case malldailycreditsubscription.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case malldailycreditsubscription.FieldPlanID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPlanID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MallDailyCreditSubscription numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MallDailyCreditSubscriptionMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MallDailyCreditSubscriptionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MallDailyCreditSubscriptionMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown MallDailyCreditSubscription nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MallDailyCreditSubscriptionMutation) ResetField(name string) error {
+	switch name {
+	case malldailycreditsubscription.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case malldailycreditsubscription.FieldPlanID:
+		m.ResetPlanID()
+		return nil
+	case malldailycreditsubscription.FieldStartsAt:
+		m.ResetStartsAt()
+		return nil
+	case malldailycreditsubscription.FieldLastGrantDate:
+		m.ResetLastGrantDate()
+		return nil
+	case malldailycreditsubscription.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case malldailycreditsubscription.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case malldailycreditsubscription.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case malldailycreditsubscription.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MallDailyCreditSubscription field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MallDailyCreditSubscriptionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MallDailyCreditSubscriptionMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MallDailyCreditSubscriptionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MallDailyCreditSubscriptionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MallDailyCreditSubscriptionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MallDailyCreditSubscriptionMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MallDailyCreditSubscriptionMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown MallDailyCreditSubscription unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MallDailyCreditSubscriptionMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown MallDailyCreditSubscription edge %s", name)
+}
+
+// MallPurchaseMutation represents an operation that mutates the MallPurchase nodes in the graph.
+type MallPurchaseMutation struct {
+	config
+	op                               Op
+	typ                              string
+	id                               *int64
+	user_id                          *int64
+	adduser_id                       *int64
+	product_type                     *string
+	product_id                       *int64
+	addproduct_id                    *int64
+	idempotency_record_id            *int64
+	addidempotency_record_id         *int64
+	payment_credit_type              *string
+	price                            *float64
+	addprice                         *float64
+	credited_type                    *string
+	credited_amount                  *float64
+	addcredited_amount               *float64
+	benefit_type                     *string
+	benefit_days                     *int
+	addbenefit_days                  *int
+	daily_temporary_credit_amount    *float64
+	adddaily_temporary_credit_amount *float64
+	subscription_expires_at          *time.Time
+	status                           *string
+	created_at                       *time.Time
+	clearedFields                    map[string]struct{}
+	done                             bool
+	oldValue                         func(context.Context) (*MallPurchase, error)
+	predicates                       []predicate.MallPurchase
+}
+
+var _ ent.Mutation = (*MallPurchaseMutation)(nil)
+
+// mallpurchaseOption allows management of the mutation configuration using functional options.
+type mallpurchaseOption func(*MallPurchaseMutation)
+
+// newMallPurchaseMutation creates new mutation for the MallPurchase entity.
+func newMallPurchaseMutation(c config, op Op, opts ...mallpurchaseOption) *MallPurchaseMutation {
+	m := &MallPurchaseMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMallPurchase,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMallPurchaseID sets the ID field of the mutation.
+func withMallPurchaseID(id int64) mallpurchaseOption {
+	return func(m *MallPurchaseMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MallPurchase
+		)
+		m.oldValue = func(ctx context.Context) (*MallPurchase, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MallPurchase.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMallPurchase sets the old MallPurchase of the mutation.
+func withMallPurchase(node *MallPurchase) mallpurchaseOption {
+	return func(m *MallPurchaseMutation) {
+		m.oldValue = func(context.Context) (*MallPurchase, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MallPurchaseMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MallPurchaseMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MallPurchaseMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MallPurchaseMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MallPurchase.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUserID sets the "user_id" field.
+func (m *MallPurchaseMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *MallPurchaseMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *MallPurchaseMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *MallPurchaseMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *MallPurchaseMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetProductType sets the "product_type" field.
+func (m *MallPurchaseMutation) SetProductType(s string) {
+	m.product_type = &s
+}
+
+// ProductType returns the value of the "product_type" field in the mutation.
+func (m *MallPurchaseMutation) ProductType() (r string, exists bool) {
+	v := m.product_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductType returns the old "product_type" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldProductType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductType: %w", err)
+	}
+	return oldValue.ProductType, nil
+}
+
+// ResetProductType resets all changes to the "product_type" field.
+func (m *MallPurchaseMutation) ResetProductType() {
+	m.product_type = nil
+}
+
+// SetProductID sets the "product_id" field.
+func (m *MallPurchaseMutation) SetProductID(i int64) {
+	m.product_id = &i
+	m.addproduct_id = nil
+}
+
+// ProductID returns the value of the "product_id" field in the mutation.
+func (m *MallPurchaseMutation) ProductID() (r int64, exists bool) {
+	v := m.product_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductID returns the old "product_id" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldProductID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductID: %w", err)
+	}
+	return oldValue.ProductID, nil
+}
+
+// AddProductID adds i to the "product_id" field.
+func (m *MallPurchaseMutation) AddProductID(i int64) {
+	if m.addproduct_id != nil {
+		*m.addproduct_id += i
+	} else {
+		m.addproduct_id = &i
+	}
+}
+
+// AddedProductID returns the value that was added to the "product_id" field in this mutation.
+func (m *MallPurchaseMutation) AddedProductID() (r int64, exists bool) {
+	v := m.addproduct_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetProductID resets all changes to the "product_id" field.
+func (m *MallPurchaseMutation) ResetProductID() {
+	m.product_id = nil
+	m.addproduct_id = nil
+}
+
+// SetIdempotencyRecordID sets the "idempotency_record_id" field.
+func (m *MallPurchaseMutation) SetIdempotencyRecordID(i int64) {
+	m.idempotency_record_id = &i
+	m.addidempotency_record_id = nil
+}
+
+// IdempotencyRecordID returns the value of the "idempotency_record_id" field in the mutation.
+func (m *MallPurchaseMutation) IdempotencyRecordID() (r int64, exists bool) {
+	v := m.idempotency_record_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdempotencyRecordID returns the old "idempotency_record_id" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldIdempotencyRecordID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdempotencyRecordID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdempotencyRecordID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdempotencyRecordID: %w", err)
+	}
+	return oldValue.IdempotencyRecordID, nil
+}
+
+// AddIdempotencyRecordID adds i to the "idempotency_record_id" field.
+func (m *MallPurchaseMutation) AddIdempotencyRecordID(i int64) {
+	if m.addidempotency_record_id != nil {
+		*m.addidempotency_record_id += i
+	} else {
+		m.addidempotency_record_id = &i
+	}
+}
+
+// AddedIdempotencyRecordID returns the value that was added to the "idempotency_record_id" field in this mutation.
+func (m *MallPurchaseMutation) AddedIdempotencyRecordID() (r int64, exists bool) {
+	v := m.addidempotency_record_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetIdempotencyRecordID resets all changes to the "idempotency_record_id" field.
+func (m *MallPurchaseMutation) ResetIdempotencyRecordID() {
+	m.idempotency_record_id = nil
+	m.addidempotency_record_id = nil
+}
+
+// SetPaymentCreditType sets the "payment_credit_type" field.
+func (m *MallPurchaseMutation) SetPaymentCreditType(s string) {
+	m.payment_credit_type = &s
+}
+
+// PaymentCreditType returns the value of the "payment_credit_type" field in the mutation.
+func (m *MallPurchaseMutation) PaymentCreditType() (r string, exists bool) {
+	v := m.payment_credit_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaymentCreditType returns the old "payment_credit_type" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldPaymentCreditType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaymentCreditType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaymentCreditType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaymentCreditType: %w", err)
+	}
+	return oldValue.PaymentCreditType, nil
+}
+
+// ResetPaymentCreditType resets all changes to the "payment_credit_type" field.
+func (m *MallPurchaseMutation) ResetPaymentCreditType() {
+	m.payment_credit_type = nil
+}
+
+// SetPrice sets the "price" field.
+func (m *MallPurchaseMutation) SetPrice(f float64) {
+	m.price = &f
+	m.addprice = nil
+}
+
+// Price returns the value of the "price" field in the mutation.
+func (m *MallPurchaseMutation) Price() (r float64, exists bool) {
+	v := m.price
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPrice returns the old "price" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldPrice(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPrice is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPrice requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPrice: %w", err)
+	}
+	return oldValue.Price, nil
+}
+
+// AddPrice adds f to the "price" field.
+func (m *MallPurchaseMutation) AddPrice(f float64) {
+	if m.addprice != nil {
+		*m.addprice += f
+	} else {
+		m.addprice = &f
+	}
+}
+
+// AddedPrice returns the value that was added to the "price" field in this mutation.
+func (m *MallPurchaseMutation) AddedPrice() (r float64, exists bool) {
+	v := m.addprice
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPrice resets all changes to the "price" field.
+func (m *MallPurchaseMutation) ResetPrice() {
+	m.price = nil
+	m.addprice = nil
+}
+
+// SetCreditedType sets the "credited_type" field.
+func (m *MallPurchaseMutation) SetCreditedType(s string) {
+	m.credited_type = &s
+}
+
+// CreditedType returns the value of the "credited_type" field in the mutation.
+func (m *MallPurchaseMutation) CreditedType() (r string, exists bool) {
+	v := m.credited_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreditedType returns the old "credited_type" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldCreditedType(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreditedType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreditedType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreditedType: %w", err)
+	}
+	return oldValue.CreditedType, nil
+}
+
+// ClearCreditedType clears the value of the "credited_type" field.
+func (m *MallPurchaseMutation) ClearCreditedType() {
+	m.credited_type = nil
+	m.clearedFields[mallpurchase.FieldCreditedType] = struct{}{}
+}
+
+// CreditedTypeCleared returns if the "credited_type" field was cleared in this mutation.
+func (m *MallPurchaseMutation) CreditedTypeCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldCreditedType]
+	return ok
+}
+
+// ResetCreditedType resets all changes to the "credited_type" field.
+func (m *MallPurchaseMutation) ResetCreditedType() {
+	m.credited_type = nil
+	delete(m.clearedFields, mallpurchase.FieldCreditedType)
+}
+
+// SetCreditedAmount sets the "credited_amount" field.
+func (m *MallPurchaseMutation) SetCreditedAmount(f float64) {
+	m.credited_amount = &f
+	m.addcredited_amount = nil
+}
+
+// CreditedAmount returns the value of the "credited_amount" field in the mutation.
+func (m *MallPurchaseMutation) CreditedAmount() (r float64, exists bool) {
+	v := m.credited_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreditedAmount returns the old "credited_amount" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldCreditedAmount(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreditedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreditedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreditedAmount: %w", err)
+	}
+	return oldValue.CreditedAmount, nil
+}
+
+// AddCreditedAmount adds f to the "credited_amount" field.
+func (m *MallPurchaseMutation) AddCreditedAmount(f float64) {
+	if m.addcredited_amount != nil {
+		*m.addcredited_amount += f
+	} else {
+		m.addcredited_amount = &f
+	}
+}
+
+// AddedCreditedAmount returns the value that was added to the "credited_amount" field in this mutation.
+func (m *MallPurchaseMutation) AddedCreditedAmount() (r float64, exists bool) {
+	v := m.addcredited_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCreditedAmount clears the value of the "credited_amount" field.
+func (m *MallPurchaseMutation) ClearCreditedAmount() {
+	m.credited_amount = nil
+	m.addcredited_amount = nil
+	m.clearedFields[mallpurchase.FieldCreditedAmount] = struct{}{}
+}
+
+// CreditedAmountCleared returns if the "credited_amount" field was cleared in this mutation.
+func (m *MallPurchaseMutation) CreditedAmountCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldCreditedAmount]
+	return ok
+}
+
+// ResetCreditedAmount resets all changes to the "credited_amount" field.
+func (m *MallPurchaseMutation) ResetCreditedAmount() {
+	m.credited_amount = nil
+	m.addcredited_amount = nil
+	delete(m.clearedFields, mallpurchase.FieldCreditedAmount)
+}
+
+// SetBenefitType sets the "benefit_type" field.
+func (m *MallPurchaseMutation) SetBenefitType(s string) {
+	m.benefit_type = &s
+}
+
+// BenefitType returns the value of the "benefit_type" field in the mutation.
+func (m *MallPurchaseMutation) BenefitType() (r string, exists bool) {
+	v := m.benefit_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBenefitType returns the old "benefit_type" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldBenefitType(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBenefitType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBenefitType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBenefitType: %w", err)
+	}
+	return oldValue.BenefitType, nil
+}
+
+// ClearBenefitType clears the value of the "benefit_type" field.
+func (m *MallPurchaseMutation) ClearBenefitType() {
+	m.benefit_type = nil
+	m.clearedFields[mallpurchase.FieldBenefitType] = struct{}{}
+}
+
+// BenefitTypeCleared returns if the "benefit_type" field was cleared in this mutation.
+func (m *MallPurchaseMutation) BenefitTypeCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldBenefitType]
+	return ok
+}
+
+// ResetBenefitType resets all changes to the "benefit_type" field.
+func (m *MallPurchaseMutation) ResetBenefitType() {
+	m.benefit_type = nil
+	delete(m.clearedFields, mallpurchase.FieldBenefitType)
+}
+
+// SetBenefitDays sets the "benefit_days" field.
+func (m *MallPurchaseMutation) SetBenefitDays(i int) {
+	m.benefit_days = &i
+	m.addbenefit_days = nil
+}
+
+// BenefitDays returns the value of the "benefit_days" field in the mutation.
+func (m *MallPurchaseMutation) BenefitDays() (r int, exists bool) {
+	v := m.benefit_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBenefitDays returns the old "benefit_days" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldBenefitDays(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBenefitDays is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBenefitDays requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBenefitDays: %w", err)
+	}
+	return oldValue.BenefitDays, nil
+}
+
+// AddBenefitDays adds i to the "benefit_days" field.
+func (m *MallPurchaseMutation) AddBenefitDays(i int) {
+	if m.addbenefit_days != nil {
+		*m.addbenefit_days += i
+	} else {
+		m.addbenefit_days = &i
+	}
+}
+
+// AddedBenefitDays returns the value that was added to the "benefit_days" field in this mutation.
+func (m *MallPurchaseMutation) AddedBenefitDays() (r int, exists bool) {
+	v := m.addbenefit_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBenefitDays clears the value of the "benefit_days" field.
+func (m *MallPurchaseMutation) ClearBenefitDays() {
+	m.benefit_days = nil
+	m.addbenefit_days = nil
+	m.clearedFields[mallpurchase.FieldBenefitDays] = struct{}{}
+}
+
+// BenefitDaysCleared returns if the "benefit_days" field was cleared in this mutation.
+func (m *MallPurchaseMutation) BenefitDaysCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldBenefitDays]
+	return ok
+}
+
+// ResetBenefitDays resets all changes to the "benefit_days" field.
+func (m *MallPurchaseMutation) ResetBenefitDays() {
+	m.benefit_days = nil
+	m.addbenefit_days = nil
+	delete(m.clearedFields, mallpurchase.FieldBenefitDays)
+}
+
+// SetDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field.
+func (m *MallPurchaseMutation) SetDailyTemporaryCreditAmount(f float64) {
+	m.daily_temporary_credit_amount = &f
+	m.adddaily_temporary_credit_amount = nil
+}
+
+// DailyTemporaryCreditAmount returns the value of the "daily_temporary_credit_amount" field in the mutation.
+func (m *MallPurchaseMutation) DailyTemporaryCreditAmount() (r float64, exists bool) {
+	v := m.daily_temporary_credit_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyTemporaryCreditAmount returns the old "daily_temporary_credit_amount" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldDailyTemporaryCreditAmount(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyTemporaryCreditAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyTemporaryCreditAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyTemporaryCreditAmount: %w", err)
+	}
+	return oldValue.DailyTemporaryCreditAmount, nil
+}
+
+// AddDailyTemporaryCreditAmount adds f to the "daily_temporary_credit_amount" field.
+func (m *MallPurchaseMutation) AddDailyTemporaryCreditAmount(f float64) {
+	if m.adddaily_temporary_credit_amount != nil {
+		*m.adddaily_temporary_credit_amount += f
+	} else {
+		m.adddaily_temporary_credit_amount = &f
+	}
+}
+
+// AddedDailyTemporaryCreditAmount returns the value that was added to the "daily_temporary_credit_amount" field in this mutation.
+func (m *MallPurchaseMutation) AddedDailyTemporaryCreditAmount() (r float64, exists bool) {
+	v := m.adddaily_temporary_credit_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearDailyTemporaryCreditAmount clears the value of the "daily_temporary_credit_amount" field.
+func (m *MallPurchaseMutation) ClearDailyTemporaryCreditAmount() {
+	m.daily_temporary_credit_amount = nil
+	m.adddaily_temporary_credit_amount = nil
+	m.clearedFields[mallpurchase.FieldDailyTemporaryCreditAmount] = struct{}{}
+}
+
+// DailyTemporaryCreditAmountCleared returns if the "daily_temporary_credit_amount" field was cleared in this mutation.
+func (m *MallPurchaseMutation) DailyTemporaryCreditAmountCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldDailyTemporaryCreditAmount]
+	return ok
+}
+
+// ResetDailyTemporaryCreditAmount resets all changes to the "daily_temporary_credit_amount" field.
+func (m *MallPurchaseMutation) ResetDailyTemporaryCreditAmount() {
+	m.daily_temporary_credit_amount = nil
+	m.adddaily_temporary_credit_amount = nil
+	delete(m.clearedFields, mallpurchase.FieldDailyTemporaryCreditAmount)
+}
+
+// SetSubscriptionExpiresAt sets the "subscription_expires_at" field.
+func (m *MallPurchaseMutation) SetSubscriptionExpiresAt(t time.Time) {
+	m.subscription_expires_at = &t
+}
+
+// SubscriptionExpiresAt returns the value of the "subscription_expires_at" field in the mutation.
+func (m *MallPurchaseMutation) SubscriptionExpiresAt() (r time.Time, exists bool) {
+	v := m.subscription_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionExpiresAt returns the old "subscription_expires_at" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldSubscriptionExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionExpiresAt: %w", err)
+	}
+	return oldValue.SubscriptionExpiresAt, nil
+}
+
+// ClearSubscriptionExpiresAt clears the value of the "subscription_expires_at" field.
+func (m *MallPurchaseMutation) ClearSubscriptionExpiresAt() {
+	m.subscription_expires_at = nil
+	m.clearedFields[mallpurchase.FieldSubscriptionExpiresAt] = struct{}{}
+}
+
+// SubscriptionExpiresAtCleared returns if the "subscription_expires_at" field was cleared in this mutation.
+func (m *MallPurchaseMutation) SubscriptionExpiresAtCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldSubscriptionExpiresAt]
+	return ok
+}
+
+// ResetSubscriptionExpiresAt resets all changes to the "subscription_expires_at" field.
+func (m *MallPurchaseMutation) ResetSubscriptionExpiresAt() {
+	m.subscription_expires_at = nil
+	delete(m.clearedFields, mallpurchase.FieldSubscriptionExpiresAt)
+}
+
+// SetStatus sets the "status" field.
+func (m *MallPurchaseMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *MallPurchaseMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *MallPurchaseMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *MallPurchaseMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *MallPurchaseMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *MallPurchaseMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// Where appends a list predicates to the MallPurchaseMutation builder.
+func (m *MallPurchaseMutation) Where(ps ...predicate.MallPurchase) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MallPurchaseMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MallPurchaseMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MallPurchase, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MallPurchaseMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MallPurchaseMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MallPurchase).
+func (m *MallPurchaseMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MallPurchaseMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.user_id != nil {
+		fields = append(fields, mallpurchase.FieldUserID)
+	}
+	if m.product_type != nil {
+		fields = append(fields, mallpurchase.FieldProductType)
+	}
+	if m.product_id != nil {
+		fields = append(fields, mallpurchase.FieldProductID)
+	}
+	if m.idempotency_record_id != nil {
+		fields = append(fields, mallpurchase.FieldIdempotencyRecordID)
+	}
+	if m.payment_credit_type != nil {
+		fields = append(fields, mallpurchase.FieldPaymentCreditType)
+	}
+	if m.price != nil {
+		fields = append(fields, mallpurchase.FieldPrice)
+	}
+	if m.credited_type != nil {
+		fields = append(fields, mallpurchase.FieldCreditedType)
+	}
+	if m.credited_amount != nil {
+		fields = append(fields, mallpurchase.FieldCreditedAmount)
+	}
+	if m.benefit_type != nil {
+		fields = append(fields, mallpurchase.FieldBenefitType)
+	}
+	if m.benefit_days != nil {
+		fields = append(fields, mallpurchase.FieldBenefitDays)
+	}
+	if m.daily_temporary_credit_amount != nil {
+		fields = append(fields, mallpurchase.FieldDailyTemporaryCreditAmount)
+	}
+	if m.subscription_expires_at != nil {
+		fields = append(fields, mallpurchase.FieldSubscriptionExpiresAt)
+	}
+	if m.status != nil {
+		fields = append(fields, mallpurchase.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, mallpurchase.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MallPurchaseMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case mallpurchase.FieldUserID:
+		return m.UserID()
+	case mallpurchase.FieldProductType:
+		return m.ProductType()
+	case mallpurchase.FieldProductID:
+		return m.ProductID()
+	case mallpurchase.FieldIdempotencyRecordID:
+		return m.IdempotencyRecordID()
+	case mallpurchase.FieldPaymentCreditType:
+		return m.PaymentCreditType()
+	case mallpurchase.FieldPrice:
+		return m.Price()
+	case mallpurchase.FieldCreditedType:
+		return m.CreditedType()
+	case mallpurchase.FieldCreditedAmount:
+		return m.CreditedAmount()
+	case mallpurchase.FieldBenefitType:
+		return m.BenefitType()
+	case mallpurchase.FieldBenefitDays:
+		return m.BenefitDays()
+	case mallpurchase.FieldDailyTemporaryCreditAmount:
+		return m.DailyTemporaryCreditAmount()
+	case mallpurchase.FieldSubscriptionExpiresAt:
+		return m.SubscriptionExpiresAt()
+	case mallpurchase.FieldStatus:
+		return m.Status()
+	case mallpurchase.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MallPurchaseMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case mallpurchase.FieldUserID:
+		return m.OldUserID(ctx)
+	case mallpurchase.FieldProductType:
+		return m.OldProductType(ctx)
+	case mallpurchase.FieldProductID:
+		return m.OldProductID(ctx)
+	case mallpurchase.FieldIdempotencyRecordID:
+		return m.OldIdempotencyRecordID(ctx)
+	case mallpurchase.FieldPaymentCreditType:
+		return m.OldPaymentCreditType(ctx)
+	case mallpurchase.FieldPrice:
+		return m.OldPrice(ctx)
+	case mallpurchase.FieldCreditedType:
+		return m.OldCreditedType(ctx)
+	case mallpurchase.FieldCreditedAmount:
+		return m.OldCreditedAmount(ctx)
+	case mallpurchase.FieldBenefitType:
+		return m.OldBenefitType(ctx)
+	case mallpurchase.FieldBenefitDays:
+		return m.OldBenefitDays(ctx)
+	case mallpurchase.FieldDailyTemporaryCreditAmount:
+		return m.OldDailyTemporaryCreditAmount(ctx)
+	case mallpurchase.FieldSubscriptionExpiresAt:
+		return m.OldSubscriptionExpiresAt(ctx)
+	case mallpurchase.FieldStatus:
+		return m.OldStatus(ctx)
+	case mallpurchase.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown MallPurchase field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MallPurchaseMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case mallpurchase.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case mallpurchase.FieldProductType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductType(v)
+		return nil
+	case mallpurchase.FieldProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductID(v)
+		return nil
+	case mallpurchase.FieldIdempotencyRecordID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdempotencyRecordID(v)
+		return nil
+	case mallpurchase.FieldPaymentCreditType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaymentCreditType(v)
+		return nil
+	case mallpurchase.FieldPrice:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPrice(v)
+		return nil
+	case mallpurchase.FieldCreditedType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreditedType(v)
+		return nil
+	case mallpurchase.FieldCreditedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreditedAmount(v)
+		return nil
+	case mallpurchase.FieldBenefitType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBenefitType(v)
+		return nil
+	case mallpurchase.FieldBenefitDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBenefitDays(v)
+		return nil
+	case mallpurchase.FieldDailyTemporaryCreditAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyTemporaryCreditAmount(v)
+		return nil
+	case mallpurchase.FieldSubscriptionExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionExpiresAt(v)
+		return nil
+	case mallpurchase.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case mallpurchase.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MallPurchase field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MallPurchaseMutation) AddedFields() []string {
+	var fields []string
+	if m.adduser_id != nil {
+		fields = append(fields, mallpurchase.FieldUserID)
+	}
+	if m.addproduct_id != nil {
+		fields = append(fields, mallpurchase.FieldProductID)
+	}
+	if m.addidempotency_record_id != nil {
+		fields = append(fields, mallpurchase.FieldIdempotencyRecordID)
+	}
+	if m.addprice != nil {
+		fields = append(fields, mallpurchase.FieldPrice)
+	}
+	if m.addcredited_amount != nil {
+		fields = append(fields, mallpurchase.FieldCreditedAmount)
+	}
+	if m.addbenefit_days != nil {
+		fields = append(fields, mallpurchase.FieldBenefitDays)
+	}
+	if m.adddaily_temporary_credit_amount != nil {
+		fields = append(fields, mallpurchase.FieldDailyTemporaryCreditAmount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MallPurchaseMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case mallpurchase.FieldUserID:
+		return m.AddedUserID()
+	case mallpurchase.FieldProductID:
+		return m.AddedProductID()
+	case mallpurchase.FieldIdempotencyRecordID:
+		return m.AddedIdempotencyRecordID()
+	case mallpurchase.FieldPrice:
+		return m.AddedPrice()
+	case mallpurchase.FieldCreditedAmount:
+		return m.AddedCreditedAmount()
+	case mallpurchase.FieldBenefitDays:
+		return m.AddedBenefitDays()
+	case mallpurchase.FieldDailyTemporaryCreditAmount:
+		return m.AddedDailyTemporaryCreditAmount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MallPurchaseMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case mallpurchase.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case mallpurchase.FieldProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProductID(v)
+		return nil
+	case mallpurchase.FieldIdempotencyRecordID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddIdempotencyRecordID(v)
+		return nil
+	case mallpurchase.FieldPrice:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPrice(v)
+		return nil
+	case mallpurchase.FieldCreditedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCreditedAmount(v)
+		return nil
+	case mallpurchase.FieldBenefitDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBenefitDays(v)
+		return nil
+	case mallpurchase.FieldDailyTemporaryCreditAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyTemporaryCreditAmount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MallPurchase numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MallPurchaseMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(mallpurchase.FieldCreditedType) {
+		fields = append(fields, mallpurchase.FieldCreditedType)
+	}
+	if m.FieldCleared(mallpurchase.FieldCreditedAmount) {
+		fields = append(fields, mallpurchase.FieldCreditedAmount)
+	}
+	if m.FieldCleared(mallpurchase.FieldBenefitType) {
+		fields = append(fields, mallpurchase.FieldBenefitType)
+	}
+	if m.FieldCleared(mallpurchase.FieldBenefitDays) {
+		fields = append(fields, mallpurchase.FieldBenefitDays)
+	}
+	if m.FieldCleared(mallpurchase.FieldDailyTemporaryCreditAmount) {
+		fields = append(fields, mallpurchase.FieldDailyTemporaryCreditAmount)
+	}
+	if m.FieldCleared(mallpurchase.FieldSubscriptionExpiresAt) {
+		fields = append(fields, mallpurchase.FieldSubscriptionExpiresAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MallPurchaseMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MallPurchaseMutation) ClearField(name string) error {
+	switch name {
+	case mallpurchase.FieldCreditedType:
+		m.ClearCreditedType()
+		return nil
+	case mallpurchase.FieldCreditedAmount:
+		m.ClearCreditedAmount()
+		return nil
+	case mallpurchase.FieldBenefitType:
+		m.ClearBenefitType()
+		return nil
+	case mallpurchase.FieldBenefitDays:
+		m.ClearBenefitDays()
+		return nil
+	case mallpurchase.FieldDailyTemporaryCreditAmount:
+		m.ClearDailyTemporaryCreditAmount()
+		return nil
+	case mallpurchase.FieldSubscriptionExpiresAt:
+		m.ClearSubscriptionExpiresAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MallPurchase nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MallPurchaseMutation) ResetField(name string) error {
+	switch name {
+	case mallpurchase.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case mallpurchase.FieldProductType:
+		m.ResetProductType()
+		return nil
+	case mallpurchase.FieldProductID:
+		m.ResetProductID()
+		return nil
+	case mallpurchase.FieldIdempotencyRecordID:
+		m.ResetIdempotencyRecordID()
+		return nil
+	case mallpurchase.FieldPaymentCreditType:
+		m.ResetPaymentCreditType()
+		return nil
+	case mallpurchase.FieldPrice:
+		m.ResetPrice()
+		return nil
+	case mallpurchase.FieldCreditedType:
+		m.ResetCreditedType()
+		return nil
+	case mallpurchase.FieldCreditedAmount:
+		m.ResetCreditedAmount()
+		return nil
+	case mallpurchase.FieldBenefitType:
+		m.ResetBenefitType()
+		return nil
+	case mallpurchase.FieldBenefitDays:
+		m.ResetBenefitDays()
+		return nil
+	case mallpurchase.FieldDailyTemporaryCreditAmount:
+		m.ResetDailyTemporaryCreditAmount()
+		return nil
+	case mallpurchase.FieldSubscriptionExpiresAt:
+		m.ResetSubscriptionExpiresAt()
+		return nil
+	case mallpurchase.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case mallpurchase.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MallPurchase field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MallPurchaseMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MallPurchaseMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MallPurchaseMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MallPurchaseMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MallPurchaseMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MallPurchaseMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MallPurchaseMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown MallPurchase unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MallPurchaseMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown MallPurchase edge %s", name)
+}
+
 // PaymentAuditLogMutation represents an operation that mutates the PaymentAuditLog nodes in the graph.
 type PaymentAuditLogMutation struct {
 	config
@@ -32740,60 +36134,71 @@ func (m *PaymentAuditLogMutation) ResetEdge(name string) error {
 // PaymentOrderMutation represents an operation that mutates the PaymentOrder nodes in the graph.
 type PaymentOrderMutation struct {
 	config
-	op                       Op
-	typ                      string
-	id                       *int64
-	user_email               *string
-	user_name                *string
-	user_notes               *string
-	amount                   *float64
-	addamount                *float64
-	pay_amount               *float64
-	addpay_amount            *float64
-	fee_rate                 *float64
-	addfee_rate              *float64
-	recharge_code            *string
-	out_trade_no             *string
-	payment_type             *string
-	payment_trade_no         *string
-	pay_url                  *string
-	qr_code                  *string
-	qr_code_img              *string
-	order_type               *string
-	plan_id                  *int64
-	addplan_id               *int64
-	subscription_group_id    *int64
-	addsubscription_group_id *int64
-	subscription_days        *int
-	addsubscription_days     *int
-	provider_instance_id     *string
-	provider_key             *string
-	provider_snapshot        *map[string]interface{}
-	status                   *string
-	refund_amount            *float64
-	addrefund_amount         *float64
-	refund_reason            *string
-	refund_at                *time.Time
-	force_refund             *bool
-	refund_requested_at      *time.Time
-	refund_request_reason    *string
-	refund_requested_by      *string
-	expires_at               *time.Time
-	paid_at                  *time.Time
-	completed_at             *time.Time
-	failed_at                *time.Time
-	failed_reason            *string
-	client_ip                *string
-	src_host                 *string
-	src_url                  *string
-	created_at               *time.Time
-	updated_at               *time.Time
-	clearedFields            map[string]struct{}
-	user                     *int64
-	cleareduser              bool
-	done                     bool
-	oldValue                 func(context.Context) (*PaymentOrder, error)
-	predicates               []predicate.PaymentOrder
+	op                                  Op
+	typ                                 string
+	id                                  *int64
+	user_email                          *string
+	user_name                           *string
+	user_notes                          *string
+	amount                              *float64
+	addamount                           *float64
+	pay_amount                          *float64
+	addpay_amount                       *float64
+	fee_rate                            *float64
+	addfee_rate                         *float64
+	recharge_code                       *string
+	out_trade_no                        *string
+	payment_type                        *string
+	payment_trade_no                    *string
+	pay_url                             *string
+	qr_code                             *string
+	qr_code_img                         *string
+	order_type                          *string
+	plan_id                             *int64
+	addplan_id                          *int64
+	subscription_group_id               *int64
+	addsubscription_group_id            *int64
+	subscription_days                   *int
+	addsubscription_days                *int
+	currency_product_id                 *int64
+	addcurrency_product_id              *int64
+	currency_product_name               *string
+	currency_product_payment_price      *float64
+	addcurrency_product_payment_price   *float64
+	currency_product_credited_amount    *float64
+	addcurrency_product_credited_amount *float64
+	daily_purchase_limit_snapshot       *int
+	adddaily_purchase_limit_snapshot    *int
+	total_purchase_limit_snapshot       *int
+	addtotal_purchase_limit_snapshot    *int
+	provider_instance_id                *string
+	provider_key                        *string
+	provider_snapshot                   *map[string]interface{}
+	status                              *string
+	refund_amount                       *float64
+	addrefund_amount                    *float64
+	refund_reason                       *string
+	refund_at                           *time.Time
+	force_refund                        *bool
+	refund_requested_at                 *time.Time
+	refund_request_reason               *string
+	refund_requested_by                 *string
+	expires_at                          *time.Time
+	paid_at                             *time.Time
+	completed_at                        *time.Time
+	failed_at                           *time.Time
+	failed_reason                       *string
+	client_ip                           *string
+	src_host                            *string
+	src_url                             *string
+	created_at                          *time.Time
+	updated_at                          *time.Time
+	clearedFields                       map[string]struct{}
+	user                                *int64
+	cleareduser                         bool
+	done                                bool
+	oldValue                            func(context.Context) (*PaymentOrder, error)
+	predicates                          []predicate.PaymentOrder
 }
 
 var _ ent.Mutation = (*PaymentOrderMutation)(nil)
@@ -33754,6 +37159,377 @@ func (m *PaymentOrderMutation) ResetSubscriptionDays() {
 	m.subscription_days = nil
 	m.addsubscription_days = nil
 	delete(m.clearedFields, paymentorder.FieldSubscriptionDays)
+}
+
+// SetCurrencyProductID sets the "currency_product_id" field.
+func (m *PaymentOrderMutation) SetCurrencyProductID(i int64) {
+	m.currency_product_id = &i
+	m.addcurrency_product_id = nil
+}
+
+// CurrencyProductID returns the value of the "currency_product_id" field in the mutation.
+func (m *PaymentOrderMutation) CurrencyProductID() (r int64, exists bool) {
+	v := m.currency_product_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrencyProductID returns the old "currency_product_id" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldCurrencyProductID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrencyProductID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrencyProductID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrencyProductID: %w", err)
+	}
+	return oldValue.CurrencyProductID, nil
+}
+
+// AddCurrencyProductID adds i to the "currency_product_id" field.
+func (m *PaymentOrderMutation) AddCurrencyProductID(i int64) {
+	if m.addcurrency_product_id != nil {
+		*m.addcurrency_product_id += i
+	} else {
+		m.addcurrency_product_id = &i
+	}
+}
+
+// AddedCurrencyProductID returns the value that was added to the "currency_product_id" field in this mutation.
+func (m *PaymentOrderMutation) AddedCurrencyProductID() (r int64, exists bool) {
+	v := m.addcurrency_product_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCurrencyProductID clears the value of the "currency_product_id" field.
+func (m *PaymentOrderMutation) ClearCurrencyProductID() {
+	m.currency_product_id = nil
+	m.addcurrency_product_id = nil
+	m.clearedFields[paymentorder.FieldCurrencyProductID] = struct{}{}
+}
+
+// CurrencyProductIDCleared returns if the "currency_product_id" field was cleared in this mutation.
+func (m *PaymentOrderMutation) CurrencyProductIDCleared() bool {
+	_, ok := m.clearedFields[paymentorder.FieldCurrencyProductID]
+	return ok
+}
+
+// ResetCurrencyProductID resets all changes to the "currency_product_id" field.
+func (m *PaymentOrderMutation) ResetCurrencyProductID() {
+	m.currency_product_id = nil
+	m.addcurrency_product_id = nil
+	delete(m.clearedFields, paymentorder.FieldCurrencyProductID)
+}
+
+// SetCurrencyProductName sets the "currency_product_name" field.
+func (m *PaymentOrderMutation) SetCurrencyProductName(s string) {
+	m.currency_product_name = &s
+}
+
+// CurrencyProductName returns the value of the "currency_product_name" field in the mutation.
+func (m *PaymentOrderMutation) CurrencyProductName() (r string, exists bool) {
+	v := m.currency_product_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrencyProductName returns the old "currency_product_name" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldCurrencyProductName(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrencyProductName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrencyProductName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrencyProductName: %w", err)
+	}
+	return oldValue.CurrencyProductName, nil
+}
+
+// ClearCurrencyProductName clears the value of the "currency_product_name" field.
+func (m *PaymentOrderMutation) ClearCurrencyProductName() {
+	m.currency_product_name = nil
+	m.clearedFields[paymentorder.FieldCurrencyProductName] = struct{}{}
+}
+
+// CurrencyProductNameCleared returns if the "currency_product_name" field was cleared in this mutation.
+func (m *PaymentOrderMutation) CurrencyProductNameCleared() bool {
+	_, ok := m.clearedFields[paymentorder.FieldCurrencyProductName]
+	return ok
+}
+
+// ResetCurrencyProductName resets all changes to the "currency_product_name" field.
+func (m *PaymentOrderMutation) ResetCurrencyProductName() {
+	m.currency_product_name = nil
+	delete(m.clearedFields, paymentorder.FieldCurrencyProductName)
+}
+
+// SetCurrencyProductPaymentPrice sets the "currency_product_payment_price" field.
+func (m *PaymentOrderMutation) SetCurrencyProductPaymentPrice(f float64) {
+	m.currency_product_payment_price = &f
+	m.addcurrency_product_payment_price = nil
+}
+
+// CurrencyProductPaymentPrice returns the value of the "currency_product_payment_price" field in the mutation.
+func (m *PaymentOrderMutation) CurrencyProductPaymentPrice() (r float64, exists bool) {
+	v := m.currency_product_payment_price
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrencyProductPaymentPrice returns the old "currency_product_payment_price" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldCurrencyProductPaymentPrice(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrencyProductPaymentPrice is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrencyProductPaymentPrice requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrencyProductPaymentPrice: %w", err)
+	}
+	return oldValue.CurrencyProductPaymentPrice, nil
+}
+
+// AddCurrencyProductPaymentPrice adds f to the "currency_product_payment_price" field.
+func (m *PaymentOrderMutation) AddCurrencyProductPaymentPrice(f float64) {
+	if m.addcurrency_product_payment_price != nil {
+		*m.addcurrency_product_payment_price += f
+	} else {
+		m.addcurrency_product_payment_price = &f
+	}
+}
+
+// AddedCurrencyProductPaymentPrice returns the value that was added to the "currency_product_payment_price" field in this mutation.
+func (m *PaymentOrderMutation) AddedCurrencyProductPaymentPrice() (r float64, exists bool) {
+	v := m.addcurrency_product_payment_price
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCurrencyProductPaymentPrice clears the value of the "currency_product_payment_price" field.
+func (m *PaymentOrderMutation) ClearCurrencyProductPaymentPrice() {
+	m.currency_product_payment_price = nil
+	m.addcurrency_product_payment_price = nil
+	m.clearedFields[paymentorder.FieldCurrencyProductPaymentPrice] = struct{}{}
+}
+
+// CurrencyProductPaymentPriceCleared returns if the "currency_product_payment_price" field was cleared in this mutation.
+func (m *PaymentOrderMutation) CurrencyProductPaymentPriceCleared() bool {
+	_, ok := m.clearedFields[paymentorder.FieldCurrencyProductPaymentPrice]
+	return ok
+}
+
+// ResetCurrencyProductPaymentPrice resets all changes to the "currency_product_payment_price" field.
+func (m *PaymentOrderMutation) ResetCurrencyProductPaymentPrice() {
+	m.currency_product_payment_price = nil
+	m.addcurrency_product_payment_price = nil
+	delete(m.clearedFields, paymentorder.FieldCurrencyProductPaymentPrice)
+}
+
+// SetCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field.
+func (m *PaymentOrderMutation) SetCurrencyProductCreditedAmount(f float64) {
+	m.currency_product_credited_amount = &f
+	m.addcurrency_product_credited_amount = nil
+}
+
+// CurrencyProductCreditedAmount returns the value of the "currency_product_credited_amount" field in the mutation.
+func (m *PaymentOrderMutation) CurrencyProductCreditedAmount() (r float64, exists bool) {
+	v := m.currency_product_credited_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrencyProductCreditedAmount returns the old "currency_product_credited_amount" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldCurrencyProductCreditedAmount(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrencyProductCreditedAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrencyProductCreditedAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrencyProductCreditedAmount: %w", err)
+	}
+	return oldValue.CurrencyProductCreditedAmount, nil
+}
+
+// AddCurrencyProductCreditedAmount adds f to the "currency_product_credited_amount" field.
+func (m *PaymentOrderMutation) AddCurrencyProductCreditedAmount(f float64) {
+	if m.addcurrency_product_credited_amount != nil {
+		*m.addcurrency_product_credited_amount += f
+	} else {
+		m.addcurrency_product_credited_amount = &f
+	}
+}
+
+// AddedCurrencyProductCreditedAmount returns the value that was added to the "currency_product_credited_amount" field in this mutation.
+func (m *PaymentOrderMutation) AddedCurrencyProductCreditedAmount() (r float64, exists bool) {
+	v := m.addcurrency_product_credited_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCurrencyProductCreditedAmount clears the value of the "currency_product_credited_amount" field.
+func (m *PaymentOrderMutation) ClearCurrencyProductCreditedAmount() {
+	m.currency_product_credited_amount = nil
+	m.addcurrency_product_credited_amount = nil
+	m.clearedFields[paymentorder.FieldCurrencyProductCreditedAmount] = struct{}{}
+}
+
+// CurrencyProductCreditedAmountCleared returns if the "currency_product_credited_amount" field was cleared in this mutation.
+func (m *PaymentOrderMutation) CurrencyProductCreditedAmountCleared() bool {
+	_, ok := m.clearedFields[paymentorder.FieldCurrencyProductCreditedAmount]
+	return ok
+}
+
+// ResetCurrencyProductCreditedAmount resets all changes to the "currency_product_credited_amount" field.
+func (m *PaymentOrderMutation) ResetCurrencyProductCreditedAmount() {
+	m.currency_product_credited_amount = nil
+	m.addcurrency_product_credited_amount = nil
+	delete(m.clearedFields, paymentorder.FieldCurrencyProductCreditedAmount)
+}
+
+// SetDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field.
+func (m *PaymentOrderMutation) SetDailyPurchaseLimitSnapshot(i int) {
+	m.daily_purchase_limit_snapshot = &i
+	m.adddaily_purchase_limit_snapshot = nil
+}
+
+// DailyPurchaseLimitSnapshot returns the value of the "daily_purchase_limit_snapshot" field in the mutation.
+func (m *PaymentOrderMutation) DailyPurchaseLimitSnapshot() (r int, exists bool) {
+	v := m.daily_purchase_limit_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyPurchaseLimitSnapshot returns the old "daily_purchase_limit_snapshot" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldDailyPurchaseLimitSnapshot(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyPurchaseLimitSnapshot is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyPurchaseLimitSnapshot requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyPurchaseLimitSnapshot: %w", err)
+	}
+	return oldValue.DailyPurchaseLimitSnapshot, nil
+}
+
+// AddDailyPurchaseLimitSnapshot adds i to the "daily_purchase_limit_snapshot" field.
+func (m *PaymentOrderMutation) AddDailyPurchaseLimitSnapshot(i int) {
+	if m.adddaily_purchase_limit_snapshot != nil {
+		*m.adddaily_purchase_limit_snapshot += i
+	} else {
+		m.adddaily_purchase_limit_snapshot = &i
+	}
+}
+
+// AddedDailyPurchaseLimitSnapshot returns the value that was added to the "daily_purchase_limit_snapshot" field in this mutation.
+func (m *PaymentOrderMutation) AddedDailyPurchaseLimitSnapshot() (r int, exists bool) {
+	v := m.adddaily_purchase_limit_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyPurchaseLimitSnapshot resets all changes to the "daily_purchase_limit_snapshot" field.
+func (m *PaymentOrderMutation) ResetDailyPurchaseLimitSnapshot() {
+	m.daily_purchase_limit_snapshot = nil
+	m.adddaily_purchase_limit_snapshot = nil
+}
+
+// SetTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field.
+func (m *PaymentOrderMutation) SetTotalPurchaseLimitSnapshot(i int) {
+	m.total_purchase_limit_snapshot = &i
+	m.addtotal_purchase_limit_snapshot = nil
+}
+
+// TotalPurchaseLimitSnapshot returns the value of the "total_purchase_limit_snapshot" field in the mutation.
+func (m *PaymentOrderMutation) TotalPurchaseLimitSnapshot() (r int, exists bool) {
+	v := m.total_purchase_limit_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalPurchaseLimitSnapshot returns the old "total_purchase_limit_snapshot" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldTotalPurchaseLimitSnapshot(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalPurchaseLimitSnapshot is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalPurchaseLimitSnapshot requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalPurchaseLimitSnapshot: %w", err)
+	}
+	return oldValue.TotalPurchaseLimitSnapshot, nil
+}
+
+// AddTotalPurchaseLimitSnapshot adds i to the "total_purchase_limit_snapshot" field.
+func (m *PaymentOrderMutation) AddTotalPurchaseLimitSnapshot(i int) {
+	if m.addtotal_purchase_limit_snapshot != nil {
+		*m.addtotal_purchase_limit_snapshot += i
+	} else {
+		m.addtotal_purchase_limit_snapshot = &i
+	}
+}
+
+// AddedTotalPurchaseLimitSnapshot returns the value that was added to the "total_purchase_limit_snapshot" field in this mutation.
+func (m *PaymentOrderMutation) AddedTotalPurchaseLimitSnapshot() (r int, exists bool) {
+	v := m.addtotal_purchase_limit_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTotalPurchaseLimitSnapshot resets all changes to the "total_purchase_limit_snapshot" field.
+func (m *PaymentOrderMutation) ResetTotalPurchaseLimitSnapshot() {
+	m.total_purchase_limit_snapshot = nil
+	m.addtotal_purchase_limit_snapshot = nil
 }
 
 // SetProviderInstanceID sets the "provider_instance_id" field.
@@ -34762,7 +38538,7 @@ func (m *PaymentOrderMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PaymentOrderMutation) Fields() []string {
-	fields := make([]string, 0, 39)
+	fields := make([]string, 0, 45)
 	if m.user != nil {
 		fields = append(fields, paymentorder.FieldUserID)
 	}
@@ -34816,6 +38592,24 @@ func (m *PaymentOrderMutation) Fields() []string {
 	}
 	if m.subscription_days != nil {
 		fields = append(fields, paymentorder.FieldSubscriptionDays)
+	}
+	if m.currency_product_id != nil {
+		fields = append(fields, paymentorder.FieldCurrencyProductID)
+	}
+	if m.currency_product_name != nil {
+		fields = append(fields, paymentorder.FieldCurrencyProductName)
+	}
+	if m.currency_product_payment_price != nil {
+		fields = append(fields, paymentorder.FieldCurrencyProductPaymentPrice)
+	}
+	if m.currency_product_credited_amount != nil {
+		fields = append(fields, paymentorder.FieldCurrencyProductCreditedAmount)
+	}
+	if m.daily_purchase_limit_snapshot != nil {
+		fields = append(fields, paymentorder.FieldDailyPurchaseLimitSnapshot)
+	}
+	if m.total_purchase_limit_snapshot != nil {
+		fields = append(fields, paymentorder.FieldTotalPurchaseLimitSnapshot)
 	}
 	if m.provider_instance_id != nil {
 		fields = append(fields, paymentorder.FieldProviderInstanceID)
@@ -34924,6 +38718,18 @@ func (m *PaymentOrderMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionGroupID()
 	case paymentorder.FieldSubscriptionDays:
 		return m.SubscriptionDays()
+	case paymentorder.FieldCurrencyProductID:
+		return m.CurrencyProductID()
+	case paymentorder.FieldCurrencyProductName:
+		return m.CurrencyProductName()
+	case paymentorder.FieldCurrencyProductPaymentPrice:
+		return m.CurrencyProductPaymentPrice()
+	case paymentorder.FieldCurrencyProductCreditedAmount:
+		return m.CurrencyProductCreditedAmount()
+	case paymentorder.FieldDailyPurchaseLimitSnapshot:
+		return m.DailyPurchaseLimitSnapshot()
+	case paymentorder.FieldTotalPurchaseLimitSnapshot:
+		return m.TotalPurchaseLimitSnapshot()
 	case paymentorder.FieldProviderInstanceID:
 		return m.ProviderInstanceID()
 	case paymentorder.FieldProviderKey:
@@ -35011,6 +38817,18 @@ func (m *PaymentOrderMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldSubscriptionGroupID(ctx)
 	case paymentorder.FieldSubscriptionDays:
 		return m.OldSubscriptionDays(ctx)
+	case paymentorder.FieldCurrencyProductID:
+		return m.OldCurrencyProductID(ctx)
+	case paymentorder.FieldCurrencyProductName:
+		return m.OldCurrencyProductName(ctx)
+	case paymentorder.FieldCurrencyProductPaymentPrice:
+		return m.OldCurrencyProductPaymentPrice(ctx)
+	case paymentorder.FieldCurrencyProductCreditedAmount:
+		return m.OldCurrencyProductCreditedAmount(ctx)
+	case paymentorder.FieldDailyPurchaseLimitSnapshot:
+		return m.OldDailyPurchaseLimitSnapshot(ctx)
+	case paymentorder.FieldTotalPurchaseLimitSnapshot:
+		return m.OldTotalPurchaseLimitSnapshot(ctx)
 	case paymentorder.FieldProviderInstanceID:
 		return m.OldProviderInstanceID(ctx)
 	case paymentorder.FieldProviderKey:
@@ -35188,6 +39006,48 @@ func (m *PaymentOrderMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSubscriptionDays(v)
 		return nil
+	case paymentorder.FieldCurrencyProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrencyProductID(v)
+		return nil
+	case paymentorder.FieldCurrencyProductName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrencyProductName(v)
+		return nil
+	case paymentorder.FieldCurrencyProductPaymentPrice:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrencyProductPaymentPrice(v)
+		return nil
+	case paymentorder.FieldCurrencyProductCreditedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrencyProductCreditedAmount(v)
+		return nil
+	case paymentorder.FieldDailyPurchaseLimitSnapshot:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyPurchaseLimitSnapshot(v)
+		return nil
+	case paymentorder.FieldTotalPurchaseLimitSnapshot:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalPurchaseLimitSnapshot(v)
+		return nil
 	case paymentorder.FieldProviderInstanceID:
 		v, ok := value.(string)
 		if !ok {
@@ -35361,6 +39221,21 @@ func (m *PaymentOrderMutation) AddedFields() []string {
 	if m.addsubscription_days != nil {
 		fields = append(fields, paymentorder.FieldSubscriptionDays)
 	}
+	if m.addcurrency_product_id != nil {
+		fields = append(fields, paymentorder.FieldCurrencyProductID)
+	}
+	if m.addcurrency_product_payment_price != nil {
+		fields = append(fields, paymentorder.FieldCurrencyProductPaymentPrice)
+	}
+	if m.addcurrency_product_credited_amount != nil {
+		fields = append(fields, paymentorder.FieldCurrencyProductCreditedAmount)
+	}
+	if m.adddaily_purchase_limit_snapshot != nil {
+		fields = append(fields, paymentorder.FieldDailyPurchaseLimitSnapshot)
+	}
+	if m.addtotal_purchase_limit_snapshot != nil {
+		fields = append(fields, paymentorder.FieldTotalPurchaseLimitSnapshot)
+	}
 	if m.addrefund_amount != nil {
 		fields = append(fields, paymentorder.FieldRefundAmount)
 	}
@@ -35384,6 +39259,16 @@ func (m *PaymentOrderMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedSubscriptionGroupID()
 	case paymentorder.FieldSubscriptionDays:
 		return m.AddedSubscriptionDays()
+	case paymentorder.FieldCurrencyProductID:
+		return m.AddedCurrencyProductID()
+	case paymentorder.FieldCurrencyProductPaymentPrice:
+		return m.AddedCurrencyProductPaymentPrice()
+	case paymentorder.FieldCurrencyProductCreditedAmount:
+		return m.AddedCurrencyProductCreditedAmount()
+	case paymentorder.FieldDailyPurchaseLimitSnapshot:
+		return m.AddedDailyPurchaseLimitSnapshot()
+	case paymentorder.FieldTotalPurchaseLimitSnapshot:
+		return m.AddedTotalPurchaseLimitSnapshot()
 	case paymentorder.FieldRefundAmount:
 		return m.AddedRefundAmount()
 	}
@@ -35437,6 +39322,41 @@ func (m *PaymentOrderMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddSubscriptionDays(v)
 		return nil
+	case paymentorder.FieldCurrencyProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCurrencyProductID(v)
+		return nil
+	case paymentorder.FieldCurrencyProductPaymentPrice:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCurrencyProductPaymentPrice(v)
+		return nil
+	case paymentorder.FieldCurrencyProductCreditedAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCurrencyProductCreditedAmount(v)
+		return nil
+	case paymentorder.FieldDailyPurchaseLimitSnapshot:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyPurchaseLimitSnapshot(v)
+		return nil
+	case paymentorder.FieldTotalPurchaseLimitSnapshot:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTotalPurchaseLimitSnapshot(v)
+		return nil
 	case paymentorder.FieldRefundAmount:
 		v, ok := value.(float64)
 		if !ok {
@@ -35472,6 +39392,18 @@ func (m *PaymentOrderMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(paymentorder.FieldSubscriptionDays) {
 		fields = append(fields, paymentorder.FieldSubscriptionDays)
+	}
+	if m.FieldCleared(paymentorder.FieldCurrencyProductID) {
+		fields = append(fields, paymentorder.FieldCurrencyProductID)
+	}
+	if m.FieldCleared(paymentorder.FieldCurrencyProductName) {
+		fields = append(fields, paymentorder.FieldCurrencyProductName)
+	}
+	if m.FieldCleared(paymentorder.FieldCurrencyProductPaymentPrice) {
+		fields = append(fields, paymentorder.FieldCurrencyProductPaymentPrice)
+	}
+	if m.FieldCleared(paymentorder.FieldCurrencyProductCreditedAmount) {
+		fields = append(fields, paymentorder.FieldCurrencyProductCreditedAmount)
 	}
 	if m.FieldCleared(paymentorder.FieldProviderInstanceID) {
 		fields = append(fields, paymentorder.FieldProviderInstanceID)
@@ -35546,6 +39478,18 @@ func (m *PaymentOrderMutation) ClearField(name string) error {
 		return nil
 	case paymentorder.FieldSubscriptionDays:
 		m.ClearSubscriptionDays()
+		return nil
+	case paymentorder.FieldCurrencyProductID:
+		m.ClearCurrencyProductID()
+		return nil
+	case paymentorder.FieldCurrencyProductName:
+		m.ClearCurrencyProductName()
+		return nil
+	case paymentorder.FieldCurrencyProductPaymentPrice:
+		m.ClearCurrencyProductPaymentPrice()
+		return nil
+	case paymentorder.FieldCurrencyProductCreditedAmount:
+		m.ClearCurrencyProductCreditedAmount()
 		return nil
 	case paymentorder.FieldProviderInstanceID:
 		m.ClearProviderInstanceID()
@@ -35647,6 +39591,24 @@ func (m *PaymentOrderMutation) ResetField(name string) error {
 		return nil
 	case paymentorder.FieldSubscriptionDays:
 		m.ResetSubscriptionDays()
+		return nil
+	case paymentorder.FieldCurrencyProductID:
+		m.ResetCurrencyProductID()
+		return nil
+	case paymentorder.FieldCurrencyProductName:
+		m.ResetCurrencyProductName()
+		return nil
+	case paymentorder.FieldCurrencyProductPaymentPrice:
+		m.ResetCurrencyProductPaymentPrice()
+		return nil
+	case paymentorder.FieldCurrencyProductCreditedAmount:
+		m.ResetCurrencyProductCreditedAmount()
+		return nil
+	case paymentorder.FieldDailyPurchaseLimitSnapshot:
+		m.ResetDailyPurchaseLimitSnapshot()
+		return nil
+	case paymentorder.FieldTotalPurchaseLimitSnapshot:
+		m.ResetTotalPurchaseLimitSnapshot()
 		return nil
 	case paymentorder.FieldProviderInstanceID:
 		m.ResetProviderInstanceID()
@@ -36743,6 +40705,1705 @@ func (m *PaymentProviderInstanceMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *PaymentProviderInstanceMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown PaymentProviderInstance edge %s", name)
+}
+
+// PaymentPurchaseCounterMutation represents an operation that mutates the PaymentPurchaseCounter nodes in the graph.
+type PaymentPurchaseCounterMutation struct {
+	config
+	op                Op
+	typ               string
+	id                *int64
+	user_id           *int64
+	adduser_id        *int64
+	product_type      *string
+	product_id        *int64
+	addproduct_id     *int64
+	period_type       *string
+	period_start      *time.Time
+	reserved_count    *int
+	addreserved_count *int
+	consumed_count    *int
+	addconsumed_count *int
+	created_at        *time.Time
+	updated_at        *time.Time
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*PaymentPurchaseCounter, error)
+	predicates        []predicate.PaymentPurchaseCounter
+}
+
+var _ ent.Mutation = (*PaymentPurchaseCounterMutation)(nil)
+
+// paymentpurchasecounterOption allows management of the mutation configuration using functional options.
+type paymentpurchasecounterOption func(*PaymentPurchaseCounterMutation)
+
+// newPaymentPurchaseCounterMutation creates new mutation for the PaymentPurchaseCounter entity.
+func newPaymentPurchaseCounterMutation(c config, op Op, opts ...paymentpurchasecounterOption) *PaymentPurchaseCounterMutation {
+	m := &PaymentPurchaseCounterMutation{
+		config:        c,
+		op:            op,
+		typ:           TypePaymentPurchaseCounter,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withPaymentPurchaseCounterID sets the ID field of the mutation.
+func withPaymentPurchaseCounterID(id int64) paymentpurchasecounterOption {
+	return func(m *PaymentPurchaseCounterMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *PaymentPurchaseCounter
+		)
+		m.oldValue = func(ctx context.Context) (*PaymentPurchaseCounter, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().PaymentPurchaseCounter.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withPaymentPurchaseCounter sets the old PaymentPurchaseCounter of the mutation.
+func withPaymentPurchaseCounter(node *PaymentPurchaseCounter) paymentpurchasecounterOption {
+	return func(m *PaymentPurchaseCounterMutation) {
+		m.oldValue = func(context.Context) (*PaymentPurchaseCounter, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m PaymentPurchaseCounterMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m PaymentPurchaseCounterMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *PaymentPurchaseCounterMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *PaymentPurchaseCounterMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().PaymentPurchaseCounter.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUserID sets the "user_id" field.
+func (m *PaymentPurchaseCounterMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *PaymentPurchaseCounterMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the PaymentPurchaseCounter entity.
+// If the PaymentPurchaseCounter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseCounterMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *PaymentPurchaseCounterMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *PaymentPurchaseCounterMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *PaymentPurchaseCounterMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetProductType sets the "product_type" field.
+func (m *PaymentPurchaseCounterMutation) SetProductType(s string) {
+	m.product_type = &s
+}
+
+// ProductType returns the value of the "product_type" field in the mutation.
+func (m *PaymentPurchaseCounterMutation) ProductType() (r string, exists bool) {
+	v := m.product_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductType returns the old "product_type" field's value of the PaymentPurchaseCounter entity.
+// If the PaymentPurchaseCounter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseCounterMutation) OldProductType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductType: %w", err)
+	}
+	return oldValue.ProductType, nil
+}
+
+// ResetProductType resets all changes to the "product_type" field.
+func (m *PaymentPurchaseCounterMutation) ResetProductType() {
+	m.product_type = nil
+}
+
+// SetProductID sets the "product_id" field.
+func (m *PaymentPurchaseCounterMutation) SetProductID(i int64) {
+	m.product_id = &i
+	m.addproduct_id = nil
+}
+
+// ProductID returns the value of the "product_id" field in the mutation.
+func (m *PaymentPurchaseCounterMutation) ProductID() (r int64, exists bool) {
+	v := m.product_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductID returns the old "product_id" field's value of the PaymentPurchaseCounter entity.
+// If the PaymentPurchaseCounter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseCounterMutation) OldProductID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductID: %w", err)
+	}
+	return oldValue.ProductID, nil
+}
+
+// AddProductID adds i to the "product_id" field.
+func (m *PaymentPurchaseCounterMutation) AddProductID(i int64) {
+	if m.addproduct_id != nil {
+		*m.addproduct_id += i
+	} else {
+		m.addproduct_id = &i
+	}
+}
+
+// AddedProductID returns the value that was added to the "product_id" field in this mutation.
+func (m *PaymentPurchaseCounterMutation) AddedProductID() (r int64, exists bool) {
+	v := m.addproduct_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetProductID resets all changes to the "product_id" field.
+func (m *PaymentPurchaseCounterMutation) ResetProductID() {
+	m.product_id = nil
+	m.addproduct_id = nil
+}
+
+// SetPeriodType sets the "period_type" field.
+func (m *PaymentPurchaseCounterMutation) SetPeriodType(s string) {
+	m.period_type = &s
+}
+
+// PeriodType returns the value of the "period_type" field in the mutation.
+func (m *PaymentPurchaseCounterMutation) PeriodType() (r string, exists bool) {
+	v := m.period_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodType returns the old "period_type" field's value of the PaymentPurchaseCounter entity.
+// If the PaymentPurchaseCounter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseCounterMutation) OldPeriodType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodType: %w", err)
+	}
+	return oldValue.PeriodType, nil
+}
+
+// ResetPeriodType resets all changes to the "period_type" field.
+func (m *PaymentPurchaseCounterMutation) ResetPeriodType() {
+	m.period_type = nil
+}
+
+// SetPeriodStart sets the "period_start" field.
+func (m *PaymentPurchaseCounterMutation) SetPeriodStart(t time.Time) {
+	m.period_start = &t
+}
+
+// PeriodStart returns the value of the "period_start" field in the mutation.
+func (m *PaymentPurchaseCounterMutation) PeriodStart() (r time.Time, exists bool) {
+	v := m.period_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodStart returns the old "period_start" field's value of the PaymentPurchaseCounter entity.
+// If the PaymentPurchaseCounter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseCounterMutation) OldPeriodStart(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodStart: %w", err)
+	}
+	return oldValue.PeriodStart, nil
+}
+
+// ResetPeriodStart resets all changes to the "period_start" field.
+func (m *PaymentPurchaseCounterMutation) ResetPeriodStart() {
+	m.period_start = nil
+}
+
+// SetReservedCount sets the "reserved_count" field.
+func (m *PaymentPurchaseCounterMutation) SetReservedCount(i int) {
+	m.reserved_count = &i
+	m.addreserved_count = nil
+}
+
+// ReservedCount returns the value of the "reserved_count" field in the mutation.
+func (m *PaymentPurchaseCounterMutation) ReservedCount() (r int, exists bool) {
+	v := m.reserved_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReservedCount returns the old "reserved_count" field's value of the PaymentPurchaseCounter entity.
+// If the PaymentPurchaseCounter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseCounterMutation) OldReservedCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReservedCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReservedCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReservedCount: %w", err)
+	}
+	return oldValue.ReservedCount, nil
+}
+
+// AddReservedCount adds i to the "reserved_count" field.
+func (m *PaymentPurchaseCounterMutation) AddReservedCount(i int) {
+	if m.addreserved_count != nil {
+		*m.addreserved_count += i
+	} else {
+		m.addreserved_count = &i
+	}
+}
+
+// AddedReservedCount returns the value that was added to the "reserved_count" field in this mutation.
+func (m *PaymentPurchaseCounterMutation) AddedReservedCount() (r int, exists bool) {
+	v := m.addreserved_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetReservedCount resets all changes to the "reserved_count" field.
+func (m *PaymentPurchaseCounterMutation) ResetReservedCount() {
+	m.reserved_count = nil
+	m.addreserved_count = nil
+}
+
+// SetConsumedCount sets the "consumed_count" field.
+func (m *PaymentPurchaseCounterMutation) SetConsumedCount(i int) {
+	m.consumed_count = &i
+	m.addconsumed_count = nil
+}
+
+// ConsumedCount returns the value of the "consumed_count" field in the mutation.
+func (m *PaymentPurchaseCounterMutation) ConsumedCount() (r int, exists bool) {
+	v := m.consumed_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConsumedCount returns the old "consumed_count" field's value of the PaymentPurchaseCounter entity.
+// If the PaymentPurchaseCounter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseCounterMutation) OldConsumedCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConsumedCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConsumedCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConsumedCount: %w", err)
+	}
+	return oldValue.ConsumedCount, nil
+}
+
+// AddConsumedCount adds i to the "consumed_count" field.
+func (m *PaymentPurchaseCounterMutation) AddConsumedCount(i int) {
+	if m.addconsumed_count != nil {
+		*m.addconsumed_count += i
+	} else {
+		m.addconsumed_count = &i
+	}
+}
+
+// AddedConsumedCount returns the value that was added to the "consumed_count" field in this mutation.
+func (m *PaymentPurchaseCounterMutation) AddedConsumedCount() (r int, exists bool) {
+	v := m.addconsumed_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetConsumedCount resets all changes to the "consumed_count" field.
+func (m *PaymentPurchaseCounterMutation) ResetConsumedCount() {
+	m.consumed_count = nil
+	m.addconsumed_count = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *PaymentPurchaseCounterMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *PaymentPurchaseCounterMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the PaymentPurchaseCounter entity.
+// If the PaymentPurchaseCounter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseCounterMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *PaymentPurchaseCounterMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *PaymentPurchaseCounterMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *PaymentPurchaseCounterMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the PaymentPurchaseCounter entity.
+// If the PaymentPurchaseCounter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseCounterMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *PaymentPurchaseCounterMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the PaymentPurchaseCounterMutation builder.
+func (m *PaymentPurchaseCounterMutation) Where(ps ...predicate.PaymentPurchaseCounter) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the PaymentPurchaseCounterMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *PaymentPurchaseCounterMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.PaymentPurchaseCounter, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *PaymentPurchaseCounterMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *PaymentPurchaseCounterMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (PaymentPurchaseCounter).
+func (m *PaymentPurchaseCounterMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *PaymentPurchaseCounterMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.user_id != nil {
+		fields = append(fields, paymentpurchasecounter.FieldUserID)
+	}
+	if m.product_type != nil {
+		fields = append(fields, paymentpurchasecounter.FieldProductType)
+	}
+	if m.product_id != nil {
+		fields = append(fields, paymentpurchasecounter.FieldProductID)
+	}
+	if m.period_type != nil {
+		fields = append(fields, paymentpurchasecounter.FieldPeriodType)
+	}
+	if m.period_start != nil {
+		fields = append(fields, paymentpurchasecounter.FieldPeriodStart)
+	}
+	if m.reserved_count != nil {
+		fields = append(fields, paymentpurchasecounter.FieldReservedCount)
+	}
+	if m.consumed_count != nil {
+		fields = append(fields, paymentpurchasecounter.FieldConsumedCount)
+	}
+	if m.created_at != nil {
+		fields = append(fields, paymentpurchasecounter.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, paymentpurchasecounter.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *PaymentPurchaseCounterMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case paymentpurchasecounter.FieldUserID:
+		return m.UserID()
+	case paymentpurchasecounter.FieldProductType:
+		return m.ProductType()
+	case paymentpurchasecounter.FieldProductID:
+		return m.ProductID()
+	case paymentpurchasecounter.FieldPeriodType:
+		return m.PeriodType()
+	case paymentpurchasecounter.FieldPeriodStart:
+		return m.PeriodStart()
+	case paymentpurchasecounter.FieldReservedCount:
+		return m.ReservedCount()
+	case paymentpurchasecounter.FieldConsumedCount:
+		return m.ConsumedCount()
+	case paymentpurchasecounter.FieldCreatedAt:
+		return m.CreatedAt()
+	case paymentpurchasecounter.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *PaymentPurchaseCounterMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case paymentpurchasecounter.FieldUserID:
+		return m.OldUserID(ctx)
+	case paymentpurchasecounter.FieldProductType:
+		return m.OldProductType(ctx)
+	case paymentpurchasecounter.FieldProductID:
+		return m.OldProductID(ctx)
+	case paymentpurchasecounter.FieldPeriodType:
+		return m.OldPeriodType(ctx)
+	case paymentpurchasecounter.FieldPeriodStart:
+		return m.OldPeriodStart(ctx)
+	case paymentpurchasecounter.FieldReservedCount:
+		return m.OldReservedCount(ctx)
+	case paymentpurchasecounter.FieldConsumedCount:
+		return m.OldConsumedCount(ctx)
+	case paymentpurchasecounter.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case paymentpurchasecounter.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown PaymentPurchaseCounter field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentPurchaseCounterMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case paymentpurchasecounter.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case paymentpurchasecounter.FieldProductType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductType(v)
+		return nil
+	case paymentpurchasecounter.FieldProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductID(v)
+		return nil
+	case paymentpurchasecounter.FieldPeriodType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodType(v)
+		return nil
+	case paymentpurchasecounter.FieldPeriodStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodStart(v)
+		return nil
+	case paymentpurchasecounter.FieldReservedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReservedCount(v)
+		return nil
+	case paymentpurchasecounter.FieldConsumedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConsumedCount(v)
+		return nil
+	case paymentpurchasecounter.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case paymentpurchasecounter.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseCounter field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *PaymentPurchaseCounterMutation) AddedFields() []string {
+	var fields []string
+	if m.adduser_id != nil {
+		fields = append(fields, paymentpurchasecounter.FieldUserID)
+	}
+	if m.addproduct_id != nil {
+		fields = append(fields, paymentpurchasecounter.FieldProductID)
+	}
+	if m.addreserved_count != nil {
+		fields = append(fields, paymentpurchasecounter.FieldReservedCount)
+	}
+	if m.addconsumed_count != nil {
+		fields = append(fields, paymentpurchasecounter.FieldConsumedCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *PaymentPurchaseCounterMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case paymentpurchasecounter.FieldUserID:
+		return m.AddedUserID()
+	case paymentpurchasecounter.FieldProductID:
+		return m.AddedProductID()
+	case paymentpurchasecounter.FieldReservedCount:
+		return m.AddedReservedCount()
+	case paymentpurchasecounter.FieldConsumedCount:
+		return m.AddedConsumedCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentPurchaseCounterMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case paymentpurchasecounter.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case paymentpurchasecounter.FieldProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProductID(v)
+		return nil
+	case paymentpurchasecounter.FieldReservedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReservedCount(v)
+		return nil
+	case paymentpurchasecounter.FieldConsumedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddConsumedCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseCounter numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *PaymentPurchaseCounterMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *PaymentPurchaseCounterMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *PaymentPurchaseCounterMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown PaymentPurchaseCounter nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *PaymentPurchaseCounterMutation) ResetField(name string) error {
+	switch name {
+	case paymentpurchasecounter.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case paymentpurchasecounter.FieldProductType:
+		m.ResetProductType()
+		return nil
+	case paymentpurchasecounter.FieldProductID:
+		m.ResetProductID()
+		return nil
+	case paymentpurchasecounter.FieldPeriodType:
+		m.ResetPeriodType()
+		return nil
+	case paymentpurchasecounter.FieldPeriodStart:
+		m.ResetPeriodStart()
+		return nil
+	case paymentpurchasecounter.FieldReservedCount:
+		m.ResetReservedCount()
+		return nil
+	case paymentpurchasecounter.FieldConsumedCount:
+		m.ResetConsumedCount()
+		return nil
+	case paymentpurchasecounter.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case paymentpurchasecounter.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseCounter field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *PaymentPurchaseCounterMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *PaymentPurchaseCounterMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *PaymentPurchaseCounterMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *PaymentPurchaseCounterMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *PaymentPurchaseCounterMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *PaymentPurchaseCounterMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *PaymentPurchaseCounterMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown PaymentPurchaseCounter unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *PaymentPurchaseCounterMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown PaymentPurchaseCounter edge %s", name)
+}
+
+// PaymentPurchaseReservationMutation represents an operation that mutates the PaymentPurchaseReservation nodes in the graph.
+type PaymentPurchaseReservationMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *int64
+	order_id           *int64
+	addorder_id        *int64
+	user_id            *int64
+	adduser_id         *int64
+	product_type       *string
+	product_id         *int64
+	addproduct_id      *int64
+	daily_period_start *time.Time
+	status             *string
+	created_at         *time.Time
+	updated_at         *time.Time
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*PaymentPurchaseReservation, error)
+	predicates         []predicate.PaymentPurchaseReservation
+}
+
+var _ ent.Mutation = (*PaymentPurchaseReservationMutation)(nil)
+
+// paymentpurchasereservationOption allows management of the mutation configuration using functional options.
+type paymentpurchasereservationOption func(*PaymentPurchaseReservationMutation)
+
+// newPaymentPurchaseReservationMutation creates new mutation for the PaymentPurchaseReservation entity.
+func newPaymentPurchaseReservationMutation(c config, op Op, opts ...paymentpurchasereservationOption) *PaymentPurchaseReservationMutation {
+	m := &PaymentPurchaseReservationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypePaymentPurchaseReservation,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withPaymentPurchaseReservationID sets the ID field of the mutation.
+func withPaymentPurchaseReservationID(id int64) paymentpurchasereservationOption {
+	return func(m *PaymentPurchaseReservationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *PaymentPurchaseReservation
+		)
+		m.oldValue = func(ctx context.Context) (*PaymentPurchaseReservation, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().PaymentPurchaseReservation.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withPaymentPurchaseReservation sets the old PaymentPurchaseReservation of the mutation.
+func withPaymentPurchaseReservation(node *PaymentPurchaseReservation) paymentpurchasereservationOption {
+	return func(m *PaymentPurchaseReservationMutation) {
+		m.oldValue = func(context.Context) (*PaymentPurchaseReservation, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m PaymentPurchaseReservationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m PaymentPurchaseReservationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *PaymentPurchaseReservationMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *PaymentPurchaseReservationMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().PaymentPurchaseReservation.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetOrderID sets the "order_id" field.
+func (m *PaymentPurchaseReservationMutation) SetOrderID(i int64) {
+	m.order_id = &i
+	m.addorder_id = nil
+}
+
+// OrderID returns the value of the "order_id" field in the mutation.
+func (m *PaymentPurchaseReservationMutation) OrderID() (r int64, exists bool) {
+	v := m.order_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOrderID returns the old "order_id" field's value of the PaymentPurchaseReservation entity.
+// If the PaymentPurchaseReservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseReservationMutation) OldOrderID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOrderID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOrderID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOrderID: %w", err)
+	}
+	return oldValue.OrderID, nil
+}
+
+// AddOrderID adds i to the "order_id" field.
+func (m *PaymentPurchaseReservationMutation) AddOrderID(i int64) {
+	if m.addorder_id != nil {
+		*m.addorder_id += i
+	} else {
+		m.addorder_id = &i
+	}
+}
+
+// AddedOrderID returns the value that was added to the "order_id" field in this mutation.
+func (m *PaymentPurchaseReservationMutation) AddedOrderID() (r int64, exists bool) {
+	v := m.addorder_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOrderID resets all changes to the "order_id" field.
+func (m *PaymentPurchaseReservationMutation) ResetOrderID() {
+	m.order_id = nil
+	m.addorder_id = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *PaymentPurchaseReservationMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *PaymentPurchaseReservationMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the PaymentPurchaseReservation entity.
+// If the PaymentPurchaseReservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseReservationMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *PaymentPurchaseReservationMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *PaymentPurchaseReservationMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *PaymentPurchaseReservationMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetProductType sets the "product_type" field.
+func (m *PaymentPurchaseReservationMutation) SetProductType(s string) {
+	m.product_type = &s
+}
+
+// ProductType returns the value of the "product_type" field in the mutation.
+func (m *PaymentPurchaseReservationMutation) ProductType() (r string, exists bool) {
+	v := m.product_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductType returns the old "product_type" field's value of the PaymentPurchaseReservation entity.
+// If the PaymentPurchaseReservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseReservationMutation) OldProductType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductType: %w", err)
+	}
+	return oldValue.ProductType, nil
+}
+
+// ResetProductType resets all changes to the "product_type" field.
+func (m *PaymentPurchaseReservationMutation) ResetProductType() {
+	m.product_type = nil
+}
+
+// SetProductID sets the "product_id" field.
+func (m *PaymentPurchaseReservationMutation) SetProductID(i int64) {
+	m.product_id = &i
+	m.addproduct_id = nil
+}
+
+// ProductID returns the value of the "product_id" field in the mutation.
+func (m *PaymentPurchaseReservationMutation) ProductID() (r int64, exists bool) {
+	v := m.product_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductID returns the old "product_id" field's value of the PaymentPurchaseReservation entity.
+// If the PaymentPurchaseReservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseReservationMutation) OldProductID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductID: %w", err)
+	}
+	return oldValue.ProductID, nil
+}
+
+// AddProductID adds i to the "product_id" field.
+func (m *PaymentPurchaseReservationMutation) AddProductID(i int64) {
+	if m.addproduct_id != nil {
+		*m.addproduct_id += i
+	} else {
+		m.addproduct_id = &i
+	}
+}
+
+// AddedProductID returns the value that was added to the "product_id" field in this mutation.
+func (m *PaymentPurchaseReservationMutation) AddedProductID() (r int64, exists bool) {
+	v := m.addproduct_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetProductID resets all changes to the "product_id" field.
+func (m *PaymentPurchaseReservationMutation) ResetProductID() {
+	m.product_id = nil
+	m.addproduct_id = nil
+}
+
+// SetDailyPeriodStart sets the "daily_period_start" field.
+func (m *PaymentPurchaseReservationMutation) SetDailyPeriodStart(t time.Time) {
+	m.daily_period_start = &t
+}
+
+// DailyPeriodStart returns the value of the "daily_period_start" field in the mutation.
+func (m *PaymentPurchaseReservationMutation) DailyPeriodStart() (r time.Time, exists bool) {
+	v := m.daily_period_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyPeriodStart returns the old "daily_period_start" field's value of the PaymentPurchaseReservation entity.
+// If the PaymentPurchaseReservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseReservationMutation) OldDailyPeriodStart(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyPeriodStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyPeriodStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyPeriodStart: %w", err)
+	}
+	return oldValue.DailyPeriodStart, nil
+}
+
+// ResetDailyPeriodStart resets all changes to the "daily_period_start" field.
+func (m *PaymentPurchaseReservationMutation) ResetDailyPeriodStart() {
+	m.daily_period_start = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *PaymentPurchaseReservationMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *PaymentPurchaseReservationMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the PaymentPurchaseReservation entity.
+// If the PaymentPurchaseReservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseReservationMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *PaymentPurchaseReservationMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *PaymentPurchaseReservationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *PaymentPurchaseReservationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the PaymentPurchaseReservation entity.
+// If the PaymentPurchaseReservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseReservationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *PaymentPurchaseReservationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *PaymentPurchaseReservationMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *PaymentPurchaseReservationMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the PaymentPurchaseReservation entity.
+// If the PaymentPurchaseReservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseReservationMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *PaymentPurchaseReservationMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the PaymentPurchaseReservationMutation builder.
+func (m *PaymentPurchaseReservationMutation) Where(ps ...predicate.PaymentPurchaseReservation) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the PaymentPurchaseReservationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *PaymentPurchaseReservationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.PaymentPurchaseReservation, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *PaymentPurchaseReservationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *PaymentPurchaseReservationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (PaymentPurchaseReservation).
+func (m *PaymentPurchaseReservationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *PaymentPurchaseReservationMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.order_id != nil {
+		fields = append(fields, paymentpurchasereservation.FieldOrderID)
+	}
+	if m.user_id != nil {
+		fields = append(fields, paymentpurchasereservation.FieldUserID)
+	}
+	if m.product_type != nil {
+		fields = append(fields, paymentpurchasereservation.FieldProductType)
+	}
+	if m.product_id != nil {
+		fields = append(fields, paymentpurchasereservation.FieldProductID)
+	}
+	if m.daily_period_start != nil {
+		fields = append(fields, paymentpurchasereservation.FieldDailyPeriodStart)
+	}
+	if m.status != nil {
+		fields = append(fields, paymentpurchasereservation.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, paymentpurchasereservation.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, paymentpurchasereservation.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *PaymentPurchaseReservationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case paymentpurchasereservation.FieldOrderID:
+		return m.OrderID()
+	case paymentpurchasereservation.FieldUserID:
+		return m.UserID()
+	case paymentpurchasereservation.FieldProductType:
+		return m.ProductType()
+	case paymentpurchasereservation.FieldProductID:
+		return m.ProductID()
+	case paymentpurchasereservation.FieldDailyPeriodStart:
+		return m.DailyPeriodStart()
+	case paymentpurchasereservation.FieldStatus:
+		return m.Status()
+	case paymentpurchasereservation.FieldCreatedAt:
+		return m.CreatedAt()
+	case paymentpurchasereservation.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *PaymentPurchaseReservationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case paymentpurchasereservation.FieldOrderID:
+		return m.OldOrderID(ctx)
+	case paymentpurchasereservation.FieldUserID:
+		return m.OldUserID(ctx)
+	case paymentpurchasereservation.FieldProductType:
+		return m.OldProductType(ctx)
+	case paymentpurchasereservation.FieldProductID:
+		return m.OldProductID(ctx)
+	case paymentpurchasereservation.FieldDailyPeriodStart:
+		return m.OldDailyPeriodStart(ctx)
+	case paymentpurchasereservation.FieldStatus:
+		return m.OldStatus(ctx)
+	case paymentpurchasereservation.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case paymentpurchasereservation.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown PaymentPurchaseReservation field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentPurchaseReservationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case paymentpurchasereservation.FieldOrderID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOrderID(v)
+		return nil
+	case paymentpurchasereservation.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case paymentpurchasereservation.FieldProductType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductType(v)
+		return nil
+	case paymentpurchasereservation.FieldProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductID(v)
+		return nil
+	case paymentpurchasereservation.FieldDailyPeriodStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyPeriodStart(v)
+		return nil
+	case paymentpurchasereservation.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case paymentpurchasereservation.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case paymentpurchasereservation.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseReservation field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *PaymentPurchaseReservationMutation) AddedFields() []string {
+	var fields []string
+	if m.addorder_id != nil {
+		fields = append(fields, paymentpurchasereservation.FieldOrderID)
+	}
+	if m.adduser_id != nil {
+		fields = append(fields, paymentpurchasereservation.FieldUserID)
+	}
+	if m.addproduct_id != nil {
+		fields = append(fields, paymentpurchasereservation.FieldProductID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *PaymentPurchaseReservationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case paymentpurchasereservation.FieldOrderID:
+		return m.AddedOrderID()
+	case paymentpurchasereservation.FieldUserID:
+		return m.AddedUserID()
+	case paymentpurchasereservation.FieldProductID:
+		return m.AddedProductID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentPurchaseReservationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case paymentpurchasereservation.FieldOrderID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOrderID(v)
+		return nil
+	case paymentpurchasereservation.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case paymentpurchasereservation.FieldProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProductID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseReservation numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *PaymentPurchaseReservationMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *PaymentPurchaseReservationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *PaymentPurchaseReservationMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown PaymentPurchaseReservation nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *PaymentPurchaseReservationMutation) ResetField(name string) error {
+	switch name {
+	case paymentpurchasereservation.FieldOrderID:
+		m.ResetOrderID()
+		return nil
+	case paymentpurchasereservation.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case paymentpurchasereservation.FieldProductType:
+		m.ResetProductType()
+		return nil
+	case paymentpurchasereservation.FieldProductID:
+		m.ResetProductID()
+		return nil
+	case paymentpurchasereservation.FieldDailyPeriodStart:
+		m.ResetDailyPeriodStart()
+		return nil
+	case paymentpurchasereservation.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case paymentpurchasereservation.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case paymentpurchasereservation.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseReservation field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *PaymentPurchaseReservationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *PaymentPurchaseReservationMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *PaymentPurchaseReservationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *PaymentPurchaseReservationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *PaymentPurchaseReservationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *PaymentPurchaseReservationMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *PaymentPurchaseReservationMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown PaymentPurchaseReservation unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *PaymentPurchaseReservationMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown PaymentPurchaseReservation edge %s", name)
 }
 
 // PendingAuthSessionMutation represents an operation that mutates the PendingAuthSession nodes in the graph.
@@ -43407,32 +49068,40 @@ func (m *SettingMutation) ResetEdge(name string) error {
 // SubscriptionPlanMutation represents an operation that mutates the SubscriptionPlan nodes in the graph.
 type SubscriptionPlanMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *int64
-	group_id          *int64
-	addgroup_id       *int64
-	name              *string
-	description       *string
-	price             *float64
-	addprice          *float64
-	original_price    *float64
-	addoriginal_price *float64
-	currency          *string
-	validity_days     *int
-	addvalidity_days  *int
-	validity_unit     *string
-	features          *string
-	product_name      *string
-	for_sale          *bool
-	sort_order        *int
-	addsort_order     *int
-	created_at        *time.Time
-	updated_at        *time.Time
-	clearedFields     map[string]struct{}
-	done              bool
-	oldValue          func(context.Context) (*SubscriptionPlan, error)
-	predicates        []predicate.SubscriptionPlan
+	op                               Op
+	typ                              string
+	id                               *int64
+	group_id                         *int64
+	addgroup_id                      *int64
+	name                             *string
+	description                      *string
+	price                            *float64
+	addprice                         *float64
+	original_price                   *float64
+	addoriginal_price                *float64
+	benefit_type                     *string
+	payment_credit_type              *string
+	daily_temporary_credit_amount    *float64
+	adddaily_temporary_credit_amount *float64
+	currency                         *string
+	validity_days                    *int
+	addvalidity_days                 *int
+	validity_unit                    *string
+	features                         *string
+	product_name                     *string
+	for_sale                         *bool
+	sort_order                       *int
+	addsort_order                    *int
+	daily_purchase_limit             *int
+	adddaily_purchase_limit          *int
+	total_purchase_limit             *int
+	addtotal_purchase_limit          *int
+	created_at                       *time.Time
+	updated_at                       *time.Time
+	clearedFields                    map[string]struct{}
+	done                             bool
+	oldValue                         func(context.Context) (*SubscriptionPlan, error)
+	predicates                       []predicate.SubscriptionPlan
 }
 
 var _ ent.Mutation = (*SubscriptionPlanMutation)(nil)
@@ -43787,6 +49456,134 @@ func (m *SubscriptionPlanMutation) ResetOriginalPrice() {
 	delete(m.clearedFields, subscriptionplan.FieldOriginalPrice)
 }
 
+// SetBenefitType sets the "benefit_type" field.
+func (m *SubscriptionPlanMutation) SetBenefitType(s string) {
+	m.benefit_type = &s
+}
+
+// BenefitType returns the value of the "benefit_type" field in the mutation.
+func (m *SubscriptionPlanMutation) BenefitType() (r string, exists bool) {
+	v := m.benefit_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBenefitType returns the old "benefit_type" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldBenefitType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBenefitType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBenefitType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBenefitType: %w", err)
+	}
+	return oldValue.BenefitType, nil
+}
+
+// ResetBenefitType resets all changes to the "benefit_type" field.
+func (m *SubscriptionPlanMutation) ResetBenefitType() {
+	m.benefit_type = nil
+}
+
+// SetPaymentCreditType sets the "payment_credit_type" field.
+func (m *SubscriptionPlanMutation) SetPaymentCreditType(s string) {
+	m.payment_credit_type = &s
+}
+
+// PaymentCreditType returns the value of the "payment_credit_type" field in the mutation.
+func (m *SubscriptionPlanMutation) PaymentCreditType() (r string, exists bool) {
+	v := m.payment_credit_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaymentCreditType returns the old "payment_credit_type" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldPaymentCreditType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaymentCreditType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaymentCreditType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaymentCreditType: %w", err)
+	}
+	return oldValue.PaymentCreditType, nil
+}
+
+// ResetPaymentCreditType resets all changes to the "payment_credit_type" field.
+func (m *SubscriptionPlanMutation) ResetPaymentCreditType() {
+	m.payment_credit_type = nil
+}
+
+// SetDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field.
+func (m *SubscriptionPlanMutation) SetDailyTemporaryCreditAmount(f float64) {
+	m.daily_temporary_credit_amount = &f
+	m.adddaily_temporary_credit_amount = nil
+}
+
+// DailyTemporaryCreditAmount returns the value of the "daily_temporary_credit_amount" field in the mutation.
+func (m *SubscriptionPlanMutation) DailyTemporaryCreditAmount() (r float64, exists bool) {
+	v := m.daily_temporary_credit_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyTemporaryCreditAmount returns the old "daily_temporary_credit_amount" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldDailyTemporaryCreditAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyTemporaryCreditAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyTemporaryCreditAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyTemporaryCreditAmount: %w", err)
+	}
+	return oldValue.DailyTemporaryCreditAmount, nil
+}
+
+// AddDailyTemporaryCreditAmount adds f to the "daily_temporary_credit_amount" field.
+func (m *SubscriptionPlanMutation) AddDailyTemporaryCreditAmount(f float64) {
+	if m.adddaily_temporary_credit_amount != nil {
+		*m.adddaily_temporary_credit_amount += f
+	} else {
+		m.adddaily_temporary_credit_amount = &f
+	}
+}
+
+// AddedDailyTemporaryCreditAmount returns the value that was added to the "daily_temporary_credit_amount" field in this mutation.
+func (m *SubscriptionPlanMutation) AddedDailyTemporaryCreditAmount() (r float64, exists bool) {
+	v := m.adddaily_temporary_credit_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyTemporaryCreditAmount resets all changes to the "daily_temporary_credit_amount" field.
+func (m *SubscriptionPlanMutation) ResetDailyTemporaryCreditAmount() {
+	m.daily_temporary_credit_amount = nil
+	m.adddaily_temporary_credit_amount = nil
+}
+
 // SetCurrency sets the "currency" field.
 func (m *SubscriptionPlanMutation) SetCurrency(s string) {
 	m.currency = &s
@@ -44079,6 +49876,118 @@ func (m *SubscriptionPlanMutation) ResetSortOrder() {
 	m.addsort_order = nil
 }
 
+// SetDailyPurchaseLimit sets the "daily_purchase_limit" field.
+func (m *SubscriptionPlanMutation) SetDailyPurchaseLimit(i int) {
+	m.daily_purchase_limit = &i
+	m.adddaily_purchase_limit = nil
+}
+
+// DailyPurchaseLimit returns the value of the "daily_purchase_limit" field in the mutation.
+func (m *SubscriptionPlanMutation) DailyPurchaseLimit() (r int, exists bool) {
+	v := m.daily_purchase_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyPurchaseLimit returns the old "daily_purchase_limit" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldDailyPurchaseLimit(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyPurchaseLimit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyPurchaseLimit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyPurchaseLimit: %w", err)
+	}
+	return oldValue.DailyPurchaseLimit, nil
+}
+
+// AddDailyPurchaseLimit adds i to the "daily_purchase_limit" field.
+func (m *SubscriptionPlanMutation) AddDailyPurchaseLimit(i int) {
+	if m.adddaily_purchase_limit != nil {
+		*m.adddaily_purchase_limit += i
+	} else {
+		m.adddaily_purchase_limit = &i
+	}
+}
+
+// AddedDailyPurchaseLimit returns the value that was added to the "daily_purchase_limit" field in this mutation.
+func (m *SubscriptionPlanMutation) AddedDailyPurchaseLimit() (r int, exists bool) {
+	v := m.adddaily_purchase_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyPurchaseLimit resets all changes to the "daily_purchase_limit" field.
+func (m *SubscriptionPlanMutation) ResetDailyPurchaseLimit() {
+	m.daily_purchase_limit = nil
+	m.adddaily_purchase_limit = nil
+}
+
+// SetTotalPurchaseLimit sets the "total_purchase_limit" field.
+func (m *SubscriptionPlanMutation) SetTotalPurchaseLimit(i int) {
+	m.total_purchase_limit = &i
+	m.addtotal_purchase_limit = nil
+}
+
+// TotalPurchaseLimit returns the value of the "total_purchase_limit" field in the mutation.
+func (m *SubscriptionPlanMutation) TotalPurchaseLimit() (r int, exists bool) {
+	v := m.total_purchase_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalPurchaseLimit returns the old "total_purchase_limit" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldTotalPurchaseLimit(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalPurchaseLimit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalPurchaseLimit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalPurchaseLimit: %w", err)
+	}
+	return oldValue.TotalPurchaseLimit, nil
+}
+
+// AddTotalPurchaseLimit adds i to the "total_purchase_limit" field.
+func (m *SubscriptionPlanMutation) AddTotalPurchaseLimit(i int) {
+	if m.addtotal_purchase_limit != nil {
+		*m.addtotal_purchase_limit += i
+	} else {
+		m.addtotal_purchase_limit = &i
+	}
+}
+
+// AddedTotalPurchaseLimit returns the value that was added to the "total_purchase_limit" field in this mutation.
+func (m *SubscriptionPlanMutation) AddedTotalPurchaseLimit() (r int, exists bool) {
+	v := m.addtotal_purchase_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTotalPurchaseLimit resets all changes to the "total_purchase_limit" field.
+func (m *SubscriptionPlanMutation) ResetTotalPurchaseLimit() {
+	m.total_purchase_limit = nil
+	m.addtotal_purchase_limit = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *SubscriptionPlanMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -44185,7 +50094,7 @@ func (m *SubscriptionPlanMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionPlanMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 19)
 	if m.group_id != nil {
 		fields = append(fields, subscriptionplan.FieldGroupID)
 	}
@@ -44200,6 +50109,15 @@ func (m *SubscriptionPlanMutation) Fields() []string {
 	}
 	if m.original_price != nil {
 		fields = append(fields, subscriptionplan.FieldOriginalPrice)
+	}
+	if m.benefit_type != nil {
+		fields = append(fields, subscriptionplan.FieldBenefitType)
+	}
+	if m.payment_credit_type != nil {
+		fields = append(fields, subscriptionplan.FieldPaymentCreditType)
+	}
+	if m.daily_temporary_credit_amount != nil {
+		fields = append(fields, subscriptionplan.FieldDailyTemporaryCreditAmount)
 	}
 	if m.currency != nil {
 		fields = append(fields, subscriptionplan.FieldCurrency)
@@ -44221,6 +50139,12 @@ func (m *SubscriptionPlanMutation) Fields() []string {
 	}
 	if m.sort_order != nil {
 		fields = append(fields, subscriptionplan.FieldSortOrder)
+	}
+	if m.daily_purchase_limit != nil {
+		fields = append(fields, subscriptionplan.FieldDailyPurchaseLimit)
+	}
+	if m.total_purchase_limit != nil {
+		fields = append(fields, subscriptionplan.FieldTotalPurchaseLimit)
 	}
 	if m.created_at != nil {
 		fields = append(fields, subscriptionplan.FieldCreatedAt)
@@ -44246,6 +50170,12 @@ func (m *SubscriptionPlanMutation) Field(name string) (ent.Value, bool) {
 		return m.Price()
 	case subscriptionplan.FieldOriginalPrice:
 		return m.OriginalPrice()
+	case subscriptionplan.FieldBenefitType:
+		return m.BenefitType()
+	case subscriptionplan.FieldPaymentCreditType:
+		return m.PaymentCreditType()
+	case subscriptionplan.FieldDailyTemporaryCreditAmount:
+		return m.DailyTemporaryCreditAmount()
 	case subscriptionplan.FieldCurrency:
 		return m.Currency()
 	case subscriptionplan.FieldValidityDays:
@@ -44260,6 +50190,10 @@ func (m *SubscriptionPlanMutation) Field(name string) (ent.Value, bool) {
 		return m.ForSale()
 	case subscriptionplan.FieldSortOrder:
 		return m.SortOrder()
+	case subscriptionplan.FieldDailyPurchaseLimit:
+		return m.DailyPurchaseLimit()
+	case subscriptionplan.FieldTotalPurchaseLimit:
+		return m.TotalPurchaseLimit()
 	case subscriptionplan.FieldCreatedAt:
 		return m.CreatedAt()
 	case subscriptionplan.FieldUpdatedAt:
@@ -44283,6 +50217,12 @@ func (m *SubscriptionPlanMutation) OldField(ctx context.Context, name string) (e
 		return m.OldPrice(ctx)
 	case subscriptionplan.FieldOriginalPrice:
 		return m.OldOriginalPrice(ctx)
+	case subscriptionplan.FieldBenefitType:
+		return m.OldBenefitType(ctx)
+	case subscriptionplan.FieldPaymentCreditType:
+		return m.OldPaymentCreditType(ctx)
+	case subscriptionplan.FieldDailyTemporaryCreditAmount:
+		return m.OldDailyTemporaryCreditAmount(ctx)
 	case subscriptionplan.FieldCurrency:
 		return m.OldCurrency(ctx)
 	case subscriptionplan.FieldValidityDays:
@@ -44297,6 +50237,10 @@ func (m *SubscriptionPlanMutation) OldField(ctx context.Context, name string) (e
 		return m.OldForSale(ctx)
 	case subscriptionplan.FieldSortOrder:
 		return m.OldSortOrder(ctx)
+	case subscriptionplan.FieldDailyPurchaseLimit:
+		return m.OldDailyPurchaseLimit(ctx)
+	case subscriptionplan.FieldTotalPurchaseLimit:
+		return m.OldTotalPurchaseLimit(ctx)
 	case subscriptionplan.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case subscriptionplan.FieldUpdatedAt:
@@ -44344,6 +50288,27 @@ func (m *SubscriptionPlanMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetOriginalPrice(v)
+		return nil
+	case subscriptionplan.FieldBenefitType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBenefitType(v)
+		return nil
+	case subscriptionplan.FieldPaymentCreditType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaymentCreditType(v)
+		return nil
+	case subscriptionplan.FieldDailyTemporaryCreditAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyTemporaryCreditAmount(v)
 		return nil
 	case subscriptionplan.FieldCurrency:
 		v, ok := value.(string)
@@ -44394,6 +50359,20 @@ func (m *SubscriptionPlanMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetSortOrder(v)
 		return nil
+	case subscriptionplan.FieldDailyPurchaseLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyPurchaseLimit(v)
+		return nil
+	case subscriptionplan.FieldTotalPurchaseLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalPurchaseLimit(v)
+		return nil
 	case subscriptionplan.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -44425,11 +50404,20 @@ func (m *SubscriptionPlanMutation) AddedFields() []string {
 	if m.addoriginal_price != nil {
 		fields = append(fields, subscriptionplan.FieldOriginalPrice)
 	}
+	if m.adddaily_temporary_credit_amount != nil {
+		fields = append(fields, subscriptionplan.FieldDailyTemporaryCreditAmount)
+	}
 	if m.addvalidity_days != nil {
 		fields = append(fields, subscriptionplan.FieldValidityDays)
 	}
 	if m.addsort_order != nil {
 		fields = append(fields, subscriptionplan.FieldSortOrder)
+	}
+	if m.adddaily_purchase_limit != nil {
+		fields = append(fields, subscriptionplan.FieldDailyPurchaseLimit)
+	}
+	if m.addtotal_purchase_limit != nil {
+		fields = append(fields, subscriptionplan.FieldTotalPurchaseLimit)
 	}
 	return fields
 }
@@ -44445,10 +50433,16 @@ func (m *SubscriptionPlanMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedPrice()
 	case subscriptionplan.FieldOriginalPrice:
 		return m.AddedOriginalPrice()
+	case subscriptionplan.FieldDailyTemporaryCreditAmount:
+		return m.AddedDailyTemporaryCreditAmount()
 	case subscriptionplan.FieldValidityDays:
 		return m.AddedValidityDays()
 	case subscriptionplan.FieldSortOrder:
 		return m.AddedSortOrder()
+	case subscriptionplan.FieldDailyPurchaseLimit:
+		return m.AddedDailyPurchaseLimit()
+	case subscriptionplan.FieldTotalPurchaseLimit:
+		return m.AddedTotalPurchaseLimit()
 	}
 	return nil, false
 }
@@ -44479,6 +50473,13 @@ func (m *SubscriptionPlanMutation) AddField(name string, value ent.Value) error 
 		}
 		m.AddOriginalPrice(v)
 		return nil
+	case subscriptionplan.FieldDailyTemporaryCreditAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyTemporaryCreditAmount(v)
+		return nil
 	case subscriptionplan.FieldValidityDays:
 		v, ok := value.(int)
 		if !ok {
@@ -44492,6 +50493,20 @@ func (m *SubscriptionPlanMutation) AddField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddSortOrder(v)
+		return nil
+	case subscriptionplan.FieldDailyPurchaseLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyPurchaseLimit(v)
+		return nil
+	case subscriptionplan.FieldTotalPurchaseLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTotalPurchaseLimit(v)
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionPlan numeric field %s", name)
@@ -44544,6 +50559,15 @@ func (m *SubscriptionPlanMutation) ResetField(name string) error {
 	case subscriptionplan.FieldOriginalPrice:
 		m.ResetOriginalPrice()
 		return nil
+	case subscriptionplan.FieldBenefitType:
+		m.ResetBenefitType()
+		return nil
+	case subscriptionplan.FieldPaymentCreditType:
+		m.ResetPaymentCreditType()
+		return nil
+	case subscriptionplan.FieldDailyTemporaryCreditAmount:
+		m.ResetDailyTemporaryCreditAmount()
+		return nil
 	case subscriptionplan.FieldCurrency:
 		m.ResetCurrency()
 		return nil
@@ -44564,6 +50588,12 @@ func (m *SubscriptionPlanMutation) ResetField(name string) error {
 		return nil
 	case subscriptionplan.FieldSortOrder:
 		m.ResetSortOrder()
+		return nil
+	case subscriptionplan.FieldDailyPurchaseLimit:
+		m.ResetDailyPurchaseLimit()
+		return nil
+	case subscriptionplan.FieldTotalPurchaseLimit:
+		m.ResetTotalPurchaseLimit()
 		return nil
 	case subscriptionplan.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -46725,10 +52755,16 @@ type TemporaryCreditGrantMutation struct {
 	created_at                                 *time.Time
 	updated_at                                 *time.Time
 	source                                     *temporarycreditgrant.Source
+	mall_purchase_id                           *int64
+	addmall_purchase_id                        *int64
+	daily_subscription_id                      *int64
+	adddaily_subscription_id                   *int64
+	scheduled_date                             *time.Time
 	amount                                     *float64
 	addamount                                  *float64
 	remaining_amount                           *float64
 	addremaining_amount                        *float64
+	available_at                               *time.Time
 	expires_at                                 *time.Time
 	notes                                      *string
 	clearedFields                              map[string]struct{}
@@ -47040,6 +53076,195 @@ func (m *TemporaryCreditGrantMutation) ResetCheckinID() {
 	delete(m.clearedFields, temporarycreditgrant.FieldCheckinID)
 }
 
+// SetMallPurchaseID sets the "mall_purchase_id" field.
+func (m *TemporaryCreditGrantMutation) SetMallPurchaseID(i int64) {
+	m.mall_purchase_id = &i
+	m.addmall_purchase_id = nil
+}
+
+// MallPurchaseID returns the value of the "mall_purchase_id" field in the mutation.
+func (m *TemporaryCreditGrantMutation) MallPurchaseID() (r int64, exists bool) {
+	v := m.mall_purchase_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMallPurchaseID returns the old "mall_purchase_id" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldMallPurchaseID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMallPurchaseID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMallPurchaseID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMallPurchaseID: %w", err)
+	}
+	return oldValue.MallPurchaseID, nil
+}
+
+// AddMallPurchaseID adds i to the "mall_purchase_id" field.
+func (m *TemporaryCreditGrantMutation) AddMallPurchaseID(i int64) {
+	if m.addmall_purchase_id != nil {
+		*m.addmall_purchase_id += i
+	} else {
+		m.addmall_purchase_id = &i
+	}
+}
+
+// AddedMallPurchaseID returns the value that was added to the "mall_purchase_id" field in this mutation.
+func (m *TemporaryCreditGrantMutation) AddedMallPurchaseID() (r int64, exists bool) {
+	v := m.addmall_purchase_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearMallPurchaseID clears the value of the "mall_purchase_id" field.
+func (m *TemporaryCreditGrantMutation) ClearMallPurchaseID() {
+	m.mall_purchase_id = nil
+	m.addmall_purchase_id = nil
+	m.clearedFields[temporarycreditgrant.FieldMallPurchaseID] = struct{}{}
+}
+
+// MallPurchaseIDCleared returns if the "mall_purchase_id" field was cleared in this mutation.
+func (m *TemporaryCreditGrantMutation) MallPurchaseIDCleared() bool {
+	_, ok := m.clearedFields[temporarycreditgrant.FieldMallPurchaseID]
+	return ok
+}
+
+// ResetMallPurchaseID resets all changes to the "mall_purchase_id" field.
+func (m *TemporaryCreditGrantMutation) ResetMallPurchaseID() {
+	m.mall_purchase_id = nil
+	m.addmall_purchase_id = nil
+	delete(m.clearedFields, temporarycreditgrant.FieldMallPurchaseID)
+}
+
+// SetDailySubscriptionID sets the "daily_subscription_id" field.
+func (m *TemporaryCreditGrantMutation) SetDailySubscriptionID(i int64) {
+	m.daily_subscription_id = &i
+	m.adddaily_subscription_id = nil
+}
+
+// DailySubscriptionID returns the value of the "daily_subscription_id" field in the mutation.
+func (m *TemporaryCreditGrantMutation) DailySubscriptionID() (r int64, exists bool) {
+	v := m.daily_subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailySubscriptionID returns the old "daily_subscription_id" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldDailySubscriptionID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailySubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailySubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailySubscriptionID: %w", err)
+	}
+	return oldValue.DailySubscriptionID, nil
+}
+
+// AddDailySubscriptionID adds i to the "daily_subscription_id" field.
+func (m *TemporaryCreditGrantMutation) AddDailySubscriptionID(i int64) {
+	if m.adddaily_subscription_id != nil {
+		*m.adddaily_subscription_id += i
+	} else {
+		m.adddaily_subscription_id = &i
+	}
+}
+
+// AddedDailySubscriptionID returns the value that was added to the "daily_subscription_id" field in this mutation.
+func (m *TemporaryCreditGrantMutation) AddedDailySubscriptionID() (r int64, exists bool) {
+	v := m.adddaily_subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearDailySubscriptionID clears the value of the "daily_subscription_id" field.
+func (m *TemporaryCreditGrantMutation) ClearDailySubscriptionID() {
+	m.daily_subscription_id = nil
+	m.adddaily_subscription_id = nil
+	m.clearedFields[temporarycreditgrant.FieldDailySubscriptionID] = struct{}{}
+}
+
+// DailySubscriptionIDCleared returns if the "daily_subscription_id" field was cleared in this mutation.
+func (m *TemporaryCreditGrantMutation) DailySubscriptionIDCleared() bool {
+	_, ok := m.clearedFields[temporarycreditgrant.FieldDailySubscriptionID]
+	return ok
+}
+
+// ResetDailySubscriptionID resets all changes to the "daily_subscription_id" field.
+func (m *TemporaryCreditGrantMutation) ResetDailySubscriptionID() {
+	m.daily_subscription_id = nil
+	m.adddaily_subscription_id = nil
+	delete(m.clearedFields, temporarycreditgrant.FieldDailySubscriptionID)
+}
+
+// SetScheduledDate sets the "scheduled_date" field.
+func (m *TemporaryCreditGrantMutation) SetScheduledDate(t time.Time) {
+	m.scheduled_date = &t
+}
+
+// ScheduledDate returns the value of the "scheduled_date" field in the mutation.
+func (m *TemporaryCreditGrantMutation) ScheduledDate() (r time.Time, exists bool) {
+	v := m.scheduled_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScheduledDate returns the old "scheduled_date" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldScheduledDate(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScheduledDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScheduledDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScheduledDate: %w", err)
+	}
+	return oldValue.ScheduledDate, nil
+}
+
+// ClearScheduledDate clears the value of the "scheduled_date" field.
+func (m *TemporaryCreditGrantMutation) ClearScheduledDate() {
+	m.scheduled_date = nil
+	m.clearedFields[temporarycreditgrant.FieldScheduledDate] = struct{}{}
+}
+
+// ScheduledDateCleared returns if the "scheduled_date" field was cleared in this mutation.
+func (m *TemporaryCreditGrantMutation) ScheduledDateCleared() bool {
+	_, ok := m.clearedFields[temporarycreditgrant.FieldScheduledDate]
+	return ok
+}
+
+// ResetScheduledDate resets all changes to the "scheduled_date" field.
+func (m *TemporaryCreditGrantMutation) ResetScheduledDate() {
+	m.scheduled_date = nil
+	delete(m.clearedFields, temporarycreditgrant.FieldScheduledDate)
+}
+
 // SetAmount sets the "amount" field.
 func (m *TemporaryCreditGrantMutation) SetAmount(f float64) {
 	m.amount = &f
@@ -47150,6 +53375,42 @@ func (m *TemporaryCreditGrantMutation) AddedRemainingAmount() (r float64, exists
 func (m *TemporaryCreditGrantMutation) ResetRemainingAmount() {
 	m.remaining_amount = nil
 	m.addremaining_amount = nil
+}
+
+// SetAvailableAt sets the "available_at" field.
+func (m *TemporaryCreditGrantMutation) SetAvailableAt(t time.Time) {
+	m.available_at = &t
+}
+
+// AvailableAt returns the value of the "available_at" field in the mutation.
+func (m *TemporaryCreditGrantMutation) AvailableAt() (r time.Time, exists bool) {
+	v := m.available_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAvailableAt returns the old "available_at" field's value of the TemporaryCreditGrant entity.
+// If the TemporaryCreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TemporaryCreditGrantMutation) OldAvailableAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAvailableAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAvailableAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAvailableAt: %w", err)
+	}
+	return oldValue.AvailableAt, nil
+}
+
+// ResetAvailableAt resets all changes to the "available_at" field.
+func (m *TemporaryCreditGrantMutation) ResetAvailableAt() {
+	m.available_at = nil
 }
 
 // SetExpiresAt sets the "expires_at" field.
@@ -47509,7 +53770,7 @@ func (m *TemporaryCreditGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TemporaryCreditGrantMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 14)
 	if m.created_at != nil {
 		fields = append(fields, temporarycreditgrant.FieldCreatedAt)
 	}
@@ -47525,11 +53786,23 @@ func (m *TemporaryCreditGrantMutation) Fields() []string {
 	if m.checkin != nil {
 		fields = append(fields, temporarycreditgrant.FieldCheckinID)
 	}
+	if m.mall_purchase_id != nil {
+		fields = append(fields, temporarycreditgrant.FieldMallPurchaseID)
+	}
+	if m.daily_subscription_id != nil {
+		fields = append(fields, temporarycreditgrant.FieldDailySubscriptionID)
+	}
+	if m.scheduled_date != nil {
+		fields = append(fields, temporarycreditgrant.FieldScheduledDate)
+	}
 	if m.amount != nil {
 		fields = append(fields, temporarycreditgrant.FieldAmount)
 	}
 	if m.remaining_amount != nil {
 		fields = append(fields, temporarycreditgrant.FieldRemainingAmount)
+	}
+	if m.available_at != nil {
+		fields = append(fields, temporarycreditgrant.FieldAvailableAt)
 	}
 	if m.expires_at != nil {
 		fields = append(fields, temporarycreditgrant.FieldExpiresAt)
@@ -47558,10 +53831,18 @@ func (m *TemporaryCreditGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.Source()
 	case temporarycreditgrant.FieldCheckinID:
 		return m.CheckinID()
+	case temporarycreditgrant.FieldMallPurchaseID:
+		return m.MallPurchaseID()
+	case temporarycreditgrant.FieldDailySubscriptionID:
+		return m.DailySubscriptionID()
+	case temporarycreditgrant.FieldScheduledDate:
+		return m.ScheduledDate()
 	case temporarycreditgrant.FieldAmount:
 		return m.Amount()
 	case temporarycreditgrant.FieldRemainingAmount:
 		return m.RemainingAmount()
+	case temporarycreditgrant.FieldAvailableAt:
+		return m.AvailableAt()
 	case temporarycreditgrant.FieldExpiresAt:
 		return m.ExpiresAt()
 	case temporarycreditgrant.FieldNotes:
@@ -47587,10 +53868,18 @@ func (m *TemporaryCreditGrantMutation) OldField(ctx context.Context, name string
 		return m.OldSource(ctx)
 	case temporarycreditgrant.FieldCheckinID:
 		return m.OldCheckinID(ctx)
+	case temporarycreditgrant.FieldMallPurchaseID:
+		return m.OldMallPurchaseID(ctx)
+	case temporarycreditgrant.FieldDailySubscriptionID:
+		return m.OldDailySubscriptionID(ctx)
+	case temporarycreditgrant.FieldScheduledDate:
+		return m.OldScheduledDate(ctx)
 	case temporarycreditgrant.FieldAmount:
 		return m.OldAmount(ctx)
 	case temporarycreditgrant.FieldRemainingAmount:
 		return m.OldRemainingAmount(ctx)
+	case temporarycreditgrant.FieldAvailableAt:
+		return m.OldAvailableAt(ctx)
 	case temporarycreditgrant.FieldExpiresAt:
 		return m.OldExpiresAt(ctx)
 	case temporarycreditgrant.FieldNotes:
@@ -47641,6 +53930,27 @@ func (m *TemporaryCreditGrantMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetCheckinID(v)
 		return nil
+	case temporarycreditgrant.FieldMallPurchaseID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMallPurchaseID(v)
+		return nil
+	case temporarycreditgrant.FieldDailySubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailySubscriptionID(v)
+		return nil
+	case temporarycreditgrant.FieldScheduledDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScheduledDate(v)
+		return nil
 	case temporarycreditgrant.FieldAmount:
 		v, ok := value.(float64)
 		if !ok {
@@ -47654,6 +53964,13 @@ func (m *TemporaryCreditGrantMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRemainingAmount(v)
+		return nil
+	case temporarycreditgrant.FieldAvailableAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAvailableAt(v)
 		return nil
 	case temporarycreditgrant.FieldExpiresAt:
 		v, ok := value.(time.Time)
@@ -47684,6 +54001,12 @@ func (m *TemporaryCreditGrantMutation) SetField(name string, value ent.Value) er
 // this mutation.
 func (m *TemporaryCreditGrantMutation) AddedFields() []string {
 	var fields []string
+	if m.addmall_purchase_id != nil {
+		fields = append(fields, temporarycreditgrant.FieldMallPurchaseID)
+	}
+	if m.adddaily_subscription_id != nil {
+		fields = append(fields, temporarycreditgrant.FieldDailySubscriptionID)
+	}
 	if m.addamount != nil {
 		fields = append(fields, temporarycreditgrant.FieldAmount)
 	}
@@ -47698,6 +54021,10 @@ func (m *TemporaryCreditGrantMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *TemporaryCreditGrantMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case temporarycreditgrant.FieldMallPurchaseID:
+		return m.AddedMallPurchaseID()
+	case temporarycreditgrant.FieldDailySubscriptionID:
+		return m.AddedDailySubscriptionID()
 	case temporarycreditgrant.FieldAmount:
 		return m.AddedAmount()
 	case temporarycreditgrant.FieldRemainingAmount:
@@ -47711,6 +54038,20 @@ func (m *TemporaryCreditGrantMutation) AddedField(name string) (ent.Value, bool)
 // type.
 func (m *TemporaryCreditGrantMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case temporarycreditgrant.FieldMallPurchaseID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMallPurchaseID(v)
+		return nil
+	case temporarycreditgrant.FieldDailySubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailySubscriptionID(v)
+		return nil
 	case temporarycreditgrant.FieldAmount:
 		v, ok := value.(float64)
 		if !ok {
@@ -47736,6 +54077,15 @@ func (m *TemporaryCreditGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(temporarycreditgrant.FieldCheckinID) {
 		fields = append(fields, temporarycreditgrant.FieldCheckinID)
 	}
+	if m.FieldCleared(temporarycreditgrant.FieldMallPurchaseID) {
+		fields = append(fields, temporarycreditgrant.FieldMallPurchaseID)
+	}
+	if m.FieldCleared(temporarycreditgrant.FieldDailySubscriptionID) {
+		fields = append(fields, temporarycreditgrant.FieldDailySubscriptionID)
+	}
+	if m.FieldCleared(temporarycreditgrant.FieldScheduledDate) {
+		fields = append(fields, temporarycreditgrant.FieldScheduledDate)
+	}
 	if m.FieldCleared(temporarycreditgrant.FieldGrantedBy) {
 		fields = append(fields, temporarycreditgrant.FieldGrantedBy)
 	}
@@ -47755,6 +54105,15 @@ func (m *TemporaryCreditGrantMutation) ClearField(name string) error {
 	switch name {
 	case temporarycreditgrant.FieldCheckinID:
 		m.ClearCheckinID()
+		return nil
+	case temporarycreditgrant.FieldMallPurchaseID:
+		m.ClearMallPurchaseID()
+		return nil
+	case temporarycreditgrant.FieldDailySubscriptionID:
+		m.ClearDailySubscriptionID()
+		return nil
+	case temporarycreditgrant.FieldScheduledDate:
+		m.ClearScheduledDate()
 		return nil
 	case temporarycreditgrant.FieldGrantedBy:
 		m.ClearGrantedBy()
@@ -47782,11 +54141,23 @@ func (m *TemporaryCreditGrantMutation) ResetField(name string) error {
 	case temporarycreditgrant.FieldCheckinID:
 		m.ResetCheckinID()
 		return nil
+	case temporarycreditgrant.FieldMallPurchaseID:
+		m.ResetMallPurchaseID()
+		return nil
+	case temporarycreditgrant.FieldDailySubscriptionID:
+		m.ResetDailySubscriptionID()
+		return nil
+	case temporarycreditgrant.FieldScheduledDate:
+		m.ResetScheduledDate()
+		return nil
 	case temporarycreditgrant.FieldAmount:
 		m.ResetAmount()
 		return nil
 	case temporarycreditgrant.FieldRemainingAmount:
 		m.ResetRemainingAmount()
+		return nil
+	case temporarycreditgrant.FieldAvailableAt:
+		m.ResetAvailableAt()
 		return nil
 	case temporarycreditgrant.FieldExpiresAt:
 		m.ResetExpiresAt()

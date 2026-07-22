@@ -77,11 +77,17 @@ export interface BuildCreateOrderPayloadInput {
   paymentType: string
   orderType: OrderType
   planId?: number
+  productId?: number
   origin?: string
   isMobile: boolean
   isWechatBrowser: boolean
   /** When true, Alipay payments always use QR code (passes is_mobile: false to backend) */
   forceQRCode?: boolean
+}
+
+type SubscriptionValidity = {
+  validity_days: number
+  validity_unit?: string
 }
 
 type CreateOrderFlowResult = CreateOrderResult & {
@@ -112,6 +118,19 @@ export function getVisibleMethods(methods: Record<string, MethodLimit>): Record<
   return visible
 }
 
+export function subscriptionValidityDays(plan: SubscriptionValidity): number {
+  switch ((plan.validity_unit || 'day').toLowerCase()) {
+    case 'week':
+    case 'weeks':
+      return plan.validity_days * 7
+    case 'month':
+    case 'months':
+      return plan.validity_days * 30
+    default:
+      return plan.validity_days
+  }
+}
+
 export function buildCreateOrderPayload(input: BuildCreateOrderPayloadInput): CreateOrderRequest {
   const visibleMethod = normalizeVisibleMethod(input.paymentType) || input.paymentType.trim()
   const normalizedOrigin = (input.origin || '').trim().replace(/\/+$/, '')
@@ -121,13 +140,18 @@ export function buildCreateOrderPayload(input: BuildCreateOrderPayloadInput): Cr
     ? false
     : input.isMobile
   const payload: CreateOrderRequest = {
-    amount: input.amount,
     payment_type: visibleMethod,
     order_type: input.orderType,
     is_mobile: effectiveMobile,
     payment_source: visibleMethod === 'wxpay' && input.isWechatBrowser
       ? 'wechat_in_app_resume'
       : 'hosted_redirect',
+  }
+
+  if (input.productId) {
+    payload.product_id = input.productId
+  } else {
+    payload.amount = input.amount
   }
 
   if (input.planId) {

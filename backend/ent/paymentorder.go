@@ -55,6 +55,18 @@ type PaymentOrder struct {
 	SubscriptionGroupID *int64 `json:"subscription_group_id,omitempty"`
 	// SubscriptionDays holds the value of the "subscription_days" field.
 	SubscriptionDays *int `json:"subscription_days,omitempty"`
+	// CurrencyProductID holds the value of the "currency_product_id" field.
+	CurrencyProductID *int64 `json:"currency_product_id,omitempty"`
+	// CurrencyProductName holds the value of the "currency_product_name" field.
+	CurrencyProductName *string `json:"currency_product_name,omitempty"`
+	// CurrencyProductPaymentPrice holds the value of the "currency_product_payment_price" field.
+	CurrencyProductPaymentPrice *float64 `json:"currency_product_payment_price,omitempty"`
+	// CurrencyProductCreditedAmount holds the value of the "currency_product_credited_amount" field.
+	CurrencyProductCreditedAmount *float64 `json:"currency_product_credited_amount,omitempty"`
+	// DailyPurchaseLimitSnapshot holds the value of the "daily_purchase_limit_snapshot" field.
+	DailyPurchaseLimitSnapshot int `json:"daily_purchase_limit_snapshot,omitempty"`
+	// TotalPurchaseLimitSnapshot holds the value of the "total_purchase_limit_snapshot" field.
+	TotalPurchaseLimitSnapshot int `json:"total_purchase_limit_snapshot,omitempty"`
 	// ProviderInstanceID holds the value of the "provider_instance_id" field.
 	ProviderInstanceID *string `json:"provider_instance_id,omitempty"`
 	// ProviderKey holds the value of the "provider_key" field.
@@ -132,11 +144,11 @@ func (*PaymentOrder) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case paymentorder.FieldForceRefund:
 			values[i] = new(sql.NullBool)
-		case paymentorder.FieldAmount, paymentorder.FieldPayAmount, paymentorder.FieldFeeRate, paymentorder.FieldRefundAmount:
+		case paymentorder.FieldAmount, paymentorder.FieldPayAmount, paymentorder.FieldFeeRate, paymentorder.FieldCurrencyProductPaymentPrice, paymentorder.FieldCurrencyProductCreditedAmount, paymentorder.FieldRefundAmount:
 			values[i] = new(sql.NullFloat64)
-		case paymentorder.FieldID, paymentorder.FieldUserID, paymentorder.FieldPlanID, paymentorder.FieldSubscriptionGroupID, paymentorder.FieldSubscriptionDays:
+		case paymentorder.FieldID, paymentorder.FieldUserID, paymentorder.FieldPlanID, paymentorder.FieldSubscriptionGroupID, paymentorder.FieldSubscriptionDays, paymentorder.FieldCurrencyProductID, paymentorder.FieldDailyPurchaseLimitSnapshot, paymentorder.FieldTotalPurchaseLimitSnapshot:
 			values[i] = new(sql.NullInt64)
-		case paymentorder.FieldUserEmail, paymentorder.FieldUserName, paymentorder.FieldUserNotes, paymentorder.FieldRechargeCode, paymentorder.FieldOutTradeNo, paymentorder.FieldPaymentType, paymentorder.FieldPaymentTradeNo, paymentorder.FieldPayURL, paymentorder.FieldQrCode, paymentorder.FieldQrCodeImg, paymentorder.FieldOrderType, paymentorder.FieldProviderInstanceID, paymentorder.FieldProviderKey, paymentorder.FieldStatus, paymentorder.FieldRefundReason, paymentorder.FieldRefundRequestReason, paymentorder.FieldRefundRequestedBy, paymentorder.FieldFailedReason, paymentorder.FieldClientIP, paymentorder.FieldSrcHost, paymentorder.FieldSrcURL:
+		case paymentorder.FieldUserEmail, paymentorder.FieldUserName, paymentorder.FieldUserNotes, paymentorder.FieldRechargeCode, paymentorder.FieldOutTradeNo, paymentorder.FieldPaymentType, paymentorder.FieldPaymentTradeNo, paymentorder.FieldPayURL, paymentorder.FieldQrCode, paymentorder.FieldQrCodeImg, paymentorder.FieldOrderType, paymentorder.FieldCurrencyProductName, paymentorder.FieldProviderInstanceID, paymentorder.FieldProviderKey, paymentorder.FieldStatus, paymentorder.FieldRefundReason, paymentorder.FieldRefundRequestReason, paymentorder.FieldRefundRequestedBy, paymentorder.FieldFailedReason, paymentorder.FieldClientIP, paymentorder.FieldSrcHost, paymentorder.FieldSrcURL:
 			values[i] = new(sql.NullString)
 		case paymentorder.FieldRefundAt, paymentorder.FieldRefundRequestedAt, paymentorder.FieldExpiresAt, paymentorder.FieldPaidAt, paymentorder.FieldCompletedAt, paymentorder.FieldFailedAt, paymentorder.FieldCreatedAt, paymentorder.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -275,6 +287,46 @@ func (_m *PaymentOrder) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SubscriptionDays = new(int)
 				*_m.SubscriptionDays = int(value.Int64)
+			}
+		case paymentorder.FieldCurrencyProductID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field currency_product_id", values[i])
+			} else if value.Valid {
+				_m.CurrencyProductID = new(int64)
+				*_m.CurrencyProductID = value.Int64
+			}
+		case paymentorder.FieldCurrencyProductName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field currency_product_name", values[i])
+			} else if value.Valid {
+				_m.CurrencyProductName = new(string)
+				*_m.CurrencyProductName = value.String
+			}
+		case paymentorder.FieldCurrencyProductPaymentPrice:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field currency_product_payment_price", values[i])
+			} else if value.Valid {
+				_m.CurrencyProductPaymentPrice = new(float64)
+				*_m.CurrencyProductPaymentPrice = value.Float64
+			}
+		case paymentorder.FieldCurrencyProductCreditedAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field currency_product_credited_amount", values[i])
+			} else if value.Valid {
+				_m.CurrencyProductCreditedAmount = new(float64)
+				*_m.CurrencyProductCreditedAmount = value.Float64
+			}
+		case paymentorder.FieldDailyPurchaseLimitSnapshot:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field daily_purchase_limit_snapshot", values[i])
+			} else if value.Valid {
+				_m.DailyPurchaseLimitSnapshot = int(value.Int64)
+			}
+		case paymentorder.FieldTotalPurchaseLimitSnapshot:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field total_purchase_limit_snapshot", values[i])
+			} else if value.Valid {
+				_m.TotalPurchaseLimitSnapshot = int(value.Int64)
 			}
 		case paymentorder.FieldProviderInstanceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -524,6 +576,32 @@ func (_m *PaymentOrder) String() string {
 		builder.WriteString("subscription_days=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	if v := _m.CurrencyProductID; v != nil {
+		builder.WriteString("currency_product_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.CurrencyProductName; v != nil {
+		builder.WriteString("currency_product_name=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.CurrencyProductPaymentPrice; v != nil {
+		builder.WriteString("currency_product_payment_price=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.CurrencyProductCreditedAmount; v != nil {
+		builder.WriteString("currency_product_credited_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("daily_purchase_limit_snapshot=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DailyPurchaseLimitSnapshot))
+	builder.WriteString(", ")
+	builder.WriteString("total_purchase_limit_snapshot=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TotalPurchaseLimitSnapshot))
 	builder.WriteString(", ")
 	if v := _m.ProviderInstanceID; v != nil {
 		builder.WriteString("provider_instance_id=")

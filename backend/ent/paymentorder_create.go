@@ -211,6 +211,90 @@ func (_c *PaymentOrderCreate) SetNillableSubscriptionDays(v *int) *PaymentOrderC
 	return _c
 }
 
+// SetCurrencyProductID sets the "currency_product_id" field.
+func (_c *PaymentOrderCreate) SetCurrencyProductID(v int64) *PaymentOrderCreate {
+	_c.mutation.SetCurrencyProductID(v)
+	return _c
+}
+
+// SetNillableCurrencyProductID sets the "currency_product_id" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableCurrencyProductID(v *int64) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetCurrencyProductID(*v)
+	}
+	return _c
+}
+
+// SetCurrencyProductName sets the "currency_product_name" field.
+func (_c *PaymentOrderCreate) SetCurrencyProductName(v string) *PaymentOrderCreate {
+	_c.mutation.SetCurrencyProductName(v)
+	return _c
+}
+
+// SetNillableCurrencyProductName sets the "currency_product_name" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableCurrencyProductName(v *string) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetCurrencyProductName(*v)
+	}
+	return _c
+}
+
+// SetCurrencyProductPaymentPrice sets the "currency_product_payment_price" field.
+func (_c *PaymentOrderCreate) SetCurrencyProductPaymentPrice(v float64) *PaymentOrderCreate {
+	_c.mutation.SetCurrencyProductPaymentPrice(v)
+	return _c
+}
+
+// SetNillableCurrencyProductPaymentPrice sets the "currency_product_payment_price" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableCurrencyProductPaymentPrice(v *float64) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetCurrencyProductPaymentPrice(*v)
+	}
+	return _c
+}
+
+// SetCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field.
+func (_c *PaymentOrderCreate) SetCurrencyProductCreditedAmount(v float64) *PaymentOrderCreate {
+	_c.mutation.SetCurrencyProductCreditedAmount(v)
+	return _c
+}
+
+// SetNillableCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableCurrencyProductCreditedAmount(v *float64) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetCurrencyProductCreditedAmount(*v)
+	}
+	return _c
+}
+
+// SetDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field.
+func (_c *PaymentOrderCreate) SetDailyPurchaseLimitSnapshot(v int) *PaymentOrderCreate {
+	_c.mutation.SetDailyPurchaseLimitSnapshot(v)
+	return _c
+}
+
+// SetNillableDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableDailyPurchaseLimitSnapshot(v *int) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetDailyPurchaseLimitSnapshot(*v)
+	}
+	return _c
+}
+
+// SetTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field.
+func (_c *PaymentOrderCreate) SetTotalPurchaseLimitSnapshot(v int) *PaymentOrderCreate {
+	_c.mutation.SetTotalPurchaseLimitSnapshot(v)
+	return _c
+}
+
+// SetNillableTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableTotalPurchaseLimitSnapshot(v *int) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetTotalPurchaseLimitSnapshot(*v)
+	}
+	return _c
+}
+
 // SetProviderInstanceID sets the "provider_instance_id" field.
 func (_c *PaymentOrderCreate) SetProviderInstanceID(v string) *PaymentOrderCreate {
 	_c.mutation.SetProviderInstanceID(v)
@@ -525,6 +609,14 @@ func (_c *PaymentOrderCreate) defaults() {
 		v := paymentorder.DefaultOrderType
 		_c.mutation.SetOrderType(v)
 	}
+	if _, ok := _c.mutation.DailyPurchaseLimitSnapshot(); !ok {
+		v := paymentorder.DefaultDailyPurchaseLimitSnapshot
+		_c.mutation.SetDailyPurchaseLimitSnapshot(v)
+	}
+	if _, ok := _c.mutation.TotalPurchaseLimitSnapshot(); !ok {
+		v := paymentorder.DefaultTotalPurchaseLimitSnapshot
+		_c.mutation.SetTotalPurchaseLimitSnapshot(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := paymentorder.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -615,6 +707,27 @@ func (_c *PaymentOrderCreate) check() error {
 	if v, ok := _c.mutation.OrderType(); ok {
 		if err := paymentorder.OrderTypeValidator(v); err != nil {
 			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.order_type": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.CurrencyProductName(); ok {
+		if err := paymentorder.CurrencyProductNameValidator(v); err != nil {
+			return &ValidationError{Name: "currency_product_name", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.currency_product_name": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.DailyPurchaseLimitSnapshot(); !ok {
+		return &ValidationError{Name: "daily_purchase_limit_snapshot", err: errors.New(`ent: missing required field "PaymentOrder.daily_purchase_limit_snapshot"`)}
+	}
+	if v, ok := _c.mutation.DailyPurchaseLimitSnapshot(); ok {
+		if err := paymentorder.DailyPurchaseLimitSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "daily_purchase_limit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.daily_purchase_limit_snapshot": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.TotalPurchaseLimitSnapshot(); !ok {
+		return &ValidationError{Name: "total_purchase_limit_snapshot", err: errors.New(`ent: missing required field "PaymentOrder.total_purchase_limit_snapshot"`)}
+	}
+	if v, ok := _c.mutation.TotalPurchaseLimitSnapshot(); ok {
+		if err := paymentorder.TotalPurchaseLimitSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "total_purchase_limit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.total_purchase_limit_snapshot": %w`, err)}
 		}
 	}
 	if v, ok := _c.mutation.ProviderInstanceID(); ok {
@@ -768,6 +881,30 @@ func (_c *PaymentOrderCreate) createSpec() (*PaymentOrder, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.SubscriptionDays(); ok {
 		_spec.SetField(paymentorder.FieldSubscriptionDays, field.TypeInt, value)
 		_node.SubscriptionDays = &value
+	}
+	if value, ok := _c.mutation.CurrencyProductID(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductID, field.TypeInt64, value)
+		_node.CurrencyProductID = &value
+	}
+	if value, ok := _c.mutation.CurrencyProductName(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductName, field.TypeString, value)
+		_node.CurrencyProductName = &value
+	}
+	if value, ok := _c.mutation.CurrencyProductPaymentPrice(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductPaymentPrice, field.TypeFloat64, value)
+		_node.CurrencyProductPaymentPrice = &value
+	}
+	if value, ok := _c.mutation.CurrencyProductCreditedAmount(); ok {
+		_spec.SetField(paymentorder.FieldCurrencyProductCreditedAmount, field.TypeFloat64, value)
+		_node.CurrencyProductCreditedAmount = &value
+	}
+	if value, ok := _c.mutation.DailyPurchaseLimitSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldDailyPurchaseLimitSnapshot, field.TypeInt, value)
+		_node.DailyPurchaseLimitSnapshot = value
+	}
+	if value, ok := _c.mutation.TotalPurchaseLimitSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldTotalPurchaseLimitSnapshot, field.TypeInt, value)
+		_node.TotalPurchaseLimitSnapshot = value
 	}
 	if value, ok := _c.mutation.ProviderInstanceID(); ok {
 		_spec.SetField(paymentorder.FieldProviderInstanceID, field.TypeString, value)
@@ -1213,6 +1350,132 @@ func (u *PaymentOrderUpsert) AddSubscriptionDays(v int) *PaymentOrderUpsert {
 // ClearSubscriptionDays clears the value of the "subscription_days" field.
 func (u *PaymentOrderUpsert) ClearSubscriptionDays() *PaymentOrderUpsert {
 	u.SetNull(paymentorder.FieldSubscriptionDays)
+	return u
+}
+
+// SetCurrencyProductID sets the "currency_product_id" field.
+func (u *PaymentOrderUpsert) SetCurrencyProductID(v int64) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldCurrencyProductID, v)
+	return u
+}
+
+// UpdateCurrencyProductID sets the "currency_product_id" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateCurrencyProductID() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldCurrencyProductID)
+	return u
+}
+
+// AddCurrencyProductID adds v to the "currency_product_id" field.
+func (u *PaymentOrderUpsert) AddCurrencyProductID(v int64) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldCurrencyProductID, v)
+	return u
+}
+
+// ClearCurrencyProductID clears the value of the "currency_product_id" field.
+func (u *PaymentOrderUpsert) ClearCurrencyProductID() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldCurrencyProductID)
+	return u
+}
+
+// SetCurrencyProductName sets the "currency_product_name" field.
+func (u *PaymentOrderUpsert) SetCurrencyProductName(v string) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldCurrencyProductName, v)
+	return u
+}
+
+// UpdateCurrencyProductName sets the "currency_product_name" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateCurrencyProductName() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldCurrencyProductName)
+	return u
+}
+
+// ClearCurrencyProductName clears the value of the "currency_product_name" field.
+func (u *PaymentOrderUpsert) ClearCurrencyProductName() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldCurrencyProductName)
+	return u
+}
+
+// SetCurrencyProductPaymentPrice sets the "currency_product_payment_price" field.
+func (u *PaymentOrderUpsert) SetCurrencyProductPaymentPrice(v float64) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldCurrencyProductPaymentPrice, v)
+	return u
+}
+
+// UpdateCurrencyProductPaymentPrice sets the "currency_product_payment_price" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateCurrencyProductPaymentPrice() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldCurrencyProductPaymentPrice)
+	return u
+}
+
+// AddCurrencyProductPaymentPrice adds v to the "currency_product_payment_price" field.
+func (u *PaymentOrderUpsert) AddCurrencyProductPaymentPrice(v float64) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldCurrencyProductPaymentPrice, v)
+	return u
+}
+
+// ClearCurrencyProductPaymentPrice clears the value of the "currency_product_payment_price" field.
+func (u *PaymentOrderUpsert) ClearCurrencyProductPaymentPrice() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldCurrencyProductPaymentPrice)
+	return u
+}
+
+// SetCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field.
+func (u *PaymentOrderUpsert) SetCurrencyProductCreditedAmount(v float64) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldCurrencyProductCreditedAmount, v)
+	return u
+}
+
+// UpdateCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateCurrencyProductCreditedAmount() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldCurrencyProductCreditedAmount)
+	return u
+}
+
+// AddCurrencyProductCreditedAmount adds v to the "currency_product_credited_amount" field.
+func (u *PaymentOrderUpsert) AddCurrencyProductCreditedAmount(v float64) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldCurrencyProductCreditedAmount, v)
+	return u
+}
+
+// ClearCurrencyProductCreditedAmount clears the value of the "currency_product_credited_amount" field.
+func (u *PaymentOrderUpsert) ClearCurrencyProductCreditedAmount() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldCurrencyProductCreditedAmount)
+	return u
+}
+
+// SetDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsert) SetDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldDailyPurchaseLimitSnapshot, v)
+	return u
+}
+
+// UpdateDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateDailyPurchaseLimitSnapshot() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldDailyPurchaseLimitSnapshot)
+	return u
+}
+
+// AddDailyPurchaseLimitSnapshot adds v to the "daily_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsert) AddDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldDailyPurchaseLimitSnapshot, v)
+	return u
+}
+
+// SetTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsert) SetTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldTotalPurchaseLimitSnapshot, v)
+	return u
+}
+
+// UpdateTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateTotalPurchaseLimitSnapshot() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldTotalPurchaseLimitSnapshot)
+	return u
+}
+
+// AddTotalPurchaseLimitSnapshot adds v to the "total_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsert) AddTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldTotalPurchaseLimitSnapshot, v)
 	return u
 }
 
@@ -1925,6 +2188,153 @@ func (u *PaymentOrderUpsertOne) UpdateSubscriptionDays() *PaymentOrderUpsertOne 
 func (u *PaymentOrderUpsertOne) ClearSubscriptionDays() *PaymentOrderUpsertOne {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearSubscriptionDays()
+	})
+}
+
+// SetCurrencyProductID sets the "currency_product_id" field.
+func (u *PaymentOrderUpsertOne) SetCurrencyProductID(v int64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetCurrencyProductID(v)
+	})
+}
+
+// AddCurrencyProductID adds v to the "currency_product_id" field.
+func (u *PaymentOrderUpsertOne) AddCurrencyProductID(v int64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddCurrencyProductID(v)
+	})
+}
+
+// UpdateCurrencyProductID sets the "currency_product_id" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateCurrencyProductID() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateCurrencyProductID()
+	})
+}
+
+// ClearCurrencyProductID clears the value of the "currency_product_id" field.
+func (u *PaymentOrderUpsertOne) ClearCurrencyProductID() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearCurrencyProductID()
+	})
+}
+
+// SetCurrencyProductName sets the "currency_product_name" field.
+func (u *PaymentOrderUpsertOne) SetCurrencyProductName(v string) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetCurrencyProductName(v)
+	})
+}
+
+// UpdateCurrencyProductName sets the "currency_product_name" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateCurrencyProductName() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateCurrencyProductName()
+	})
+}
+
+// ClearCurrencyProductName clears the value of the "currency_product_name" field.
+func (u *PaymentOrderUpsertOne) ClearCurrencyProductName() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearCurrencyProductName()
+	})
+}
+
+// SetCurrencyProductPaymentPrice sets the "currency_product_payment_price" field.
+func (u *PaymentOrderUpsertOne) SetCurrencyProductPaymentPrice(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetCurrencyProductPaymentPrice(v)
+	})
+}
+
+// AddCurrencyProductPaymentPrice adds v to the "currency_product_payment_price" field.
+func (u *PaymentOrderUpsertOne) AddCurrencyProductPaymentPrice(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddCurrencyProductPaymentPrice(v)
+	})
+}
+
+// UpdateCurrencyProductPaymentPrice sets the "currency_product_payment_price" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateCurrencyProductPaymentPrice() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateCurrencyProductPaymentPrice()
+	})
+}
+
+// ClearCurrencyProductPaymentPrice clears the value of the "currency_product_payment_price" field.
+func (u *PaymentOrderUpsertOne) ClearCurrencyProductPaymentPrice() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearCurrencyProductPaymentPrice()
+	})
+}
+
+// SetCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field.
+func (u *PaymentOrderUpsertOne) SetCurrencyProductCreditedAmount(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetCurrencyProductCreditedAmount(v)
+	})
+}
+
+// AddCurrencyProductCreditedAmount adds v to the "currency_product_credited_amount" field.
+func (u *PaymentOrderUpsertOne) AddCurrencyProductCreditedAmount(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddCurrencyProductCreditedAmount(v)
+	})
+}
+
+// UpdateCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateCurrencyProductCreditedAmount() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateCurrencyProductCreditedAmount()
+	})
+}
+
+// ClearCurrencyProductCreditedAmount clears the value of the "currency_product_credited_amount" field.
+func (u *PaymentOrderUpsertOne) ClearCurrencyProductCreditedAmount() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearCurrencyProductCreditedAmount()
+	})
+}
+
+// SetDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsertOne) SetDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetDailyPurchaseLimitSnapshot(v)
+	})
+}
+
+// AddDailyPurchaseLimitSnapshot adds v to the "daily_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsertOne) AddDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddDailyPurchaseLimitSnapshot(v)
+	})
+}
+
+// UpdateDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateDailyPurchaseLimitSnapshot() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateDailyPurchaseLimitSnapshot()
+	})
+}
+
+// SetTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsertOne) SetTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetTotalPurchaseLimitSnapshot(v)
+	})
+}
+
+// AddTotalPurchaseLimitSnapshot adds v to the "total_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsertOne) AddTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddTotalPurchaseLimitSnapshot(v)
+	})
+}
+
+// UpdateTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateTotalPurchaseLimitSnapshot() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateTotalPurchaseLimitSnapshot()
 	})
 }
 
@@ -2857,6 +3267,153 @@ func (u *PaymentOrderUpsertBulk) UpdateSubscriptionDays() *PaymentOrderUpsertBul
 func (u *PaymentOrderUpsertBulk) ClearSubscriptionDays() *PaymentOrderUpsertBulk {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearSubscriptionDays()
+	})
+}
+
+// SetCurrencyProductID sets the "currency_product_id" field.
+func (u *PaymentOrderUpsertBulk) SetCurrencyProductID(v int64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetCurrencyProductID(v)
+	})
+}
+
+// AddCurrencyProductID adds v to the "currency_product_id" field.
+func (u *PaymentOrderUpsertBulk) AddCurrencyProductID(v int64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddCurrencyProductID(v)
+	})
+}
+
+// UpdateCurrencyProductID sets the "currency_product_id" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateCurrencyProductID() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateCurrencyProductID()
+	})
+}
+
+// ClearCurrencyProductID clears the value of the "currency_product_id" field.
+func (u *PaymentOrderUpsertBulk) ClearCurrencyProductID() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearCurrencyProductID()
+	})
+}
+
+// SetCurrencyProductName sets the "currency_product_name" field.
+func (u *PaymentOrderUpsertBulk) SetCurrencyProductName(v string) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetCurrencyProductName(v)
+	})
+}
+
+// UpdateCurrencyProductName sets the "currency_product_name" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateCurrencyProductName() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateCurrencyProductName()
+	})
+}
+
+// ClearCurrencyProductName clears the value of the "currency_product_name" field.
+func (u *PaymentOrderUpsertBulk) ClearCurrencyProductName() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearCurrencyProductName()
+	})
+}
+
+// SetCurrencyProductPaymentPrice sets the "currency_product_payment_price" field.
+func (u *PaymentOrderUpsertBulk) SetCurrencyProductPaymentPrice(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetCurrencyProductPaymentPrice(v)
+	})
+}
+
+// AddCurrencyProductPaymentPrice adds v to the "currency_product_payment_price" field.
+func (u *PaymentOrderUpsertBulk) AddCurrencyProductPaymentPrice(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddCurrencyProductPaymentPrice(v)
+	})
+}
+
+// UpdateCurrencyProductPaymentPrice sets the "currency_product_payment_price" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateCurrencyProductPaymentPrice() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateCurrencyProductPaymentPrice()
+	})
+}
+
+// ClearCurrencyProductPaymentPrice clears the value of the "currency_product_payment_price" field.
+func (u *PaymentOrderUpsertBulk) ClearCurrencyProductPaymentPrice() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearCurrencyProductPaymentPrice()
+	})
+}
+
+// SetCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field.
+func (u *PaymentOrderUpsertBulk) SetCurrencyProductCreditedAmount(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetCurrencyProductCreditedAmount(v)
+	})
+}
+
+// AddCurrencyProductCreditedAmount adds v to the "currency_product_credited_amount" field.
+func (u *PaymentOrderUpsertBulk) AddCurrencyProductCreditedAmount(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddCurrencyProductCreditedAmount(v)
+	})
+}
+
+// UpdateCurrencyProductCreditedAmount sets the "currency_product_credited_amount" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateCurrencyProductCreditedAmount() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateCurrencyProductCreditedAmount()
+	})
+}
+
+// ClearCurrencyProductCreditedAmount clears the value of the "currency_product_credited_amount" field.
+func (u *PaymentOrderUpsertBulk) ClearCurrencyProductCreditedAmount() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearCurrencyProductCreditedAmount()
+	})
+}
+
+// SetDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsertBulk) SetDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetDailyPurchaseLimitSnapshot(v)
+	})
+}
+
+// AddDailyPurchaseLimitSnapshot adds v to the "daily_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsertBulk) AddDailyPurchaseLimitSnapshot(v int) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddDailyPurchaseLimitSnapshot(v)
+	})
+}
+
+// UpdateDailyPurchaseLimitSnapshot sets the "daily_purchase_limit_snapshot" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateDailyPurchaseLimitSnapshot() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateDailyPurchaseLimitSnapshot()
+	})
+}
+
+// SetTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsertBulk) SetTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetTotalPurchaseLimitSnapshot(v)
+	})
+}
+
+// AddTotalPurchaseLimitSnapshot adds v to the "total_purchase_limit_snapshot" field.
+func (u *PaymentOrderUpsertBulk) AddTotalPurchaseLimitSnapshot(v int) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddTotalPurchaseLimitSnapshot(v)
+	})
+}
+
+// UpdateTotalPurchaseLimitSnapshot sets the "total_purchase_limit_snapshot" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateTotalPurchaseLimitSnapshot() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateTotalPurchaseLimitSnapshot()
 	})
 }
 

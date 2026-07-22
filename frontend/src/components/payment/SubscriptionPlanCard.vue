@@ -2,7 +2,7 @@
   <div
     :class="[
       'group relative flex flex-col overflow-hidden rounded-2xl border transition-all',
-      'hover:shadow-xl hover:-translate-y-0.5',
+      purchaseDisabled ? 'opacity-65' : 'hover:-translate-y-0.5 hover:shadow-xl',
       borderClass,
       'bg-white dark:bg-dark-800',
     ]"
@@ -11,7 +11,7 @@
     <div :class="['h-1.5', accentClass]" />
 
     <div class="flex flex-1 flex-col p-4">
-      <!-- Header: name + badge + price -->
+      <!-- Header: product identity + purchase limit -->
       <div class="mb-3 flex items-start justify-between gap-2">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
@@ -24,22 +24,29 @@
             {{ plan.description }}
           </p>
         </div>
-        <div class="shrink-0 text-right">
-          <div class="flex items-baseline gap-1">
-            <span class="text-xs text-gray-400 dark:text-dark-500">$</span>
-            <span :class="['text-2xl font-extrabold tracking-tight', textClass]">{{ formatMoneyDisplay(plan.price) }}</span>
-            <span v-if="plan.currency" class="text-xs font-medium text-gray-400 dark:text-dark-500">{{ plan.currency }}</span>
-          </div>
-          <span class="text-[11px] text-gray-400 dark:text-dark-500">/ {{ validitySuffix }}</span>
-          <div v-if="plan.original_price" class="mt-0.5 flex items-center justify-end gap-1.5">
-            <span class="text-xs text-gray-400 line-through dark:text-dark-500">${{ formatMoneyDisplay(plan.original_price) }}<template v-if="plan.currency"> {{ plan.currency }}</template></span>
-            <span :class="['rounded px-1 py-0.5 text-[10px] font-semibold', discountClass]">{{ discountText }}</span>
-          </div>
-        </div>
+        <PurchaseLimitBadge :limits="plan" />
       </div>
 
-      <!-- Group quota info (compact) -->
-      <div class="mb-3 grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-dark-700/50">
+      <div v-if="isDailyTemporaryCredit" class="mb-3 grid grid-cols-3 gap-2 rounded-lg bg-cyan-50 px-3 py-2 text-xs dark:bg-cyan-950/30">
+        <div>
+          <span class="block text-cyan-700/70 dark:text-cyan-300/70">{{ t('commerce.subscription.dailyAmount') }}</span>
+          <strong class="mt-0.5 block font-mono text-sm text-cyan-800 dark:text-cyan-200">${{ formatMoneyDisplay(dailyCreditAmount) }}</strong>
+        </div>
+        <div>
+          <span class="block text-cyan-700/70 dark:text-cyan-300/70">{{ t('commerce.subscription.duration') }}</span>
+          <strong class="mt-0.5 block text-sm text-cyan-800 dark:text-cyan-200">{{ t('commerce.subscription.daysCount', { days: plan.validity_days }) }}</strong>
+        </div>
+        <div>
+          <span class="block text-cyan-700/70 dark:text-cyan-300/70">{{ t('commerce.subscription.totalAmount') }}</span>
+          <strong class="mt-0.5 block font-mono text-sm text-cyan-800 dark:text-cyan-200">${{ formatMoneyDisplay(dailyCreditTotal) }}</strong>
+        </div>
+        <p class="col-span-3 border-t border-cyan-200/70 pt-2 text-[11px] text-cyan-700 dark:border-cyan-800 dark:text-cyan-300">
+          {{ t('commerce.subscription.renewalExtends') }}
+        </p>
+      </div>
+
+      <!-- Legacy Sub2 group quota info -->
+      <div v-else class="mb-3 grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-dark-700/50">
         <div class="flex items-center justify-between">
           <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.rate') }}</span>
           <span class="font-medium text-gray-700 dark:text-gray-300">{{ rateDisplay }}</span>
@@ -87,13 +94,35 @@
 
       <div class="flex-1" />
 
+      <div class="mb-3 flex items-end justify-between gap-3 border-t border-gray-100 pt-3 dark:border-dark-700">
+        <div class="min-w-0">
+          <p class="text-[11px] text-gray-400 dark:text-dark-500">{{ t('payment.purchaseCard.expectedReceive') }}</p>
+          <p :class="['mt-0.5 break-words text-lg font-bold', textClass]">{{ expectedReceive }}</p>
+        </div>
+        <div class="shrink-0 text-right">
+          <p class="text-[11px] text-gray-400 dark:text-dark-500">{{ t('payment.purchaseCard.expectedSpend') }}</p>
+          <div class="mt-0.5 flex items-baseline justify-end gap-1">
+            <span class="text-xs text-gray-400 dark:text-dark-500">$</span>
+            <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">{{ formatMoneyDisplay(plan.price) }}</span>
+            <span class="text-[10px] font-medium text-gray-400 dark:text-dark-500">{{ paymentCreditLabel }}</span>
+          </div>
+          <div v-if="plan.original_price" class="mt-0.5 flex items-center justify-end gap-1.5">
+            <span class="text-[10px] text-gray-400 line-through dark:text-dark-500">${{ formatMoneyDisplay(plan.original_price) }} {{ paymentCreditLabel }}</span>
+            <span :class="['rounded px-1 py-0.5 text-[10px] font-semibold', discountClass]">{{ discountText }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Subscribe Button -->
       <button
         type="button"
         :class="['w-full rounded-xl py-2.5 text-sm font-semibold transition-all active:scale-[0.98]', btnClass]"
+        :disabled="purchaseDisabled"
+        :aria-disabled="purchaseDisabled"
+        data-test="subscription-plan-select"
         @click="emit('select', plan)"
       >
-        {{ isRenewal ? t('payment.renewNow') : t('payment.subscribeNow') }}
+        {{ purchaseDisabledText || (isRenewal ? t('payment.renewNow') : t('payment.subscribeNow')) }}
       </button>
     </div>
   </div>
@@ -105,7 +134,10 @@ import { useI18n } from 'vue-i18n'
 import type { SubscriptionPlan } from '@/types/payment'
 import type { UserSubscription } from '@/types'
 import { useAppStore } from '@/stores/app'
-import { formatMoneyDisplay } from '@/utils/format'
+import { formatMoneyDisplay, multiplyDecimalAmount } from '@/utils/format'
+import { isPurchaseLimitExhausted } from '@/utils/purchaseLimits'
+import { subscriptionValidityDays } from '@/components/payment/paymentFlow'
+import PurchaseLimitBadge from '@/components/payment/PurchaseLimitBadge.vue'
 import { hasPeakRate as groupHasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
 import {
   platformAccentBarClass,
@@ -118,11 +150,12 @@ import {
   platformLabel,
 } from '@/utils/platformColors'
 
-const props = defineProps<{ plan: SubscriptionPlan; activeSubscriptions?: UserSubscription[] }>()
+const props = defineProps<{ plan: SubscriptionPlan; activeSubscriptions?: UserSubscription[]; disabledReason?: string }>()
 const emit = defineEmits<{ select: [plan: SubscriptionPlan] }>()
 const { t } = useI18n()
 
-const platform = computed(() => props.plan.group_platform || '')
+const isDailyTemporaryCredit = computed(() => props.plan.benefit_type === 'daily_temporary_credit')
+const platform = computed(() => isDailyTemporaryCredit.value ? '' : (props.plan.group_platform || ''))
 const isRenewal = computed(() =>
   props.activeSubscriptions?.some(s => s.group_id === props.plan.group_id && s.status === 'active') ?? false
 )
@@ -133,9 +166,19 @@ const borderClass = computed(() => platformBorderClass(platform.value))
 const badgeLightClass = computed(() => platformBadgeLightClass(platform.value))
 const textClass = computed(() => platformTextClass(platform.value))
 const iconClass = computed(() => platformIconClass(platform.value))
-const btnClass = computed(() => platformButtonClass(platform.value))
+const isExhausted = computed(() => isPurchaseLimitExhausted(props.plan))
+const purchaseDisabled = computed(() => isExhausted.value || Boolean(props.disabledReason))
+const purchaseDisabledText = computed(() => props.disabledReason || (isExhausted.value ? t('payment.purchaseLimit.exhausted') : ''))
+const btnClass = computed(() => purchaseDisabled.value
+  ? 'cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
+  : platformButtonClass(platform.value))
 const discountClass = computed(() => platformDiscountClass(platform.value))
-const pLabel = computed(() => platformLabel(platform.value))
+const pLabel = computed(() => isDailyTemporaryCredit.value
+  ? t('commerce.subscription.dailyTemporaryBadge')
+  : platformLabel(platform.value))
+const paymentCreditLabel = computed(() => t(`commerce.creditType.${props.plan.payment_credit_type === 'temporary' ? 'temporary' : 'permanent'}`))
+const dailyCreditAmount = computed(() => props.plan.daily_temporary_credit_amount ?? 0)
+const dailyCreditTotal = computed(() => multiplyDecimalAmount(dailyCreditAmount.value, props.plan.validity_days))
 
 const discountText = computed(() => {
   if (!props.plan.original_price || props.plan.original_price <= 0) return ''
@@ -170,9 +213,10 @@ const modelScopeLabels = computed(() => {
 })
 
 const validitySuffix = computed(() => {
-  const u = props.plan.validity_unit || 'day'
-  if (u === 'month') return t('payment.perMonth')
-  if (u === 'year') return t('payment.perYear')
-  return `${props.plan.validity_days}${t('payment.days')}`
+  return `${subscriptionValidityDays(props.plan)}${t('payment.days')}`
 })
+
+const expectedReceive = computed(() => isDailyTemporaryCredit.value
+  ? `$${formatMoneyDisplay(dailyCreditTotal.value)} ${t('commerce.creditType.temporary')}`
+  : validitySuffix.value)
 </script>

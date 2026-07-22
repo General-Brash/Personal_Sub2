@@ -95,3 +95,31 @@ FROM temporary_credit_grants
 WHERE user_id = $1 AND source = 'admin_grant'`, user.ID).Scan(&count))
 	require.Zero(t, count)
 }
+
+func TestTemporaryCreditAuditClassifiesAllFourStatuses(t *testing.T) {
+	ctx := context.Background()
+	user := newTemporaryCreditTestUser(t)
+	_, err := integrationDB.ExecContext(ctx, `
+INSERT INTO temporary_credit_grants
+    (user_id, source, amount, remaining_amount, available_at, expires_at, notes, granted_by)
+VALUES
+    ($1, 'admin_grant', 1, 1, clock_timestamp() + INTERVAL '1 hour', clock_timestamp() + INTERVAL '2 hours', 'unused', $1),
+    ($1, 'admin_grant', 1, 1, clock_timestamp() - INTERVAL '1 hour', clock_timestamp() + INTERVAL '1 hour', 'active', $1),
+    ($1, 'admin_grant', 1, 0, clock_timestamp() - INTERVAL '2 hours', clock_timestamp() - INTERVAL '1 hour', 'depleted', $1),
+    ($1, 'admin_grant', 1, 1, clock_timestamp() - INTERVAL '2 hours', clock_timestamp() - INTERVAL '1 hour', 'expired', $1)`, user.ID)
+	require.NoError(t, err)
+
+	items, total, err := NewTemporaryCreditAuditRepository(integrationDB).ListByUser(ctx, user.ID, 1, 20)
+	require.NoError(t, err)
+	require.Equal(t, int64(4), total)
+	require.Len(t, items, 4)
+
+	statuses := make(map[string]service.TemporaryCreditStatus, len(items))
+	for _, item := range items {
+		statuses[item.Notes] = item.Status
+	}
+	require.Equal(t, service.TemporaryCreditStatusUnused, statuses["unused"])
+	require.Equal(t, service.TemporaryCreditStatusActive, statuses["active"])
+	require.Equal(t, service.TemporaryCreditStatusDepleted, statuses["depleted"])
+	require.Equal(t, service.TemporaryCreditStatusExpired, statuses["expired"])
+}

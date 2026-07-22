@@ -84,6 +84,7 @@ type CreateOrderRequest struct {
 	PaymentSource   string
 	OrderType       string
 	PlanID          int64
+	ProductID       int64
 	Locale          string
 }
 
@@ -109,6 +110,7 @@ type CreateOrderResponse struct {
 	ExpiresAt    time.Time                       `json:"expires_at"`
 	PaymentMode  string                          `json:"payment_mode,omitempty"`
 	ResumeToken  string                          `json:"resume_token,omitempty"`
+	ProductID    int64                           `json:"product_id,omitempty"`
 }
 
 type OrderListParams struct {

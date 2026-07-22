@@ -179,6 +179,7 @@ type SystemSettings struct {
 
 	// Backend Mode
 	BackendModeEnabled bool `json:"backend_mode_enabled"`
+	MallEnabled        bool `json:"mall_enabled"`
 
 	// Gateway forwarding behavior
 	EnableFingerprintUnification           bool   `json:"enable_fingerprint_unification"`
@@ -356,6 +357,7 @@ type PublicSettings struct {
 	GoogleOAuthEnabled               bool                     `json:"google_oauth_enabled"`
 	SoraClientEnabled                bool                     `json:"sora_client_enabled"`
 	BackendModeEnabled               bool                     `json:"backend_mode_enabled"`
+	MallEnabled                      bool                     `json:"mall_enabled"`
 	PaymentEnabled                   bool                     `json:"payment_enabled"`
 	Version                          string                   `json:"version"`
 	// 服务器全局时区（IANA 名称与当前 UTC 偏移，如 "Asia/Shanghai" / "+08:00"）。

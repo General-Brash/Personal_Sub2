@@ -127,9 +127,22 @@ func (s *PaymentService) cancelCore(ctx context.Context, o *dbent.PaymentOrder, 
 			return checkPaidResultAlreadyPaid, nil
 		}
 	}
-	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusPending)).SetStatus(fs).Save(ctx)
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return "", fmt.Errorf("begin order cancellation: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	c, err := tx.PaymentOrder.Update().Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusPending)).SetStatus(fs).Save(ctx)
 	if err != nil {
 		return "", fmt.Errorf("update order status: %w", err)
+	}
+	if c > 0 {
+		if err := releaseReservedPurchaseTx(ctx, tx, o.ID); err != nil {
+			return "", err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("commit order cancellation: %w", err)
 	}
 	if c > 0 {
 		auditAction := "ORDER_CANCELLED"

@@ -64,34 +64,46 @@
           </div>
         </section>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <div class="card min-w-0 p-4">
+        <div class="grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div data-test="checkin-stat-card" class="card flex min-w-0 flex-col p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.currentStreak') }}</p>
-            <p data-test="current-streak" class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+            <p data-test="current-streak" class="mt-2 whitespace-nowrap text-2xl font-bold text-gray-900 dark:text-white">
               {{ t('checkin.streakDays', { count: status.current_streak_day }) }}
             </p>
           </div>
-          <div class="card p-4">
+          <div data-test="checkin-stat-card" class="card flex min-w-0 flex-col p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.nextDayReward') }}</p>
-            <p data-test="next-reward" class="mt-2 min-w-0 break-all text-lg font-semibold text-primary-600 dark:text-primary-400">
-              {{ t('checkin.rewardDay', { day: status.next_reward_day }) }} / {{ formatCredit(status.next_reward_amount) }}+{{ formatCredit(status.next_permanent_reward_amount || '0.00000000') }}
+            <p
+              data-test="next-reward"
+              class="mt-2 min-w-0 max-w-full whitespace-nowrap text-sm font-semibold tabular-nums text-primary-600 dark:text-primary-400"
+              :style="fitSummaryValue(nextRewardText, 14)"
+            >
+              {{ nextRewardText }}
             </p>
           </div>
-          <div class="card p-4">
+          <div data-test="checkin-stat-card" class="card flex min-w-0 flex-col p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.monthlyCumulativeReward') }}</p>
-            <p data-test="monthly-reward-total" class="mt-2 min-w-0 break-all text-lg font-semibold text-gray-900 dark:text-white">
-              {{ formatCredit(status.monthly_reward_total) }}+{{ formatCredit(status.monthly_permanent_reward_total || '0.00000000') }}
+            <p
+              data-test="monthly-reward-total"
+              class="mt-2 min-w-0 max-w-full whitespace-nowrap text-sm font-semibold tabular-nums text-gray-900 dark:text-white"
+              :style="fitSummaryValue(monthlyRewardText, 14)"
+            >
+              {{ monthlyRewardText }}
             </p>
           </div>
-          <div class="card min-w-0 p-4">
+          <div data-test="checkin-stat-card" class="card flex min-w-0 flex-col p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.temporaryCreditAvailable') }}</p>
-            <p data-test="temporary-credit" class="mt-2 min-w-0 break-all text-lg font-semibold text-emerald-600 dark:text-emerald-400">
-              {{ formatCredit(status.temporary_credit_available) }}
+            <p
+              data-test="temporary-credit"
+              class="mt-2 min-w-0 max-w-full whitespace-nowrap text-lg font-semibold tabular-nums text-emerald-600 dark:text-emerald-400"
+              :style="fitSummaryValue(temporaryCreditText, 18)"
+            >
+              {{ temporaryCreditText }}
             </p>
           </div>
-          <div class="card min-w-0 p-4">
+          <div data-test="checkin-stat-card" class="card flex min-w-0 flex-col p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.expiresAt') }}</p>
-            <p class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
+            <p class="mt-2 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">
               {{ formatExpiry(status.temporary_credit_earliest_expires_at) }}
             </p>
           </div>
@@ -173,6 +185,7 @@ interface CalendarCell {
 
 const idempotencyKeyStorage = 'daily-checkin-idempotency-key'
 const idempotencyDateStorage = 'daily-checkin-idempotency-date'
+const summaryValueSafeWidth = 136
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -192,6 +205,15 @@ const checkInButtonLabel = computed(() => {
   if (status.value.today_checked_in) return t('checkin.checkedIn')
   return t('checkin.checkIn')
 })
+const nextRewardText = computed(() => {
+  if (!status.value) return ''
+  return `${t('checkin.rewardDay', { day: status.value.next_reward_day })} / ${formatCredit(status.value.next_reward_amount)}+${formatCredit(status.value.next_permanent_reward_amount || '0.00000000')}`
+})
+const monthlyRewardText = computed(() => {
+  if (!status.value) return ''
+  return `${formatCredit(status.value.monthly_reward_total)}+${formatCredit(status.value.monthly_permanent_reward_total || '0.00000000')}`
+})
+const temporaryCreditText = computed(() => status.value ? formatCredit(status.value.temporary_credit_available) : '')
 
 const calendarEntries = computed(() => {
   const entries = new Map<string, CheckinCalendarEntry>()
@@ -319,6 +341,16 @@ function getBeijingDate(): string {
 
 function formatCredit(value: string): string {
   return `$${formatDecimalAmount(value)}`
+}
+
+function fitSummaryValue(value: string, preferredFontSize: number): { fontSize: string } | undefined {
+  const widthUnits = Array.from(value).reduce(
+    (total, character) => total + (character.codePointAt(0)! > 0x7f ? 1 : 0.68),
+    0,
+  )
+  const fittedFontSize = summaryValueSafeWidth / Math.max(widthUnits, 1)
+  if (fittedFontSize >= preferredFontSize) return undefined
+  return { fontSize: `${fittedFontSize.toFixed(2)}px` }
 }
 
 function formatExpiry(value: string | null): string {

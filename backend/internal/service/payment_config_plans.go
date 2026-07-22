@@ -48,12 +48,57 @@ func validatePlanRequired(name string, groupID int64, price float64, validityDay
 	return nil
 }
 
+func validatePlanDefinition(name string, groupID int64, price float64, validityDays int, validityUnit string, originalPrice *float64, benefitType, paymentCreditType string, dailyAmount float64) (SubscriptionBenefitType, MallCreditType, float64, float64, error) {
+	benefit, err := normalizeSubscriptionBenefitType(benefitType)
+	if err != nil {
+		return "", "", 0, 0, err
+	}
+	paymentType, err := normalizeMallCreditType(paymentCreditType)
+	if err != nil {
+		return "", "", 0, 0, err
+	}
+	if benefit == SubscriptionBenefitSub2 {
+		if err := validatePlanRequired(name, groupID, price, validityDays, validityUnit, originalPrice); err != nil {
+			return "", "", 0, 0, err
+		}
+		if dailyAmount != 0 {
+			return "", "", 0, 0, infraerrors.BadRequest("PLAN_DAILY_CREDIT_INVALID", "sub2 plans cannot grant daily temporary credit")
+		}
+	} else {
+		if strings.TrimSpace(name) == "" {
+			return "", "", 0, 0, infraerrors.BadRequest("PLAN_NAME_REQUIRED", "plan name is required")
+		}
+		if groupID != 0 {
+			return "", "", 0, 0, infraerrors.BadRequest("PLAN_GROUP_INVALID", "daily temporary credit plans must not select a group")
+		}
+		if validityDays <= 0 || validityDays > 3650 || strings.TrimSpace(validityUnit) != "day" {
+			return "", "", 0, 0, infraerrors.BadRequest("PLAN_VALIDITY_REQUIRED", "daily temporary credit plans require 1-3650 days")
+		}
+		if _, err := validateCurrencyProductCreditedAmount(dailyAmount); err != nil {
+			return "", "", 0, 0, infraerrors.BadRequest("PLAN_DAILY_CREDIT_INVALID", "daily temporary credit amount must be positive")
+		}
+		if originalPrice != nil && *originalPrice < 0 {
+			return "", "", 0, 0, infraerrors.BadRequest("PLAN_ORIGINAL_PRICE_INVALID", "original price must be >= 0")
+		}
+	}
+	normalizedPrice, err := normalizeLedgerAmount(price)
+	if err != nil || normalizedPrice <= 0 {
+		return "", "", 0, 0, infraerrors.BadRequest("PLAN_PRICE_INVALID", "price must be a positive amount with at most eight decimals")
+	}
+	normalizedDaily := float64(0)
+	if dailyAmount > 0 {
+		normalizedDaily, _ = normalizeLedgerAmount(dailyAmount)
+	}
+	return benefit, paymentType, normalizedPrice, normalizedDaily, nil
+}
+
 // validatePlanPatch validates only the non-nil fields in a patch update.
 func validatePlanPatch(req UpdatePlanRequest) error {
 	if req.Name != nil && strings.TrimSpace(*req.Name) == "" {
 		return infraerrors.BadRequest("PLAN_NAME_REQUIRED", "plan name is required")
 	}
-	if req.GroupID != nil && *req.GroupID <= 0 {
+	allowZeroGroup := req.BenefitType != nil && strings.TrimSpace(*req.BenefitType) == string(SubscriptionBenefitDailyTemporaryCredit)
+	if req.GroupID != nil && (*req.GroupID < 0 || (*req.GroupID == 0 && !allowZeroGroup)) {
 		return infraerrors.BadRequest("PLAN_GROUP_REQUIRED", "group is required")
 	}
 	if req.Price != nil && *req.Price <= 0 {
@@ -67,6 +112,22 @@ func validatePlanPatch(req UpdatePlanRequest) error {
 	}
 	if req.OriginalPrice != nil && *req.OriginalPrice < 0 {
 		return infraerrors.BadRequest("PLAN_ORIGINAL_PRICE_INVALID", "original price must be >= 0")
+	}
+	if req.BenefitType != nil {
+		if _, err := normalizeSubscriptionBenefitType(*req.BenefitType); err != nil {
+			return err
+		}
+	}
+	if req.PaymentCreditType != nil {
+		if _, err := normalizeMallCreditType(*req.PaymentCreditType); err != nil {
+			return err
+		}
+	}
+	if req.DailyTemporaryCreditAmount != nil && *req.DailyTemporaryCreditAmount < 0 {
+		return infraerrors.BadRequest("PLAN_DAILY_CREDIT_INVALID", "daily temporary credit amount must be non-negative")
+	}
+	if err := validatePurchaseLimitPatch(req.DailyPurchaseLimit, req.TotalPurchaseLimit); err != nil {
+		return err
 	}
 	return nil
 }
@@ -93,7 +154,7 @@ func (s *PaymentConfigService) GetGroupInfoMap(ctx context.Context, plans []*dbe
 	ids := make([]int64, 0, len(plans))
 	seen := make(map[int64]bool)
 	for _, p := range plans {
-		if !seen[p.GroupID] {
+		if p.GroupID > 0 && !seen[p.GroupID] {
 			seen[p.GroupID] = true
 			ids = append(ids, p.GroupID)
 		}
@@ -133,18 +194,24 @@ func (s *PaymentConfigService) ListPlansForSale(ctx context.Context) ([]*dbent.S
 }
 
 func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanRequest) (*dbent.SubscriptionPlan, error) {
-	if err := validatePlanRequired(req.Name, req.GroupID, req.Price, req.ValidityDays, req.ValidityUnit, req.OriginalPrice); err != nil {
+	benefit, paymentType, price, dailyAmount, err := validatePlanDefinition(req.Name, req.GroupID, req.Price, req.ValidityDays, req.ValidityUnit, req.OriginalPrice, req.BenefitType, req.PaymentCreditType, req.DailyTemporaryCreditAmount)
+	if err != nil {
 		return nil, err
 	}
 	currency, err := normalizePlanCurrency(req.Currency)
 	if err != nil {
 		return nil, err
 	}
+	if err := validatePurchaseLimits(req.DailyPurchaseLimit, req.TotalPurchaseLimit); err != nil {
+		return nil, err
+	}
 	b := s.entClient.SubscriptionPlan.Create().
 		SetGroupID(req.GroupID).SetName(req.Name).SetDescription(req.Description).
-		SetPrice(req.Price).SetCurrency(currency).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
+		SetPrice(price).SetCurrency(currency).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
+		SetBenefitType(string(benefit)).SetPaymentCreditType(string(paymentType)).SetDailyTemporaryCreditAmount(dailyAmount).
 		SetFeatures(req.Features).SetProductName(req.ProductName).
-		SetForSale(req.ForSale).SetSortOrder(req.SortOrder)
+		SetForSale(req.ForSale).SetSortOrder(req.SortOrder).
+		SetDailyPurchaseLimit(req.DailyPurchaseLimit).SetTotalPurchaseLimit(req.TotalPurchaseLimit)
 	if req.OriginalPrice != nil {
 		b.SetOriginalPrice(*req.OriginalPrice)
 	}
@@ -158,6 +225,45 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	if err := validatePlanPatch(req); err != nil {
 		return nil, err
 	}
+	current, err := s.GetPlan(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	name, groupID, price := current.Name, current.GroupID, current.Price
+	validityDays, validityUnit := current.ValidityDays, current.ValidityUnit
+	benefitType, paymentCreditType, dailyAmount := current.BenefitType, current.PaymentCreditType, current.DailyTemporaryCreditAmount
+	originalPrice := current.OriginalPrice
+	if req.Name != nil {
+		name = *req.Name
+	}
+	if req.GroupID != nil {
+		groupID = *req.GroupID
+	}
+	if req.Price != nil {
+		price = *req.Price
+	}
+	if req.ValidityDays != nil {
+		validityDays = *req.ValidityDays
+	}
+	if req.ValidityUnit != nil {
+		validityUnit = *req.ValidityUnit
+	}
+	if req.BenefitType != nil {
+		benefitType = *req.BenefitType
+	}
+	if req.PaymentCreditType != nil {
+		paymentCreditType = *req.PaymentCreditType
+	}
+	if req.DailyTemporaryCreditAmount != nil {
+		dailyAmount = *req.DailyTemporaryCreditAmount
+	}
+	if req.OriginalPrice != nil {
+		originalPrice = req.OriginalPrice
+	}
+	benefit, paymentType, normalizedPrice, normalizedDaily, err := validatePlanDefinition(name, groupID, price, validityDays, validityUnit, originalPrice, benefitType, paymentCreditType, dailyAmount)
+	if err != nil {
+		return nil, err
+	}
 	u := s.entClient.SubscriptionPlan.UpdateOneID(id)
 	if req.GroupID != nil {
 		u.SetGroupID(*req.GroupID)
@@ -169,7 +275,7 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 		u.SetDescription(*req.Description)
 	}
 	if req.Price != nil {
-		u.SetPrice(*req.Price)
+		u.SetPrice(normalizedPrice)
 	}
 	if req.OriginalPrice != nil {
 		u.SetOriginalPrice(*req.OriginalPrice)
@@ -198,6 +304,21 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	}
 	if req.SortOrder != nil {
 		u.SetSortOrder(*req.SortOrder)
+	}
+	if req.DailyPurchaseLimit != nil {
+		u.SetDailyPurchaseLimit(*req.DailyPurchaseLimit)
+	}
+	if req.TotalPurchaseLimit != nil {
+		u.SetTotalPurchaseLimit(*req.TotalPurchaseLimit)
+	}
+	if req.BenefitType != nil {
+		u.SetBenefitType(string(benefit))
+	}
+	if req.PaymentCreditType != nil {
+		u.SetPaymentCreditType(string(paymentType))
+	}
+	if req.DailyTemporaryCreditAmount != nil {
+		u.SetDailyTemporaryCreditAmount(normalizedDaily)
 	}
 	return u.Save(ctx)
 }

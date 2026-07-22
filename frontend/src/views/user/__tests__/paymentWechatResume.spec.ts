@@ -33,6 +33,28 @@ describe('parseWechatResumeRoute', () => {
       orderType: 'balance',
       orderAmount: 12.5,
       planId: undefined,
+      productId: undefined,
+    })
+  })
+
+  it('restores a fixed currency product without trusting a client amount', () => {
+    expect(parseWechatResumeRoute({
+      wechat_resume: '1',
+      openid: 'openid-product',
+      payment_type: 'wxpay',
+      order_type: 'balance',
+      product_id: '12',
+      amount: '9999',
+    }, [], 88, [{
+      id: 12,
+      name: 'Starter credit',
+      description: '',
+      payment_price: 19.9,
+      credited_permanent_amount: 25,
+      sort_order: 1,
+    }])).toMatchObject({
+      productId: 12,
+      orderAmount: 19.9,
     })
   })
 })
@@ -48,6 +70,7 @@ describe('stripWechatResumeQuery', () => {
       amount: '12.5',
       order_type: 'subscription',
       plan_id: '7',
+      product_id: '12',
       state: 'state-123',
       scope: 'snsapi_base',
     })).toEqual({

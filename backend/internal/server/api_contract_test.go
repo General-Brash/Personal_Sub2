@@ -917,6 +917,7 @@ func TestAPIContracts(t *testing.T) {
 					},
 					"custom_menu_items": [],
 					"custom_endpoints": [],
+					"mall_enabled":    false,
 					"payment_enabled": false,
 					"payment_min_amount": 0,
 					"payment_max_amount": 0,
@@ -1199,6 +1200,7 @@ func TestAPIContracts(t *testing.T) {
 					"openai_fast_policy_settings": {
 						"rules": []
 					},
+					"mall_enabled":    false,
 					"payment_enabled": false,
 					"payment_min_amount": 0,
 					"payment_max_amount": 0,

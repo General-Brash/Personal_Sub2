@@ -89,6 +89,7 @@
               autocomplete="off"
               required
               class="input font-mono"
+              @blur="tier.amount = formatEditableAmount(tier.amount)"
               @keydown.enter.prevent="saveSettings"
             />
             <input
@@ -101,6 +102,7 @@
               autocomplete="off"
               required
               class="input font-mono"
+              @blur="tier.permanent_amount = formatEditableAmount(tier.permanent_amount)"
               @keydown.enter.prevent="saveSettings"
             />
             </div>
@@ -151,8 +153,8 @@ const form = reactive<CheckinSettingsForm>({
   max_reward_day: 7,
   reward_tiers: Array.from({ length: 7 }, (_, index) => ({
     day: index + 1,
-    amount: '1.00000000',
-    permanent_amount: '0.00000000',
+    amount: '1.00',
+    permanent_amount: '0.00',
   })),
 })
 
@@ -169,8 +171,8 @@ watch(
     while (form.reward_tiers.length < value) {
       form.reward_tiers.push({
         day: form.reward_tiers.length + 1,
-        amount: '1.00000000',
-        permanent_amount: '0.00000000',
+        amount: '1.00',
+        permanent_amount: '0.00',
       })
     }
     form.reward_tiers.forEach((tier, index) => {
@@ -185,9 +187,18 @@ function applySettings(settings: CheckinSettings) {
   form.max_reward_day = settings.max_reward_day
   form.reward_tiers = settings.reward_tiers.map((tier) => ({
     day: tier.day,
-    amount: tier.amount,
-    permanent_amount: tier.permanent_amount || '0.00000000',
+    amount: formatEditableAmount(tier.amount),
+    permanent_amount: formatEditableAmount(tier.permanent_amount || '0.00000000'),
   }))
+}
+
+/** Keep a readable two-place default without rounding away sub-cent precision. */
+function formatEditableAmount(value: string): string {
+  const normalized = value.trim()
+  if (!amountPattern.test(normalized)) return value
+  const [integer, fraction = ''] = normalized.split('.')
+  const significantFraction = fraction.replace(/0+$/, '')
+  return `${integer}.${significantFraction.padEnd(2, '0')}`
 }
 
 function isValidPositiveAmount(value: string): boolean {

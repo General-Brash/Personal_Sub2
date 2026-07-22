@@ -188,7 +188,16 @@
                 {{ temporaryCreditSourceLabel(item.source) }}
               </span>
             </div>
-            <span class="font-mono text-xs text-gray-400">#{{ item.id }}</span>
+            <div class="flex items-center gap-2">
+              <span
+                :data-testid="`temporary-credit-status-${item.id}`"
+                class="inline-flex rounded px-2 py-0.5 text-xs font-medium"
+                :class="temporaryCreditStatusClass(item.status)"
+              >
+                {{ temporaryCreditStatusLabel(item.status) }}
+              </span>
+              <span class="font-mono text-xs text-gray-400">#{{ item.id }}</span>
+            </div>
           </div>
           <dl class="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
             <div>
@@ -198,6 +207,12 @@
             <div>
               <dt class="text-xs text-gray-500">{{ t('checkin.admin.remainingAmount') }}</dt>
               <dd class="mt-0.5 font-mono text-gray-900 dark:text-white">{{ formatDecimalAmount(item.remaining_amount) }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-gray-500">{{ t('checkin.admin.availableAtLabel') }}</dt>
+              <dd class="mt-0.5 text-gray-900 dark:text-white">
+                <time :datetime="item.available_at">{{ formatDateTime(item.available_at) }}</time>
+              </dd>
             </div>
             <div>
               <dt class="text-xs text-gray-500">{{ t('checkin.admin.expiresAtLabel') }}</dt>
@@ -442,7 +457,25 @@ function invalidateHistoryRequests() {
 function temporaryCreditSourceLabel(source: string): string {
   if (source === 'checkin') return t('checkin.admin.sourceCheckin')
   if (source === 'admin_grant') return t('checkin.admin.sourceAdminGrant')
+  if (source === 'bank_advance') return t('checkin.admin.sourceBankAdvance')
+  if (source === 'bank_exchange') return t('checkin.admin.sourceBankExchange')
+  if (source === 'mall_product') return t('checkin.admin.sourceMallProduct')
+  if (source === 'subscription') return t('checkin.admin.sourceSubscription')
   return source
+}
+
+function temporaryCreditStatusLabel(status: string): string {
+  const known = ['unused', 'active', 'depleted', 'expired'].includes(status) ? status : 'unknown'
+  return t(`checkin.admin.temporaryStatus.${known}`)
+}
+
+function temporaryCreditStatusClass(status: string): string {
+  return ({
+    unused: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:ring-blue-800',
+    active: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:ring-emerald-800',
+    depleted: 'bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-200 dark:bg-dark-700 dark:text-gray-300 dark:ring-dark-600',
+    expired: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-800',
+  } as Record<string, string>)[status] ?? 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'
 }
 
 const isAdminType = (type: string) => type === 'admin_balance' || type === 'admin_concurrency'

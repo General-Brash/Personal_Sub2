@@ -4,11 +4,22 @@
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="input-label">{{ t('payment.admin.planName') }} <span class="text-red-500">*</span></label>
-          <input v-model="planForm.name" type="text" class="input" required />
+          <input v-model="planForm.name" data-test="plan-name" type="text" class="input" required />
         </div>
         <div>
+          <label class="input-label">{{ t('payment.admin.benefitType') }} <span class="text-red-500">*</span></label>
+          <Select v-model="planForm.benefit_type" :options="benefitTypeOptions" data-test="plan-benefit-type" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="input-label">{{ t('payment.admin.paymentCreditType') }} <span class="text-red-500">*</span></label>
+          <Select v-model="planForm.payment_credit_type" :options="creditTypeOptions" data-test="plan-payment-credit-type" />
+        </div>
+        <div v-if="isSub2Benefit">
           <label class="input-label">{{ t('payment.admin.group') }} <span class="text-red-500">*</span></label>
-          <Select v-model="planForm.group_id" :options="groupOptions" :placeholder="t('payment.admin.selectGroup')" class="w-full">
+          <Select v-model="planForm.group_id" :options="groupOptions" :placeholder="t('payment.admin.selectGroup')" class="w-full" data-test="plan-group">
             <template #selected="{ option }">
               <span v-if="option?.platform" :class="platformTextClass(String(option.platform))">{{ option.label }}</span>
               <span v-else>{{ option?.label || t('payment.admin.selectGroup') }}</span>
@@ -18,6 +29,14 @@
               <Icon v-if="selected" name="check" size="sm" class="text-primary-500" :stroke-width="2" />
             </template>
           </Select>
+        </div>
+        <div v-else>
+          <label class="input-label">{{ t('payment.admin.dailyTemporaryCreditAmount') }} <span class="text-red-500">*</span></label>
+          <div class="relative mt-1">
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center font-mono text-gray-500">$</span>
+            <input v-model.number="planForm.daily_temporary_credit_amount" data-test="plan-daily-temporary-credit" type="number" min="0.00000001" step="0.00000001" class="input pl-7 font-mono" required />
+          </div>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.dailyTemporaryCreditHint') }}</p>
         </div>
       </div>
 
@@ -33,37 +52,70 @@
         </div>
       </div>
 
-      <div><label class="input-label">{{ t('payment.admin.planDescription') }} <span class="text-red-500">*</span></label><textarea v-model="planForm.description" rows="2" class="input" required></textarea></div>
+      <div><label class="input-label">{{ t('payment.admin.planDescription') }} <span class="text-red-500">*</span></label><textarea v-model="planForm.description" data-test="plan-description" rows="2" class="input" required></textarea></div>
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="input-label">{{ t('payment.admin.price') }} <span class="text-red-500">*</span></label>
-          <input v-model.number="planForm.price" type="number" step="0.01" min="0.01" class="input" required />
-          <p v-if="subscriptionCnyPreview" class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400">
-            {{ t('payment.admin.subscriptionCnyPayPreview', { amount: subscriptionCnyPreview.amount }) }}
-            <span v-if="subscriptionCnyPreview.feeRate > 0">
-              {{ t('payment.admin.subscriptionCnyPayPreviewWithFee', { feeRate: subscriptionCnyPreview.feeRate, total: subscriptionCnyPreview.total }) }}
-            </span>
-          </p>
+          <div class="relative mt-1">
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center font-mono text-gray-500">$</span>
+            <input v-model.number="planForm.price" data-test="plan-price" type="number" step="0.00000001" min="0.00000001" class="input pl-7 font-mono" required />
+          </div>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ creditTypeLabel(planForm.payment_credit_type) }}</p>
         </div>
-        <div><label class="input-label">{{ t('payment.admin.originalPrice') }}</label><input v-model.number="planForm.original_price" type="number" step="0.01" min="0" class="input" /></div>
-      </div>
-      <div class="grid grid-cols-2 gap-4">
-        <div><label class="input-label">{{ t('payment.admin.validityDays') }} <span class="text-red-500">*</span></label><input v-model.number="planForm.validity_days" type="number" min="1" class="input" required /></div>
-        <div><label class="input-label">{{ t('payment.admin.validityUnit') }} <span class="text-red-500">*</span></label><Select v-model="planForm.validity_unit" :options="validityUnitOptions" /></div>
-      </div>
-      <div class="grid grid-cols-2 gap-4">
-        <div><label class="input-label">{{ t('payment.admin.sortOrder') }}</label><input v-model.number="planForm.sort_order" type="number" min="0" class="input" /></div>
         <div>
-          <label class="input-label">{{ t('payment.admin.currency') }}</label>
-          <input v-model="planForm.currency" type="text" maxlength="3" class="input uppercase" :placeholder="t('payment.admin.currencyPlaceholder')" />
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.currencyHint') }}</p>
+          <label class="input-label">{{ t('payment.admin.originalPrice') }}</label>
+          <div class="relative mt-1">
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center font-mono text-gray-500">$</span>
+            <input v-model.number="planForm.original_price" type="number" step="0.00000001" min="0" class="input pl-7 font-mono" />
+          </div>
         </div>
       </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="input-label">{{ t('payment.admin.validityDays') }} <span class="text-red-500">*</span></label><input v-model.number="planForm.validity_days" data-test="plan-validity-days" type="number" min="1" class="input" required /></div>
+        <div v-if="isSub2Benefit"><label class="input-label">{{ t('payment.admin.validityUnit') }} <span class="text-red-500">*</span></label><Select v-model="planForm.validity_unit" :options="validityUnitOptions" /></div>
+        <div v-else class="flex items-end pb-2 text-sm text-gray-500 dark:text-gray-400">{{ t('payment.admin.dailyTemporaryCreditHint') }}</div>
+      </div>
+      <div><label class="input-label">{{ t('payment.admin.sortOrder') }}</label><input v-model.number="planForm.sort_order" type="number" min="0" class="input" /></div>
       <div>
         <label class="input-label">{{ t('payment.admin.features') }}</label>
         <textarea v-model="planFeaturesText" rows="3" class="input" :placeholder="t('payment.admin.featuresPlaceholder')"></textarea>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.featuresHint') }}</p>
       </div>
+      <details class="rounded-lg border border-gray-200 px-4 py-3 dark:border-dark-600" data-test="plan-advanced-settings">
+        <summary class="cursor-pointer text-sm font-medium text-gray-800 dark:text-gray-200">
+          {{ t('payment.admin.advancedSettings') }}
+        </summary>
+        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label for="plan-daily-purchase-limit" class="input-label">{{ t('payment.admin.dailyPurchaseLimit') }}</label>
+            <input
+              id="plan-daily-purchase-limit"
+              v-model.number="planForm.daily_purchase_limit"
+              data-test="plan-daily-purchase-limit"
+              type="number"
+              min="0"
+              step="1"
+              class="input"
+              :placeholder="t('payment.admin.purchaseLimitPlaceholder')"
+            />
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.dailyPurchaseLimitHint') }}</p>
+          </div>
+          <div>
+            <label for="plan-total-purchase-limit" class="input-label">{{ t('payment.admin.totalPurchaseLimit') }}</label>
+            <input
+              id="plan-total-purchase-limit"
+              v-model.number="planForm.total_purchase_limit"
+              data-test="plan-total-purchase-limit"
+              type="number"
+              min="0"
+              step="1"
+              class="input"
+              :placeholder="t('payment.admin.purchaseLimitPlaceholder')"
+            />
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.totalPurchaseLimitHint') }}</p>
+          </div>
+        </div>
+      </details>
       <div class="flex items-center gap-3">
         <label class="text-sm text-gray-700 dark:text-gray-300">{{ t('payment.admin.forSale') }}</label>
         <button
@@ -97,8 +149,7 @@ import { useAppStore } from '@/stores/app'
 import { adminPaymentAPI } from '@/api/admin/payment'
 import type { AdminPaymentConfig } from '@/api/admin/payment'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { formatPaymentAmount } from '@/components/payment/currency'
-import type { SubscriptionPlan } from '@/types/payment'
+import type { CreditType, SubscriptionBenefitType, SubscriptionPlan } from '@/types/payment'
 import type { AdminGroup } from '@/types'
 import { formatMoneyDisplay } from '@/utils/format'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -123,14 +174,54 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const saving = ref(false)
-const planForm = reactive({ name: '', group_id: null as number | null, description: '', price: 0, original_price: 0, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
+const planForm = reactive({
+  name: '',
+  group_id: null as number | null,
+  benefit_type: 'sub2' as SubscriptionBenefitType,
+  payment_credit_type: 'permanent' as CreditType,
+  daily_temporary_credit_amount: 0,
+  description: '',
+  price: 0,
+  original_price: 0,
+  currency: '',
+  validity_days: 30,
+  validity_unit: 'days',
+  sort_order: 0,
+  for_sale: true,
+  daily_purchase_limit: 0,
+  total_purchase_limit: 0,
+})
 const planFeaturesText = ref('')
+const isSub2Benefit = computed(() => planForm.benefit_type === 'sub2')
+
+const benefitTypeOptions = computed(() => [
+  { value: 'sub2', label: t('payment.admin.benefitSub2') },
+  { value: 'daily_temporary_credit', label: t('payment.admin.benefitDailyTemporaryCredit') },
+])
+
+const creditTypeOptions = computed(() => [
+  { value: 'permanent', label: t('commerce.creditType.permanent') },
+  { value: 'temporary', label: t('commerce.creditType.temporary') },
+])
 
 const validityUnitOptions = computed(() => [
   { value: 'days', label: t('payment.admin.days') },
   { value: 'weeks', label: t('payment.admin.weeks') },
   { value: 'months', label: t('payment.admin.months') },
 ])
+
+function normalizeSub2ValidityUnit(unit?: string): string {
+  switch (unit) {
+    case 'week':
+    case 'weeks':
+      return 'weeks'
+    case 'month':
+    case 'months':
+      return 'months'
+    default:
+      return 'days'
+  }
+}
 
 const groupOptions = computed(() =>
   props.groups
@@ -147,28 +238,16 @@ const selectedGroupInfo = computed(() => {
   return props.groups.find(g => g.id === planForm.group_id) || null
 })
 
-function roundCnyAmount(value: number): number {
-  return Math.round(value * 100) / 100
+function creditTypeLabel(type: CreditType): string {
+  return t(`commerce.creditType.${type}`)
 }
 
-function ceilCnyAmount(value: number): number {
-  return Math.ceil(value * 100) / 100
-}
-
-const subscriptionCnyPreview = computed(() => {
-  const price = Number(planForm.price) || 0
-  const rate = Number(props.paymentConfig?.subscription_usd_to_cny_rate) || 0
-  if (price <= 0 || rate <= 0) return null
-
-  const amount = roundCnyAmount(price * rate)
-  const feeRate = Number(props.paymentConfig?.recharge_fee_rate) || 0
-  const fee = feeRate > 0 ? ceilCnyAmount((amount * feeRate) / 100) : 0
-  const total = feeRate > 0 ? roundCnyAmount(amount + fee) : amount
-
-  return {
-    amount: formatPaymentAmount(amount, 'CNY'),
-    feeRate,
-    total: formatPaymentAmount(total, 'CNY'),
+watch(() => planForm.benefit_type, (benefitType) => {
+  if (benefitType === 'daily_temporary_credit') {
+    planForm.group_id = 0
+    planForm.validity_unit = 'day'
+  } else if (planForm.group_id === 0) {
+    planForm.group_id = null
   }
 })
 
@@ -176,10 +255,11 @@ const subscriptionCnyPreview = computed(() => {
 watch(() => props.show, (visible) => {
   if (!visible) return
   if (props.plan) {
-    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, currency: props.plan.currency || '', validity_days: props.plan.validity_days, validity_unit: props.plan.validity_unit || 'days', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale })
+    const benefitType = props.plan.benefit_type ?? 'sub2'
+    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, benefit_type: benefitType, payment_credit_type: props.plan.payment_credit_type ?? 'permanent', daily_temporary_credit_amount: props.plan.daily_temporary_credit_amount ?? 0, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, currency: props.plan.currency || '', validity_days: props.plan.validity_days, validity_unit: benefitType === 'sub2' ? normalizeSub2ValidityUnit(props.plan.validity_unit) : 'day', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale, daily_purchase_limit: props.plan.daily_purchase_limit ?? 0, total_purchase_limit: props.plan.total_purchase_limit ?? 0 })
     planFeaturesText.value = (props.plan.features || []).join('\n')
   } else {
-    Object.assign(planForm, { name: '', group_id: null, description: '', price: 0, original_price: 0, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
+    Object.assign(planForm, { name: '', group_id: null, benefit_type: 'sub2', payment_credit_type: 'permanent', daily_temporary_credit_amount: 0, description: '', price: 0, original_price: 0, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true, daily_purchase_limit: 0, total_purchase_limit: 0 })
     planFeaturesText.value = ''
   }
 })
@@ -189,21 +269,34 @@ function buildPlanPayload() {
   const features = planFeaturesText.value.split('\n').map(f => f.trim()).filter(Boolean).join('\n')
   return {
     name: planForm.name,
-    group_id: planForm.group_id,
+    group_id: isSub2Benefit.value ? planForm.group_id : 0,
+    benefit_type: planForm.benefit_type,
+    payment_credit_type: planForm.payment_credit_type,
+    daily_temporary_credit_amount: isSub2Benefit.value ? 0 : planForm.daily_temporary_credit_amount,
     description: planForm.description,
     price: planForm.price,
     original_price: planForm.original_price || 0,
     currency: planForm.currency.trim().toUpperCase(),
     validity_days: planForm.validity_days,
-    validity_unit: planForm.validity_unit,
+    validity_unit: isSub2Benefit.value ? planForm.validity_unit : 'day',
     sort_order: planForm.sort_order,
     for_sale: planForm.for_sale,
+    daily_purchase_limit: normalizedPurchaseLimit(planForm.daily_purchase_limit),
+    total_purchase_limit: normalizedPurchaseLimit(planForm.total_purchase_limit),
     features,
   }
 }
 
+function validPurchaseLimit(value: unknown): boolean {
+  return value === '' || (typeof value === 'number' && Number.isInteger(value) && value >= 0)
+}
+
+function normalizedPurchaseLimit(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 0
+}
+
 async function handleSavePlan() {
-  if (!planForm.group_id) {
+  if (isSub2Benefit.value && !planForm.group_id) {
     appStore.showError(t('payment.admin.groupRequired'))
     return
   }
@@ -213,6 +306,14 @@ async function handleSavePlan() {
   }
   if (!planForm.validity_days || planForm.validity_days < 1) {
     appStore.showError(t('payment.admin.validityDaysRequired'))
+    return
+  }
+  if (!isSub2Benefit.value && (!Number.isFinite(planForm.daily_temporary_credit_amount) || planForm.daily_temporary_credit_amount <= 0)) {
+    appStore.showError(t('payment.admin.dailyTemporaryCreditAmountRequired'))
+    return
+  }
+  if (!validPurchaseLimit(planForm.daily_purchase_limit) || !validPurchaseLimit(planForm.total_purchase_limit)) {
+    appStore.showError(t('payment.admin.purchaseLimitInvalid'))
     return
   }
   saving.value = true

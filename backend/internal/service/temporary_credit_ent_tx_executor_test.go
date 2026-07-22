@@ -69,6 +69,7 @@ func TestEntTxTemporaryCreditExecutorRollsBackUsageAndCreditWritesWhenPermanentB
 	_, err = executor.ExecContext(ctx, "INSERT INTO usage_logs (request_id) VALUES ($1)", "usage-request-42")
 	require.NoError(t, err)
 
+	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`SELECT id, remaining_amount`).
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "remaining_amount"}).AddRow(int64(11), "0.25000000"))

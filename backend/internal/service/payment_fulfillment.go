@@ -148,27 +148,41 @@ func expectedNotificationProviderKey(registry *payment.Registry, orderPaymentTyp
 }
 
 func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, tradeNo string, paid float64, pk string) error {
-	previousStatus := o.Status
 	now := time.Now()
 	grace := now.Add(-paymentGraceMinutes * time.Minute)
-	c, err := s.entClient.PaymentOrder.Update().Where(
-		paymentorder.IDEQ(o.ID),
-		paymentorder.Or(
-			paymentorder.StatusEQ(OrderStatusPending),
-			paymentorder.StatusEQ(OrderStatusCancelled),
-			paymentorder.And(
-				paymentorder.StatusEQ(OrderStatusExpired),
-				paymentorder.UpdatedAtGTE(grace),
-			),
-		),
-	).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(now).ClearFailedAt().ClearFailedReason().Save(ctx)
+	updated, previousStatus, err := s.transitionOrderToPaidWithPurchase(ctx, o, tradeNo, paid, now, grace)
 	if err != nil {
-		return fmt.Errorf("update to PAID: %w", err)
+		if (previousStatus == OrderStatusCancelled || previousStatus == OrderStatusExpired || previousStatus == OrderStatusFailed) &&
+			orderHasProductPurchase(o) &&
+			(isPurchaseLimitExceeded(err) || errors.Is(err, errPurchaseReservationUnavailable) || errors.Is(err, errPaymentAfterExpiryGrace)) {
+			// Reload the current row for the refund claim. The entity passed into
+			// this method was intentionally loaded before the transition lock.
+			if current, getErr := s.entClient.PaymentOrder.Get(ctx, o.ID); getErr == nil {
+				o = current
+			}
+			return s.rejectLateProductPayment(ctx, o, tradeNo, paid, pk, err.Error())
+		}
+		if previousStatus == OrderStatusExpired &&
+			errors.Is(err, errPaymentAfterExpiryGrace) &&
+			!orderHasProductPurchase(o) {
+			// Late balance callbacks are acknowledged after the same expiry
+			// audit as alreadyProcessed. Returning the cutoff error would make
+			// providers retry a payment that must never be fulfilled.
+			return s.alreadyProcessed(ctx, o)
+		}
+		return err
 	}
-	if c == 0 {
+	if !updated {
+		if previousStatus == OrderStatusRefunding {
+			if current, getErr := s.entClient.PaymentOrder.Get(ctx, o.ID); getErr == nil {
+				if handled, recoverErr := s.recoverRejectedProductRefund(ctx, current); handled {
+					return recoverErr
+				}
+			}
+		}
 		return s.alreadyProcessed(ctx, o)
 	}
-	if previousStatus == OrderStatusCancelled || previousStatus == OrderStatusExpired {
+	if previousStatus == OrderStatusCancelled || previousStatus == OrderStatusExpired || previousStatus == OrderStatusFailed {
 		slog.Info("order recovered from webhook payment success",
 			"orderID", o.ID,
 			"previousStatus", previousStatus,
@@ -194,7 +208,15 @@ func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentO
 	switch cur.Status {
 	case OrderStatusCompleted, OrderStatusRefunded:
 		return nil
-	case OrderStatusFailed, OrderStatusPaid, OrderStatusRecharging:
+	case OrderStatusFailed:
+		// A provider-init failure has no captured payment and must never be
+		// fulfilled by a duplicate/late callback. Only a callback that first
+		// transitions it to PAID can enter fulfillment.
+		if cur.PaidAt == nil {
+			return nil
+		}
+		return s.executeFulfillment(ctx, o.ID)
+	case OrderStatusPaid, OrderStatusRecharging:
 		return s.executeFulfillment(ctx, o.ID)
 	case OrderStatusExpired:
 		slog.Warn("webhook payment success for expired order beyond grace period",
@@ -237,6 +259,9 @@ func (s *PaymentService) ExecuteBalanceFulfillment(ctx context.Context, oid int6
 	}
 	if o.Status != OrderStatusPaid && o.Status != OrderStatusFailed && o.Status != OrderStatusRecharging {
 		return infraerrors.BadRequest("INVALID_STATUS", "order cannot fulfill in status "+o.Status)
+	}
+	if o.Status == OrderStatusFailed && o.PaidAt == nil {
+		return infraerrors.BadRequest("INVALID_STATUS", "unpaid failed order cannot fulfill")
 	}
 	lease, err := s.acquirePaymentFulfillmentLease(ctx, o)
 	if err != nil {
@@ -477,6 +502,9 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 	}
 	if o.Status != OrderStatusPaid && o.Status != OrderStatusFailed && o.Status != OrderStatusRecharging {
 		return infraerrors.BadRequest("INVALID_STATUS", "order cannot fulfill in status "+o.Status)
+	}
+	if o.Status == OrderStatusFailed && o.PaidAt == nil {
+		return infraerrors.BadRequest("INVALID_STATUS", "unpaid failed order cannot fulfill")
 	}
 	if o.SubscriptionGroupID == nil || o.SubscriptionDays == nil {
 		return infraerrors.BadRequest("INVALID_STATUS", "missing subscription info")

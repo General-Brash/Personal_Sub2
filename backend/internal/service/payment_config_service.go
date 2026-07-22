@@ -157,33 +157,43 @@ type UpdateProviderInstanceRequest struct {
 	AllowUserRefund *bool             `json:"allow_user_refund"`
 }
 type CreatePlanRequest struct {
-	GroupID       int64    `json:"group_id"`
-	Name          string   `json:"name"`
-	Description   string   `json:"description"`
-	Price         float64  `json:"price"`
-	OriginalPrice *float64 `json:"original_price"`
-	Currency      string   `json:"currency"`
-	ValidityDays  int      `json:"validity_days"`
-	ValidityUnit  string   `json:"validity_unit"`
-	Features      string   `json:"features"`
-	ProductName   string   `json:"product_name"`
-	ForSale       bool     `json:"for_sale"`
-	SortOrder     int      `json:"sort_order"`
+	GroupID                    int64    `json:"group_id"`
+	Name                       string   `json:"name"`
+	Description                string   `json:"description"`
+	Price                      float64  `json:"price"`
+	OriginalPrice              *float64 `json:"original_price"`
+	Currency                   string   `json:"currency"`
+	ValidityDays               int      `json:"validity_days"`
+	ValidityUnit               string   `json:"validity_unit"`
+	Features                   string   `json:"features"`
+	ProductName                string   `json:"product_name"`
+	ForSale                    bool     `json:"for_sale"`
+	SortOrder                  int      `json:"sort_order"`
+	DailyPurchaseLimit         int      `json:"daily_purchase_limit"`
+	TotalPurchaseLimit         int      `json:"total_purchase_limit"`
+	BenefitType                string   `json:"benefit_type"`
+	PaymentCreditType          string   `json:"payment_credit_type"`
+	DailyTemporaryCreditAmount float64  `json:"daily_temporary_credit_amount"`
 }
 
 type UpdatePlanRequest struct {
-	GroupID       *int64   `json:"group_id"`
-	Name          *string  `json:"name"`
-	Description   *string  `json:"description"`
-	Price         *float64 `json:"price"`
-	OriginalPrice *float64 `json:"original_price"`
-	Currency      *string  `json:"currency"`
-	ValidityDays  *int     `json:"validity_days"`
-	ValidityUnit  *string  `json:"validity_unit"`
-	Features      *string  `json:"features"`
-	ProductName   *string  `json:"product_name"`
-	ForSale       *bool    `json:"for_sale"`
-	SortOrder     *int     `json:"sort_order"`
+	GroupID                    *int64   `json:"group_id"`
+	Name                       *string  `json:"name"`
+	Description                *string  `json:"description"`
+	Price                      *float64 `json:"price"`
+	OriginalPrice              *float64 `json:"original_price"`
+	Currency                   *string  `json:"currency"`
+	ValidityDays               *int     `json:"validity_days"`
+	ValidityUnit               *string  `json:"validity_unit"`
+	Features                   *string  `json:"features"`
+	ProductName                *string  `json:"product_name"`
+	ForSale                    *bool    `json:"for_sale"`
+	SortOrder                  *int     `json:"sort_order"`
+	DailyPurchaseLimit         *int     `json:"daily_purchase_limit"`
+	TotalPurchaseLimit         *int     `json:"total_purchase_limit"`
+	BenefitType                *string  `json:"benefit_type"`
+	PaymentCreditType          *string  `json:"payment_credit_type"`
+	DailyTemporaryCreditAmount *float64 `json:"daily_temporary_credit_amount"`
 }
 
 // PaymentConfigService manages payment configuration and CRUD for

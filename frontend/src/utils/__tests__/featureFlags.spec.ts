@@ -12,6 +12,7 @@ import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
 const pageVisibilityFlags = [
   FeatureFlags.userChannelStatus,
+  FeatureFlags.mall,
   FeatureFlags.userSubscriptions,
   FeatureFlags.adminSubscriptions,
   FeatureFlags.adminPromoCodes,
@@ -26,6 +27,7 @@ describe('page visibility feature flags', () => {
   it('uses the exact backend keys and opt-out semantics', () => {
     expect(pageVisibilityFlags.map(({ key, mode }) => ({ key, mode }))).toEqual([
       { key: 'user_channel_status_enabled', mode: 'opt-out' },
+      { key: 'mall_enabled', mode: 'opt-out' },
       { key: 'user_subscriptions_enabled', mode: 'opt-out' },
       { key: 'admin_subscriptions_enabled', mode: 'opt-out' },
       { key: 'admin_promo_codes_enabled', mode: 'opt-out' },

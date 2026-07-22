@@ -4,8 +4,10 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/google/uuid"
@@ -60,6 +62,116 @@ func TestTemporaryCreditRepositoryCreateGrantTxRollsBackWithCallerTransaction(t 
 	var count int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM temporary_credit_grants WHERE id = $1", grant.ID).Scan(&count))
 	require.Zero(t, count)
+}
+
+func TestTemporaryCreditRepositoryNonAdvanceGrantsDoNotOffsetExistingDebt(t *testing.T) {
+	ctx := context.Background()
+	repo := NewTemporaryCreditRepository(integrationDB)
+	temporaryCreditService := service.NewTemporaryCreditService(repo)
+	user := newTemporaryCreditTestUser(t)
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(ctx, "DELETE FROM bank_ledger WHERE user_id = $1", user.ID)
+		_, _ = integrationDB.ExecContext(ctx, "DELETE FROM bank_loans WHERE user_id = $1", user.ID)
+	})
+
+	advanceGrant, err := temporaryCreditService.CreateGrant(ctx, service.CreateTemporaryCreditGrantInput{
+		UserID: user.ID,
+		Source: service.TemporaryCreditSourceBankAdvance,
+		Amount: 10,
+	})
+	require.NoError(t, err)
+	settlementDueAt := time.Now().UTC().Truncate(time.Second).Add(72 * time.Hour)
+	var loanID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+INSERT INTO bank_loans
+    (user_id, grant_id, principal, debt_remaining, status, grant_expires_at, settlement_due_at)
+VALUES ($1, $2, 10, 10, 'active', $3, $4)
+RETURNING id`, user.ID, advanceGrant.ID, advanceGrant.ExpiresAt(), settlementDueAt).Scan(&loanID))
+	_, err = integrationDB.ExecContext(ctx, `
+UPDATE users
+SET temporary_credit_debt = 10,
+    temporary_credit_debt_due_at = $2
+WHERE id = $1`, user.ID, settlementDueAt)
+	require.NoError(t, err)
+
+	var checkinID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+INSERT INTO daily_checkins
+    (user_id, checkin_date, streak_day, reward_day, reward_amount)
+VALUES ($1, CURRENT_DATE, 1, 1, 2)
+RETURNING id`, user.ID).Scan(&checkinID))
+	adminID := user.ID
+	tests := []struct {
+		name  string
+		input service.CreateTemporaryCreditGrantInput
+	}{
+		{
+			name: "bank exchange",
+			input: service.CreateTemporaryCreditGrantInput{
+				UserID: user.ID,
+				Source: service.TemporaryCreditSourceBankExchange,
+				Amount: 2,
+			},
+		},
+		{
+			name: "check-in",
+			input: service.CreateTemporaryCreditGrantInput{
+				UserID:    user.ID,
+				Source:    service.TemporaryCreditSourceCheckin,
+				CheckinID: &checkinID,
+				Amount:    2,
+			},
+		},
+		{
+			name: "administrator grant",
+			input: service.CreateTemporaryCreditGrantInput{
+				UserID:    user.ID,
+				Source:    service.TemporaryCreditSourceAdminGrant,
+				Amount:    2,
+				Notes:     "manual credit",
+				GrantedBy: &adminID,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			grant, err := temporaryCreditService.CreateGrant(ctx, tt.input)
+			require.NoError(t, err)
+			require.Equal(t, float64(2), grant.RemainingAmount)
+
+			var persistedRemaining string
+			require.NoError(t, integrationDB.QueryRowContext(ctx,
+				"SELECT remaining_amount::text FROM temporary_credit_grants WHERE id = $1",
+				grant.ID,
+			).Scan(&persistedRemaining))
+			require.Equal(t, "2.00000000", persistedRemaining)
+		})
+	}
+
+	var debt, loanDebt string
+	var persistedDueAt time.Time
+	var loanStatus string
+	var settledAt sql.NullTime
+	var debtOffsetCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+SELECT temporary_credit_debt::text, temporary_credit_debt_due_at
+FROM users
+WHERE id = $1`, user.ID).Scan(&debt, &persistedDueAt))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+SELECT debt_remaining::text, status, settled_at
+FROM bank_loans
+WHERE id = $1`, loanID).Scan(&loanDebt, &loanStatus, &settledAt))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+SELECT COUNT(*)
+FROM bank_ledger
+WHERE user_id = $1 AND operation = 'debt_offset'`, user.ID).Scan(&debtOffsetCount))
+	require.Equal(t, "10.00000000", debt)
+	require.True(t, settlementDueAt.Equal(persistedDueAt))
+	require.Equal(t, "10.00000000", loanDebt)
+	require.Equal(t, "active", loanStatus)
+	require.False(t, settledAt.Valid)
+	require.Zero(t, debtOffsetCount)
 }
 
 func TestTemporaryCreditRepositoryConsumeFEFORollsBackGrantAndConsumptionWithCallerTransaction(t *testing.T) {

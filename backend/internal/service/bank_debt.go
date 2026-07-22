@@ -39,24 +39,20 @@ func ApplyTemporaryCreditDebtOffsetTx(
 	if err != nil || debt <= ledgerAmountEpsilon {
 		return grantAmount, 0, nil
 	}
-	if dueAt.Valid {
-		var databaseNow time.Time
-		if err := tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&databaseNow); err != nil {
-			return 0, 0, fmt.Errorf("sample temporary credit debt offset clock: %w", err)
-		}
-		if !dueAt.Time.After(databaseNow) {
-			policy, err := loadBankPolicy(ctx, tx)
-			if err != nil {
-				return 0, 0, err
-			}
-			settled, err := settleBankDebtLocked(ctx, tx, userID, balance, debt, dueAt, policy, databaseNow)
-			if err != nil {
-				return 0, 0, err
-			}
-			if settled {
-				return grantAmount, 0, nil
-			}
-		}
+	var databaseNow time.Time
+	if err := tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&databaseNow); err != nil {
+		return 0, 0, fmt.Errorf("sample temporary credit debt offset clock: %w", err)
+	}
+	policy, err := loadBankPolicy(ctx, tx)
+	if err != nil {
+		return 0, 0, err
+	}
+	debt, _, forcedSettled, err := reconcileBankDebtLocked(ctx, tx, userID, balance, debt, dueAt, policy, databaseNow)
+	if err != nil {
+		return 0, 0, err
+	}
+	if forcedSettled || debt <= ledgerAmountEpsilon {
+		return grantAmount, 0, nil
 	}
 
 	offsetAmount = math.Min(debt, grantAmount)

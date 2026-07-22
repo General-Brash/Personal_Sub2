@@ -18,6 +18,7 @@ const {
   getBankSettings,
   getBankStatus,
   requestBankAdvance,
+  repayBankDebt,
   refreshUser,
   showError,
   showSuccess,
@@ -32,6 +33,7 @@ const {
   getBankSettings: vi.fn(),
   getBankStatus: vi.fn(),
   requestBankAdvance: vi.fn(),
+  repayBankDebt: vi.fn(),
   refreshUser: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
@@ -43,6 +45,7 @@ vi.mock('@/api/bank', () => ({
   getBankSettings,
   getBankStatus,
   requestBankAdvance,
+  repayBankDebt,
   updateBankSettings,
 }))
 
@@ -74,6 +77,9 @@ const policy: BankPolicy = {
   debt_grace_days: 3,
   debt_conversion_ratio: '1.25000000',
   exchange_rate: '2.00000000',
+  unused_advance_debt_reduction_ratio: '0.75000000',
+  early_repay_temporary_ratio: '1.00000000',
+  early_repay_permanent_ratio: '2.00000000',
 }
 
 const baseStatus = (overrides: Partial<BankStatus> = {}): BankStatus => ({
@@ -121,6 +127,10 @@ const showExchangeMode = async (wrapper: VueWrapper) => {
   await wrapper.get('[data-test="bank-mode-exchange"]').trigger('click')
 }
 
+const showRepayMode = async (wrapper: VueWrapper) => {
+  await wrapper.get('[data-test="bank-mode-repay"]').trigger('click')
+}
+
 describe('BankView', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -132,6 +142,7 @@ describe('BankView', () => {
     getBankSettings.mockReset()
     getBankStatus.mockReset()
     requestBankAdvance.mockReset()
+    repayBankDebt.mockReset()
     refreshUser.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
@@ -139,6 +150,7 @@ describe('BankView', () => {
     getBankStatus.mockResolvedValue(baseStatus())
     getBankSettings.mockResolvedValue(policy)
     requestBankAdvance.mockResolvedValue({ amount: '5.00000000' })
+    repayBankDebt.mockResolvedValue({ source: 'temporary', credit_spent: '1.00000000', debt_reduced: '1.00000000' })
     refreshUser.mockResolvedValue(undefined)
     exchangePermanentForTemporary.mockResolvedValue({ permanent_spent: '1.00000000' })
     updateBankSettings.mockResolvedValue(policy)
@@ -164,24 +176,27 @@ describe('BankView', () => {
     const wrapper = await mountView()
     const advanceTab = wrapper.get('[data-test="bank-mode-advance"]')
     const exchangeTab = wrapper.get('[data-test="bank-mode-exchange"]')
+    const repayTab = wrapper.get('[data-test="bank-mode-repay"]')
     const advancePanel = wrapper.get(`#${advanceTab.attributes('aria-controls')}`)
     const exchangePanel = wrapper.get(`#${exchangeTab.attributes('aria-controls')}`)
+    const repayPanel = wrapper.get(`#${repayTab.attributes('aria-controls')}`)
 
     expect(wrapper.findAll('[data-test="bank-operation-card"]')).toHaveLength(1)
     expect(advanceTab.attributes('aria-selected')).toBe('true')
     expect(exchangeTab.attributes('aria-selected')).toBe('false')
-    expect(wrapper.get('[data-test="bank-mode-indicator"]').classes()).toContain('translate-x-0')
+    expect(wrapper.get('[data-test="bank-mode-indicator"]').attributes('style')).toContain('translateX(0)')
     expect(advancePanel.attributes('aria-hidden')).toBe('false')
     expect(exchangePanel.attributes('aria-hidden')).toBe('true')
     expect(advancePanel.attributes('hidden')).toBeUndefined()
     expect(wrapper.get('[data-test="advance-wallet-balance"]').text()).toBe('3.50')
     expect(exchangePanel.attributes('hidden')).toBeDefined()
+    expect(repayPanel.attributes('hidden')).toBeDefined()
 
     await showExchangeMode(wrapper)
 
     expect(advanceTab.attributes('aria-selected')).toBe('false')
     expect(exchangeTab.attributes('aria-selected')).toBe('true')
-    expect(wrapper.get('[data-test="bank-mode-indicator"]').classes()).toContain('translate-x-full')
+    expect(wrapper.get('[data-test="bank-mode-indicator"]').attributes('style')).toContain('translateX(100%)')
     expect(advancePanel.attributes('aria-hidden')).toBe('true')
     expect(exchangePanel.attributes('aria-hidden')).toBe('false')
     expect(advancePanel.attributes('hidden')).toBeDefined()
@@ -195,6 +210,7 @@ describe('BankView', () => {
     const wrapper = await mountView(document.body)
     const advanceTab = wrapper.get('[data-test="bank-mode-advance"]')
     const exchangeTab = wrapper.get('[data-test="bank-mode-exchange"]')
+    const repayTab = wrapper.get('[data-test="bank-mode-repay"]')
 
     expect(advanceTab.attributes('tabindex')).toBe('0')
     expect(exchangeTab.attributes('tabindex')).toBe('-1')
@@ -213,20 +229,20 @@ describe('BankView', () => {
 
     await advanceTab.trigger('keydown', { key: 'ArrowLeft' })
     await flushPromises()
-    expect(exchangeTab.attributes('aria-selected')).toBe('true')
-    expect(document.activeElement).toBe(exchangeTab.element)
+    expect(repayTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(repayTab.element)
 
-    await exchangeTab.trigger('keydown', { key: 'ArrowRight' })
+    await repayTab.trigger('keydown', { key: 'ArrowRight' })
     await flushPromises()
     expect(advanceTab.attributes('aria-selected')).toBe('true')
     expect(document.activeElement).toBe(advanceTab.element)
 
     await advanceTab.trigger('keydown', { key: 'End' })
     await flushPromises()
-    expect(exchangeTab.attributes('aria-selected')).toBe('true')
-    expect(document.activeElement).toBe(exchangeTab.element)
+    expect(repayTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(repayTab.element)
 
-    await exchangeTab.trigger('keydown', { key: 'Home' })
+    await repayTab.trigger('keydown', { key: 'Home' })
     await flushPromises()
     expect(advanceTab.attributes('aria-selected')).toBe('true')
     expect(advanceTab.attributes('tabindex')).toBe('0')
@@ -341,6 +357,36 @@ describe('BankView', () => {
     expect(refreshUser).toHaveBeenCalledTimes(2)
   })
 
+  it('previews and submits early repayment with either configured source ratio', async () => {
+    getBankStatus.mockResolvedValue(baseStatus({
+      temporary_debt: '5.00000000',
+      temporary_debt_due_at: '2026-07-22T16:00:00Z',
+    }))
+    const wrapper = await mountView()
+    await showRepayMode(wrapper)
+
+    await wrapper.get('[data-test="repay-input"]').setValue('1.25000000')
+    expect(wrapper.get('[data-test="repay-preview-amount"]').text()).toBe('1.25')
+    expect(wrapper.get('[data-test="repay-debt-remaining"]').text()).toContain('3.75')
+    await wrapper.get('[data-test="repay-submit"]').trigger('submit')
+    await flushPromises()
+    expect(repayBankDebt).toHaveBeenCalledWith(
+      'temporary',
+      '1.25000000',
+      expect.stringMatching(/^bank-repay-/),
+    )
+
+    getBankStatus.mockResolvedValue(baseStatus({ temporary_debt: '5.00000000' }))
+    await wrapper.get('[data-test="repay-source-permanent"]').trigger('click')
+    await wrapper.get('[data-test="repay-input"]').setValue('1.00000000')
+    expect(wrapper.get('[data-test="repay-preview-amount"]').text()).toBe('2.00')
+    expect(wrapper.get('[data-test="repay-debt-remaining"]').text()).toContain('3.00')
+
+    await wrapper.get('[data-test="repay-input"]').setValue('9.00000000')
+    expect(wrapper.get('[data-test="repay-preview-amount"]').text()).toBe('5.00')
+    expect(wrapper.get('[data-test="repay-debt-remaining"]').text()).toContain('0.00')
+  })
+
   it.each([
     ['23:54:59', '2026-07-19T15:54:59.000Z', false],
     ['23:55:00', '2026-07-19T15:55:00.000Z', true],
@@ -411,16 +457,53 @@ describe('BankView', () => {
     expect(wrapper.get('[data-test="exchange-submit"]').attributes('disabled')).toBeDefined()
   })
 
-  it('disables both bank mutations when permanent balance is negative', async () => {
-    getBankStatus.mockResolvedValueOnce(baseStatus({ permanent_balance: '-0.00000001' }))
+  it('allows temporary-credit repayment while permanent balance is negative', async () => {
+    getBankStatus.mockResolvedValueOnce(baseStatus({
+      permanent_balance: '-1.00000000',
+      temporary_credit_available: '3.50000000',
+      temporary_debt: '5.00000000',
+    }))
 
     const wrapper = await mountView()
+    await showRepayMode(wrapper)
+    const input = wrapper.get('[data-test="repay-input"]')
 
-    expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('0.00')
-    expect(wrapper.get('[data-test="advance-input"]').attributes('disabled')).toBeDefined()
-    await showExchangeMode(wrapper)
-    expect(wrapper.get('[data-test="exchange-input"]').attributes('disabled')).toBeDefined()
+    expect(input.attributes('disabled')).toBeUndefined()
+    await input.setValue('1.00000000')
+    expect(wrapper.get('[data-test="repay-submit"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-test="repay-flow"]').trigger('submit')
+    await flushPromises()
+
+    expect(repayBankDebt).toHaveBeenCalledWith(
+      'temporary',
+      '1.00000000',
+      expect.stringMatching(/^bank-repay-/),
+    )
   })
+
+  it.each(['-0.00000001', 'not-a-number'])(
+    'blocks permanent-backed mutations when permanent balance is unusable: %s',
+    async (permanentBalance) => {
+      getBankStatus.mockResolvedValueOnce(baseStatus({
+        permanent_balance: permanentBalance,
+        temporary_debt: '5.00000000',
+      }))
+
+      const wrapper = await mountView()
+
+      expect(wrapper.get('[data-test="permanent-balance"]').text()).toBe('0.00')
+      expect(wrapper.get('[data-test="advance-input"]').attributes('disabled')).toBeDefined()
+      await showExchangeMode(wrapper)
+      expect(wrapper.get('[data-test="exchange-input"]').attributes('disabled')).toBeDefined()
+      await showRepayMode(wrapper)
+      expect(wrapper.get('[data-test="repay-input"]').attributes('disabled')).toBeUndefined()
+      await wrapper.get('[data-test="repay-source-permanent"]').trigger('click')
+      expect(wrapper.get('[data-test="repay-input"]').attributes('disabled')).toBeDefined()
+      expect(wrapper.get('[data-test="repay-submit"]').attributes('disabled')).toBeDefined()
+      await wrapper.get('[data-test="repay-flow"]').trigger('submit')
+      expect(repayBankDebt).not.toHaveBeenCalled()
+    },
+  )
 
   it('allows admins to load, validate, and save the bank policy', async () => {
     authState.isAdmin = true
@@ -430,6 +513,9 @@ describe('BankView', () => {
       debt_grace_days: 5,
       debt_conversion_ratio: '1.50000000',
       exchange_rate: '3.00000000',
+      unused_advance_debt_reduction_ratio: '0.75000000',
+      early_repay_temporary_ratio: '1.00000000',
+      early_repay_permanent_ratio: '2.00000000',
     }
     updateBankSettings.mockResolvedValueOnce(updatedPolicy)
     const wrapper = await mountView()

@@ -23,6 +23,10 @@ export default {
             label: 'Channel Status',
             hint: 'Controls the user Channel Status page. The entry also stays hidden when Channel Monitor is disabled.',
           },
+          mall: {
+            label: 'Mall',
+            hint: 'Controls the Mall page for regular users, including direct access. The Bank remains available.',
+          },
           userSubscriptions: {
             label: 'My Subscriptions',
             hint: 'Controls the My Subscriptions page in the user sidebar.',

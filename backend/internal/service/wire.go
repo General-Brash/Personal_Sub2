@@ -19,6 +19,12 @@ func ProvideTemporaryCreditService(repo TemporaryCreditRepository, availableCred
 	return NewTemporaryCreditServiceWithAvailableCreditInvalidator(repo, availableCreditInvalidator)
 }
 
+func ProvideMallService(db *sql.DB, temporaryCredit *TemporaryCreditService, subscription *SubscriptionService, authCacheInvalidator APIKeyAuthCacheInvalidator) *MallService {
+	svc := NewMallService(db, temporaryCredit, subscription)
+	svc.SetAuthCacheInvalidator(authCacheInvalidator)
+	return svc
+}
+
 // ProvideBankService wires and starts the bank debt settlement worker. The
 // billing cache is also the post-commit invalidation boundary for bank balance
 // and available-credit changes.
@@ -796,6 +802,7 @@ var ProviderSet = wire.NewSet(
 	ProvideAffiliateRebateWorker,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
+	ProvideMallService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
 	ProvideChannelMonitorService,

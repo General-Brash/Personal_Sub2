@@ -32,14 +32,19 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/currencyproduct"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/malldailycreditsubscription"
+	"github.com/Wei-Shaw/sub2api/ent/mallpurchase"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -102,6 +107,8 @@ type Client struct {
 	ChannelMonitorHistory *ChannelMonitorHistoryClient
 	// ChannelMonitorRequestTemplate is the client for interacting with the ChannelMonitorRequestTemplate builders.
 	ChannelMonitorRequestTemplate *ChannelMonitorRequestTemplateClient
+	// CurrencyProduct is the client for interacting with the CurrencyProduct builders.
+	CurrencyProduct *CurrencyProductClient
 	// DailyCheckin is the client for interacting with the DailyCheckin builders.
 	DailyCheckin *DailyCheckinClient
 	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
@@ -112,12 +119,20 @@ type Client struct {
 	IdempotencyRecord *IdempotencyRecordClient
 	// IdentityAdoptionDecision is the client for interacting with the IdentityAdoptionDecision builders.
 	IdentityAdoptionDecision *IdentityAdoptionDecisionClient
+	// MallDailyCreditSubscription is the client for interacting with the MallDailyCreditSubscription builders.
+	MallDailyCreditSubscription *MallDailyCreditSubscriptionClient
+	// MallPurchase is the client for interacting with the MallPurchase builders.
+	MallPurchase *MallPurchaseClient
 	// PaymentAuditLog is the client for interacting with the PaymentAuditLog builders.
 	PaymentAuditLog *PaymentAuditLogClient
 	// PaymentOrder is the client for interacting with the PaymentOrder builders.
 	PaymentOrder *PaymentOrderClient
 	// PaymentProviderInstance is the client for interacting with the PaymentProviderInstance builders.
 	PaymentProviderInstance *PaymentProviderInstanceClient
+	// PaymentPurchaseCounter is the client for interacting with the PaymentPurchaseCounter builders.
+	PaymentPurchaseCounter *PaymentPurchaseCounterClient
+	// PaymentPurchaseReservation is the client for interacting with the PaymentPurchaseReservation builders.
+	PaymentPurchaseReservation *PaymentPurchaseReservationClient
 	// PendingAuthSession is the client for interacting with the PendingAuthSession builders.
 	PendingAuthSession *PendingAuthSessionClient
 	// PromoCode is the client for interacting with the PromoCode builders.
@@ -184,14 +199,19 @@ func (c *Client) init() {
 	c.ChannelMonitorDailyRollup = NewChannelMonitorDailyRollupClient(c.config)
 	c.ChannelMonitorHistory = NewChannelMonitorHistoryClient(c.config)
 	c.ChannelMonitorRequestTemplate = NewChannelMonitorRequestTemplateClient(c.config)
+	c.CurrencyProduct = NewCurrencyProductClient(c.config)
 	c.DailyCheckin = NewDailyCheckinClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
 	c.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(c.config)
+	c.MallDailyCreditSubscription = NewMallDailyCreditSubscriptionClient(c.config)
+	c.MallPurchase = NewMallPurchaseClient(c.config)
 	c.PaymentAuditLog = NewPaymentAuditLogClient(c.config)
 	c.PaymentOrder = NewPaymentOrderClient(c.config)
 	c.PaymentProviderInstance = NewPaymentProviderInstanceClient(c.config)
+	c.PaymentPurchaseCounter = NewPaymentPurchaseCounterClient(c.config)
+	c.PaymentPurchaseReservation = NewPaymentPurchaseReservationClient(c.config)
 	c.PendingAuthSession = NewPendingAuthSessionClient(c.config)
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
@@ -320,14 +340,19 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ChannelMonitorDailyRollup:      NewChannelMonitorDailyRollupClient(cfg),
 		ChannelMonitorHistory:          NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate:  NewChannelMonitorRequestTemplateClient(cfg),
+		CurrencyProduct:                NewCurrencyProductClient(cfg),
 		DailyCheckin:                   NewDailyCheckinClient(cfg),
 		ErrorPassthroughRule:           NewErrorPassthroughRuleClient(cfg),
 		Group:                          NewGroupClient(cfg),
 		IdempotencyRecord:              NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:       NewIdentityAdoptionDecisionClient(cfg),
+		MallDailyCreditSubscription:    NewMallDailyCreditSubscriptionClient(cfg),
+		MallPurchase:                   NewMallPurchaseClient(cfg),
 		PaymentAuditLog:                NewPaymentAuditLogClient(cfg),
 		PaymentOrder:                   NewPaymentOrderClient(cfg),
 		PaymentProviderInstance:        NewPaymentProviderInstanceClient(cfg),
+		PaymentPurchaseCounter:         NewPaymentPurchaseCounterClient(cfg),
+		PaymentPurchaseReservation:     NewPaymentPurchaseReservationClient(cfg),
 		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
 		PromoCode:                      NewPromoCodeClient(cfg),
 		PromoCodeUsage:                 NewPromoCodeUsageClient(cfg),
@@ -383,14 +408,19 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ChannelMonitorDailyRollup:      NewChannelMonitorDailyRollupClient(cfg),
 		ChannelMonitorHistory:          NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate:  NewChannelMonitorRequestTemplateClient(cfg),
+		CurrencyProduct:                NewCurrencyProductClient(cfg),
 		DailyCheckin:                   NewDailyCheckinClient(cfg),
 		ErrorPassthroughRule:           NewErrorPassthroughRuleClient(cfg),
 		Group:                          NewGroupClient(cfg),
 		IdempotencyRecord:              NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:       NewIdentityAdoptionDecisionClient(cfg),
+		MallDailyCreditSubscription:    NewMallDailyCreditSubscriptionClient(cfg),
+		MallPurchase:                   NewMallPurchaseClient(cfg),
 		PaymentAuditLog:                NewPaymentAuditLogClient(cfg),
 		PaymentOrder:                   NewPaymentOrderClient(cfg),
 		PaymentProviderInstance:        NewPaymentProviderInstanceClient(cfg),
+		PaymentPurchaseCounter:         NewPaymentPurchaseCounterClient(cfg),
+		PaymentPurchaseReservation:     NewPaymentPurchaseReservationClient(cfg),
 		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
 		PromoCode:                      NewPromoCodeClient(cfg),
 		PromoCodeUsage:                 NewPromoCodeUsageClient(cfg),
@@ -444,14 +474,16 @@ func (c *Client) Use(hooks ...Hook) {
 		c.BatchImageCreditHold, c.BatchImageCreditHoldAllocation, c.BatchImageEvent,
 		c.BatchImageItem, c.BatchImageJob, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
-		c.ChannelMonitorRequestTemplate, c.DailyCheckin, c.ErrorPassthroughRule,
-		c.Group, c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
-		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.TemporaryCreditConsumption,
-		c.TemporaryCreditGrant, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.ChannelMonitorRequestTemplate, c.CurrencyProduct, c.DailyCheckin,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
+		c.IdentityAdoptionDecision, c.MallDailyCreditSubscription, c.MallPurchase,
+		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
+		c.PaymentPurchaseCounter, c.PaymentPurchaseReservation, c.PendingAuthSession,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.TemporaryCreditConsumption, c.TemporaryCreditGrant, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -466,14 +498,16 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.BatchImageCreditHold, c.BatchImageCreditHoldAllocation, c.BatchImageEvent,
 		c.BatchImageItem, c.BatchImageJob, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
-		c.ChannelMonitorRequestTemplate, c.DailyCheckin, c.ErrorPassthroughRule,
-		c.Group, c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
-		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.TemporaryCreditConsumption,
-		c.TemporaryCreditGrant, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.ChannelMonitorRequestTemplate, c.CurrencyProduct, c.DailyCheckin,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
+		c.IdentityAdoptionDecision, c.MallDailyCreditSubscription, c.MallPurchase,
+		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
+		c.PaymentPurchaseCounter, c.PaymentPurchaseReservation, c.PendingAuthSession,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.TemporaryCreditConsumption, c.TemporaryCreditGrant, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -516,6 +550,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ChannelMonitorHistory.mutate(ctx, m)
 	case *ChannelMonitorRequestTemplateMutation:
 		return c.ChannelMonitorRequestTemplate.mutate(ctx, m)
+	case *CurrencyProductMutation:
+		return c.CurrencyProduct.mutate(ctx, m)
 	case *DailyCheckinMutation:
 		return c.DailyCheckin.mutate(ctx, m)
 	case *ErrorPassthroughRuleMutation:
@@ -526,12 +562,20 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdempotencyRecord.mutate(ctx, m)
 	case *IdentityAdoptionDecisionMutation:
 		return c.IdentityAdoptionDecision.mutate(ctx, m)
+	case *MallDailyCreditSubscriptionMutation:
+		return c.MallDailyCreditSubscription.mutate(ctx, m)
+	case *MallPurchaseMutation:
+		return c.MallPurchase.mutate(ctx, m)
 	case *PaymentAuditLogMutation:
 		return c.PaymentAuditLog.mutate(ctx, m)
 	case *PaymentOrderMutation:
 		return c.PaymentOrder.mutate(ctx, m)
 	case *PaymentProviderInstanceMutation:
 		return c.PaymentProviderInstance.mutate(ctx, m)
+	case *PaymentPurchaseCounterMutation:
+		return c.PaymentPurchaseCounter.mutate(ctx, m)
+	case *PaymentPurchaseReservationMutation:
+		return c.PaymentPurchaseReservation.mutate(ctx, m)
 	case *PendingAuthSessionMutation:
 		return c.PendingAuthSession.mutate(ctx, m)
 	case *PromoCodeMutation:
@@ -3287,6 +3331,139 @@ func (c *ChannelMonitorRequestTemplateClient) mutate(ctx context.Context, m *Cha
 	}
 }
 
+// CurrencyProductClient is a client for the CurrencyProduct schema.
+type CurrencyProductClient struct {
+	config
+}
+
+// NewCurrencyProductClient returns a client for the CurrencyProduct from the given config.
+func NewCurrencyProductClient(c config) *CurrencyProductClient {
+	return &CurrencyProductClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `currencyproduct.Hooks(f(g(h())))`.
+func (c *CurrencyProductClient) Use(hooks ...Hook) {
+	c.hooks.CurrencyProduct = append(c.hooks.CurrencyProduct, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `currencyproduct.Intercept(f(g(h())))`.
+func (c *CurrencyProductClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CurrencyProduct = append(c.inters.CurrencyProduct, interceptors...)
+}
+
+// Create returns a builder for creating a CurrencyProduct entity.
+func (c *CurrencyProductClient) Create() *CurrencyProductCreate {
+	mutation := newCurrencyProductMutation(c.config, OpCreate)
+	return &CurrencyProductCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CurrencyProduct entities.
+func (c *CurrencyProductClient) CreateBulk(builders ...*CurrencyProductCreate) *CurrencyProductCreateBulk {
+	return &CurrencyProductCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CurrencyProductClient) MapCreateBulk(slice any, setFunc func(*CurrencyProductCreate, int)) *CurrencyProductCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CurrencyProductCreateBulk{err: fmt.Errorf("calling to CurrencyProductClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CurrencyProductCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CurrencyProductCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CurrencyProduct.
+func (c *CurrencyProductClient) Update() *CurrencyProductUpdate {
+	mutation := newCurrencyProductMutation(c.config, OpUpdate)
+	return &CurrencyProductUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CurrencyProductClient) UpdateOne(_m *CurrencyProduct) *CurrencyProductUpdateOne {
+	mutation := newCurrencyProductMutation(c.config, OpUpdateOne, withCurrencyProduct(_m))
+	return &CurrencyProductUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CurrencyProductClient) UpdateOneID(id int64) *CurrencyProductUpdateOne {
+	mutation := newCurrencyProductMutation(c.config, OpUpdateOne, withCurrencyProductID(id))
+	return &CurrencyProductUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CurrencyProduct.
+func (c *CurrencyProductClient) Delete() *CurrencyProductDelete {
+	mutation := newCurrencyProductMutation(c.config, OpDelete)
+	return &CurrencyProductDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CurrencyProductClient) DeleteOne(_m *CurrencyProduct) *CurrencyProductDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CurrencyProductClient) DeleteOneID(id int64) *CurrencyProductDeleteOne {
+	builder := c.Delete().Where(currencyproduct.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CurrencyProductDeleteOne{builder}
+}
+
+// Query returns a query builder for CurrencyProduct.
+func (c *CurrencyProductClient) Query() *CurrencyProductQuery {
+	return &CurrencyProductQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCurrencyProduct},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CurrencyProduct entity by its id.
+func (c *CurrencyProductClient) Get(ctx context.Context, id int64) (*CurrencyProduct, error) {
+	return c.Query().Where(currencyproduct.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CurrencyProductClient) GetX(ctx context.Context, id int64) *CurrencyProduct {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CurrencyProductClient) Hooks() []Hook {
+	return c.hooks.CurrencyProduct
+}
+
+// Interceptors returns the client interceptors.
+func (c *CurrencyProductClient) Interceptors() []Interceptor {
+	return c.inters.CurrencyProduct
+}
+
+func (c *CurrencyProductClient) mutate(ctx context.Context, m *CurrencyProductMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CurrencyProductCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CurrencyProductUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CurrencyProductUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CurrencyProductDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CurrencyProduct mutation op: %q", m.Op())
+	}
+}
+
 // DailyCheckinClient is a client for the DailyCheckin schema.
 type DailyCheckinClient struct {
 	config
@@ -4162,6 +4339,272 @@ func (c *IdentityAdoptionDecisionClient) mutate(ctx context.Context, m *Identity
 	}
 }
 
+// MallDailyCreditSubscriptionClient is a client for the MallDailyCreditSubscription schema.
+type MallDailyCreditSubscriptionClient struct {
+	config
+}
+
+// NewMallDailyCreditSubscriptionClient returns a client for the MallDailyCreditSubscription from the given config.
+func NewMallDailyCreditSubscriptionClient(c config) *MallDailyCreditSubscriptionClient {
+	return &MallDailyCreditSubscriptionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `malldailycreditsubscription.Hooks(f(g(h())))`.
+func (c *MallDailyCreditSubscriptionClient) Use(hooks ...Hook) {
+	c.hooks.MallDailyCreditSubscription = append(c.hooks.MallDailyCreditSubscription, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `malldailycreditsubscription.Intercept(f(g(h())))`.
+func (c *MallDailyCreditSubscriptionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MallDailyCreditSubscription = append(c.inters.MallDailyCreditSubscription, interceptors...)
+}
+
+// Create returns a builder for creating a MallDailyCreditSubscription entity.
+func (c *MallDailyCreditSubscriptionClient) Create() *MallDailyCreditSubscriptionCreate {
+	mutation := newMallDailyCreditSubscriptionMutation(c.config, OpCreate)
+	return &MallDailyCreditSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MallDailyCreditSubscription entities.
+func (c *MallDailyCreditSubscriptionClient) CreateBulk(builders ...*MallDailyCreditSubscriptionCreate) *MallDailyCreditSubscriptionCreateBulk {
+	return &MallDailyCreditSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MallDailyCreditSubscriptionClient) MapCreateBulk(slice any, setFunc func(*MallDailyCreditSubscriptionCreate, int)) *MallDailyCreditSubscriptionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MallDailyCreditSubscriptionCreateBulk{err: fmt.Errorf("calling to MallDailyCreditSubscriptionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MallDailyCreditSubscriptionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MallDailyCreditSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MallDailyCreditSubscription.
+func (c *MallDailyCreditSubscriptionClient) Update() *MallDailyCreditSubscriptionUpdate {
+	mutation := newMallDailyCreditSubscriptionMutation(c.config, OpUpdate)
+	return &MallDailyCreditSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MallDailyCreditSubscriptionClient) UpdateOne(_m *MallDailyCreditSubscription) *MallDailyCreditSubscriptionUpdateOne {
+	mutation := newMallDailyCreditSubscriptionMutation(c.config, OpUpdateOne, withMallDailyCreditSubscription(_m))
+	return &MallDailyCreditSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MallDailyCreditSubscriptionClient) UpdateOneID(id int64) *MallDailyCreditSubscriptionUpdateOne {
+	mutation := newMallDailyCreditSubscriptionMutation(c.config, OpUpdateOne, withMallDailyCreditSubscriptionID(id))
+	return &MallDailyCreditSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MallDailyCreditSubscription.
+func (c *MallDailyCreditSubscriptionClient) Delete() *MallDailyCreditSubscriptionDelete {
+	mutation := newMallDailyCreditSubscriptionMutation(c.config, OpDelete)
+	return &MallDailyCreditSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MallDailyCreditSubscriptionClient) DeleteOne(_m *MallDailyCreditSubscription) *MallDailyCreditSubscriptionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MallDailyCreditSubscriptionClient) DeleteOneID(id int64) *MallDailyCreditSubscriptionDeleteOne {
+	builder := c.Delete().Where(malldailycreditsubscription.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MallDailyCreditSubscriptionDeleteOne{builder}
+}
+
+// Query returns a query builder for MallDailyCreditSubscription.
+func (c *MallDailyCreditSubscriptionClient) Query() *MallDailyCreditSubscriptionQuery {
+	return &MallDailyCreditSubscriptionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMallDailyCreditSubscription},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MallDailyCreditSubscription entity by its id.
+func (c *MallDailyCreditSubscriptionClient) Get(ctx context.Context, id int64) (*MallDailyCreditSubscription, error) {
+	return c.Query().Where(malldailycreditsubscription.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MallDailyCreditSubscriptionClient) GetX(ctx context.Context, id int64) *MallDailyCreditSubscription {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MallDailyCreditSubscriptionClient) Hooks() []Hook {
+	return c.hooks.MallDailyCreditSubscription
+}
+
+// Interceptors returns the client interceptors.
+func (c *MallDailyCreditSubscriptionClient) Interceptors() []Interceptor {
+	return c.inters.MallDailyCreditSubscription
+}
+
+func (c *MallDailyCreditSubscriptionClient) mutate(ctx context.Context, m *MallDailyCreditSubscriptionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MallDailyCreditSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MallDailyCreditSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MallDailyCreditSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MallDailyCreditSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MallDailyCreditSubscription mutation op: %q", m.Op())
+	}
+}
+
+// MallPurchaseClient is a client for the MallPurchase schema.
+type MallPurchaseClient struct {
+	config
+}
+
+// NewMallPurchaseClient returns a client for the MallPurchase from the given config.
+func NewMallPurchaseClient(c config) *MallPurchaseClient {
+	return &MallPurchaseClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `mallpurchase.Hooks(f(g(h())))`.
+func (c *MallPurchaseClient) Use(hooks ...Hook) {
+	c.hooks.MallPurchase = append(c.hooks.MallPurchase, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `mallpurchase.Intercept(f(g(h())))`.
+func (c *MallPurchaseClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MallPurchase = append(c.inters.MallPurchase, interceptors...)
+}
+
+// Create returns a builder for creating a MallPurchase entity.
+func (c *MallPurchaseClient) Create() *MallPurchaseCreate {
+	mutation := newMallPurchaseMutation(c.config, OpCreate)
+	return &MallPurchaseCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MallPurchase entities.
+func (c *MallPurchaseClient) CreateBulk(builders ...*MallPurchaseCreate) *MallPurchaseCreateBulk {
+	return &MallPurchaseCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MallPurchaseClient) MapCreateBulk(slice any, setFunc func(*MallPurchaseCreate, int)) *MallPurchaseCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MallPurchaseCreateBulk{err: fmt.Errorf("calling to MallPurchaseClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MallPurchaseCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MallPurchaseCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MallPurchase.
+func (c *MallPurchaseClient) Update() *MallPurchaseUpdate {
+	mutation := newMallPurchaseMutation(c.config, OpUpdate)
+	return &MallPurchaseUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MallPurchaseClient) UpdateOne(_m *MallPurchase) *MallPurchaseUpdateOne {
+	mutation := newMallPurchaseMutation(c.config, OpUpdateOne, withMallPurchase(_m))
+	return &MallPurchaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MallPurchaseClient) UpdateOneID(id int64) *MallPurchaseUpdateOne {
+	mutation := newMallPurchaseMutation(c.config, OpUpdateOne, withMallPurchaseID(id))
+	return &MallPurchaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MallPurchase.
+func (c *MallPurchaseClient) Delete() *MallPurchaseDelete {
+	mutation := newMallPurchaseMutation(c.config, OpDelete)
+	return &MallPurchaseDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MallPurchaseClient) DeleteOne(_m *MallPurchase) *MallPurchaseDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MallPurchaseClient) DeleteOneID(id int64) *MallPurchaseDeleteOne {
+	builder := c.Delete().Where(mallpurchase.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MallPurchaseDeleteOne{builder}
+}
+
+// Query returns a query builder for MallPurchase.
+func (c *MallPurchaseClient) Query() *MallPurchaseQuery {
+	return &MallPurchaseQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMallPurchase},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MallPurchase entity by its id.
+func (c *MallPurchaseClient) Get(ctx context.Context, id int64) (*MallPurchase, error) {
+	return c.Query().Where(mallpurchase.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MallPurchaseClient) GetX(ctx context.Context, id int64) *MallPurchase {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MallPurchaseClient) Hooks() []Hook {
+	return c.hooks.MallPurchase
+}
+
+// Interceptors returns the client interceptors.
+func (c *MallPurchaseClient) Interceptors() []Interceptor {
+	return c.inters.MallPurchase
+}
+
+func (c *MallPurchaseClient) mutate(ctx context.Context, m *MallPurchaseMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MallPurchaseCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MallPurchaseUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MallPurchaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MallPurchaseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MallPurchase mutation op: %q", m.Op())
+	}
+}
+
 // PaymentAuditLogClient is a client for the PaymentAuditLog schema.
 type PaymentAuditLogClient struct {
 	config
@@ -4574,6 +5017,272 @@ func (c *PaymentProviderInstanceClient) mutate(ctx context.Context, m *PaymentPr
 		return (&PaymentProviderInstanceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown PaymentProviderInstance mutation op: %q", m.Op())
+	}
+}
+
+// PaymentPurchaseCounterClient is a client for the PaymentPurchaseCounter schema.
+type PaymentPurchaseCounterClient struct {
+	config
+}
+
+// NewPaymentPurchaseCounterClient returns a client for the PaymentPurchaseCounter from the given config.
+func NewPaymentPurchaseCounterClient(c config) *PaymentPurchaseCounterClient {
+	return &PaymentPurchaseCounterClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `paymentpurchasecounter.Hooks(f(g(h())))`.
+func (c *PaymentPurchaseCounterClient) Use(hooks ...Hook) {
+	c.hooks.PaymentPurchaseCounter = append(c.hooks.PaymentPurchaseCounter, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `paymentpurchasecounter.Intercept(f(g(h())))`.
+func (c *PaymentPurchaseCounterClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PaymentPurchaseCounter = append(c.inters.PaymentPurchaseCounter, interceptors...)
+}
+
+// Create returns a builder for creating a PaymentPurchaseCounter entity.
+func (c *PaymentPurchaseCounterClient) Create() *PaymentPurchaseCounterCreate {
+	mutation := newPaymentPurchaseCounterMutation(c.config, OpCreate)
+	return &PaymentPurchaseCounterCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PaymentPurchaseCounter entities.
+func (c *PaymentPurchaseCounterClient) CreateBulk(builders ...*PaymentPurchaseCounterCreate) *PaymentPurchaseCounterCreateBulk {
+	return &PaymentPurchaseCounterCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PaymentPurchaseCounterClient) MapCreateBulk(slice any, setFunc func(*PaymentPurchaseCounterCreate, int)) *PaymentPurchaseCounterCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PaymentPurchaseCounterCreateBulk{err: fmt.Errorf("calling to PaymentPurchaseCounterClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PaymentPurchaseCounterCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PaymentPurchaseCounterCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PaymentPurchaseCounter.
+func (c *PaymentPurchaseCounterClient) Update() *PaymentPurchaseCounterUpdate {
+	mutation := newPaymentPurchaseCounterMutation(c.config, OpUpdate)
+	return &PaymentPurchaseCounterUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PaymentPurchaseCounterClient) UpdateOne(_m *PaymentPurchaseCounter) *PaymentPurchaseCounterUpdateOne {
+	mutation := newPaymentPurchaseCounterMutation(c.config, OpUpdateOne, withPaymentPurchaseCounter(_m))
+	return &PaymentPurchaseCounterUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PaymentPurchaseCounterClient) UpdateOneID(id int64) *PaymentPurchaseCounterUpdateOne {
+	mutation := newPaymentPurchaseCounterMutation(c.config, OpUpdateOne, withPaymentPurchaseCounterID(id))
+	return &PaymentPurchaseCounterUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PaymentPurchaseCounter.
+func (c *PaymentPurchaseCounterClient) Delete() *PaymentPurchaseCounterDelete {
+	mutation := newPaymentPurchaseCounterMutation(c.config, OpDelete)
+	return &PaymentPurchaseCounterDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PaymentPurchaseCounterClient) DeleteOne(_m *PaymentPurchaseCounter) *PaymentPurchaseCounterDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PaymentPurchaseCounterClient) DeleteOneID(id int64) *PaymentPurchaseCounterDeleteOne {
+	builder := c.Delete().Where(paymentpurchasecounter.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PaymentPurchaseCounterDeleteOne{builder}
+}
+
+// Query returns a query builder for PaymentPurchaseCounter.
+func (c *PaymentPurchaseCounterClient) Query() *PaymentPurchaseCounterQuery {
+	return &PaymentPurchaseCounterQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePaymentPurchaseCounter},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PaymentPurchaseCounter entity by its id.
+func (c *PaymentPurchaseCounterClient) Get(ctx context.Context, id int64) (*PaymentPurchaseCounter, error) {
+	return c.Query().Where(paymentpurchasecounter.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PaymentPurchaseCounterClient) GetX(ctx context.Context, id int64) *PaymentPurchaseCounter {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PaymentPurchaseCounterClient) Hooks() []Hook {
+	return c.hooks.PaymentPurchaseCounter
+}
+
+// Interceptors returns the client interceptors.
+func (c *PaymentPurchaseCounterClient) Interceptors() []Interceptor {
+	return c.inters.PaymentPurchaseCounter
+}
+
+func (c *PaymentPurchaseCounterClient) mutate(ctx context.Context, m *PaymentPurchaseCounterMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PaymentPurchaseCounterCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PaymentPurchaseCounterUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PaymentPurchaseCounterUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PaymentPurchaseCounterDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PaymentPurchaseCounter mutation op: %q", m.Op())
+	}
+}
+
+// PaymentPurchaseReservationClient is a client for the PaymentPurchaseReservation schema.
+type PaymentPurchaseReservationClient struct {
+	config
+}
+
+// NewPaymentPurchaseReservationClient returns a client for the PaymentPurchaseReservation from the given config.
+func NewPaymentPurchaseReservationClient(c config) *PaymentPurchaseReservationClient {
+	return &PaymentPurchaseReservationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `paymentpurchasereservation.Hooks(f(g(h())))`.
+func (c *PaymentPurchaseReservationClient) Use(hooks ...Hook) {
+	c.hooks.PaymentPurchaseReservation = append(c.hooks.PaymentPurchaseReservation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `paymentpurchasereservation.Intercept(f(g(h())))`.
+func (c *PaymentPurchaseReservationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PaymentPurchaseReservation = append(c.inters.PaymentPurchaseReservation, interceptors...)
+}
+
+// Create returns a builder for creating a PaymentPurchaseReservation entity.
+func (c *PaymentPurchaseReservationClient) Create() *PaymentPurchaseReservationCreate {
+	mutation := newPaymentPurchaseReservationMutation(c.config, OpCreate)
+	return &PaymentPurchaseReservationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PaymentPurchaseReservation entities.
+func (c *PaymentPurchaseReservationClient) CreateBulk(builders ...*PaymentPurchaseReservationCreate) *PaymentPurchaseReservationCreateBulk {
+	return &PaymentPurchaseReservationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PaymentPurchaseReservationClient) MapCreateBulk(slice any, setFunc func(*PaymentPurchaseReservationCreate, int)) *PaymentPurchaseReservationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PaymentPurchaseReservationCreateBulk{err: fmt.Errorf("calling to PaymentPurchaseReservationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PaymentPurchaseReservationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PaymentPurchaseReservationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PaymentPurchaseReservation.
+func (c *PaymentPurchaseReservationClient) Update() *PaymentPurchaseReservationUpdate {
+	mutation := newPaymentPurchaseReservationMutation(c.config, OpUpdate)
+	return &PaymentPurchaseReservationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PaymentPurchaseReservationClient) UpdateOne(_m *PaymentPurchaseReservation) *PaymentPurchaseReservationUpdateOne {
+	mutation := newPaymentPurchaseReservationMutation(c.config, OpUpdateOne, withPaymentPurchaseReservation(_m))
+	return &PaymentPurchaseReservationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PaymentPurchaseReservationClient) UpdateOneID(id int64) *PaymentPurchaseReservationUpdateOne {
+	mutation := newPaymentPurchaseReservationMutation(c.config, OpUpdateOne, withPaymentPurchaseReservationID(id))
+	return &PaymentPurchaseReservationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PaymentPurchaseReservation.
+func (c *PaymentPurchaseReservationClient) Delete() *PaymentPurchaseReservationDelete {
+	mutation := newPaymentPurchaseReservationMutation(c.config, OpDelete)
+	return &PaymentPurchaseReservationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PaymentPurchaseReservationClient) DeleteOne(_m *PaymentPurchaseReservation) *PaymentPurchaseReservationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PaymentPurchaseReservationClient) DeleteOneID(id int64) *PaymentPurchaseReservationDeleteOne {
+	builder := c.Delete().Where(paymentpurchasereservation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PaymentPurchaseReservationDeleteOne{builder}
+}
+
+// Query returns a query builder for PaymentPurchaseReservation.
+func (c *PaymentPurchaseReservationClient) Query() *PaymentPurchaseReservationQuery {
+	return &PaymentPurchaseReservationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePaymentPurchaseReservation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PaymentPurchaseReservation entity by its id.
+func (c *PaymentPurchaseReservationClient) Get(ctx context.Context, id int64) (*PaymentPurchaseReservation, error) {
+	return c.Query().Where(paymentpurchasereservation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PaymentPurchaseReservationClient) GetX(ctx context.Context, id int64) *PaymentPurchaseReservation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PaymentPurchaseReservationClient) Hooks() []Hook {
+	return c.hooks.PaymentPurchaseReservation
+}
+
+// Interceptors returns the client interceptors.
+func (c *PaymentPurchaseReservationClient) Interceptors() []Interceptor {
+	return c.inters.PaymentPurchaseReservation
+}
+
+func (c *PaymentPurchaseReservationClient) mutate(ctx context.Context, m *PaymentPurchaseReservationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PaymentPurchaseReservationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PaymentPurchaseReservationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PaymentPurchaseReservationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PaymentPurchaseReservationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PaymentPurchaseReservation mutation op: %q", m.Op())
 	}
 }
 
@@ -7872,10 +8581,12 @@ type (
 		AnnouncementRead, AuthIdentity, AuthIdentityChannel, BatchImageCreditHold,
 		BatchImageCreditHoldAllocation, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, DailyCheckin, ErrorPassthroughRule, Group,
-		IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		ChannelMonitorRequestTemplate, CurrencyProduct, DailyCheckin,
+		ErrorPassthroughRule, Group, IdempotencyRecord, IdentityAdoptionDecision,
+		MallDailyCreditSubscription, MallPurchase, PaymentAuditLog, PaymentOrder,
+		PaymentProviderInstance, PaymentPurchaseCounter, PaymentPurchaseReservation,
+		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemCode,
+		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
 		TemporaryCreditConsumption, TemporaryCreditGrant, UsageCleanupTask, UsageLog,
 		User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserPlatformQuota, UserSubscription []ent.Hook
@@ -7885,10 +8596,12 @@ type (
 		AnnouncementRead, AuthIdentity, AuthIdentityChannel, BatchImageCreditHold,
 		BatchImageCreditHoldAllocation, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, DailyCheckin, ErrorPassthroughRule, Group,
-		IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		ChannelMonitorRequestTemplate, CurrencyProduct, DailyCheckin,
+		ErrorPassthroughRule, Group, IdempotencyRecord, IdentityAdoptionDecision,
+		MallDailyCreditSubscription, MallPurchase, PaymentAuditLog, PaymentOrder,
+		PaymentProviderInstance, PaymentPurchaseCounter, PaymentPurchaseReservation,
+		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemCode,
+		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
 		TemporaryCreditConsumption, TemporaryCreditGrant, UsageCleanupTask, UsageLog,
 		User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserPlatformQuota, UserSubscription []ent.Interceptor

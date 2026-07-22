@@ -75,6 +75,21 @@ func CheckinID(v int64) predicate.TemporaryCreditGrant {
 	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldCheckinID, v))
 }
 
+// MallPurchaseID applies equality check predicate on the "mall_purchase_id" field. It's identical to MallPurchaseIDEQ.
+func MallPurchaseID(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldMallPurchaseID, v))
+}
+
+// DailySubscriptionID applies equality check predicate on the "daily_subscription_id" field. It's identical to DailySubscriptionIDEQ.
+func DailySubscriptionID(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldDailySubscriptionID, v))
+}
+
+// ScheduledDate applies equality check predicate on the "scheduled_date" field. It's identical to ScheduledDateEQ.
+func ScheduledDate(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldScheduledDate, v))
+}
+
 // Amount applies equality check predicate on the "amount" field. It's identical to AmountEQ.
 func Amount(v float64) predicate.TemporaryCreditGrant {
 	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldAmount, v))
@@ -83,6 +98,11 @@ func Amount(v float64) predicate.TemporaryCreditGrant {
 // RemainingAmount applies equality check predicate on the "remaining_amount" field. It's identical to RemainingAmountEQ.
 func RemainingAmount(v float64) predicate.TemporaryCreditGrant {
 	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldRemainingAmount, v))
+}
+
+// AvailableAt applies equality check predicate on the "available_at" field. It's identical to AvailableAtEQ.
+func AvailableAt(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldAvailableAt, v))
 }
 
 // ExpiresAt applies equality check predicate on the "expires_at" field. It's identical to ExpiresAtEQ.
@@ -250,6 +270,156 @@ func CheckinIDNotNil() predicate.TemporaryCreditGrant {
 	return predicate.TemporaryCreditGrant(sql.FieldNotNull(FieldCheckinID))
 }
 
+// MallPurchaseIDEQ applies the EQ predicate on the "mall_purchase_id" field.
+func MallPurchaseIDEQ(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldMallPurchaseID, v))
+}
+
+// MallPurchaseIDNEQ applies the NEQ predicate on the "mall_purchase_id" field.
+func MallPurchaseIDNEQ(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNEQ(FieldMallPurchaseID, v))
+}
+
+// MallPurchaseIDIn applies the In predicate on the "mall_purchase_id" field.
+func MallPurchaseIDIn(vs ...int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldIn(FieldMallPurchaseID, vs...))
+}
+
+// MallPurchaseIDNotIn applies the NotIn predicate on the "mall_purchase_id" field.
+func MallPurchaseIDNotIn(vs ...int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNotIn(FieldMallPurchaseID, vs...))
+}
+
+// MallPurchaseIDGT applies the GT predicate on the "mall_purchase_id" field.
+func MallPurchaseIDGT(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldGT(FieldMallPurchaseID, v))
+}
+
+// MallPurchaseIDGTE applies the GTE predicate on the "mall_purchase_id" field.
+func MallPurchaseIDGTE(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldGTE(FieldMallPurchaseID, v))
+}
+
+// MallPurchaseIDLT applies the LT predicate on the "mall_purchase_id" field.
+func MallPurchaseIDLT(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldLT(FieldMallPurchaseID, v))
+}
+
+// MallPurchaseIDLTE applies the LTE predicate on the "mall_purchase_id" field.
+func MallPurchaseIDLTE(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldLTE(FieldMallPurchaseID, v))
+}
+
+// MallPurchaseIDIsNil applies the IsNil predicate on the "mall_purchase_id" field.
+func MallPurchaseIDIsNil() predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldIsNull(FieldMallPurchaseID))
+}
+
+// MallPurchaseIDNotNil applies the NotNil predicate on the "mall_purchase_id" field.
+func MallPurchaseIDNotNil() predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNotNull(FieldMallPurchaseID))
+}
+
+// DailySubscriptionIDEQ applies the EQ predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDEQ(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldDailySubscriptionID, v))
+}
+
+// DailySubscriptionIDNEQ applies the NEQ predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDNEQ(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNEQ(FieldDailySubscriptionID, v))
+}
+
+// DailySubscriptionIDIn applies the In predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDIn(vs ...int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldIn(FieldDailySubscriptionID, vs...))
+}
+
+// DailySubscriptionIDNotIn applies the NotIn predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDNotIn(vs ...int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNotIn(FieldDailySubscriptionID, vs...))
+}
+
+// DailySubscriptionIDGT applies the GT predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDGT(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldGT(FieldDailySubscriptionID, v))
+}
+
+// DailySubscriptionIDGTE applies the GTE predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDGTE(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldGTE(FieldDailySubscriptionID, v))
+}
+
+// DailySubscriptionIDLT applies the LT predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDLT(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldLT(FieldDailySubscriptionID, v))
+}
+
+// DailySubscriptionIDLTE applies the LTE predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDLTE(v int64) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldLTE(FieldDailySubscriptionID, v))
+}
+
+// DailySubscriptionIDIsNil applies the IsNil predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDIsNil() predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldIsNull(FieldDailySubscriptionID))
+}
+
+// DailySubscriptionIDNotNil applies the NotNil predicate on the "daily_subscription_id" field.
+func DailySubscriptionIDNotNil() predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNotNull(FieldDailySubscriptionID))
+}
+
+// ScheduledDateEQ applies the EQ predicate on the "scheduled_date" field.
+func ScheduledDateEQ(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldScheduledDate, v))
+}
+
+// ScheduledDateNEQ applies the NEQ predicate on the "scheduled_date" field.
+func ScheduledDateNEQ(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNEQ(FieldScheduledDate, v))
+}
+
+// ScheduledDateIn applies the In predicate on the "scheduled_date" field.
+func ScheduledDateIn(vs ...time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldIn(FieldScheduledDate, vs...))
+}
+
+// ScheduledDateNotIn applies the NotIn predicate on the "scheduled_date" field.
+func ScheduledDateNotIn(vs ...time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNotIn(FieldScheduledDate, vs...))
+}
+
+// ScheduledDateGT applies the GT predicate on the "scheduled_date" field.
+func ScheduledDateGT(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldGT(FieldScheduledDate, v))
+}
+
+// ScheduledDateGTE applies the GTE predicate on the "scheduled_date" field.
+func ScheduledDateGTE(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldGTE(FieldScheduledDate, v))
+}
+
+// ScheduledDateLT applies the LT predicate on the "scheduled_date" field.
+func ScheduledDateLT(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldLT(FieldScheduledDate, v))
+}
+
+// ScheduledDateLTE applies the LTE predicate on the "scheduled_date" field.
+func ScheduledDateLTE(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldLTE(FieldScheduledDate, v))
+}
+
+// ScheduledDateIsNil applies the IsNil predicate on the "scheduled_date" field.
+func ScheduledDateIsNil() predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldIsNull(FieldScheduledDate))
+}
+
+// ScheduledDateNotNil applies the NotNil predicate on the "scheduled_date" field.
+func ScheduledDateNotNil() predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNotNull(FieldScheduledDate))
+}
+
 // AmountEQ applies the EQ predicate on the "amount" field.
 func AmountEQ(v float64) predicate.TemporaryCreditGrant {
 	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldAmount, v))
@@ -328,6 +498,46 @@ func RemainingAmountLT(v float64) predicate.TemporaryCreditGrant {
 // RemainingAmountLTE applies the LTE predicate on the "remaining_amount" field.
 func RemainingAmountLTE(v float64) predicate.TemporaryCreditGrant {
 	return predicate.TemporaryCreditGrant(sql.FieldLTE(FieldRemainingAmount, v))
+}
+
+// AvailableAtEQ applies the EQ predicate on the "available_at" field.
+func AvailableAtEQ(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldEQ(FieldAvailableAt, v))
+}
+
+// AvailableAtNEQ applies the NEQ predicate on the "available_at" field.
+func AvailableAtNEQ(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNEQ(FieldAvailableAt, v))
+}
+
+// AvailableAtIn applies the In predicate on the "available_at" field.
+func AvailableAtIn(vs ...time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldIn(FieldAvailableAt, vs...))
+}
+
+// AvailableAtNotIn applies the NotIn predicate on the "available_at" field.
+func AvailableAtNotIn(vs ...time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldNotIn(FieldAvailableAt, vs...))
+}
+
+// AvailableAtGT applies the GT predicate on the "available_at" field.
+func AvailableAtGT(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldGT(FieldAvailableAt, v))
+}
+
+// AvailableAtGTE applies the GTE predicate on the "available_at" field.
+func AvailableAtGTE(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldGTE(FieldAvailableAt, v))
+}
+
+// AvailableAtLT applies the LT predicate on the "available_at" field.
+func AvailableAtLT(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldLT(FieldAvailableAt, v))
+}
+
+// AvailableAtLTE applies the LTE predicate on the "available_at" field.
+func AvailableAtLTE(v time.Time) predicate.TemporaryCreditGrant {
+	return predicate.TemporaryCreditGrant(sql.FieldLTE(FieldAvailableAt, v))
 }
 
 // ExpiresAtEQ applies the EQ predicate on the "expires_at" field.

@@ -215,7 +215,8 @@ type UpdateSettingsRequest struct {
 	AllowUngroupedKeyScheduling bool `json:"allow_ungrouped_key_scheduling"`
 
 	// Backend Mode
-	BackendModeEnabled bool `json:"backend_mode_enabled"`
+	BackendModeEnabled bool  `json:"backend_mode_enabled"`
+	MallEnabled        *bool `json:"mall_enabled"`
 
 	// Gateway forwarding behavior
 	EnableFingerprintUnification           *bool   `json:"enable_fingerprint_unification"`
@@ -1312,6 +1313,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		MaxClaudeCodeVersion:                   req.MaxClaudeCodeVersion,
 		AllowUngroupedKeyScheduling:            req.AllowUngroupedKeyScheduling,
 		BackendModeEnabled:                     req.BackendModeEnabled,
+		MallEnabled: func() bool {
+			if req.MallEnabled != nil {
+				return *req.MallEnabled
+			}
+			return previousSettings.MallEnabled
+		}(),
 		AllowUserViewErrorRequests: func() bool {
 			if req.AllowUserViewErrorRequests != nil {
 				return *req.AllowUserViewErrorRequests
@@ -1869,6 +1876,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		MaxClaudeCodeVersion:                                   updatedSettings.MaxClaudeCodeVersion,
 		AllowUngroupedKeyScheduling:                            updatedSettings.AllowUngroupedKeyScheduling,
 		BackendModeEnabled:                                     updatedSettings.BackendModeEnabled,
+		MallEnabled:                                            updatedSettings.MallEnabled,
 		EnableFingerprintUnification:                           updatedSettings.EnableFingerprintUnification,
 		EnableMetadataPassthrough:                              updatedSettings.EnableMetadataPassthrough,
 		EnableCCHSigning:                                       updatedSettings.EnableCCHSigning,

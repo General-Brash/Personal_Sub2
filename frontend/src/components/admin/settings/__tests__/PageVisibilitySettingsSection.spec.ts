@@ -33,6 +33,7 @@ function mountSection() {
   return mount(PageVisibilitySettingsSection, {
     props: {
       userChannelStatusEnabled: true,
+      mallEnabled: true,
       userSubscriptionsEnabled: false,
       adminSubscriptionsEnabled: true,
       adminPromoCodesEnabled: true,
@@ -47,12 +48,12 @@ function mountSection() {
 }
 
 describe('PageVisibilitySettingsSection', () => {
-  it('renders two un-nested page groups with five toggles', () => {
+  it('renders two un-nested page groups with six toggles', () => {
     const wrapper = mountSection()
 
     expect(wrapper.findAll('.card')).toHaveLength(1)
     expect(wrapper.find('.card .card').exists()).toBe(false)
-    expect(wrapper.findAll('[role="switch"]')).toHaveLength(5)
+    expect(wrapper.findAll('[role="switch"]')).toHaveLength(6)
     expect(wrapper.text()).toContain('admin.settings.features.pageVisibility.userPages')
     expect(wrapper.text()).toContain('admin.settings.features.pageVisibility.adminPages')
   })
@@ -77,6 +78,7 @@ describe('PageVisibilitySettingsSection', () => {
     }
 
     expect(wrapper.emitted('update:userChannelStatusEnabled')).toEqual([[false]])
+    expect(wrapper.emitted('update:mallEnabled')).toEqual([[false]])
     expect(wrapper.emitted('update:userSubscriptionsEnabled')).toEqual([[true]])
     expect(wrapper.emitted('update:adminSubscriptionsEnabled')).toEqual([[false]])
     expect(wrapper.emitted('update:adminPromoCodesEnabled')).toEqual([[false]])

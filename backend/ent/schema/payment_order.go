@@ -44,7 +44,7 @@ func (PaymentOrder) Fields() []ent.Field {
 
 		// 金额信息
 		field.Float("amount").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}),
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
 		field.Float("pay_amount").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}),
 		field.Float("fee_rate").
@@ -87,6 +87,27 @@ func (PaymentOrder) Fields() []ent.Field {
 		field.Int("subscription_days").
 			Optional().
 			Nillable(),
+		field.Int64("currency_product_id").
+			Optional().
+			Nillable(),
+		field.String("currency_product_name").
+			Optional().
+			Nillable().
+			MaxLen(100),
+		field.Float("currency_product_payment_price").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "numeric(20,2)"}),
+		field.Float("currency_product_credited_amount").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "numeric(20,8)"}),
+		field.Int("daily_purchase_limit_snapshot").
+			NonNegative().
+			Default(0),
+		field.Int("total_purchase_limit_snapshot").
+			NonNegative().
+			Default(0),
 		field.String("provider_instance_id").
 			Optional().
 			Nillable().
@@ -106,7 +127,7 @@ func (PaymentOrder) Fields() []ent.Field {
 
 		// 退款信息
 		field.Float("refund_amount").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}).
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
 		field.String("refund_reason").
 			Optional().

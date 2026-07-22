@@ -64,8 +64,22 @@ describe('CheckinSettingsCard', () => {
     expect(getCheckinSettings).toHaveBeenCalledTimes(1)
     expect((wrapper.get('[data-testid="checkin-max-reward-day"]').element as HTMLInputElement).value).toBe('2')
     expect((wrapper.get('[data-testid="checkin-tier-1"]').element as HTMLInputElement).value).toBe('0.00000001')
-    expect((wrapper.get('[data-testid="checkin-permanent-tier-2"]').element as HTMLInputElement).value).toBe('2.00000000')
-    expect((wrapper.get('[data-testid="checkin-tier-2"]').element as HTMLInputElement).value).toBe('1.25000000')
+    expect((wrapper.get('[data-testid="checkin-permanent-tier-2"]').element as HTMLInputElement).value).toBe('2.00')
+    expect((wrapper.get('[data-testid="checkin-tier-2"]').element as HTMLInputElement).value).toBe('1.25')
+  })
+
+  it('normalizes edited values to at least two places without rounding eight-place precision', async () => {
+    const wrapper = mount(CheckinSettingsCard)
+    await flushPromises()
+    const input = wrapper.get('[data-testid="checkin-tier-2"]')
+
+    await input.setValue('2.5')
+    await input.trigger('blur')
+    expect((input.element as HTMLInputElement).value).toBe('2.50')
+
+    await input.setValue('0.00000001')
+    await input.trigger('blur')
+    expect((input.element as HTMLInputElement).value).toBe('0.00000001')
   })
 
   it('keeps every reward amount as a string when extending and saving complete tiers', async () => {
@@ -82,8 +96,8 @@ describe('CheckinSettingsCard', () => {
       enabled: false,
       max_reward_day: 3,
       reward_tiers: [
-        { day: 1, amount: '0.00000001', permanent_amount: '0.00000000' },
-        { day: 2, amount: '1.25000000', permanent_amount: '2.00000000' },
+        { day: 1, amount: '0.00000001', permanent_amount: '0.00' },
+        { day: 2, amount: '1.25', permanent_amount: '2.00' },
         { day: 3, amount: '0.00000101', permanent_amount: '0.50000000' },
       ],
     })
@@ -101,7 +115,7 @@ describe('CheckinSettingsCard', () => {
     await maxRewardDayInput.setValue('365')
     expect(wrapper.findAll('[data-testid^="checkin-tier-"]')).toHaveLength(365)
     expect((wrapper.get('[data-testid="checkin-tier-365"]').element as HTMLInputElement).value).toBe(
-      '1.00000000',
+      '1.00',
     )
 
     await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
@@ -113,8 +127,8 @@ describe('CheckinSettingsCard', () => {
     expect(payload.reward_tiers).toHaveLength(365)
     expect(payload.reward_tiers[364]).toEqual({
       day: 365,
-      amount: '1.00000000',
-      permanent_amount: '0.00000000',
+      amount: '1.00',
+      permanent_amount: '0.00',
     })
   })
 
@@ -151,17 +165,17 @@ describe('CheckinSettingsCard', () => {
     expect(payload.reward_tiers[36]).toEqual({
       day: 37,
       amount: '0.00000037',
-      permanent_amount: '0.00000000',
+      permanent_amount: '0.00',
     })
     expect(payload.reward_tiers[363]).toEqual({
       day: 364,
       amount: '0.00000364',
-      permanent_amount: '0.00000000',
+      permanent_amount: '0.00',
     })
     expect(payload.reward_tiers).not.toContainEqual({
       day: 365,
       amount: '0.00000365',
-      permanent_amount: '0.00000000',
+      permanent_amount: '0.00',
     })
   })
 
@@ -226,7 +240,7 @@ describe('CheckinSettingsCard', () => {
 
     expect(
       (wrapper.get('[data-testid="checkin-permanent-tier-1"]').element as HTMLInputElement).value,
-    ).toBe('0.00000000')
+    ).toBe('0.00')
   })
 
   it('serializes deferred save attempts and freezes inputs until the response settles', async () => {

@@ -239,6 +239,7 @@ export interface PublicSettings {
   channel_monitor_default_interval_seconds: number
   available_channels_enabled: boolean
   user_channel_status_enabled?: boolean
+  mall_enabled?: boolean
   user_subscriptions_enabled?: boolean
   admin_subscriptions_enabled?: boolean
   admin_promo_codes_enabled?: boolean

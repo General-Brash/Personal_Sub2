@@ -974,6 +974,42 @@ var (
 			},
 		},
 	}
+	// CurrencyProductsColumns holds the columns for the "currency_products" table.
+	CurrencyProductsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "payment_price", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "payment_credit_type", Type: field.TypeString, Size: 20, Default: "permanent"},
+		{Name: "credited_type", Type: field.TypeString, Size: 20, Default: "permanent"},
+		{Name: "credited_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "credited_permanent_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "is_active", Type: field.TypeBool, Default: true},
+		{Name: "for_sale", Type: field.TypeBool, Default: true},
+		{Name: "daily_purchase_limit", Type: field.TypeInt, Default: 0},
+		{Name: "total_purchase_limit", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// CurrencyProductsTable holds the schema information for the "currency_products" table.
+	CurrencyProductsTable = &schema.Table{
+		Name:       "currency_products",
+		Columns:    CurrencyProductsColumns,
+		PrimaryKey: []*schema.Column{CurrencyProductsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "currencyproduct_is_active_for_sale_sort_order",
+				Unique:  false,
+				Columns: []*schema.Column{CurrencyProductsColumns[9], CurrencyProductsColumns[10], CurrencyProductsColumns[8]},
+			},
+			{
+				Name:    "currencyproduct_sort_order",
+				Unique:  false,
+				Columns: []*schema.Column{CurrencyProductsColumns[8]},
+			},
+		},
+	}
 	// DailyCheckinsColumns holds the columns for the "daily_checkins" table.
 	DailyCheckinsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1234,6 +1270,72 @@ var (
 			},
 		},
 	}
+	// MallDailyCreditSubscriptionsColumns holds the columns for the "mall_daily_credit_subscriptions" table.
+	MallDailyCreditSubscriptionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "plan_id", Type: field.TypeInt64},
+		{Name: "starts_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "last_grant_date", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// MallDailyCreditSubscriptionsTable holds the schema information for the "mall_daily_credit_subscriptions" table.
+	MallDailyCreditSubscriptionsTable = &schema.Table{
+		Name:       "mall_daily_credit_subscriptions",
+		Columns:    MallDailyCreditSubscriptionsColumns,
+		PrimaryKey: []*schema.Column{MallDailyCreditSubscriptionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "malldailycreditsubscription_user_id_plan_id",
+				Unique:  true,
+				Columns: []*schema.Column{MallDailyCreditSubscriptionsColumns[1], MallDailyCreditSubscriptionsColumns[2]},
+			},
+			{
+				Name:    "malldailycreditsubscription_user_id_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{MallDailyCreditSubscriptionsColumns[1], MallDailyCreditSubscriptionsColumns[5]},
+			},
+		},
+	}
+	// MallPurchasesColumns holds the columns for the "mall_purchases" table.
+	MallPurchasesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "product_type", Type: field.TypeString, Size: 20},
+		{Name: "product_id", Type: field.TypeInt64},
+		{Name: "idempotency_record_id", Type: field.TypeInt64, Unique: true},
+		{Name: "payment_credit_type", Type: field.TypeString, Size: 20},
+		{Name: "price", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "credited_type", Type: field.TypeString, Nullable: true, Size: 20},
+		{Name: "credited_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "benefit_type", Type: field.TypeString, Nullable: true, Size: 40},
+		{Name: "benefit_days", Type: field.TypeInt, Nullable: true},
+		{Name: "daily_temporary_credit_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "subscription_expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "completed"},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// MallPurchasesTable holds the schema information for the "mall_purchases" table.
+	MallPurchasesTable = &schema.Table{
+		Name:       "mall_purchases",
+		Columns:    MallPurchasesColumns,
+		PrimaryKey: []*schema.Column{MallPurchasesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "mallpurchase_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{MallPurchasesColumns[1], MallPurchasesColumns[14]},
+			},
+			{
+				Name:    "mallpurchase_product_type_product_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{MallPurchasesColumns[2], MallPurchasesColumns[3], MallPurchasesColumns[14]},
+			},
+		},
+	}
 	// PaymentAuditLogsColumns holds the columns for the "payment_audit_logs" table.
 	PaymentAuditLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1262,7 +1364,7 @@ var (
 		{Name: "user_email", Type: field.TypeString, Size: 255},
 		{Name: "user_name", Type: field.TypeString, Size: 100},
 		{Name: "user_notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "pay_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
 		{Name: "fee_rate", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
 		{Name: "recharge_code", Type: field.TypeString, Size: 64},
@@ -1276,11 +1378,17 @@ var (
 		{Name: "plan_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "subscription_group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "subscription_days", Type: field.TypeInt, Nullable: true},
+		{Name: "currency_product_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "currency_product_name", Type: field.TypeString, Nullable: true, Size: 100},
+		{Name: "currency_product_payment_price", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,2)"}},
+		{Name: "currency_product_credited_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "daily_purchase_limit_snapshot", Type: field.TypeInt, Default: 0},
+		{Name: "total_purchase_limit_snapshot", Type: field.TypeInt, Default: 0},
 		{Name: "provider_instance_id", Type: field.TypeString, Nullable: true, Size: 64},
 		{Name: "provider_key", Type: field.TypeString, Nullable: true, Size: 30},
 		{Name: "provider_snapshot", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "status", Type: field.TypeString, Size: 30, Default: "PENDING"},
-		{Name: "refund_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "refund_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "refund_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "refund_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "force_refund", Type: field.TypeBool, Default: false},
@@ -1307,7 +1415,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "payment_orders_users_payment_orders",
-				Columns:    []*schema.Column{PaymentOrdersColumns[39]},
+				Columns:    []*schema.Column{PaymentOrdersColumns[45]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1324,32 +1432,32 @@ var (
 			{
 				Name:    "paymentorder_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[39]},
+				Columns: []*schema.Column{PaymentOrdersColumns[45]},
 			},
 			{
 				Name:    "paymentorder_status",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[21]},
+				Columns: []*schema.Column{PaymentOrdersColumns[27]},
 			},
 			{
 				Name:    "paymentorder_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[29]},
+				Columns: []*schema.Column{PaymentOrdersColumns[35]},
 			},
 			{
 				Name:    "paymentorder_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[37]},
+				Columns: []*schema.Column{PaymentOrdersColumns[43]},
 			},
 			{
 				Name:    "paymentorder_paid_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[30]},
+				Columns: []*schema.Column{PaymentOrdersColumns[36]},
 			},
 			{
 				Name:    "paymentorder_payment_type_paid_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[9], PaymentOrdersColumns[30]},
+				Columns: []*schema.Column{PaymentOrdersColumns[9], PaymentOrdersColumns[36]},
 			},
 			{
 				Name:    "paymentorder_order_type",
@@ -1389,6 +1497,62 @@ var (
 				Name:    "paymentproviderinstance_enabled",
 				Unique:  false,
 				Columns: []*schema.Column{PaymentProviderInstancesColumns[5]},
+			},
+		},
+	}
+	// PaymentPurchaseCountersColumns holds the columns for the "payment_purchase_counters" table.
+	PaymentPurchaseCountersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "product_type", Type: field.TypeString, Size: 20},
+		{Name: "product_id", Type: field.TypeInt64},
+		{Name: "period_type", Type: field.TypeString, Size: 10},
+		{Name: "period_start", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "reserved_count", Type: field.TypeInt, Default: 0},
+		{Name: "consumed_count", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// PaymentPurchaseCountersTable holds the schema information for the "payment_purchase_counters" table.
+	PaymentPurchaseCountersTable = &schema.Table{
+		Name:       "payment_purchase_counters",
+		Columns:    PaymentPurchaseCountersColumns,
+		PrimaryKey: []*schema.Column{PaymentPurchaseCountersColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "paymentpurchasecounter_user_id_product_type_product_id_period_type_period_start",
+				Unique:  true,
+				Columns: []*schema.Column{PaymentPurchaseCountersColumns[1], PaymentPurchaseCountersColumns[2], PaymentPurchaseCountersColumns[3], PaymentPurchaseCountersColumns[4], PaymentPurchaseCountersColumns[5]},
+			},
+			{
+				Name:    "paymentpurchasecounter_user_id_period_type_period_start",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentPurchaseCountersColumns[1], PaymentPurchaseCountersColumns[4], PaymentPurchaseCountersColumns[5]},
+			},
+		},
+	}
+	// PaymentPurchaseReservationsColumns holds the columns for the "payment_purchase_reservations" table.
+	PaymentPurchaseReservationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "order_id", Type: field.TypeInt64, Unique: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "product_type", Type: field.TypeString, Size: 20},
+		{Name: "product_id", Type: field.TypeInt64},
+		{Name: "daily_period_start", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "reserved"},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// PaymentPurchaseReservationsTable holds the schema information for the "payment_purchase_reservations" table.
+	PaymentPurchaseReservationsTable = &schema.Table{
+		Name:       "payment_purchase_reservations",
+		Columns:    PaymentPurchaseReservationsColumns,
+		PrimaryKey: []*schema.Column{PaymentPurchaseReservationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "paymentpurchasereservation_user_id_product_type_product_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentPurchaseReservationsColumns[2], PaymentPurchaseReservationsColumns[3], PaymentPurchaseReservationsColumns[4], PaymentPurchaseReservationsColumns[6]},
 			},
 		},
 	}
@@ -1678,8 +1842,11 @@ var (
 		{Name: "group_id", Type: field.TypeInt64},
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "price", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
-		{Name: "original_price", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "price", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "original_price", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "benefit_type", Type: field.TypeString, Size: 40, Default: "sub2"},
+		{Name: "payment_credit_type", Type: field.TypeString, Size: 20, Default: "permanent"},
+		{Name: "daily_temporary_credit_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "currency", Type: field.TypeString, Size: 3, Default: ""},
 		{Name: "validity_days", Type: field.TypeInt, Default: 30},
 		{Name: "validity_unit", Type: field.TypeString, Size: 10, Default: "day"},
@@ -1687,6 +1854,8 @@ var (
 		{Name: "product_name", Type: field.TypeString, Size: 100, Default: ""},
 		{Name: "for_sale", Type: field.TypeBool, Default: true},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "daily_purchase_limit", Type: field.TypeInt, Default: 0},
+		{Name: "total_purchase_limit", Type: field.TypeInt, Default: 0},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 	}
@@ -1704,7 +1873,7 @@ var (
 			{
 				Name:    "subscriptionplan_for_sale",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionPlansColumns[11]},
+				Columns: []*schema.Column{SubscriptionPlansColumns[14]},
 			},
 		},
 	}
@@ -1789,9 +1958,13 @@ var (
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "source", Type: field.TypeEnum, Enums: []string{"checkin", "admin_grant"}},
+		{Name: "source", Type: field.TypeEnum, Enums: []string{"checkin", "admin_grant", "bank_advance", "bank_exchange", "mall_product", "subscription"}},
+		{Name: "mall_purchase_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "daily_subscription_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "scheduled_date", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "date"}},
 		{Name: "amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "remaining_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "available_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "notes", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "checkin_id", Type: field.TypeInt64, Unique: true, Nullable: true},
@@ -1806,19 +1979,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "temporary_credit_grants_daily_checkins_temporary_credit_grant",
-				Columns:    []*schema.Column{TemporaryCreditGrantsColumns[8]},
+				Columns:    []*schema.Column{TemporaryCreditGrantsColumns[12]},
 				RefColumns: []*schema.Column{DailyCheckinsColumns[0]},
 				OnDelete:   schema.Restrict,
 			},
 			{
 				Symbol:     "temporary_credit_grants_users_temporary_credit_grants",
-				Columns:    []*schema.Column{TemporaryCreditGrantsColumns[9]},
+				Columns:    []*schema.Column{TemporaryCreditGrantsColumns[13]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.Restrict,
 			},
 			{
 				Symbol:     "temporary_credit_grants_users_granted_temporary_credit_grants",
-				Columns:    []*schema.Column{TemporaryCreditGrantsColumns[10]},
+				Columns:    []*schema.Column{TemporaryCreditGrantsColumns[14]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.Restrict,
 			},
@@ -1827,7 +2000,7 @@ var (
 			{
 				Name:    "temporarycreditgrant_checkin_id",
 				Unique:  true,
-				Columns: []*schema.Column{TemporaryCreditGrantsColumns[8]},
+				Columns: []*schema.Column{TemporaryCreditGrantsColumns[12]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "checkin_id IS NOT NULL",
 				},
@@ -1835,7 +2008,7 @@ var (
 			{
 				Name:    "temporarycreditgrant_user_id_expires_at_id",
 				Unique:  false,
-				Columns: []*schema.Column{TemporaryCreditGrantsColumns[9], TemporaryCreditGrantsColumns[6], TemporaryCreditGrantsColumns[0]},
+				Columns: []*schema.Column{TemporaryCreditGrantsColumns[13], TemporaryCreditGrantsColumns[10], TemporaryCreditGrantsColumns[0]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "remaining_amount > 0",
 				},
@@ -2349,14 +2522,19 @@ var (
 		ChannelMonitorDailyRollupsTable,
 		ChannelMonitorHistoriesTable,
 		ChannelMonitorRequestTemplatesTable,
+		CurrencyProductsTable,
 		DailyCheckinsTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
 		IdempotencyRecordsTable,
 		IdentityAdoptionDecisionsTable,
+		MallDailyCreditSubscriptionsTable,
+		MallPurchasesTable,
 		PaymentAuditLogsTable,
 		PaymentOrdersTable,
 		PaymentProviderInstancesTable,
+		PaymentPurchaseCountersTable,
+		PaymentPurchaseReservationsTable,
 		PendingAuthSessionsTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
@@ -2469,6 +2647,9 @@ func init() {
 	ChannelMonitorRequestTemplatesTable.Annotation = &entsql.Annotation{
 		Table: "channel_monitor_request_templates",
 	}
+	CurrencyProductsTable.Annotation = &entsql.Annotation{
+		Table: "currency_products",
+	}
 	DailyCheckinsTable.ForeignKeys[0].RefTable = UsersTable
 	DailyCheckinsTable.Annotation = &entsql.Annotation{
 		Table: "daily_checkins",
@@ -2487,6 +2668,12 @@ func init() {
 	IdentityAdoptionDecisionsTable.Annotation = &entsql.Annotation{
 		Table: "identity_adoption_decisions",
 	}
+	MallDailyCreditSubscriptionsTable.Annotation = &entsql.Annotation{
+		Table: "mall_daily_credit_subscriptions",
+	}
+	MallPurchasesTable.Annotation = &entsql.Annotation{
+		Table: "mall_purchases",
+	}
 	PaymentAuditLogsTable.Annotation = &entsql.Annotation{
 		Table: "payment_audit_logs",
 	}
@@ -2496,6 +2683,12 @@ func init() {
 	}
 	PaymentProviderInstancesTable.Annotation = &entsql.Annotation{
 		Table: "payment_provider_instances",
+	}
+	PaymentPurchaseCountersTable.Annotation = &entsql.Annotation{
+		Table: "payment_purchase_counters",
+	}
+	PaymentPurchaseReservationsTable.Annotation = &entsql.Annotation{
+		Table: "payment_purchase_reservations",
 	}
 	PendingAuthSessionsTable.ForeignKeys[0].RefTable = UsersTable
 	PendingAuthSessionsTable.Annotation = &entsql.Annotation{

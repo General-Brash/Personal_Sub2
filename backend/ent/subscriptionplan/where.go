@@ -79,6 +79,21 @@ func OriginalPrice(v float64) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldOriginalPrice, v))
 }
 
+// BenefitType applies equality check predicate on the "benefit_type" field. It's identical to BenefitTypeEQ.
+func BenefitType(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldBenefitType, v))
+}
+
+// PaymentCreditType applies equality check predicate on the "payment_credit_type" field. It's identical to PaymentCreditTypeEQ.
+func PaymentCreditType(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPaymentCreditType, v))
+}
+
+// DailyTemporaryCreditAmount applies equality check predicate on the "daily_temporary_credit_amount" field. It's identical to DailyTemporaryCreditAmountEQ.
+func DailyTemporaryCreditAmount(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldDailyTemporaryCreditAmount, v))
+}
+
 // Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
 func Currency(v string) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldCurrency, v))
@@ -112,6 +127,16 @@ func ForSale(v bool) predicate.SubscriptionPlan {
 // SortOrder applies equality check predicate on the "sort_order" field. It's identical to SortOrderEQ.
 func SortOrder(v int) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldSortOrder, v))
+}
+
+// DailyPurchaseLimit applies equality check predicate on the "daily_purchase_limit" field. It's identical to DailyPurchaseLimitEQ.
+func DailyPurchaseLimit(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldDailyPurchaseLimit, v))
+}
+
+// TotalPurchaseLimit applies equality check predicate on the "total_purchase_limit" field. It's identical to TotalPurchaseLimitEQ.
+func TotalPurchaseLimit(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldTotalPurchaseLimit, v))
 }
 
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
@@ -382,6 +407,176 @@ func OriginalPriceIsNil() predicate.SubscriptionPlan {
 // OriginalPriceNotNil applies the NotNil predicate on the "original_price" field.
 func OriginalPriceNotNil() predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldNotNull(FieldOriginalPrice))
+}
+
+// BenefitTypeEQ applies the EQ predicate on the "benefit_type" field.
+func BenefitTypeEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldBenefitType, v))
+}
+
+// BenefitTypeNEQ applies the NEQ predicate on the "benefit_type" field.
+func BenefitTypeNEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldBenefitType, v))
+}
+
+// BenefitTypeIn applies the In predicate on the "benefit_type" field.
+func BenefitTypeIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldBenefitType, vs...))
+}
+
+// BenefitTypeNotIn applies the NotIn predicate on the "benefit_type" field.
+func BenefitTypeNotIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldBenefitType, vs...))
+}
+
+// BenefitTypeGT applies the GT predicate on the "benefit_type" field.
+func BenefitTypeGT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldBenefitType, v))
+}
+
+// BenefitTypeGTE applies the GTE predicate on the "benefit_type" field.
+func BenefitTypeGTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldBenefitType, v))
+}
+
+// BenefitTypeLT applies the LT predicate on the "benefit_type" field.
+func BenefitTypeLT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldBenefitType, v))
+}
+
+// BenefitTypeLTE applies the LTE predicate on the "benefit_type" field.
+func BenefitTypeLTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldBenefitType, v))
+}
+
+// BenefitTypeContains applies the Contains predicate on the "benefit_type" field.
+func BenefitTypeContains(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContains(FieldBenefitType, v))
+}
+
+// BenefitTypeHasPrefix applies the HasPrefix predicate on the "benefit_type" field.
+func BenefitTypeHasPrefix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasPrefix(FieldBenefitType, v))
+}
+
+// BenefitTypeHasSuffix applies the HasSuffix predicate on the "benefit_type" field.
+func BenefitTypeHasSuffix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasSuffix(FieldBenefitType, v))
+}
+
+// BenefitTypeEqualFold applies the EqualFold predicate on the "benefit_type" field.
+func BenefitTypeEqualFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEqualFold(FieldBenefitType, v))
+}
+
+// BenefitTypeContainsFold applies the ContainsFold predicate on the "benefit_type" field.
+func BenefitTypeContainsFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContainsFold(FieldBenefitType, v))
+}
+
+// PaymentCreditTypeEQ applies the EQ predicate on the "payment_credit_type" field.
+func PaymentCreditTypeEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeNEQ applies the NEQ predicate on the "payment_credit_type" field.
+func PaymentCreditTypeNEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeIn applies the In predicate on the "payment_credit_type" field.
+func PaymentCreditTypeIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldPaymentCreditType, vs...))
+}
+
+// PaymentCreditTypeNotIn applies the NotIn predicate on the "payment_credit_type" field.
+func PaymentCreditTypeNotIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldPaymentCreditType, vs...))
+}
+
+// PaymentCreditTypeGT applies the GT predicate on the "payment_credit_type" field.
+func PaymentCreditTypeGT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeGTE applies the GTE predicate on the "payment_credit_type" field.
+func PaymentCreditTypeGTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeLT applies the LT predicate on the "payment_credit_type" field.
+func PaymentCreditTypeLT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeLTE applies the LTE predicate on the "payment_credit_type" field.
+func PaymentCreditTypeLTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeContains applies the Contains predicate on the "payment_credit_type" field.
+func PaymentCreditTypeContains(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContains(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeHasPrefix applies the HasPrefix predicate on the "payment_credit_type" field.
+func PaymentCreditTypeHasPrefix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasPrefix(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeHasSuffix applies the HasSuffix predicate on the "payment_credit_type" field.
+func PaymentCreditTypeHasSuffix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasSuffix(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeEqualFold applies the EqualFold predicate on the "payment_credit_type" field.
+func PaymentCreditTypeEqualFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEqualFold(FieldPaymentCreditType, v))
+}
+
+// PaymentCreditTypeContainsFold applies the ContainsFold predicate on the "payment_credit_type" field.
+func PaymentCreditTypeContainsFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContainsFold(FieldPaymentCreditType, v))
+}
+
+// DailyTemporaryCreditAmountEQ applies the EQ predicate on the "daily_temporary_credit_amount" field.
+func DailyTemporaryCreditAmountEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldDailyTemporaryCreditAmount, v))
+}
+
+// DailyTemporaryCreditAmountNEQ applies the NEQ predicate on the "daily_temporary_credit_amount" field.
+func DailyTemporaryCreditAmountNEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldDailyTemporaryCreditAmount, v))
+}
+
+// DailyTemporaryCreditAmountIn applies the In predicate on the "daily_temporary_credit_amount" field.
+func DailyTemporaryCreditAmountIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldDailyTemporaryCreditAmount, vs...))
+}
+
+// DailyTemporaryCreditAmountNotIn applies the NotIn predicate on the "daily_temporary_credit_amount" field.
+func DailyTemporaryCreditAmountNotIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldDailyTemporaryCreditAmount, vs...))
+}
+
+// DailyTemporaryCreditAmountGT applies the GT predicate on the "daily_temporary_credit_amount" field.
+func DailyTemporaryCreditAmountGT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldDailyTemporaryCreditAmount, v))
+}
+
+// DailyTemporaryCreditAmountGTE applies the GTE predicate on the "daily_temporary_credit_amount" field.
+func DailyTemporaryCreditAmountGTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldDailyTemporaryCreditAmount, v))
+}
+
+// DailyTemporaryCreditAmountLT applies the LT predicate on the "daily_temporary_credit_amount" field.
+func DailyTemporaryCreditAmountLT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldDailyTemporaryCreditAmount, v))
+}
+
+// DailyTemporaryCreditAmountLTE applies the LTE predicate on the "daily_temporary_credit_amount" field.
+func DailyTemporaryCreditAmountLTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldDailyTemporaryCreditAmount, v))
 }
 
 // CurrencyEQ applies the EQ predicate on the "currency" field.
@@ -732,6 +927,86 @@ func SortOrderLT(v int) predicate.SubscriptionPlan {
 // SortOrderLTE applies the LTE predicate on the "sort_order" field.
 func SortOrderLTE(v int) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldLTE(FieldSortOrder, v))
+}
+
+// DailyPurchaseLimitEQ applies the EQ predicate on the "daily_purchase_limit" field.
+func DailyPurchaseLimitEQ(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldDailyPurchaseLimit, v))
+}
+
+// DailyPurchaseLimitNEQ applies the NEQ predicate on the "daily_purchase_limit" field.
+func DailyPurchaseLimitNEQ(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldDailyPurchaseLimit, v))
+}
+
+// DailyPurchaseLimitIn applies the In predicate on the "daily_purchase_limit" field.
+func DailyPurchaseLimitIn(vs ...int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldDailyPurchaseLimit, vs...))
+}
+
+// DailyPurchaseLimitNotIn applies the NotIn predicate on the "daily_purchase_limit" field.
+func DailyPurchaseLimitNotIn(vs ...int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldDailyPurchaseLimit, vs...))
+}
+
+// DailyPurchaseLimitGT applies the GT predicate on the "daily_purchase_limit" field.
+func DailyPurchaseLimitGT(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldDailyPurchaseLimit, v))
+}
+
+// DailyPurchaseLimitGTE applies the GTE predicate on the "daily_purchase_limit" field.
+func DailyPurchaseLimitGTE(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldDailyPurchaseLimit, v))
+}
+
+// DailyPurchaseLimitLT applies the LT predicate on the "daily_purchase_limit" field.
+func DailyPurchaseLimitLT(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldDailyPurchaseLimit, v))
+}
+
+// DailyPurchaseLimitLTE applies the LTE predicate on the "daily_purchase_limit" field.
+func DailyPurchaseLimitLTE(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldDailyPurchaseLimit, v))
+}
+
+// TotalPurchaseLimitEQ applies the EQ predicate on the "total_purchase_limit" field.
+func TotalPurchaseLimitEQ(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldTotalPurchaseLimit, v))
+}
+
+// TotalPurchaseLimitNEQ applies the NEQ predicate on the "total_purchase_limit" field.
+func TotalPurchaseLimitNEQ(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldTotalPurchaseLimit, v))
+}
+
+// TotalPurchaseLimitIn applies the In predicate on the "total_purchase_limit" field.
+func TotalPurchaseLimitIn(vs ...int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldTotalPurchaseLimit, vs...))
+}
+
+// TotalPurchaseLimitNotIn applies the NotIn predicate on the "total_purchase_limit" field.
+func TotalPurchaseLimitNotIn(vs ...int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldTotalPurchaseLimit, vs...))
+}
+
+// TotalPurchaseLimitGT applies the GT predicate on the "total_purchase_limit" field.
+func TotalPurchaseLimitGT(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldTotalPurchaseLimit, v))
+}
+
+// TotalPurchaseLimitGTE applies the GTE predicate on the "total_purchase_limit" field.
+func TotalPurchaseLimitGTE(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldTotalPurchaseLimit, v))
+}
+
+// TotalPurchaseLimitLT applies the LT predicate on the "total_purchase_limit" field.
+func TotalPurchaseLimitLT(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldTotalPurchaseLimit, v))
+}
+
+// TotalPurchaseLimitLTE applies the LTE predicate on the "total_purchase_limit" field.
+func TotalPurchaseLimitLTE(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldTotalPurchaseLimit, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

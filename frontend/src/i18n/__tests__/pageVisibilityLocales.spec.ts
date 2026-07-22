@@ -13,6 +13,7 @@ describe('page visibility locales', () => {
       adminPages: 'Administrator Pages',
     })
     expect(messages.admin.settings.features.pageVisibility.userChannelStatus.label).toBe('Channel Status')
+    expect(messages.admin.settings.features.pageVisibility.mall.label).toBe('Mall')
     expect(messages.admin.settings.features.pageVisibility.userSubscriptions.label).toBe('My Subscriptions')
     expect(messages.admin.settings.features.pageVisibility.adminSubscriptions.label).toBe('Subscription Management')
     expect(messages.admin.settings.features.pageVisibility.adminPromoCodes.label).toBe('Promo Code Management')
@@ -29,6 +30,7 @@ describe('page visibility locales', () => {
       adminPages: '管理员页面',
     })
     expect(messages.admin.settings.features.pageVisibility.userChannelStatus.label).toBe('渠道状态')
+    expect(messages.admin.settings.features.pageVisibility.mall.label).toBe('商城')
     expect(messages.admin.settings.features.pageVisibility.userSubscriptions.label).toBe('我的订阅')
     expect(messages.admin.settings.features.pageVisibility.adminSubscriptions.label).toBe('订阅管理')
     expect(messages.admin.settings.features.pageVisibility.adminPromoCodes.label).toBe('优惠码管理')

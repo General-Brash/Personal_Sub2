@@ -68,6 +68,7 @@ func RegisterUserRoutes(
 			bank.GET("/status", h.Bank.GetStatus)
 			bank.POST("/advance", h.Bank.Advance)
 			bank.POST("/exchange", h.Bank.Exchange)
+			bank.POST("/repay", h.Bank.Repay)
 		}
 
 		// API Key管理

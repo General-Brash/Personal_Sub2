@@ -56,28 +56,22 @@ func (r *temporaryCreditRepository) CreateGrantTx(ctx context.Context, tx *sql.T
 	out := grant
 	var source string
 	var checkinID, grantedBy sql.NullInt64
-	var persistedExpiresAt time.Time
+	var persistedAvailableAt, persistedExpiresAt time.Time
 	err := tx.QueryRowContext(ctx, `
 INSERT INTO temporary_credit_grants
-    (user_id, source, checkin_id, amount, remaining_amount, expires_at, notes, granted_by)
-VALUES ($1, $2, $3, $4, $4, $5, $6, $7)
-RETURNING id, user_id, source, checkin_id, amount, remaining_amount, expires_at, notes, granted_by, created_at, updated_at`,
-		grant.UserID, grant.Source, nullableInt64(grant.CheckinID), strconv.FormatFloat(grant.Amount, 'f', 8, 64), expiresAt,
-		grant.Notes, nullableInt64(grant.GrantedBy),
-	).Scan(&out.ID, &out.UserID, &source, &checkinID, &out.Amount, &out.RemainingAmount, &persistedExpiresAt, &out.Notes, &grantedBy, &out.CreatedAt, &out.UpdatedAt)
+    (user_id, source, checkin_id, mall_purchase_id, daily_subscription_id, scheduled_date,
+     amount, remaining_amount, available_at, expires_at, notes, granted_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, $11)
+RETURNING id, user_id, source, checkin_id, amount, remaining_amount, available_at, expires_at, notes, granted_by, created_at, updated_at`,
+		grant.UserID, grant.Source, nullableInt64(grant.CheckinID), nullableInt64(grant.MallPurchaseID), nullableInt64(grant.DailySubscriptionID), nullableDate(grant.ScheduledDate),
+		strconv.FormatFloat(grant.Amount, 'f', 8, 64), grant.AvailableAt(), expiresAt, grant.Notes, nullableInt64(grant.GrantedBy),
+	).Scan(&out.ID, &out.UserID, &source, &checkinID, &out.Amount, &out.RemainingAmount, &persistedAvailableAt, &persistedExpiresAt, &out.Notes, &grantedBy, &out.CreatedAt, &out.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create temporary credit grant: %w", err)
 	}
 	out.Source = service.TemporaryCreditSource(source)
 	out.CheckinID = nullableInt64Ptr(checkinID)
 	out.GrantedBy = nullableInt64Ptr(grantedBy)
-	if out.Source != service.TemporaryCreditSourceBankAdvance {
-		remaining, _, offsetErr := service.ApplyTemporaryCreditDebtOffsetTx(ctx, tx, out.UserID, out.ID, out.Amount)
-		if offsetErr != nil {
-			return nil, fmt.Errorf("apply temporary credit debt offset: %w", offsetErr)
-		}
-		out.RemainingAmount = remaining
-	}
 	return &out, nil
 }
 
@@ -90,7 +84,9 @@ func (r *temporaryCreditRepository) AvailableSummary(ctx context.Context, userID
 	err := r.db.QueryRowContext(ctx, `
 SELECT COALESCE(SUM(remaining_amount), 0), MIN(expires_at)
 FROM temporary_credit_grants
-WHERE user_id = $1 AND remaining_amount > 0 AND expires_at > clock_timestamp()`, userID).
+WHERE user_id = $1 AND remaining_amount > 0
+  AND available_at <= clock_timestamp()
+  AND expires_at > clock_timestamp()`, userID).
 		Scan(&total, &earliest)
 	if err != nil {
 		return 0, nil, err
@@ -122,6 +118,13 @@ func nullableInt64Ptr(v sql.NullInt64) *int64 {
 		return nil
 	}
 	return &v.Int64
+}
+
+func nullableDate(v *time.Time) any {
+	if v == nil {
+		return nil
+	}
+	return v.Format("2006-01-02")
 }
 
 var _ service.TemporaryCreditRepository = (*temporaryCreditRepository)(nil)

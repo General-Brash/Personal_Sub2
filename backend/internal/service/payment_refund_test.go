@@ -417,6 +417,109 @@ func TestQueryAndFinalizeRefundUnsupportedProviderReturnsClearError(t *testing.T
 	require.Equal(t, "REFUND_QUERY_UNSUPPORTED", infraerrors.Reason(err))
 }
 
+func TestQueryAndFinalizeRefundUsesGatewayAmountForCreditedBalanceRefund(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createPendingRefundOrderForTest(t, ctx, client, "query-finalize-product-amount")
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		SetAmount(12.34567891).
+		SetPayAmount(9.99).
+		SetRefundAmount(6.172839455).
+		Save(ctx)
+	require.NoError(t, err)
+
+	provider := &refundQueryProviderTestDouble{
+		refundResponse: &payment.RefundResponse{RefundID: "rf_test", Status: payment.ProviderStatusPending},
+	}
+	svc := &PaymentService{entClient: client, loadBalancer: &captureLoadBalancer{}}
+	restore := replacePaymentProviderFactoryForTest(t, provider)
+	defer restore()
+
+	result, err := svc.QueryAndFinalizeRefund(ctx, order.ID)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "5.00", provider.queryRequest.Amount)
+}
+
+func TestPrepareRefundRecoversRecordedLateProductSuccess(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createPendingRefundOrderForTest(t, ctx, client, "prepare-recover-success")
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		SetCurrencyProductID(903).
+		SetStatus(OrderStatusRefunding).
+		Save(ctx)
+	require.NoError(t, err)
+	createPurchaseLimitRefundAudit(t, ctx, client, order.ID, purchaseLimitRejectedPaymentAudit, `{"reason":"late"}`)
+	createPurchaseLimitRefundAudit(t, ctx, client, order.ID, purchaseLimitRefundResultAudit, `{"status":"success","refundID":"rf_prepare_recovered"}`)
+
+	svc := &PaymentService{entClient: client}
+	plan, result, err := svc.PrepareRefund(ctx, order.ID, 0, "", true, false)
+	require.NoError(t, err)
+	require.Nil(t, plan)
+	require.NotNil(t, result)
+	require.True(t, result.Success)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusRefunded, reloaded.Status)
+}
+
+func TestPrepareRefundRecoversRecordedLateProductPendingWithoutNewRefundPlan(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createPendingRefundOrderForTest(t, ctx, client, "prepare-recover-pending")
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		SetCurrencyProductID(905).
+		SetStatus(OrderStatusRefunding).
+		Save(ctx)
+	require.NoError(t, err)
+	createPurchaseLimitRefundAudit(t, ctx, client, order.ID, purchaseLimitRejectedPaymentAudit, `{"reason":"late"}`)
+	createPurchaseLimitRefundAudit(t, ctx, client, order.ID, purchaseLimitRefundResultAudit, `{"status":"pending","refundID":"rf_prepare_pending"}`)
+
+	svc := &PaymentService{entClient: client}
+	plan, result, err := svc.PrepareRefund(ctx, order.ID, 0, "", true, false)
+	require.NoError(t, err)
+	require.Nil(t, plan, "a recorded pending provider refund must not issue another refund request")
+	require.NotNil(t, result)
+	require.False(t, result.Success)
+	require.Contains(t, result.Warning, "pending confirmation")
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusRefundPending, reloaded.Status)
+}
+
+func TestQueryAndFinalizeRefundRecoversRecordedPendingBeforeProviderQuery(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createPendingRefundOrderForTest(t, ctx, client, "query-recover-pending")
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		SetCurrencyProductID(904).
+		SetStatus(OrderStatusRefunding).
+		Save(ctx)
+	require.NoError(t, err)
+	createPurchaseLimitRefundAudit(t, ctx, client, order.ID, purchaseLimitRejectedPaymentAudit, `{"reason":"late"}`)
+	createPurchaseLimitRefundAudit(t, ctx, client, order.ID, purchaseLimitRefundResultAudit, `{"status":"pending","refundID":"rf_query_recovered"}`)
+
+	provider := &refundQueryProviderTestDouble{
+		refundResponse: &payment.RefundResponse{RefundID: "rf_query_recovered", Status: payment.ProviderStatusSuccess},
+	}
+	svc := &PaymentService{entClient: client, loadBalancer: &captureLoadBalancer{}}
+	restore := replacePaymentProviderFactoryForTest(t, provider)
+	defer restore()
+
+	result, err := svc.QueryAndFinalizeRefund(ctx, order.ID)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Success)
+	require.Equal(t, "rf_query_recovered", provider.queryRequest.RefundID)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusRefunded, reloaded.Status)
+}
+
 func createPendingRefundOrderForTest(t *testing.T, ctx context.Context, client *dbent.Client, suffix string) *dbent.PaymentOrder {
 	t.Helper()
 
@@ -504,8 +607,10 @@ func (refundProviderTestDouble) Refund(context.Context, payment.RefundRequest) (
 type refundQueryProviderTestDouble struct {
 	refundProviderTestDouble
 	refundResponse *payment.RefundResponse
+	queryRequest   payment.RefundQueryRequest
 }
 
-func (p *refundQueryProviderTestDouble) QueryRefund(context.Context, payment.RefundQueryRequest) (*payment.RefundResponse, error) {
+func (p *refundQueryProviderTestDouble) QueryRefund(_ context.Context, req payment.RefundQueryRequest) (*payment.RefundResponse, error) {
+	p.queryRequest = req
 	return p.refundResponse, nil
 }

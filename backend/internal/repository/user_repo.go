@@ -151,6 +151,7 @@ FROM users AS u
 LEFT JOIN temporary_credit_grants AS g
   ON g.user_id = u.id
  AND g.remaining_amount > 0
+ AND g.available_at <= clock_timestamp()
  AND g.expires_at > clock_timestamp()
 WHERE u.id = $1
   AND u.deleted_at IS NULL

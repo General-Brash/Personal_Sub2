@@ -7,7 +7,7 @@ vi.mock('@/i18n', () => ({
   i18n: { global: { t: (key: string) => key } },
 }))
 
-import { formatCurrency, formatDecimalAmount, formatMoneyDisplay } from '../format'
+import { compareDecimalAmounts, formatCurrency, formatDecimalAmount, formatMoneyDisplay, multiplyDecimalAmount } from '../format'
 
 describe('formatCurrency', () => {
   beforeEach(() => {
@@ -64,5 +64,19 @@ describe('formatDecimalAmount', () => {
     expect(formatDecimalAmount(null)).toBe('0.00')
     expect(formatDecimalAmount('not-an-amount')).toBe('0.00')
     expect(formatDecimalAmount(Number.POSITIVE_INFINITY)).toBe('0.00')
+  })
+})
+
+describe('fixed precision credit comparisons', () => {
+  it.each([
+    ['1.00000000', '1.00000000', 0],
+    ['1.00000001', '1.00000000', 1],
+    ['0.99999999', '1.00000000', -1],
+  ])('compares %s and %s at eight places', (left, right, expected) => {
+    expect(compareDecimalAmounts(left, right)).toBe(expected)
+  })
+
+  it('multiplies daily credit without floating-point drift', () => {
+    expect(multiplyDecimalAmount('0.10000001', 3)).toBe('0.30000003')
   })
 })

@@ -38,11 +38,20 @@ func (SubscriptionPlan) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "text"}).
 			Default(""),
 		field.Float("price").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}),
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
 		field.Float("original_price").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}).
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Optional().
 			Nillable(),
+		field.String("benefit_type").
+			MaxLen(40).
+			Default("sub2"),
+		field.String("payment_credit_type").
+			MaxLen(20).
+			Default("permanent"),
+		field.Float("daily_temporary_credit_amount").
+			SchemaType(map[string]string{dialect.Postgres: "numeric(20,8)"}).
+			Default(0),
 		field.String("currency").
 			MaxLen(3).
 			Default(""),
@@ -60,6 +69,12 @@ func (SubscriptionPlan) Fields() []ent.Field {
 		field.Bool("for_sale").
 			Default(true),
 		field.Int("sort_order").
+			Default(0),
+		field.Int("daily_purchase_limit").
+			NonNegative().
+			Default(0),
+		field.Int("total_purchase_limit").
+			NonNegative().
 			Default(0),
 		field.Time("created_at").
 			Immutable().

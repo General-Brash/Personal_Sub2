@@ -21,25 +21,46 @@ const temporaryCreditRequestIDMaxLen = 255
 
 type TemporaryCreditSource string
 
+type TemporaryCreditStatus string
+
 const (
 	TemporaryCreditSourceCheckin      TemporaryCreditSource = "checkin"
 	TemporaryCreditSourceAdminGrant   TemporaryCreditSource = "admin_grant"
 	TemporaryCreditSourceBankAdvance  TemporaryCreditSource = "bank_advance"
 	TemporaryCreditSourceBankExchange TemporaryCreditSource = "bank_exchange"
+	TemporaryCreditSourceMallProduct  TemporaryCreditSource = "mall_product"
+	TemporaryCreditSourceSubscription TemporaryCreditSource = "subscription"
+)
+
+const (
+	TemporaryCreditStatusUnused   TemporaryCreditStatus = "unused"
+	TemporaryCreditStatusActive   TemporaryCreditStatus = "active"
+	TemporaryCreditStatusDepleted TemporaryCreditStatus = "depleted"
+	TemporaryCreditStatusExpired  TemporaryCreditStatus = "expired"
 )
 
 type TemporaryCreditGrant struct {
-	ID              int64
-	UserID          int64
-	Source          TemporaryCreditSource
-	CheckinID       *int64
-	Amount          float64
-	RemainingAmount float64
-	expiresAt       time.Time
-	Notes           string
-	GrantedBy       *int64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                  int64
+	UserID              int64
+	Source              TemporaryCreditSource
+	CheckinID           *int64
+	MallPurchaseID      *int64
+	DailySubscriptionID *int64
+	ScheduledDate       *time.Time
+	Amount              float64
+	RemainingAmount     float64
+	availableAt         time.Time
+	expiresAt           time.Time
+	Notes               string
+	GrantedBy           *int64
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+// AvailableAt returns when the grant starts participating in available-credit
+// and FEFO allocation queries.
+func (g TemporaryCreditGrant) AvailableAt() time.Time {
+	return g.availableAt
 }
 
 // ExpiresAt returns the service-computed expiration without allowing callers
@@ -61,17 +82,22 @@ type TemporaryCreditRepository interface {
 }
 
 type CreateTemporaryCreditGrantInput struct {
-	UserID    int64
-	Source    TemporaryCreditSource
-	CheckinID *int64
-	Amount    float64
-	Notes     string
-	GrantedBy *int64
+	UserID              int64
+	Source              TemporaryCreditSource
+	CheckinID           *int64
+	Amount              float64
+	Notes               string
+	GrantedBy           *int64
+	MallPurchaseID      *int64
+	DailySubscriptionID *int64
+	ScheduledDate       *time.Time
 
 	// businessNow is set only by same-package workflows that have already
 	// captured an authoritative business instant. Public callers cannot choose
 	// an arbitrary expiry and continue to use the service clock.
 	businessNow *time.Time
+	availableAt *time.Time
+	expiresAt   *time.Time
 }
 
 type TemporaryCreditService struct {
@@ -128,6 +154,7 @@ func (s *TemporaryCreditService) CreateGrant(ctx context.Context, input CreateTe
 	if err != nil {
 		return nil, err
 	}
+	created.availableAt = grant.availableAt
 	created.expiresAt = grant.expiresAt
 	s.invalidateAvailableCredit(ctx, created.UserID)
 	return created, nil
@@ -172,6 +199,7 @@ func (s *TemporaryCreditService) CreateGrantTx(ctx context.Context, tx *sql.Tx, 
 	if err != nil {
 		return nil, err
 	}
+	created.availableAt = grant.availableAt
 	created.expiresAt = grant.expiresAt
 	return created, nil
 }
@@ -190,15 +218,26 @@ func (s *TemporaryCreditService) newGrant(input CreateTemporaryCreditGrantInput)
 	if err != nil {
 		return TemporaryCreditGrant{}, err
 	}
+	availableAt := businessNow
+	if input.availableAt != nil {
+		availableAt = *input.availableAt
+	}
+	if input.expiresAt != nil {
+		expiresAt = *input.expiresAt
+	}
 	grant := TemporaryCreditGrant{
-		UserID:          input.UserID,
-		Source:          input.Source,
-		CheckinID:       input.CheckinID,
-		Amount:          amount,
-		RemainingAmount: amount,
-		expiresAt:       expiresAt,
-		Notes:           input.Notes,
-		GrantedBy:       input.GrantedBy,
+		UserID:              input.UserID,
+		Source:              input.Source,
+		CheckinID:           input.CheckinID,
+		MallPurchaseID:      input.MallPurchaseID,
+		DailySubscriptionID: input.DailySubscriptionID,
+		ScheduledDate:       input.ScheduledDate,
+		Amount:              amount,
+		RemainingAmount:     amount,
+		availableAt:         availableAt,
+		expiresAt:           expiresAt,
+		Notes:               input.Notes,
+		GrantedBy:           input.GrantedBy,
 	}
 	if err := validateTemporaryCreditGrant(grant); err != nil {
 		return TemporaryCreditGrant{}, err
@@ -271,18 +310,29 @@ func validateTemporaryCreditGrant(grant TemporaryCreditGrant) error {
 	if grant.expiresAt.IsZero() {
 		return fmt.Errorf("temporary credit expiration is required")
 	}
+	if grant.availableAt.IsZero() || !grant.availableAt.Before(grant.expiresAt) {
+		return fmt.Errorf("temporary credit availability window is invalid")
+	}
 	switch grant.Source {
 	case TemporaryCreditSourceCheckin:
-		if grant.CheckinID == nil || grant.GrantedBy != nil || grant.Notes != "" {
+		if grant.CheckinID == nil || grant.GrantedBy != nil || grant.Notes != "" || grant.MallPurchaseID != nil || grant.DailySubscriptionID != nil || grant.ScheduledDate != nil {
 			return fmt.Errorf("checkin grant must have checkin id and no administrator metadata")
 		}
 	case TemporaryCreditSourceAdminGrant:
-		if grant.CheckinID != nil || grant.GrantedBy == nil || *grant.GrantedBy <= 0 {
+		if grant.CheckinID != nil || grant.GrantedBy == nil || *grant.GrantedBy <= 0 || grant.MallPurchaseID != nil || grant.DailySubscriptionID != nil || grant.ScheduledDate != nil {
 			return fmt.Errorf("admin grant must have administrator metadata and no checkin id")
 		}
 	case TemporaryCreditSourceBankAdvance, TemporaryCreditSourceBankExchange:
-		if grant.CheckinID != nil || grant.GrantedBy != nil || grant.Notes != "" {
+		if grant.CheckinID != nil || grant.GrantedBy != nil || grant.Notes != "" || grant.MallPurchaseID != nil || grant.DailySubscriptionID != nil || grant.ScheduledDate != nil {
 			return fmt.Errorf("bank grant must not have checkin or administrator metadata")
+		}
+	case TemporaryCreditSourceMallProduct:
+		if grant.CheckinID != nil || grant.GrantedBy != nil || grant.Notes != "" || grant.MallPurchaseID == nil || *grant.MallPurchaseID <= 0 || grant.DailySubscriptionID != nil || grant.ScheduledDate != nil {
+			return fmt.Errorf("mall product grant must reference one mall purchase")
+		}
+	case TemporaryCreditSourceSubscription:
+		if grant.CheckinID != nil || grant.GrantedBy != nil || grant.Notes != "" || grant.MallPurchaseID == nil || *grant.MallPurchaseID <= 0 || grant.DailySubscriptionID == nil || *grant.DailySubscriptionID <= 0 || grant.ScheduledDate == nil {
+			return fmt.Errorf("subscription grant must reference its purchase, subscription, and scheduled date")
 		}
 	default:
 		return fmt.Errorf("unknown temporary credit source %q", grant.Source)

@@ -25,6 +25,7 @@ const appStore = vi.hoisted(() => ({
   publicSettingsLoaded: false,
   cachedPublicSettings: null as null | {
     payment_enabled?: boolean
+    mall_enabled?: boolean
     risk_control_enabled?: boolean
     channel_monitor_enabled?: boolean
     user_channel_status_enabled?: boolean
@@ -149,6 +150,7 @@ describe('feature route guard', () => {
   })
 
   it.each([
+    ['/mall', 'mall_enabled'],
     ['/monitor', 'user_channel_status_enabled'],
     ['/subscriptions', 'user_subscriptions_enabled'],
     ['/admin/subscriptions', 'admin_subscriptions_enabled'],
@@ -191,6 +193,53 @@ describe('feature route guard', () => {
     await navigation
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith()
+  })
+
+  it('waits for public settings before rejecting a cold disabled /mall visit', async () => {
+    const route = routerHarness.routes.find((item) => item.path === '/mall')
+    const deferred = createDeferred<{ mall_enabled: boolean }>()
+    appStore.fetchPublicSettings.mockImplementation(async () => {
+      const settings = await deferred.promise
+      appStore.cachedPublicSettings = settings
+      appStore.publicSettingsLoaded = true
+      return settings
+    })
+
+    const { navigation, next } = runGuard(route?.meta ?? {}, '/mall')
+
+    await vi.waitFor(() => expect(appStore.fetchPublicSettings).toHaveBeenCalledTimes(1))
+    expect(next).not.toHaveBeenCalled()
+
+    deferred.resolve({ mall_enabled: false })
+    await navigation
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith('/dashboard')
+    expect(appStore.showWarning).toHaveBeenCalledWith('common.pageDisabledByAdmin')
+  })
+
+  it('allows /mall browsing when the mall is enabled but payment is disabled', async () => {
+    const route = routerHarness.routes.find((item) => item.path === '/mall')
+    appStore.cachedPublicSettings = { mall_enabled: true, payment_enabled: false }
+    appStore.publicSettingsLoaded = true
+
+    const { navigation, next } = runGuard(route?.meta ?? {}, '/mall')
+    await navigation
+
+    expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
+    expect(route?.meta?.requiresPayment).toBeUndefined()
+    expect(next).toHaveBeenCalledWith()
+  })
+
+  it('keeps every /purchase query and hash value in the /mall compatibility redirect', () => {
+    const route = routerHarness.routes.find((item) => item.path === '/purchase')
+    const redirect = route?.redirect as (to: Record<string, unknown>) => Record<string, unknown>
+
+    expect(redirect({ query: { tab: 'subscription', plan_id: '7' }, hash: '#resume' })).toEqual({
+      path: '/mall',
+      query: { tab: 'subscription', plan_id: '7' },
+      hash: '#resume',
+    })
   })
 
   it.each([

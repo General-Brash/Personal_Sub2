@@ -26,14 +26,15 @@ func RegisterPaymentRoutes(
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
 	authenticated.Use(middleware.BackendModeUserGuard(settingService))
 	{
-		authenticated.GET("/config", paymentHandler.GetPaymentConfig)
-		authenticated.GET("/checkout-info", paymentHandler.GetCheckoutInfo)
-		authenticated.GET("/plans", paymentHandler.GetPlans)
-		authenticated.GET("/limits", paymentHandler.GetLimits)
+		mallGuard := middleware.MallEnabledUserGuard(settingService)
+		authenticated.GET("/config", mallGuard, paymentHandler.GetPaymentConfig)
+		authenticated.GET("/checkout-info", mallGuard, paymentHandler.GetCheckoutInfo)
+		authenticated.GET("/plans", mallGuard, paymentHandler.GetPlans)
+		authenticated.GET("/limits", mallGuard, paymentHandler.GetLimits)
 
 		orders := authenticated.Group("/orders")
 		{
-			orders.POST("", paymentHandler.CreateOrder)
+			orders.POST("", mallGuard, paymentHandler.CreateOrder)
 			orders.POST("/verify", paymentHandler.VerifyOrder)
 			orders.GET("/my", paymentHandler.GetMyOrders)
 			orders.GET("/:id", paymentHandler.GetOrder)
@@ -41,6 +42,16 @@ func RegisterPaymentRoutes(
 			orders.POST("/:id/refund-request", paymentHandler.RequestRefund)
 			orders.GET("/refund-eligible-providers", paymentHandler.GetRefundEligibleProviders)
 		}
+	}
+
+	// --- Internal-credit mall endpoints (authenticated, no provider needed) ---
+	mall := v1.Group("/mall")
+	mall.Use(gin.HandlerFunc(jwtAuth))
+	mall.Use(middleware.BackendModeUserGuard(settingService))
+	mall.Use(middleware.MallEnabledUserGuard(settingService))
+	{
+		mall.GET("/balance", paymentHandler.GetMallBalance)
+		mall.POST("/purchases", paymentHandler.PurchaseMallProduct)
 	}
 
 	// --- Public payment endpoints (no auth) ---
@@ -96,6 +107,14 @@ func RegisterPaymentRoutes(
 			plans.POST("", adminPaymentHandler.CreatePlan)
 			plans.PUT("/:id", adminPaymentHandler.UpdatePlan)
 			plans.DELETE("/:id", adminPaymentHandler.DeletePlan)
+		}
+
+		currencyProducts := adminGroup.Group("/currency-products")
+		{
+			currencyProducts.GET("", adminPaymentHandler.ListCurrencyProducts)
+			currencyProducts.POST("", adminPaymentHandler.CreateCurrencyProduct)
+			currencyProducts.PUT("/:id", adminPaymentHandler.UpdateCurrencyProduct)
+			currencyProducts.DELETE("/:id", adminPaymentHandler.DeleteCurrencyProduct)
 		}
 
 		// Provider Instances

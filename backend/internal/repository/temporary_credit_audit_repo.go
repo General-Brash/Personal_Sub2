@@ -33,7 +33,14 @@ func (r *temporaryCreditAuditRepository) ListByUser(
 	offset := int64(page-1) * int64(pageSize)
 	rows, err := r.db.QueryContext(ctx, `
 SELECT id, user_id, source, checkin_id, amount::text, remaining_amount::text,
-       expires_at, notes, granted_by, created_at, updated_at
+       available_at, expires_at,
+       CASE
+           WHEN available_at > clock_timestamp() THEN 'unused'
+           WHEN remaining_amount = 0 THEN 'depleted'
+           WHEN expires_at <= clock_timestamp() THEN 'expired'
+           ELSE 'active'
+       END AS status,
+       notes, granted_by, created_at, updated_at
 FROM temporary_credit_grants
 WHERE user_id = $1
 ORDER BY created_at DESC, id DESC
@@ -46,7 +53,7 @@ LIMIT $2 OFFSET $3`, userID, pageSize, offset)
 	items := make([]service.TemporaryCreditAuditItem, 0)
 	for rows.Next() {
 		var item service.TemporaryCreditAuditItem
-		var source string
+		var source, status string
 		var checkinID, grantedBy sql.NullInt64
 		if err := rows.Scan(
 			&item.ID,
@@ -55,7 +62,9 @@ LIMIT $2 OFFSET $3`, userID, pageSize, offset)
 			&checkinID,
 			&item.Amount,
 			&item.RemainingAmount,
+			&item.AvailableAt,
 			&item.ExpiresAt,
+			&status,
 			&item.Notes,
 			&grantedBy,
 			&item.CreatedAt,
@@ -64,8 +73,10 @@ LIMIT $2 OFFSET $3`, userID, pageSize, offset)
 			return nil, 0, fmt.Errorf("scan temporary credit audit item: %w", err)
 		}
 		item.Source = service.TemporaryCreditSource(source)
+		item.Status = service.TemporaryCreditStatus(status)
 		item.CheckinID = nullableInt64Ptr(checkinID)
 		item.GrantedBy = nullableInt64Ptr(grantedBy)
+		item.AvailableAt = item.AvailableAt.UTC()
 		item.ExpiresAt = item.ExpiresAt.UTC()
 		item.CreatedAt = item.CreatedAt.UTC()
 		item.UpdatedAt = item.UpdatedAt.UTC()

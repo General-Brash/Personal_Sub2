@@ -1,6 +1,11 @@
 <template>
   <AppLayout>
-    <div class="space-y-4">
+    <div id="admin-shelf-panel-subscription" role="tabpanel" aria-labelledby="admin-shelf-tab-subscription" class="space-y-4">
+      <header>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('commerce.shelf.title') }}</h1>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('commerce.shelf.description') }}</p>
+      </header>
+      <ShelfSectionTabs active-section="subscription" />
       <!-- Actions -->
       <div class="flex items-center justify-end gap-2">
         <button @click="loadPlans" :disabled="plansLoading" class="btn btn-secondary" :title="t('common.refresh')">
@@ -14,8 +19,12 @@
         <template #cell-name="{ value, row }">
           <span class="text-sm font-medium" :class="getPlanNameClass(row.group_id)">{{ value }}</span>
         </template>
-        <template #cell-group_id="{ value }">
-          <span v-if="isGroupMissing(value)" class="text-sm">
+        <template #cell-benefit_type="{ row }">
+          <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ benefitTypeLabel(row) }}</span>
+        </template>
+        <template #cell-group_id="{ value, row }">
+          <span v-if="row.benefit_type === 'daily_temporary_credit'" class="text-sm text-gray-400">-</span>
+          <span v-else-if="isGroupMissing(value)" class="text-sm">
             <span class="text-gray-400">#{{ value }}</span>
             <span class="ml-1 badge badge-danger">{{ t('payment.admin.groupMissing') }}</span>
           </span>
@@ -30,7 +39,7 @@
         <template #cell-price="{ value, row }">
           <div class="text-sm">
             <span class="font-medium text-gray-900 dark:text-white">${{ (value ?? 0).toFixed(2) }}</span>
-            <span v-if="row.currency" class="ml-1 text-xs text-gray-400">{{ row.currency }}</span>
+            <span class="ml-1 text-xs text-gray-400">{{ creditTypeLabel(row.payment_credit_type) }}</span>
             <span v-if="row.original_price" class="ml-1 text-xs text-gray-400 line-through">${{ row.original_price.toFixed(2) }}</span>
           </div>
         </template>
@@ -91,6 +100,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import PlanEditDialog from './PlanEditDialog.vue'
+import ShelfSectionTabs from '@/components/admin/payment/ShelfSectionTabs.vue'
 import { platformTextClass } from '@/utils/platformColors'
 
 const { t } = useI18n()
@@ -127,6 +137,16 @@ function getPlanNameClass(groupId: number): string {
   return group ? platformTextClass(group.platform) : 'text-gray-900 dark:text-white'
 }
 
+function creditTypeLabel(type: SubscriptionPlan['payment_credit_type']): string {
+  return t(`commerce.creditType.${type === 'temporary' ? 'temporary' : 'permanent'}`)
+}
+
+function benefitTypeLabel(plan: SubscriptionPlan): string {
+  return plan.benefit_type === 'daily_temporary_credit'
+    ? t('payment.admin.benefitDailyTemporaryCredit')
+    : t('payment.admin.benefitSub2')
+}
+
 
 // ==================== Plans ====================
 
@@ -140,6 +160,7 @@ const deletingPlanId = ref<number | null>(null)
 const planColumns = computed((): Column[] => [
   { key: 'id', label: 'ID' },
   { key: 'name', label: t('payment.admin.planName') },
+  { key: 'benefit_type', label: t('payment.admin.benefitType') },
   { key: 'group_id', label: t('payment.admin.group') },
   { key: 'price', label: t('payment.admin.price') },
   { key: 'validity_days', label: t('payment.admin.validityDays') },

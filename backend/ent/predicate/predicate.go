@@ -57,6 +57,9 @@ type ChannelMonitorHistory func(*sql.Selector)
 // ChannelMonitorRequestTemplate is the predicate function for channelmonitorrequesttemplate builders.
 type ChannelMonitorRequestTemplate func(*sql.Selector)
 
+// CurrencyProduct is the predicate function for currencyproduct builders.
+type CurrencyProduct func(*sql.Selector)
+
 // DailyCheckin is the predicate function for dailycheckin builders.
 type DailyCheckin func(*sql.Selector)
 
@@ -72,6 +75,12 @@ type IdempotencyRecord func(*sql.Selector)
 // IdentityAdoptionDecision is the predicate function for identityadoptiondecision builders.
 type IdentityAdoptionDecision func(*sql.Selector)
 
+// MallDailyCreditSubscription is the predicate function for malldailycreditsubscription builders.
+type MallDailyCreditSubscription func(*sql.Selector)
+
+// MallPurchase is the predicate function for mallpurchase builders.
+type MallPurchase func(*sql.Selector)
+
 // PaymentAuditLog is the predicate function for paymentauditlog builders.
 type PaymentAuditLog func(*sql.Selector)
 
@@ -80,6 +89,12 @@ type PaymentOrder func(*sql.Selector)
 
 // PaymentProviderInstance is the predicate function for paymentproviderinstance builders.
 type PaymentProviderInstance func(*sql.Selector)
+
+// PaymentPurchaseCounter is the predicate function for paymentpurchasecounter builders.
+type PaymentPurchaseCounter func(*sql.Selector)
+
+// PaymentPurchaseReservation is the predicate function for paymentpurchasereservation builders.
+type PaymentPurchaseReservation func(*sql.Selector)
 
 // PendingAuthSession is the predicate function for pendingauthsession builders.
 type PendingAuthSession func(*sql.Selector)

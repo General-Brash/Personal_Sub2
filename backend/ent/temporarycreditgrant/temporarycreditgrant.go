@@ -25,10 +25,18 @@ const (
 	FieldSource = "source"
 	// FieldCheckinID holds the string denoting the checkin_id field in the database.
 	FieldCheckinID = "checkin_id"
+	// FieldMallPurchaseID holds the string denoting the mall_purchase_id field in the database.
+	FieldMallPurchaseID = "mall_purchase_id"
+	// FieldDailySubscriptionID holds the string denoting the daily_subscription_id field in the database.
+	FieldDailySubscriptionID = "daily_subscription_id"
+	// FieldScheduledDate holds the string denoting the scheduled_date field in the database.
+	FieldScheduledDate = "scheduled_date"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
 	// FieldRemainingAmount holds the string denoting the remaining_amount field in the database.
 	FieldRemainingAmount = "remaining_amount"
+	// FieldAvailableAt holds the string denoting the available_at field in the database.
+	FieldAvailableAt = "available_at"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
 	// FieldNotes holds the string denoting the notes field in the database.
@@ -92,8 +100,12 @@ var Columns = []string{
 	FieldUserID,
 	FieldSource,
 	FieldCheckinID,
+	FieldMallPurchaseID,
+	FieldDailySubscriptionID,
+	FieldScheduledDate,
 	FieldAmount,
 	FieldRemainingAmount,
+	FieldAvailableAt,
 	FieldExpiresAt,
 	FieldNotes,
 	FieldGrantedBy,
@@ -116,6 +128,8 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultAvailableAt holds the default value on creation for the "available_at" field.
+	DefaultAvailableAt func() time.Time
 	// DefaultNotes holds the default value on creation for the "notes" field.
 	DefaultNotes string
 )
@@ -129,6 +143,8 @@ const (
 	SourceAdminGrant   Source = "admin_grant"
 	SourceBankAdvance  Source = "bank_advance"
 	SourceBankExchange Source = "bank_exchange"
+	SourceMallProduct  Source = "mall_product"
+	SourceSubscription Source = "subscription"
 )
 
 func (s Source) String() string {
@@ -138,7 +154,7 @@ func (s Source) String() string {
 // SourceValidator is a validator for the "source" field enum values. It is called by the builders before save.
 func SourceValidator(s Source) error {
 	switch s {
-	case SourceCheckin, SourceAdminGrant, SourceBankAdvance, SourceBankExchange:
+	case SourceCheckin, SourceAdminGrant, SourceBankAdvance, SourceBankExchange, SourceMallProduct, SourceSubscription:
 		return nil
 	default:
 		return fmt.Errorf("temporarycreditgrant: invalid enum value for source field: %q", s)
@@ -178,6 +194,21 @@ func ByCheckinID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCheckinID, opts...).ToFunc()
 }
 
+// ByMallPurchaseID orders the results by the mall_purchase_id field.
+func ByMallPurchaseID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMallPurchaseID, opts...).ToFunc()
+}
+
+// ByDailySubscriptionID orders the results by the daily_subscription_id field.
+func ByDailySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailySubscriptionID, opts...).ToFunc()
+}
+
+// ByScheduledDate orders the results by the scheduled_date field.
+func ByScheduledDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldScheduledDate, opts...).ToFunc()
+}
+
 // ByAmount orders the results by the amount field.
 func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAmount, opts...).ToFunc()
@@ -186,6 +217,11 @@ func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByRemainingAmount orders the results by the remaining_amount field.
 func ByRemainingAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRemainingAmount, opts...).ToFunc()
+}
+
+// ByAvailableAt orders the results by the available_at field.
+func ByAvailableAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAvailableAt, opts...).ToFunc()
 }
 
 // ByExpiresAt orders the results by the expires_at field.

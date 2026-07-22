@@ -125,6 +125,43 @@ export function formatDecimalAmount(
   return formatMoneyDisplay(amount)
 }
 
+/** Compare non-negative decimal amounts at the server's eight-place precision. */
+export function compareDecimalAmounts(
+  left: string | number | null | undefined,
+  right: string | number | null | undefined,
+): number {
+  const leftScaled = decimalAmountToScaledInteger(left)
+  const rightScaled = decimalAmountToScaledInteger(right)
+  if (leftScaled === null || rightScaled === null) return 0
+  return leftScaled < rightScaled ? -1 : leftScaled > rightScaled ? 1 : 0
+}
+
+/** Multiply an amount by a non-negative integer without losing eight-place precision. */
+export function multiplyDecimalAmount(
+  amount: string | number | null | undefined,
+  multiplier: number,
+): string {
+  const scaled = decimalAmountToScaledInteger(amount)
+  if (scaled === null || !Number.isSafeInteger(multiplier) || multiplier < 0) return '0.00000000'
+  return scaledIntegerToDecimalAmount(scaled * BigInt(multiplier))
+}
+
+function decimalAmountToScaledInteger(amount: string | number | null | undefined): bigint | null {
+  const normalized = formatMoneyDisplay(amount, 8)
+  const match = normalized.match(/^(-?)(\d+)\.(\d{8})$/)
+  if (!match) return null
+  const sign = match[1] === '-' ? -1n : 1n
+  return sign * (BigInt(match[2]) * 100000000n + BigInt(match[3]))
+}
+
+function scaledIntegerToDecimalAmount(value: bigint): string {
+  const negative = value < 0n
+  const absolute = negative ? -value : value
+  const integer = absolute / 100000000n
+  const fraction = String(absolute % 100000000n).padStart(8, '0')
+  return `${negative ? '-' : ''}${integer}.${fraction}`
+}
+
 function normalizeDecimalAmount(
   amount: string | number | null | undefined
 ): string | null {

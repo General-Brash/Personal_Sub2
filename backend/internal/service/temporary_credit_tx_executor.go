@@ -39,11 +39,16 @@ func (e *TemporaryCreditAllocationExecutor) Allocate(ctx context.Context, tx Tem
 		return 0, err
 	}
 	amount, _ = normalizeLedgerAmount(amount)
+	if err := lockTemporaryCreditUser(ctx, tx, userID); err != nil {
+		return 0, err
+	}
 
 	rows, err := tx.QueryContext(ctx, `
 SELECT id, remaining_amount
 FROM temporary_credit_grants
-WHERE user_id = $1 AND remaining_amount > 0 AND expires_at > clock_timestamp()
+WHERE user_id = $1 AND remaining_amount > 0
+  AND available_at <= clock_timestamp()
+  AND expires_at > clock_timestamp()
 ORDER BY expires_at ASC, id ASC
 FOR UPDATE`, userID)
 	if err != nil {
@@ -108,12 +113,49 @@ VALUES ($1, $2, $3, $4)`, candidate.id, nullableTemporaryCreditInt64(reference.U
 	return remaining, nil
 }
 
+// All transactions that can touch both balances and temporary grants lock the
+// user row first, then grant rows. This keeps usage billing and bank workflows
+// on the same lock order.
+func lockTemporaryCreditUser(ctx context.Context, tx TemporaryCreditSQLExecutor, userID int64) error {
+	rows, err := tx.QueryContext(ctx, `
+SELECT id
+FROM users
+WHERE id = $1 AND deleted_at IS NULL
+FOR UPDATE`, userID)
+	if err != nil {
+		return fmt.Errorf("lock temporary credit user: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("iterate temporary credit user lock: %w", err)
+		}
+		return ErrUserNotFound
+	}
+	var lockedUserID int64
+	if err := rows.Scan(&lockedUserID); err != nil {
+		return fmt.Errorf("scan temporary credit user lock: %w", err)
+	}
+	if lockedUserID != userID {
+		return errors.New("temporary credit user lock returned an unexpected user")
+	}
+	if rows.Next() {
+		return errors.New("temporary credit user lock returned multiple users")
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate temporary credit user lock: %w", err)
+	}
+	return nil
+}
+
 func updateTemporaryCreditGrant(ctx context.Context, tx TemporaryCreditSQLExecutor, grantID int64, portion float64) (float64, bool, error) {
 	rows, err := tx.QueryContext(ctx, `
 UPDATE temporary_credit_grants
 SET remaining_amount = remaining_amount - $1,
     updated_at = clock_timestamp()
-WHERE id = $2 AND remaining_amount >= $1 AND expires_at > clock_timestamp()
+WHERE id = $2 AND remaining_amount >= $1
+  AND available_at <= clock_timestamp()
+  AND expires_at > clock_timestamp()
 RETURNING $1::numeric`, formatLedgerAmount(portion), grantID)
 	if err != nil {
 		return 0, false, fmt.Errorf("update FEFO temporary credit grant %d: %w", grantID, err)

@@ -22,3 +22,20 @@ func TestBankTemporaryDebtMigrationContract(t *testing.T) {
 	require.Contains(t, sql, "bank_exchange")
 	require.Contains(t, sql, "bank_exchange_rate")
 }
+
+func TestBankRepaymentAndTemporaryAvailabilityMigrationContract(t *testing.T) {
+	content, err := fs.ReadFile(FS, "186_bank_repayment_and_available_at.sql")
+	require.NoError(t, err)
+	sql := strings.ToLower(string(content))
+
+	require.Contains(t, sql, "add column if not exists available_at timestamptz")
+	require.Contains(t, sql, "set available_at = created_at")
+	require.Contains(t, sql, "unused_credit_settled_at timestamptz")
+	require.Contains(t, sql, "unused_credit_amount numeric(20,8)")
+	require.Contains(t, sql, "unused_debt_repaid numeric(20,8)")
+	require.Contains(t, sql, "bank_unused_advance_debt_reduction_ratio")
+	require.Contains(t, sql, "0.75000000")
+	require.Contains(t, sql, "bank_early_repay_temporary_ratio")
+	require.Contains(t, sql, "bank_early_repay_permanent_ratio")
+	require.Contains(t, sql, "on conflict (key) do nothing")
+}

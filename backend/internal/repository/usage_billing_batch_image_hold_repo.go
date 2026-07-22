@@ -523,7 +523,9 @@ UPDATE temporary_credit_grants
 SET remaining_amount = remaining_amount - $1,
     updated_at = $3
 WHERE id = $2
-	AND remaining_amount >= $1`, formatBatchImageLedgerAmount(portion), candidate.GrantID, now)
+	AND remaining_amount >= $1
+	AND available_at <= clock_timestamp()
+	AND expires_at > clock_timestamp()`, formatBatchImageLedgerAmount(portion), candidate.GrantID, now)
 		if updateErr != nil {
 			return nil, fmt.Errorf("reserve temporary credit grant %d: %w", candidate.GrantID, updateErr)
 		}
@@ -600,6 +602,7 @@ SELECT id, remaining_amount, expires_at
 FROM temporary_credit_grants
 WHERE user_id = $1
   AND remaining_amount > 0
+  AND available_at <= clock_timestamp()
   AND expires_at > clock_timestamp()
 ORDER BY expires_at ASC, id ASC
 FOR UPDATE`, userID)
@@ -783,6 +786,7 @@ UPDATE temporary_credit_grants
 SET remaining_amount = remaining_amount + $1,
     updated_at = $3
 WHERE id = $2
+	AND available_at <= clock_timestamp()
 	AND expires_at > clock_timestamp()`, formatBatchImageLedgerAmount(unused), allocation.GrantID, now)
 				if restoreErr != nil {
 					return nil, fmt.Errorf("restore batch image temporary credit grant %d: %w", allocation.GrantID, restoreErr)

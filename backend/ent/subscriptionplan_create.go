@@ -68,6 +68,48 @@ func (_c *SubscriptionPlanCreate) SetNillableOriginalPrice(v *float64) *Subscrip
 	return _c
 }
 
+// SetBenefitType sets the "benefit_type" field.
+func (_c *SubscriptionPlanCreate) SetBenefitType(v string) *SubscriptionPlanCreate {
+	_c.mutation.SetBenefitType(v)
+	return _c
+}
+
+// SetNillableBenefitType sets the "benefit_type" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableBenefitType(v *string) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetBenefitType(*v)
+	}
+	return _c
+}
+
+// SetPaymentCreditType sets the "payment_credit_type" field.
+func (_c *SubscriptionPlanCreate) SetPaymentCreditType(v string) *SubscriptionPlanCreate {
+	_c.mutation.SetPaymentCreditType(v)
+	return _c
+}
+
+// SetNillablePaymentCreditType sets the "payment_credit_type" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillablePaymentCreditType(v *string) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetPaymentCreditType(*v)
+	}
+	return _c
+}
+
+// SetDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field.
+func (_c *SubscriptionPlanCreate) SetDailyTemporaryCreditAmount(v float64) *SubscriptionPlanCreate {
+	_c.mutation.SetDailyTemporaryCreditAmount(v)
+	return _c
+}
+
+// SetNillableDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableDailyTemporaryCreditAmount(v *float64) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetDailyTemporaryCreditAmount(*v)
+	}
+	return _c
+}
+
 // SetCurrency sets the "currency" field.
 func (_c *SubscriptionPlanCreate) SetCurrency(v string) *SubscriptionPlanCreate {
 	_c.mutation.SetCurrency(v)
@@ -166,6 +208,34 @@ func (_c *SubscriptionPlanCreate) SetNillableSortOrder(v *int) *SubscriptionPlan
 	return _c
 }
 
+// SetDailyPurchaseLimit sets the "daily_purchase_limit" field.
+func (_c *SubscriptionPlanCreate) SetDailyPurchaseLimit(v int) *SubscriptionPlanCreate {
+	_c.mutation.SetDailyPurchaseLimit(v)
+	return _c
+}
+
+// SetNillableDailyPurchaseLimit sets the "daily_purchase_limit" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableDailyPurchaseLimit(v *int) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetDailyPurchaseLimit(*v)
+	}
+	return _c
+}
+
+// SetTotalPurchaseLimit sets the "total_purchase_limit" field.
+func (_c *SubscriptionPlanCreate) SetTotalPurchaseLimit(v int) *SubscriptionPlanCreate {
+	_c.mutation.SetTotalPurchaseLimit(v)
+	return _c
+}
+
+// SetNillableTotalPurchaseLimit sets the "total_purchase_limit" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableTotalPurchaseLimit(v *int) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetTotalPurchaseLimit(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *SubscriptionPlanCreate) SetCreatedAt(v time.Time) *SubscriptionPlanCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -233,6 +303,18 @@ func (_c *SubscriptionPlanCreate) defaults() {
 		v := subscriptionplan.DefaultDescription
 		_c.mutation.SetDescription(v)
 	}
+	if _, ok := _c.mutation.BenefitType(); !ok {
+		v := subscriptionplan.DefaultBenefitType
+		_c.mutation.SetBenefitType(v)
+	}
+	if _, ok := _c.mutation.PaymentCreditType(); !ok {
+		v := subscriptionplan.DefaultPaymentCreditType
+		_c.mutation.SetPaymentCreditType(v)
+	}
+	if _, ok := _c.mutation.DailyTemporaryCreditAmount(); !ok {
+		v := subscriptionplan.DefaultDailyTemporaryCreditAmount
+		_c.mutation.SetDailyTemporaryCreditAmount(v)
+	}
 	if _, ok := _c.mutation.Currency(); !ok {
 		v := subscriptionplan.DefaultCurrency
 		_c.mutation.SetCurrency(v)
@@ -260,6 +342,14 @@ func (_c *SubscriptionPlanCreate) defaults() {
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		v := subscriptionplan.DefaultSortOrder
 		_c.mutation.SetSortOrder(v)
+	}
+	if _, ok := _c.mutation.DailyPurchaseLimit(); !ok {
+		v := subscriptionplan.DefaultDailyPurchaseLimit
+		_c.mutation.SetDailyPurchaseLimit(v)
+	}
+	if _, ok := _c.mutation.TotalPurchaseLimit(); !ok {
+		v := subscriptionplan.DefaultTotalPurchaseLimit
+		_c.mutation.SetTotalPurchaseLimit(v)
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := subscriptionplan.DefaultCreatedAt()
@@ -289,6 +379,25 @@ func (_c *SubscriptionPlanCreate) check() error {
 	}
 	if _, ok := _c.mutation.Price(); !ok {
 		return &ValidationError{Name: "price", err: errors.New(`ent: missing required field "SubscriptionPlan.price"`)}
+	}
+	if _, ok := _c.mutation.BenefitType(); !ok {
+		return &ValidationError{Name: "benefit_type", err: errors.New(`ent: missing required field "SubscriptionPlan.benefit_type"`)}
+	}
+	if v, ok := _c.mutation.BenefitType(); ok {
+		if err := subscriptionplan.BenefitTypeValidator(v); err != nil {
+			return &ValidationError{Name: "benefit_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.benefit_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PaymentCreditType(); !ok {
+		return &ValidationError{Name: "payment_credit_type", err: errors.New(`ent: missing required field "SubscriptionPlan.payment_credit_type"`)}
+	}
+	if v, ok := _c.mutation.PaymentCreditType(); ok {
+		if err := subscriptionplan.PaymentCreditTypeValidator(v); err != nil {
+			return &ValidationError{Name: "payment_credit_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.payment_credit_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.DailyTemporaryCreditAmount(); !ok {
+		return &ValidationError{Name: "daily_temporary_credit_amount", err: errors.New(`ent: missing required field "SubscriptionPlan.daily_temporary_credit_amount"`)}
 	}
 	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "SubscriptionPlan.currency"`)}
@@ -325,6 +434,22 @@ func (_c *SubscriptionPlanCreate) check() error {
 	}
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		return &ValidationError{Name: "sort_order", err: errors.New(`ent: missing required field "SubscriptionPlan.sort_order"`)}
+	}
+	if _, ok := _c.mutation.DailyPurchaseLimit(); !ok {
+		return &ValidationError{Name: "daily_purchase_limit", err: errors.New(`ent: missing required field "SubscriptionPlan.daily_purchase_limit"`)}
+	}
+	if v, ok := _c.mutation.DailyPurchaseLimit(); ok {
+		if err := subscriptionplan.DailyPurchaseLimitValidator(v); err != nil {
+			return &ValidationError{Name: "daily_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.daily_purchase_limit": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.TotalPurchaseLimit(); !ok {
+		return &ValidationError{Name: "total_purchase_limit", err: errors.New(`ent: missing required field "SubscriptionPlan.total_purchase_limit"`)}
+	}
+	if v, ok := _c.mutation.TotalPurchaseLimit(); ok {
+		if err := subscriptionplan.TotalPurchaseLimitValidator(v); err != nil {
+			return &ValidationError{Name: "total_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.total_purchase_limit": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SubscriptionPlan.created_at"`)}
@@ -379,6 +504,18 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 		_spec.SetField(subscriptionplan.FieldOriginalPrice, field.TypeFloat64, value)
 		_node.OriginalPrice = &value
 	}
+	if value, ok := _c.mutation.BenefitType(); ok {
+		_spec.SetField(subscriptionplan.FieldBenefitType, field.TypeString, value)
+		_node.BenefitType = value
+	}
+	if value, ok := _c.mutation.PaymentCreditType(); ok {
+		_spec.SetField(subscriptionplan.FieldPaymentCreditType, field.TypeString, value)
+		_node.PaymentCreditType = value
+	}
+	if value, ok := _c.mutation.DailyTemporaryCreditAmount(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyTemporaryCreditAmount, field.TypeFloat64, value)
+		_node.DailyTemporaryCreditAmount = value
+	}
 	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(subscriptionplan.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
@@ -406,6 +543,14 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 	if value, ok := _c.mutation.SortOrder(); ok {
 		_spec.SetField(subscriptionplan.FieldSortOrder, field.TypeInt, value)
 		_node.SortOrder = value
+	}
+	if value, ok := _c.mutation.DailyPurchaseLimit(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyPurchaseLimit, field.TypeInt, value)
+		_node.DailyPurchaseLimit = value
+	}
+	if value, ok := _c.mutation.TotalPurchaseLimit(); ok {
+		_spec.SetField(subscriptionplan.FieldTotalPurchaseLimit, field.TypeInt, value)
+		_node.TotalPurchaseLimit = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldCreatedAt, field.TypeTime, value)
@@ -551,6 +696,48 @@ func (u *SubscriptionPlanUpsert) ClearOriginalPrice() *SubscriptionPlanUpsert {
 	return u
 }
 
+// SetBenefitType sets the "benefit_type" field.
+func (u *SubscriptionPlanUpsert) SetBenefitType(v string) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldBenefitType, v)
+	return u
+}
+
+// UpdateBenefitType sets the "benefit_type" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateBenefitType() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldBenefitType)
+	return u
+}
+
+// SetPaymentCreditType sets the "payment_credit_type" field.
+func (u *SubscriptionPlanUpsert) SetPaymentCreditType(v string) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldPaymentCreditType, v)
+	return u
+}
+
+// UpdatePaymentCreditType sets the "payment_credit_type" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdatePaymentCreditType() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldPaymentCreditType)
+	return u
+}
+
+// SetDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field.
+func (u *SubscriptionPlanUpsert) SetDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldDailyTemporaryCreditAmount, v)
+	return u
+}
+
+// UpdateDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateDailyTemporaryCreditAmount() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldDailyTemporaryCreditAmount)
+	return u
+}
+
+// AddDailyTemporaryCreditAmount adds v to the "daily_temporary_credit_amount" field.
+func (u *SubscriptionPlanUpsert) AddDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldDailyTemporaryCreditAmount, v)
+	return u
+}
+
 // SetCurrency sets the "currency" field.
 func (u *SubscriptionPlanUpsert) SetCurrency(v string) *SubscriptionPlanUpsert {
 	u.Set(subscriptionplan.FieldCurrency, v)
@@ -644,6 +831,42 @@ func (u *SubscriptionPlanUpsert) UpdateSortOrder() *SubscriptionPlanUpsert {
 // AddSortOrder adds v to the "sort_order" field.
 func (u *SubscriptionPlanUpsert) AddSortOrder(v int) *SubscriptionPlanUpsert {
 	u.Add(subscriptionplan.FieldSortOrder, v)
+	return u
+}
+
+// SetDailyPurchaseLimit sets the "daily_purchase_limit" field.
+func (u *SubscriptionPlanUpsert) SetDailyPurchaseLimit(v int) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldDailyPurchaseLimit, v)
+	return u
+}
+
+// UpdateDailyPurchaseLimit sets the "daily_purchase_limit" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateDailyPurchaseLimit() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldDailyPurchaseLimit)
+	return u
+}
+
+// AddDailyPurchaseLimit adds v to the "daily_purchase_limit" field.
+func (u *SubscriptionPlanUpsert) AddDailyPurchaseLimit(v int) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldDailyPurchaseLimit, v)
+	return u
+}
+
+// SetTotalPurchaseLimit sets the "total_purchase_limit" field.
+func (u *SubscriptionPlanUpsert) SetTotalPurchaseLimit(v int) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldTotalPurchaseLimit, v)
+	return u
+}
+
+// UpdateTotalPurchaseLimit sets the "total_purchase_limit" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateTotalPurchaseLimit() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldTotalPurchaseLimit)
+	return u
+}
+
+// AddTotalPurchaseLimit adds v to the "total_purchase_limit" field.
+func (u *SubscriptionPlanUpsert) AddTotalPurchaseLimit(v int) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldTotalPurchaseLimit, v)
 	return u
 }
 
@@ -802,6 +1025,55 @@ func (u *SubscriptionPlanUpsertOne) ClearOriginalPrice() *SubscriptionPlanUpsert
 	})
 }
 
+// SetBenefitType sets the "benefit_type" field.
+func (u *SubscriptionPlanUpsertOne) SetBenefitType(v string) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetBenefitType(v)
+	})
+}
+
+// UpdateBenefitType sets the "benefit_type" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateBenefitType() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateBenefitType()
+	})
+}
+
+// SetPaymentCreditType sets the "payment_credit_type" field.
+func (u *SubscriptionPlanUpsertOne) SetPaymentCreditType(v string) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPaymentCreditType(v)
+	})
+}
+
+// UpdatePaymentCreditType sets the "payment_credit_type" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdatePaymentCreditType() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePaymentCreditType()
+	})
+}
+
+// SetDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field.
+func (u *SubscriptionPlanUpsertOne) SetDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetDailyTemporaryCreditAmount(v)
+	})
+}
+
+// AddDailyTemporaryCreditAmount adds v to the "daily_temporary_credit_amount" field.
+func (u *SubscriptionPlanUpsertOne) AddDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddDailyTemporaryCreditAmount(v)
+	})
+}
+
+// UpdateDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateDailyTemporaryCreditAmount() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateDailyTemporaryCreditAmount()
+	})
+}
+
 // SetCurrency sets the "currency" field.
 func (u *SubscriptionPlanUpsertOne) SetCurrency(v string) *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
@@ -911,6 +1183,48 @@ func (u *SubscriptionPlanUpsertOne) AddSortOrder(v int) *SubscriptionPlanUpsertO
 func (u *SubscriptionPlanUpsertOne) UpdateSortOrder() *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateSortOrder()
+	})
+}
+
+// SetDailyPurchaseLimit sets the "daily_purchase_limit" field.
+func (u *SubscriptionPlanUpsertOne) SetDailyPurchaseLimit(v int) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetDailyPurchaseLimit(v)
+	})
+}
+
+// AddDailyPurchaseLimit adds v to the "daily_purchase_limit" field.
+func (u *SubscriptionPlanUpsertOne) AddDailyPurchaseLimit(v int) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddDailyPurchaseLimit(v)
+	})
+}
+
+// UpdateDailyPurchaseLimit sets the "daily_purchase_limit" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateDailyPurchaseLimit() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateDailyPurchaseLimit()
+	})
+}
+
+// SetTotalPurchaseLimit sets the "total_purchase_limit" field.
+func (u *SubscriptionPlanUpsertOne) SetTotalPurchaseLimit(v int) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetTotalPurchaseLimit(v)
+	})
+}
+
+// AddTotalPurchaseLimit adds v to the "total_purchase_limit" field.
+func (u *SubscriptionPlanUpsertOne) AddTotalPurchaseLimit(v int) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddTotalPurchaseLimit(v)
+	})
+}
+
+// UpdateTotalPurchaseLimit sets the "total_purchase_limit" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateTotalPurchaseLimit() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateTotalPurchaseLimit()
 	})
 }
 
@@ -1237,6 +1551,55 @@ func (u *SubscriptionPlanUpsertBulk) ClearOriginalPrice() *SubscriptionPlanUpser
 	})
 }
 
+// SetBenefitType sets the "benefit_type" field.
+func (u *SubscriptionPlanUpsertBulk) SetBenefitType(v string) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetBenefitType(v)
+	})
+}
+
+// UpdateBenefitType sets the "benefit_type" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateBenefitType() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateBenefitType()
+	})
+}
+
+// SetPaymentCreditType sets the "payment_credit_type" field.
+func (u *SubscriptionPlanUpsertBulk) SetPaymentCreditType(v string) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPaymentCreditType(v)
+	})
+}
+
+// UpdatePaymentCreditType sets the "payment_credit_type" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdatePaymentCreditType() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePaymentCreditType()
+	})
+}
+
+// SetDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field.
+func (u *SubscriptionPlanUpsertBulk) SetDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetDailyTemporaryCreditAmount(v)
+	})
+}
+
+// AddDailyTemporaryCreditAmount adds v to the "daily_temporary_credit_amount" field.
+func (u *SubscriptionPlanUpsertBulk) AddDailyTemporaryCreditAmount(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddDailyTemporaryCreditAmount(v)
+	})
+}
+
+// UpdateDailyTemporaryCreditAmount sets the "daily_temporary_credit_amount" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateDailyTemporaryCreditAmount() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateDailyTemporaryCreditAmount()
+	})
+}
+
 // SetCurrency sets the "currency" field.
 func (u *SubscriptionPlanUpsertBulk) SetCurrency(v string) *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
@@ -1346,6 +1709,48 @@ func (u *SubscriptionPlanUpsertBulk) AddSortOrder(v int) *SubscriptionPlanUpsert
 func (u *SubscriptionPlanUpsertBulk) UpdateSortOrder() *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateSortOrder()
+	})
+}
+
+// SetDailyPurchaseLimit sets the "daily_purchase_limit" field.
+func (u *SubscriptionPlanUpsertBulk) SetDailyPurchaseLimit(v int) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetDailyPurchaseLimit(v)
+	})
+}
+
+// AddDailyPurchaseLimit adds v to the "daily_purchase_limit" field.
+func (u *SubscriptionPlanUpsertBulk) AddDailyPurchaseLimit(v int) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddDailyPurchaseLimit(v)
+	})
+}
+
+// UpdateDailyPurchaseLimit sets the "daily_purchase_limit" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateDailyPurchaseLimit() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateDailyPurchaseLimit()
+	})
+}
+
+// SetTotalPurchaseLimit sets the "total_purchase_limit" field.
+func (u *SubscriptionPlanUpsertBulk) SetTotalPurchaseLimit(v int) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetTotalPurchaseLimit(v)
+	})
+}
+
+// AddTotalPurchaseLimit adds v to the "total_purchase_limit" field.
+func (u *SubscriptionPlanUpsertBulk) AddTotalPurchaseLimit(v int) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddTotalPurchaseLimit(v)
+	})
+}
+
+// UpdateTotalPurchaseLimit sets the "total_purchase_limit" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateTotalPurchaseLimit() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateTotalPurchaseLimit()
 	})
 }
 

@@ -5901,6 +5901,7 @@
 
         <PageVisibilitySettingsSection
           v-model:user-channel-status-enabled="form.user_channel_status_enabled"
+          v-model:mall-enabled="form.mall_enabled"
           v-model:user-subscriptions-enabled="form.user_subscriptions_enabled"
           v-model:admin-subscriptions-enabled="form.admin_subscriptions_enabled"
           v-model:admin-promo-codes-enabled="form.admin_promo_codes_enabled"
@@ -8434,6 +8435,7 @@ const form = reactive<SettingsForm>({
   available_channels_enabled: false,
   // Page visibility switches
   user_channel_status_enabled: true,
+  mall_enabled: true,
   user_subscriptions_enabled: true,
   admin_subscriptions_enabled: true,
   admin_promo_codes_enabled: true,
@@ -9836,6 +9838,7 @@ async function saveSettings() {
       available_channels_enabled: form.available_channels_enabled,
       // Page visibility switches
       user_channel_status_enabled: form.user_channel_status_enabled,
+      mall_enabled: form.mall_enabled,
       user_subscriptions_enabled: form.user_subscriptions_enabled,
       admin_subscriptions_enabled: form.admin_subscriptions_enabled,
       admin_promo_codes_enabled: form.admin_promo_codes_enabled,

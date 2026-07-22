@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import PaymentView from '../PaymentView.vue'
 import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
-import { formatPaymentAmount } from '@/components/payment/currency'
 import type { CheckoutInfoResponse, MethodLimit, SubscriptionPlan } from '@/types/payment'
+import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 
 const routeState = vi.hoisted(() => ({
-  path: '/purchase',
+  path: '/mall',
   query: {} as Record<string, unknown>,
 }))
 
@@ -14,13 +14,18 @@ const routerReplace = vi.hoisted(() => vi.fn())
 const routerPush = vi.hoisted(() => vi.fn())
 const routerResolve = vi.hoisted(() => vi.fn(() => ({ href: '/payment/stripe?mock=1' })))
 const createOrder = vi.hoisted(() => vi.fn())
+const purchaseMallProduct = vi.hoisted(() => vi.fn())
 const refreshUser = vi.hoisted(() => vi.fn())
 const fetchActiveSubscriptions = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
+const showSuccess = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
+const appState = vi.hoisted(() => ({
+  cachedPublicSettings: { payment_enabled: true } as { payment_enabled?: boolean },
+}))
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
@@ -40,7 +45,10 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key,
+      t: (key: string, params?: Record<string, unknown>) => {
+        if (key === 'payment.purchaseConfirm.subscriptionReceive') return String(params?.validity ?? '')
+        return key
+      },
     }),
   }
 })
@@ -69,22 +77,30 @@ vi.mock('@/stores/subscriptions', () => ({
 }))
 
 vi.mock('@/stores', () => ({
-  useAppStore: () => ({
-    showError,
-    showInfo,
-    showWarning,
-  }),
+  useAppStore: () => ({ ...appState, showError, showInfo, showWarning, showSuccess }),
 }))
 
 vi.mock('@/api/payment', () => ({
   paymentAPI: {
     getCheckoutInfo,
+    purchaseMallProduct,
   },
 }))
 
 vi.mock('@/utils/device', () => ({
   isMobileDevice: () => true,
 }))
+
+const PurchaseConfirmStub = {
+  name: 'ProductPurchaseConfirmDialog',
+  props: ['show', 'productName', 'description', 'paymentMethod', 'expectedSpend', 'expectedReceive', 'limits', 'submitting'],
+  emits: ['close', 'confirm'],
+  template: '<div v-if="show" data-test="purchase-confirm-dialog"><button type="button" data-test="purchase-confirm-submit" @click="$emit(\'confirm\')">confirm</button></div>',
+}
+
+beforeEach(() => {
+  appState.cachedPublicSettings = { payment_enabled: true }
+})
 
 function checkoutInfoFixture(overrides: Partial<CheckoutInfoResponse> = {}) {
   const wxpayMethod: MethodLimit = {
@@ -103,6 +119,10 @@ function checkoutInfoFixture(overrides: Partial<CheckoutInfoResponse> = {}) {
     global_min: 0,
     global_max: 0,
     plans: [],
+    balance: {
+      permanent_balance: '100.00000000',
+      temporary_credit_available: '25.00000000',
+    },
     balance_disabled: false,
     balance_recharge_multiplier: 1,
     subscription_usd_to_cny_rate: 0,
@@ -121,6 +141,7 @@ function checkoutInfoWithPlansFixture(options: {
   checkout?: Partial<CheckoutInfoResponse>
   method?: Partial<MethodLimit>
   plan?: Partial<SubscriptionPlan>
+  plans?: SubscriptionPlan[]
 } = {}) {
   const base = checkoutInfoFixture(options.checkout).data
   const plan: SubscriptionPlan = {
@@ -154,7 +175,7 @@ function checkoutInfoWithPlansFixture(options: {
           ...options.method,
         },
       },
-      plans: [plan],
+      plans: options.plans ?? [plan],
     },
   }
 }
@@ -191,7 +212,7 @@ function oauthOrderFixture() {
     payment_type: 'wxpay',
     result_type: 'oauth_required' as const,
     oauth: {
-      authorize_url: '/api/v1/auth/oauth/wechat/payment/start?payment_type=wxpay&redirect=%2Fpurchase%3Ffrom%3Dwechat',
+      authorize_url: '/api/v1/auth/oauth/wechat/payment/start?payment_type=wxpay&redirect=%2Fmall%3Ffrom%3Dwechat',
       appid: 'wx123',
       scope: 'snsapi_base',
       redirect_url: '/auth/wechat/payment/callback',
@@ -201,7 +222,7 @@ function oauthOrderFixture() {
 
 async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoWithPlansFixture>[0] = {}) {
   vi.useRealTimers()
-  routeState.path = '/purchase'
+  routeState.path = '/mall'
   routeState.query = {
     tab: 'subscription',
     group: '3',
@@ -210,11 +231,13 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
   routerPush.mockReset().mockResolvedValue(undefined)
   routerResolve.mockClear()
   createOrder.mockReset()
+  purchaseMallProduct.mockReset()
   refreshUser.mockReset()
   fetchActiveSubscriptions.mockReset().mockResolvedValue(undefined)
   showError.mockReset()
   showInfo.mockReset()
   showWarning.mockReset()
+  showSuccess.mockReset()
   getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoWithPlansFixture(options))
   bridgeInvoke.mockReset()
   window.localStorage.clear()
@@ -228,6 +251,8 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
         },
         Teleport: true,
         Transition: false,
+        RouterLink: true,
+        ProductPurchaseConfirmDialog: PurchaseConfirmStub,
       },
     },
   })
@@ -236,130 +261,327 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
   return wrapper
 }
 
-describe('PaymentView subscription confirmation amounts', () => {
-  it('shows subscription quota limits with two decimal places', async () => {
-    const wrapper = await mountSubscriptionConfirm({
-      plan: {
-        daily_limit_usd: 1.234,
-        weekly_limit_usd: 20.005,
-        monthly_limit_usd: 100.999,
-      },
-    })
+async function mountStoreTabs(checkoutOverrides: Partial<CheckoutInfoResponse> = {}) {
+  vi.useRealTimers()
+  routeState.path = '/mall'
+  routeState.query = {}
+  routerReplace.mockReset().mockResolvedValue(undefined)
+  routerPush.mockReset().mockResolvedValue(undefined)
+  createOrder.mockReset()
+  purchaseMallProduct.mockReset()
+  refreshUser.mockReset()
+  fetchActiveSubscriptions.mockReset().mockResolvedValue(undefined)
+  showError.mockReset()
+  showInfo.mockReset()
+  showWarning.mockReset()
+  showSuccess.mockReset()
+  getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture(checkoutOverrides))
+  window.localStorage.clear()
 
-    expect(wrapper.text()).toContain('$1.23')
-    expect(wrapper.text()).toContain('$20.01')
-    expect(wrapper.text()).toContain('$101.00')
+  const wrapper = shallowMount(PaymentView, {
+    attachTo: document.body,
+    global: {
+      stubs: {
+        AppLayout: { template: '<div><slot /></div>' },
+        Teleport: true,
+        Transition: false,
+        RouterLink: true,
+        ProductPurchaseConfirmDialog: PurchaseConfirmStub,
+      },
+    },
+  })
+  await flushPromises()
+  await flushPromises()
+  return wrapper
+}
+
+describe('PaymentView store tabs', () => {
+  it('links tabs to panels and moves roving focus with keyboard navigation', async () => {
+    const wrapper = await mountStoreTabs()
+    const rechargeTab = wrapper.get('#store-tab-recharge')
+    const subscriptionTab = wrapper.get('#store-tab-subscription')
+    const rechargePanel = wrapper.get('#store-panel-recharge')
+    const subscriptionPanel = wrapper.get('#store-panel-subscription')
+
+    expect(rechargeTab.attributes('aria-controls')).toBe('store-panel-recharge')
+    expect(subscriptionTab.attributes('aria-controls')).toBe('store-panel-subscription')
+    expect(rechargePanel.attributes('aria-labelledby')).toBe('store-tab-recharge')
+    expect(subscriptionPanel.attributes('aria-labelledby')).toBe('store-tab-subscription')
+    expect(rechargeTab.attributes('tabindex')).toBe('0')
+    expect(subscriptionTab.attributes('tabindex')).toBe('-1')
+    expect(rechargePanel.attributes('hidden')).toBeUndefined()
+    expect(subscriptionPanel.attributes('hidden')).toBeDefined()
+
+    await rechargeTab.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+
+    expect(subscriptionTab.attributes('aria-selected')).toBe('true')
+    expect(subscriptionTab.attributes('tabindex')).toBe('0')
+    expect(rechargePanel.attributes('hidden')).toBeDefined()
+    expect(subscriptionPanel.attributes('hidden')).toBeUndefined()
+    expect(document.activeElement).toBe(subscriptionTab.element)
+
+    await subscriptionTab.trigger('keydown', { key: 'Home' })
+    await flushPromises()
+
+    expect(rechargeTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(rechargeTab.element)
+    wrapper.unmount()
   })
 
-  it('shows converted CNY pay amount using the subscription rate, not the balance multiplier', async () => {
+  it('keeps internal mall purchases available when no provider is configured', async () => {
+    appState.cachedPublicSettings = { payment_enabled: false }
+    const currencyWrapper = await mountStoreTabs({
+      methods: {},
+      balance_disabled: true,
+      currency_products: [{
+        id: 21,
+        name: 'Internal credit',
+        description: '',
+        payment_price: 10,
+        payment_credit_type: 'permanent',
+        credited_type: 'temporary',
+        credited_amount: 12,
+        sort_order: 1,
+      }],
+    })
+
+    expect(currencyWrapper.get('#store-tab-recharge').attributes('aria-selected')).toBe('true')
+    expect(currencyWrapper.get('#store-panel-recharge').attributes('hidden')).toBeUndefined()
+    await currencyWrapper.get('[data-test="currency-product-21"]').trigger('click')
+    expect(currencyWrapper.get('[data-test="purchase-confirm-dialog"]').exists()).toBe(true)
+    currencyWrapper.unmount()
+
+    const subscriptionWrapper = await mountSubscriptionConfirm({
+      checkout: { methods: {} },
+      plan: { price: 12 },
+    })
+    expect(subscriptionWrapper.get('[data-test="purchase-confirm-dialog"]').exists()).toBe(true)
+  })
+})
+
+describe('PaymentView internal subscription purchases', () => {
+  it('purchases only after final confirmation without requiring a provider', async () => {
     const wrapper = await mountSubscriptionConfirm({
-      checkout: {
-        balance_recharge_multiplier: 0.14,
-        subscription_usd_to_cny_rate: 7.15,
-      },
-      method: {
-        currency: 'CNY',
-      },
-      plan: {
-        price: 9.99,
-        original_price: 12.99,
+      checkout: { methods: {} },
+      plan: { price: 12, payment_credit_type: 'temporary' },
+    })
+    purchaseMallProduct.mockResolvedValue({
+      data: {
+        purchase_id: 902,
+        product_type: 'subscription',
+        product_id: 7,
+        payment_credit_type: 'temporary',
+        price: '12.00000000',
+        benefit_type: 'sub2',
+        permanent_balance: '100.00000000',
+        temporary_credit_available: '13.00000000',
       },
     })
 
-    const text = wrapper.text()
-    const convertedPrice = formatPaymentAmount(71.43, 'CNY')
-    const convertedOriginalPrice = formatPaymentAmount(92.88, 'CNY')
+    expect(purchaseMallProduct).not.toHaveBeenCalled()
+    const confirmButton = wrapper.get('[data-test="purchase-confirm-submit"]')
+    await Promise.all([confirmButton.trigger('click'), confirmButton.trigger('click')])
+    await flushPromises()
 
-    expect(text).toContain(convertedPrice)
-    expect(text).toContain(convertedOriginalPrice)
-    expect(text).not.toContain(formatPaymentAmount(9.99, 'CNY'))
-    // 换算必须使用订阅汇率（×7.15），而不是余额倍率（÷0.14 = 71.36）
-    expect(text).not.toContain(formatPaymentAmount(71.36, 'CNY'))
-    expect(wrapper.findAll('button').some(button => button.text().includes(convertedPrice))).toBe(true)
+    expect(purchaseMallProduct).toHaveBeenCalledWith(
+      { product_type: 'subscription', product_id: 7 },
+      expect.stringMatching(/^mall-subscription-7-/),
+    )
+    expect(createOrder).not.toHaveBeenCalled()
   })
 
-  it('keeps plan price when the subscription rate is not configured or payment currency is not CNY', async () => {
-    // opt-in 回归锁：即使余额倍率已配置，未配置订阅汇率时 CNY 订阅仍按 price 直付
-    const cnyWrapper = await mountSubscriptionConfirm({
-      checkout: {
-        balance_recharge_multiplier: 0.14,
-        subscription_usd_to_cny_rate: 0,
-      },
-      method: {
-        currency: 'CNY',
-      },
+  it.each([
+    ['days', 2, '2payment.days'],
+    ['weeks', 2, '14payment.days'],
+    ['months', 2, '60payment.days'],
+  ])('shows backend-equivalent validity for legacy %s plans', async (validityUnit, validityDays, expected) => {
+    const wrapper = await mountSubscriptionConfirm({
       plan: {
-        price: 7.99,
+        price: 12,
+        validity_days: validityDays,
+        validity_unit: validityUnit,
       },
     })
 
-    expect(cnyWrapper.text()).toContain(formatPaymentAmount(7.99, 'CNY'))
-    expect(cnyWrapper.text()).not.toContain(formatPaymentAmount(57.07, 'CNY'))
-    expect(cnyWrapper.text()).not.toContain(formatPaymentAmount(57.13, 'CNY'))
-
-    const usdWrapper = await mountSubscriptionConfirm({
-      checkout: {
-        subscription_usd_to_cny_rate: 7.15,
-      },
-      method: {
-        currency: 'USD',
-      },
-      plan: {
-        price: 7.99,
-        original_price: 9.99,
-      },
-    })
-
-    expect(usdWrapper.text()).toContain(formatPaymentAmount(7.99, 'USD'))
-    expect(usdWrapper.text()).toContain(formatPaymentAmount(9.99, 'USD'))
+    expect(wrapper.getComponent(PurchaseConfirmStub).props('expectedReceive')).toContain(expected)
   })
 
-  it('adds fee rate after CNY rate conversion to match backend pay_amount', async () => {
+  it('shows the disabled balance reason in the renewal plan picker', async () => {
+    const firstPlan = checkoutInfoWithPlansFixture().data.plans[0]
     const wrapper = await mountSubscriptionConfirm({
       checkout: {
-        subscription_usd_to_cny_rate: 7.15,
-        recharge_fee_rate: 2.5,
+        balance: {
+          permanent_balance: '0.00000000',
+          temporary_credit_available: '0.00000000',
+        },
       },
-      method: {
-        currency: 'CNY',
-      },
-      plan: {
-        price: 9.99,
-      },
+      plans: [firstPlan, { ...firstPlan, id: 8, name: 'Starter renewal' }],
     })
 
-    const text = wrapper.text()
-    const convertedPrice = formatPaymentAmount(71.43, 'CNY')
-    const fee = formatPaymentAmount(1.79, 'CNY')
-    const total = formatPaymentAmount(73.22, 'CNY')
-
-    expect(text).toContain(convertedPrice)
-    expect(text).toContain(fee)
-    expect(text).toContain(total)
-    expect(wrapper.findAll('button').some(button => button.text().includes(total))).toBe(true)
+    const cards = wrapper.findAllComponents(SubscriptionPlanCard)
+    expect(cards).toHaveLength(4)
+    expect(cards.every(card => card.props('disabledReason') === 'commerce.purchase.insufficient.permanent')).toBe(true)
   })
 })
 
 describe('PaymentView payment recovery', () => {
   beforeEach(() => {
     vi.useRealTimers()
-    routeState.path = '/purchase'
+    routeState.path = '/mall'
     routeState.query = {}
     routerReplace.mockReset().mockResolvedValue(undefined)
     routerPush.mockReset().mockResolvedValue(undefined)
     routerResolve.mockClear()
     createOrder.mockReset()
+    purchaseMallProduct.mockReset()
     refreshUser.mockReset()
     fetchActiveSubscriptions.mockReset().mockResolvedValue(undefined)
     showError.mockReset()
     showInfo.mockReset()
     showWarning.mockReset()
+    showSuccess.mockReset()
     bridgeInvoke.mockReset()
     window.localStorage.clear()
     ;(window as Window & { WeixinJSBridge?: { invoke: typeof bridgeInvoke } }).WeixinJSBridge = undefined
   })
 
-  it('restores a custom EasyPay method as the selected payment method', async () => {
+  it('opens a fixed currency-product confirmation immediately and purchases by server-owned id', async () => {
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({
+      currency_products: [{
+        id: 12,
+        name: 'Starter credit',
+        description: 'A fixed permanent-credit bundle',
+        payment_price: 19.9,
+        payment_credit_type: 'permanent',
+        credited_type: 'temporary',
+        credited_amount: 25,
+        sort_order: 1,
+        daily_purchase_limit: 1,
+        daily_purchase_remaining: 1,
+        total_purchase_limit: 3,
+        total_purchase_remaining: 2,
+      }],
+    }))
+    purchaseMallProduct.mockResolvedValue({
+      data: {
+        purchase_id: 901,
+        product_type: 'currency',
+        product_id: 12,
+        payment_credit_type: 'permanent',
+        price: '19.90000000',
+        credited_type: 'temporary',
+        credited_amount: '25.00000000',
+        permanent_balance: '80.10000000',
+        temporary_credit_available: '50.00000000',
+      },
+    })
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          PaymentStatusPanel: true,
+          PaymentMethodSelector: true,
+          AmountInput: true,
+          Teleport: true,
+          Transition: false,
+          RouterLink: true,
+          ProductPurchaseConfirmDialog: PurchaseConfirmStub,
+        },
+      },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-test="currency-product-12"]').trigger('click')
+    expect(purchaseMallProduct).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-test="purchase-confirm-dialog"]').exists()).toBe(true)
+    await wrapper.get('[data-test="purchase-confirm-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(purchaseMallProduct).toHaveBeenCalledWith(
+      { product_type: 'currency', product_id: 12 },
+      expect.stringMatching(/^mall-currency-12-/),
+    )
+    expect(createOrder).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-test="mall-permanent-balance"]').text()).toContain('$80.10')
+    expect(wrapper.get('[data-test="mall-temporary-balance"]').text()).toContain('$50.00')
+  })
+
+  it('shows both mall balances and a clear insufficient-credit reason', async () => {
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({
+      methods: {},
+      balance: {
+        permanent_balance: '4.00000000',
+        temporary_credit_available: '2.50000000',
+      },
+      currency_products: [{
+        id: 13,
+        name: 'Too expensive',
+        description: '',
+        payment_price: 5,
+        payment_credit_type: 'temporary',
+        credited_type: 'permanent',
+        credited_amount: 10,
+        sort_order: 1,
+      }],
+    }))
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true,
+          Transition: false,
+          RouterLink: true,
+          ProductPurchaseConfirmDialog: PurchaseConfirmStub,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="mall-permanent-balance"]').text()).toContain('$4.00')
+    expect(wrapper.get('[data-test="mall-temporary-balance"]').text()).toContain('$2.50')
+    expect(wrapper.get('[data-test="currency-product-13"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="currency-product-disabled-13"]').text()).toBe('commerce.purchase.insufficient.temporary')
+  })
+
+  it.each([
+    ['permanent', 'permanent'],
+    ['permanent', 'temporary'],
+    ['temporary', 'permanent'],
+    ['temporary', 'temporary'],
+  ] as const)('shows both credit types for %s payment and %s receipt', async (paymentCreditType, creditedType) => {
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({
+      currency_products: [{
+        id: 30,
+        name: 'Mixed credit product',
+        description: '',
+        payment_price: 1,
+        payment_credit_type: paymentCreditType,
+        credited_type: creditedType,
+        credited_amount: 2,
+        sort_order: 1,
+      }],
+    }))
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true,
+          Transition: false,
+          RouterLink: true,
+          ProductPurchaseConfirmDialog: PurchaseConfirmStub,
+        },
+      },
+    })
+    await flushPromises()
+    await wrapper.get('[data-test="currency-product-30"]').trigger('click')
+
+    const dialog = wrapper.getComponent(PurchaseConfirmStub)
+    expect(dialog.props('expectedSpend')).toContain(`commerce.creditType.${paymentCreditType}`)
+    expect(dialog.props('expectedReceive')).toContain(`commerce.creditType.${creditedType}`)
+  })
+
+  it('restores legacy EasyPay recovery without exposing provider controls in the mall', async () => {
     getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({
       methods: {
         wxpay: checkoutInfoFixture().data.methods.wxpay,
@@ -418,13 +640,14 @@ describe('PaymentView payment recovery', () => {
     await wrapper.find('[data-test="payment-done"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-test="method-selector"]').text()).toBe('ldc')
+    expect(wrapper.find('[data-test="method-selector"]').exists()).toBe(false)
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
   })
 })
 
 describe('PaymentView WeChat JSAPI flow', () => {
   beforeEach(() => {
-    routeState.path = '/purchase'
+    routeState.path = '/mall'
     routeState.query = {
       wechat_resume: '1',
       wechat_resume_token: 'resume-token-123',
@@ -463,7 +686,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(routerReplace).toHaveBeenCalledWith({ path: '/purchase', query: {} })
+    expect(routerReplace).toHaveBeenCalledWith({ path: '/mall', query: {} })
     expect(routerPush).toHaveBeenCalledWith({
       path: '/payment/result',
       query: {
@@ -576,7 +799,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
 
     const originalLocation = window.location
     const locationState = {
-      href: 'http://localhost/purchase',
+      href: 'http://localhost/mall',
       origin: 'http://localhost',
     }
     Object.defineProperty(window, 'location', {
@@ -595,7 +818,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(routerReplace).toHaveBeenCalledWith({ path: '/purchase', query: {} })
+    expect(routerReplace).toHaveBeenCalledWith({ path: '/mall', query: {} })
     expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
       payment_type: 'wxpay',
       order_type: 'subscription',
@@ -604,7 +827,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     }))
     expect(locationState.href).toContain('/api/v1/auth/oauth/wechat/payment/start?')
     expect(new URL(locationState.href, 'http://localhost').searchParams.get('redirect')).toBe(
-      '/purchase?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7',
+      '/mall?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7',
     )
 
     Object.defineProperty(window, 'location', {

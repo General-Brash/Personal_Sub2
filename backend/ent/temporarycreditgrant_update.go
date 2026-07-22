@@ -86,6 +86,80 @@ func (_u *TemporaryCreditGrantUpdate) ClearCheckinID() *TemporaryCreditGrantUpda
 	return _u
 }
 
+// SetMallPurchaseID sets the "mall_purchase_id" field.
+func (_u *TemporaryCreditGrantUpdate) SetMallPurchaseID(v int64) *TemporaryCreditGrantUpdate {
+	_u.mutation.ResetMallPurchaseID()
+	_u.mutation.SetMallPurchaseID(v)
+	return _u
+}
+
+// SetNillableMallPurchaseID sets the "mall_purchase_id" field if the given value is not nil.
+func (_u *TemporaryCreditGrantUpdate) SetNillableMallPurchaseID(v *int64) *TemporaryCreditGrantUpdate {
+	if v != nil {
+		_u.SetMallPurchaseID(*v)
+	}
+	return _u
+}
+
+// AddMallPurchaseID adds value to the "mall_purchase_id" field.
+func (_u *TemporaryCreditGrantUpdate) AddMallPurchaseID(v int64) *TemporaryCreditGrantUpdate {
+	_u.mutation.AddMallPurchaseID(v)
+	return _u
+}
+
+// ClearMallPurchaseID clears the value of the "mall_purchase_id" field.
+func (_u *TemporaryCreditGrantUpdate) ClearMallPurchaseID() *TemporaryCreditGrantUpdate {
+	_u.mutation.ClearMallPurchaseID()
+	return _u
+}
+
+// SetDailySubscriptionID sets the "daily_subscription_id" field.
+func (_u *TemporaryCreditGrantUpdate) SetDailySubscriptionID(v int64) *TemporaryCreditGrantUpdate {
+	_u.mutation.ResetDailySubscriptionID()
+	_u.mutation.SetDailySubscriptionID(v)
+	return _u
+}
+
+// SetNillableDailySubscriptionID sets the "daily_subscription_id" field if the given value is not nil.
+func (_u *TemporaryCreditGrantUpdate) SetNillableDailySubscriptionID(v *int64) *TemporaryCreditGrantUpdate {
+	if v != nil {
+		_u.SetDailySubscriptionID(*v)
+	}
+	return _u
+}
+
+// AddDailySubscriptionID adds value to the "daily_subscription_id" field.
+func (_u *TemporaryCreditGrantUpdate) AddDailySubscriptionID(v int64) *TemporaryCreditGrantUpdate {
+	_u.mutation.AddDailySubscriptionID(v)
+	return _u
+}
+
+// ClearDailySubscriptionID clears the value of the "daily_subscription_id" field.
+func (_u *TemporaryCreditGrantUpdate) ClearDailySubscriptionID() *TemporaryCreditGrantUpdate {
+	_u.mutation.ClearDailySubscriptionID()
+	return _u
+}
+
+// SetScheduledDate sets the "scheduled_date" field.
+func (_u *TemporaryCreditGrantUpdate) SetScheduledDate(v time.Time) *TemporaryCreditGrantUpdate {
+	_u.mutation.SetScheduledDate(v)
+	return _u
+}
+
+// SetNillableScheduledDate sets the "scheduled_date" field if the given value is not nil.
+func (_u *TemporaryCreditGrantUpdate) SetNillableScheduledDate(v *time.Time) *TemporaryCreditGrantUpdate {
+	if v != nil {
+		_u.SetScheduledDate(*v)
+	}
+	return _u
+}
+
+// ClearScheduledDate clears the value of the "scheduled_date" field.
+func (_u *TemporaryCreditGrantUpdate) ClearScheduledDate() *TemporaryCreditGrantUpdate {
+	_u.mutation.ClearScheduledDate()
+	return _u
+}
+
 // SetAmount sets the "amount" field.
 func (_u *TemporaryCreditGrantUpdate) SetAmount(v float64) *TemporaryCreditGrantUpdate {
 	_u.mutation.ResetAmount()
@@ -125,6 +199,20 @@ func (_u *TemporaryCreditGrantUpdate) SetNillableRemainingAmount(v *float64) *Te
 // AddRemainingAmount adds value to the "remaining_amount" field.
 func (_u *TemporaryCreditGrantUpdate) AddRemainingAmount(v float64) *TemporaryCreditGrantUpdate {
 	_u.mutation.AddRemainingAmount(v)
+	return _u
+}
+
+// SetAvailableAt sets the "available_at" field.
+func (_u *TemporaryCreditGrantUpdate) SetAvailableAt(v time.Time) *TemporaryCreditGrantUpdate {
+	_u.mutation.SetAvailableAt(v)
+	return _u
+}
+
+// SetNillableAvailableAt sets the "available_at" field if the given value is not nil.
+func (_u *TemporaryCreditGrantUpdate) SetNillableAvailableAt(v *time.Time) *TemporaryCreditGrantUpdate {
+	if v != nil {
+		_u.SetAvailableAt(*v)
+	}
 	return _u
 }
 
@@ -367,6 +455,30 @@ func (_u *TemporaryCreditGrantUpdate) sqlSave(ctx context.Context) (_node int, e
 	if value, ok := _u.mutation.Source(); ok {
 		_spec.SetField(temporarycreditgrant.FieldSource, field.TypeEnum, value)
 	}
+	if value, ok := _u.mutation.MallPurchaseID(); ok {
+		_spec.SetField(temporarycreditgrant.FieldMallPurchaseID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedMallPurchaseID(); ok {
+		_spec.AddField(temporarycreditgrant.FieldMallPurchaseID, field.TypeInt64, value)
+	}
+	if _u.mutation.MallPurchaseIDCleared() {
+		_spec.ClearField(temporarycreditgrant.FieldMallPurchaseID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.DailySubscriptionID(); ok {
+		_spec.SetField(temporarycreditgrant.FieldDailySubscriptionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedDailySubscriptionID(); ok {
+		_spec.AddField(temporarycreditgrant.FieldDailySubscriptionID, field.TypeInt64, value)
+	}
+	if _u.mutation.DailySubscriptionIDCleared() {
+		_spec.ClearField(temporarycreditgrant.FieldDailySubscriptionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.ScheduledDate(); ok {
+		_spec.SetField(temporarycreditgrant.FieldScheduledDate, field.TypeTime, value)
+	}
+	if _u.mutation.ScheduledDateCleared() {
+		_spec.ClearField(temporarycreditgrant.FieldScheduledDate, field.TypeTime)
+	}
 	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(temporarycreditgrant.FieldAmount, field.TypeFloat64, value)
 	}
@@ -378,6 +490,9 @@ func (_u *TemporaryCreditGrantUpdate) sqlSave(ctx context.Context) (_node int, e
 	}
 	if value, ok := _u.mutation.AddedRemainingAmount(); ok {
 		_spec.AddField(temporarycreditgrant.FieldRemainingAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AvailableAt(); ok {
+		_spec.SetField(temporarycreditgrant.FieldAvailableAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(temporarycreditgrant.FieldExpiresAt, field.TypeTime, value)
@@ -636,6 +751,80 @@ func (_u *TemporaryCreditGrantUpdateOne) ClearCheckinID() *TemporaryCreditGrantU
 	return _u
 }
 
+// SetMallPurchaseID sets the "mall_purchase_id" field.
+func (_u *TemporaryCreditGrantUpdateOne) SetMallPurchaseID(v int64) *TemporaryCreditGrantUpdateOne {
+	_u.mutation.ResetMallPurchaseID()
+	_u.mutation.SetMallPurchaseID(v)
+	return _u
+}
+
+// SetNillableMallPurchaseID sets the "mall_purchase_id" field if the given value is not nil.
+func (_u *TemporaryCreditGrantUpdateOne) SetNillableMallPurchaseID(v *int64) *TemporaryCreditGrantUpdateOne {
+	if v != nil {
+		_u.SetMallPurchaseID(*v)
+	}
+	return _u
+}
+
+// AddMallPurchaseID adds value to the "mall_purchase_id" field.
+func (_u *TemporaryCreditGrantUpdateOne) AddMallPurchaseID(v int64) *TemporaryCreditGrantUpdateOne {
+	_u.mutation.AddMallPurchaseID(v)
+	return _u
+}
+
+// ClearMallPurchaseID clears the value of the "mall_purchase_id" field.
+func (_u *TemporaryCreditGrantUpdateOne) ClearMallPurchaseID() *TemporaryCreditGrantUpdateOne {
+	_u.mutation.ClearMallPurchaseID()
+	return _u
+}
+
+// SetDailySubscriptionID sets the "daily_subscription_id" field.
+func (_u *TemporaryCreditGrantUpdateOne) SetDailySubscriptionID(v int64) *TemporaryCreditGrantUpdateOne {
+	_u.mutation.ResetDailySubscriptionID()
+	_u.mutation.SetDailySubscriptionID(v)
+	return _u
+}
+
+// SetNillableDailySubscriptionID sets the "daily_subscription_id" field if the given value is not nil.
+func (_u *TemporaryCreditGrantUpdateOne) SetNillableDailySubscriptionID(v *int64) *TemporaryCreditGrantUpdateOne {
+	if v != nil {
+		_u.SetDailySubscriptionID(*v)
+	}
+	return _u
+}
+
+// AddDailySubscriptionID adds value to the "daily_subscription_id" field.
+func (_u *TemporaryCreditGrantUpdateOne) AddDailySubscriptionID(v int64) *TemporaryCreditGrantUpdateOne {
+	_u.mutation.AddDailySubscriptionID(v)
+	return _u
+}
+
+// ClearDailySubscriptionID clears the value of the "daily_subscription_id" field.
+func (_u *TemporaryCreditGrantUpdateOne) ClearDailySubscriptionID() *TemporaryCreditGrantUpdateOne {
+	_u.mutation.ClearDailySubscriptionID()
+	return _u
+}
+
+// SetScheduledDate sets the "scheduled_date" field.
+func (_u *TemporaryCreditGrantUpdateOne) SetScheduledDate(v time.Time) *TemporaryCreditGrantUpdateOne {
+	_u.mutation.SetScheduledDate(v)
+	return _u
+}
+
+// SetNillableScheduledDate sets the "scheduled_date" field if the given value is not nil.
+func (_u *TemporaryCreditGrantUpdateOne) SetNillableScheduledDate(v *time.Time) *TemporaryCreditGrantUpdateOne {
+	if v != nil {
+		_u.SetScheduledDate(*v)
+	}
+	return _u
+}
+
+// ClearScheduledDate clears the value of the "scheduled_date" field.
+func (_u *TemporaryCreditGrantUpdateOne) ClearScheduledDate() *TemporaryCreditGrantUpdateOne {
+	_u.mutation.ClearScheduledDate()
+	return _u
+}
+
 // SetAmount sets the "amount" field.
 func (_u *TemporaryCreditGrantUpdateOne) SetAmount(v float64) *TemporaryCreditGrantUpdateOne {
 	_u.mutation.ResetAmount()
@@ -675,6 +864,20 @@ func (_u *TemporaryCreditGrantUpdateOne) SetNillableRemainingAmount(v *float64) 
 // AddRemainingAmount adds value to the "remaining_amount" field.
 func (_u *TemporaryCreditGrantUpdateOne) AddRemainingAmount(v float64) *TemporaryCreditGrantUpdateOne {
 	_u.mutation.AddRemainingAmount(v)
+	return _u
+}
+
+// SetAvailableAt sets the "available_at" field.
+func (_u *TemporaryCreditGrantUpdateOne) SetAvailableAt(v time.Time) *TemporaryCreditGrantUpdateOne {
+	_u.mutation.SetAvailableAt(v)
+	return _u
+}
+
+// SetNillableAvailableAt sets the "available_at" field if the given value is not nil.
+func (_u *TemporaryCreditGrantUpdateOne) SetNillableAvailableAt(v *time.Time) *TemporaryCreditGrantUpdateOne {
+	if v != nil {
+		_u.SetAvailableAt(*v)
+	}
 	return _u
 }
 
@@ -947,6 +1150,30 @@ func (_u *TemporaryCreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *Te
 	if value, ok := _u.mutation.Source(); ok {
 		_spec.SetField(temporarycreditgrant.FieldSource, field.TypeEnum, value)
 	}
+	if value, ok := _u.mutation.MallPurchaseID(); ok {
+		_spec.SetField(temporarycreditgrant.FieldMallPurchaseID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedMallPurchaseID(); ok {
+		_spec.AddField(temporarycreditgrant.FieldMallPurchaseID, field.TypeInt64, value)
+	}
+	if _u.mutation.MallPurchaseIDCleared() {
+		_spec.ClearField(temporarycreditgrant.FieldMallPurchaseID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.DailySubscriptionID(); ok {
+		_spec.SetField(temporarycreditgrant.FieldDailySubscriptionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedDailySubscriptionID(); ok {
+		_spec.AddField(temporarycreditgrant.FieldDailySubscriptionID, field.TypeInt64, value)
+	}
+	if _u.mutation.DailySubscriptionIDCleared() {
+		_spec.ClearField(temporarycreditgrant.FieldDailySubscriptionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.ScheduledDate(); ok {
+		_spec.SetField(temporarycreditgrant.FieldScheduledDate, field.TypeTime, value)
+	}
+	if _u.mutation.ScheduledDateCleared() {
+		_spec.ClearField(temporarycreditgrant.FieldScheduledDate, field.TypeTime)
+	}
 	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(temporarycreditgrant.FieldAmount, field.TypeFloat64, value)
 	}
@@ -958,6 +1185,9 @@ func (_u *TemporaryCreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *Te
 	}
 	if value, ok := _u.mutation.AddedRemainingAmount(); ok {
 		_spec.AddField(temporarycreditgrant.FieldRemainingAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AvailableAt(); ok {
+		_spec.SetField(temporarycreditgrant.FieldAvailableAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(temporarycreditgrant.FieldExpiresAt, field.TypeTime, value)

@@ -90,7 +90,7 @@ const widthClasses = computed(() => {
   // wide=multi-section forms or rich content, extra-wide=analytics/tables,
   // full=full-screen or very dense layouts.
   const widths: Record<DialogWidth, string> = {
-    narrow: 'max-w-md',
+    narrow: 'min-w-0 max-w-[calc(100vw-1rem)] sm:max-w-md',
     normal: 'max-w-lg',
     wide: 'w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl',
     'extra-wide': 'w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl',

@@ -25,14 +25,19 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/currencyproduct"
 	"github.com/Wei-Shaw/sub2api/ent/dailycheckin"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/malldailycreditsubscription"
+	"github.com/Wei-Shaw/sub2api/ent/mallpurchase"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
@@ -570,6 +575,33 @@ func (f TraverseChannelMonitorRequestTemplate) Traverse(ctx context.Context, q e
 	return fmt.Errorf("unexpected query type %T. expect *ent.ChannelMonitorRequestTemplateQuery", q)
 }
 
+// The CurrencyProductFunc type is an adapter to allow the use of ordinary function as a Querier.
+type CurrencyProductFunc func(context.Context, *ent.CurrencyProductQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f CurrencyProductFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.CurrencyProductQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.CurrencyProductQuery", q)
+}
+
+// The TraverseCurrencyProduct type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseCurrencyProduct func(context.Context, *ent.CurrencyProductQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseCurrencyProduct) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseCurrencyProduct) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.CurrencyProductQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.CurrencyProductQuery", q)
+}
+
 // The DailyCheckinFunc type is an adapter to allow the use of ordinary function as a Querier.
 type DailyCheckinFunc func(context.Context, *ent.DailyCheckinQuery) (ent.Value, error)
 
@@ -705,6 +737,60 @@ func (f TraverseIdentityAdoptionDecision) Traverse(ctx context.Context, q ent.Qu
 	return fmt.Errorf("unexpected query type %T. expect *ent.IdentityAdoptionDecisionQuery", q)
 }
 
+// The MallDailyCreditSubscriptionFunc type is an adapter to allow the use of ordinary function as a Querier.
+type MallDailyCreditSubscriptionFunc func(context.Context, *ent.MallDailyCreditSubscriptionQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f MallDailyCreditSubscriptionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.MallDailyCreditSubscriptionQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.MallDailyCreditSubscriptionQuery", q)
+}
+
+// The TraverseMallDailyCreditSubscription type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseMallDailyCreditSubscription func(context.Context, *ent.MallDailyCreditSubscriptionQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseMallDailyCreditSubscription) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseMallDailyCreditSubscription) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.MallDailyCreditSubscriptionQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.MallDailyCreditSubscriptionQuery", q)
+}
+
+// The MallPurchaseFunc type is an adapter to allow the use of ordinary function as a Querier.
+type MallPurchaseFunc func(context.Context, *ent.MallPurchaseQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f MallPurchaseFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.MallPurchaseQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.MallPurchaseQuery", q)
+}
+
+// The TraverseMallPurchase type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseMallPurchase func(context.Context, *ent.MallPurchaseQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseMallPurchase) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseMallPurchase) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.MallPurchaseQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.MallPurchaseQuery", q)
+}
+
 // The PaymentAuditLogFunc type is an adapter to allow the use of ordinary function as a Querier.
 type PaymentAuditLogFunc func(context.Context, *ent.PaymentAuditLogQuery) (ent.Value, error)
 
@@ -784,6 +870,60 @@ func (f TraversePaymentProviderInstance) Traverse(ctx context.Context, q ent.Que
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.PaymentProviderInstanceQuery", q)
+}
+
+// The PaymentPurchaseCounterFunc type is an adapter to allow the use of ordinary function as a Querier.
+type PaymentPurchaseCounterFunc func(context.Context, *ent.PaymentPurchaseCounterQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f PaymentPurchaseCounterFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.PaymentPurchaseCounterQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.PaymentPurchaseCounterQuery", q)
+}
+
+// The TraversePaymentPurchaseCounter type is an adapter to allow the use of ordinary function as Traverser.
+type TraversePaymentPurchaseCounter func(context.Context, *ent.PaymentPurchaseCounterQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraversePaymentPurchaseCounter) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraversePaymentPurchaseCounter) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.PaymentPurchaseCounterQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.PaymentPurchaseCounterQuery", q)
+}
+
+// The PaymentPurchaseReservationFunc type is an adapter to allow the use of ordinary function as a Querier.
+type PaymentPurchaseReservationFunc func(context.Context, *ent.PaymentPurchaseReservationQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f PaymentPurchaseReservationFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.PaymentPurchaseReservationQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.PaymentPurchaseReservationQuery", q)
+}
+
+// The TraversePaymentPurchaseReservation type is an adapter to allow the use of ordinary function as Traverser.
+type TraversePaymentPurchaseReservation func(context.Context, *ent.PaymentPurchaseReservationQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraversePaymentPurchaseReservation) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraversePaymentPurchaseReservation) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.PaymentPurchaseReservationQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.PaymentPurchaseReservationQuery", q)
 }
 
 // The PendingAuthSessionFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1336,6 +1476,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.ChannelMonitorHistoryQuery, predicate.ChannelMonitorHistory, channelmonitorhistory.OrderOption]{typ: ent.TypeChannelMonitorHistory, tq: q}, nil
 	case *ent.ChannelMonitorRequestTemplateQuery:
 		return &query[*ent.ChannelMonitorRequestTemplateQuery, predicate.ChannelMonitorRequestTemplate, channelmonitorrequesttemplate.OrderOption]{typ: ent.TypeChannelMonitorRequestTemplate, tq: q}, nil
+	case *ent.CurrencyProductQuery:
+		return &query[*ent.CurrencyProductQuery, predicate.CurrencyProduct, currencyproduct.OrderOption]{typ: ent.TypeCurrencyProduct, tq: q}, nil
 	case *ent.DailyCheckinQuery:
 		return &query[*ent.DailyCheckinQuery, predicate.DailyCheckin, dailycheckin.OrderOption]{typ: ent.TypeDailyCheckin, tq: q}, nil
 	case *ent.ErrorPassthroughRuleQuery:
@@ -1346,12 +1488,20 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.IdempotencyRecordQuery, predicate.IdempotencyRecord, idempotencyrecord.OrderOption]{typ: ent.TypeIdempotencyRecord, tq: q}, nil
 	case *ent.IdentityAdoptionDecisionQuery:
 		return &query[*ent.IdentityAdoptionDecisionQuery, predicate.IdentityAdoptionDecision, identityadoptiondecision.OrderOption]{typ: ent.TypeIdentityAdoptionDecision, tq: q}, nil
+	case *ent.MallDailyCreditSubscriptionQuery:
+		return &query[*ent.MallDailyCreditSubscriptionQuery, predicate.MallDailyCreditSubscription, malldailycreditsubscription.OrderOption]{typ: ent.TypeMallDailyCreditSubscription, tq: q}, nil
+	case *ent.MallPurchaseQuery:
+		return &query[*ent.MallPurchaseQuery, predicate.MallPurchase, mallpurchase.OrderOption]{typ: ent.TypeMallPurchase, tq: q}, nil
 	case *ent.PaymentAuditLogQuery:
 		return &query[*ent.PaymentAuditLogQuery, predicate.PaymentAuditLog, paymentauditlog.OrderOption]{typ: ent.TypePaymentAuditLog, tq: q}, nil
 	case *ent.PaymentOrderQuery:
 		return &query[*ent.PaymentOrderQuery, predicate.PaymentOrder, paymentorder.OrderOption]{typ: ent.TypePaymentOrder, tq: q}, nil
 	case *ent.PaymentProviderInstanceQuery:
 		return &query[*ent.PaymentProviderInstanceQuery, predicate.PaymentProviderInstance, paymentproviderinstance.OrderOption]{typ: ent.TypePaymentProviderInstance, tq: q}, nil
+	case *ent.PaymentPurchaseCounterQuery:
+		return &query[*ent.PaymentPurchaseCounterQuery, predicate.PaymentPurchaseCounter, paymentpurchasecounter.OrderOption]{typ: ent.TypePaymentPurchaseCounter, tq: q}, nil
+	case *ent.PaymentPurchaseReservationQuery:
+		return &query[*ent.PaymentPurchaseReservationQuery, predicate.PaymentPurchaseReservation, paymentpurchasereservation.OrderOption]{typ: ent.TypePaymentPurchaseReservation, tq: q}, nil
 	case *ent.PendingAuthSessionQuery:
 		return &query[*ent.PendingAuthSessionQuery, predicate.PendingAuthSession, pendingauthsession.OrderOption]{typ: ent.TypePendingAuthSession, tq: q}, nil
 	case *ent.PromoCodeQuery:

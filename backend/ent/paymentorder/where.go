@@ -145,6 +145,36 @@ func SubscriptionDays(v int) predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionDays, v))
 }
 
+// CurrencyProductID applies equality check predicate on the "currency_product_id" field. It's identical to CurrencyProductIDEQ.
+func CurrencyProductID(v int64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldCurrencyProductID, v))
+}
+
+// CurrencyProductName applies equality check predicate on the "currency_product_name" field. It's identical to CurrencyProductNameEQ.
+func CurrencyProductName(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductPaymentPrice applies equality check predicate on the "currency_product_payment_price" field. It's identical to CurrencyProductPaymentPriceEQ.
+func CurrencyProductPaymentPrice(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldCurrencyProductPaymentPrice, v))
+}
+
+// CurrencyProductCreditedAmount applies equality check predicate on the "currency_product_credited_amount" field. It's identical to CurrencyProductCreditedAmountEQ.
+func CurrencyProductCreditedAmount(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldCurrencyProductCreditedAmount, v))
+}
+
+// DailyPurchaseLimitSnapshot applies equality check predicate on the "daily_purchase_limit_snapshot" field. It's identical to DailyPurchaseLimitSnapshotEQ.
+func DailyPurchaseLimitSnapshot(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldDailyPurchaseLimitSnapshot, v))
+}
+
+// TotalPurchaseLimitSnapshot applies equality check predicate on the "total_purchase_limit_snapshot" field. It's identical to TotalPurchaseLimitSnapshotEQ.
+func TotalPurchaseLimitSnapshot(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldTotalPurchaseLimitSnapshot, v))
+}
+
 // ProviderInstanceID applies equality check predicate on the "provider_instance_id" field. It's identical to ProviderInstanceIDEQ.
 func ProviderInstanceID(v string) predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldEQ(FieldProviderInstanceID, v))
@@ -1288,6 +1318,311 @@ func SubscriptionDaysIsNil() predicate.PaymentOrder {
 // SubscriptionDaysNotNil applies the NotNil predicate on the "subscription_days" field.
 func SubscriptionDaysNotNil() predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldNotNull(FieldSubscriptionDays))
+}
+
+// CurrencyProductIDEQ applies the EQ predicate on the "currency_product_id" field.
+func CurrencyProductIDEQ(v int64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldCurrencyProductID, v))
+}
+
+// CurrencyProductIDNEQ applies the NEQ predicate on the "currency_product_id" field.
+func CurrencyProductIDNEQ(v int64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldCurrencyProductID, v))
+}
+
+// CurrencyProductIDIn applies the In predicate on the "currency_product_id" field.
+func CurrencyProductIDIn(vs ...int64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldCurrencyProductID, vs...))
+}
+
+// CurrencyProductIDNotIn applies the NotIn predicate on the "currency_product_id" field.
+func CurrencyProductIDNotIn(vs ...int64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldCurrencyProductID, vs...))
+}
+
+// CurrencyProductIDGT applies the GT predicate on the "currency_product_id" field.
+func CurrencyProductIDGT(v int64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldCurrencyProductID, v))
+}
+
+// CurrencyProductIDGTE applies the GTE predicate on the "currency_product_id" field.
+func CurrencyProductIDGTE(v int64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldCurrencyProductID, v))
+}
+
+// CurrencyProductIDLT applies the LT predicate on the "currency_product_id" field.
+func CurrencyProductIDLT(v int64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldCurrencyProductID, v))
+}
+
+// CurrencyProductIDLTE applies the LTE predicate on the "currency_product_id" field.
+func CurrencyProductIDLTE(v int64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldCurrencyProductID, v))
+}
+
+// CurrencyProductIDIsNil applies the IsNil predicate on the "currency_product_id" field.
+func CurrencyProductIDIsNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIsNull(FieldCurrencyProductID))
+}
+
+// CurrencyProductIDNotNil applies the NotNil predicate on the "currency_product_id" field.
+func CurrencyProductIDNotNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotNull(FieldCurrencyProductID))
+}
+
+// CurrencyProductNameEQ applies the EQ predicate on the "currency_product_name" field.
+func CurrencyProductNameEQ(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameNEQ applies the NEQ predicate on the "currency_product_name" field.
+func CurrencyProductNameNEQ(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameIn applies the In predicate on the "currency_product_name" field.
+func CurrencyProductNameIn(vs ...string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldCurrencyProductName, vs...))
+}
+
+// CurrencyProductNameNotIn applies the NotIn predicate on the "currency_product_name" field.
+func CurrencyProductNameNotIn(vs ...string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldCurrencyProductName, vs...))
+}
+
+// CurrencyProductNameGT applies the GT predicate on the "currency_product_name" field.
+func CurrencyProductNameGT(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameGTE applies the GTE predicate on the "currency_product_name" field.
+func CurrencyProductNameGTE(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameLT applies the LT predicate on the "currency_product_name" field.
+func CurrencyProductNameLT(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameLTE applies the LTE predicate on the "currency_product_name" field.
+func CurrencyProductNameLTE(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameContains applies the Contains predicate on the "currency_product_name" field.
+func CurrencyProductNameContains(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldContains(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameHasPrefix applies the HasPrefix predicate on the "currency_product_name" field.
+func CurrencyProductNameHasPrefix(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldHasPrefix(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameHasSuffix applies the HasSuffix predicate on the "currency_product_name" field.
+func CurrencyProductNameHasSuffix(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldHasSuffix(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameIsNil applies the IsNil predicate on the "currency_product_name" field.
+func CurrencyProductNameIsNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIsNull(FieldCurrencyProductName))
+}
+
+// CurrencyProductNameNotNil applies the NotNil predicate on the "currency_product_name" field.
+func CurrencyProductNameNotNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotNull(FieldCurrencyProductName))
+}
+
+// CurrencyProductNameEqualFold applies the EqualFold predicate on the "currency_product_name" field.
+func CurrencyProductNameEqualFold(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEqualFold(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductNameContainsFold applies the ContainsFold predicate on the "currency_product_name" field.
+func CurrencyProductNameContainsFold(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldContainsFold(FieldCurrencyProductName, v))
+}
+
+// CurrencyProductPaymentPriceEQ applies the EQ predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldCurrencyProductPaymentPrice, v))
+}
+
+// CurrencyProductPaymentPriceNEQ applies the NEQ predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceNEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldCurrencyProductPaymentPrice, v))
+}
+
+// CurrencyProductPaymentPriceIn applies the In predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldCurrencyProductPaymentPrice, vs...))
+}
+
+// CurrencyProductPaymentPriceNotIn applies the NotIn predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceNotIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldCurrencyProductPaymentPrice, vs...))
+}
+
+// CurrencyProductPaymentPriceGT applies the GT predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceGT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldCurrencyProductPaymentPrice, v))
+}
+
+// CurrencyProductPaymentPriceGTE applies the GTE predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceGTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldCurrencyProductPaymentPrice, v))
+}
+
+// CurrencyProductPaymentPriceLT applies the LT predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceLT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldCurrencyProductPaymentPrice, v))
+}
+
+// CurrencyProductPaymentPriceLTE applies the LTE predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceLTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldCurrencyProductPaymentPrice, v))
+}
+
+// CurrencyProductPaymentPriceIsNil applies the IsNil predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceIsNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIsNull(FieldCurrencyProductPaymentPrice))
+}
+
+// CurrencyProductPaymentPriceNotNil applies the NotNil predicate on the "currency_product_payment_price" field.
+func CurrencyProductPaymentPriceNotNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotNull(FieldCurrencyProductPaymentPrice))
+}
+
+// CurrencyProductCreditedAmountEQ applies the EQ predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldCurrencyProductCreditedAmount, v))
+}
+
+// CurrencyProductCreditedAmountNEQ applies the NEQ predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountNEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldCurrencyProductCreditedAmount, v))
+}
+
+// CurrencyProductCreditedAmountIn applies the In predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldCurrencyProductCreditedAmount, vs...))
+}
+
+// CurrencyProductCreditedAmountNotIn applies the NotIn predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountNotIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldCurrencyProductCreditedAmount, vs...))
+}
+
+// CurrencyProductCreditedAmountGT applies the GT predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountGT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldCurrencyProductCreditedAmount, v))
+}
+
+// CurrencyProductCreditedAmountGTE applies the GTE predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountGTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldCurrencyProductCreditedAmount, v))
+}
+
+// CurrencyProductCreditedAmountLT applies the LT predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountLT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldCurrencyProductCreditedAmount, v))
+}
+
+// CurrencyProductCreditedAmountLTE applies the LTE predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountLTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldCurrencyProductCreditedAmount, v))
+}
+
+// CurrencyProductCreditedAmountIsNil applies the IsNil predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountIsNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIsNull(FieldCurrencyProductCreditedAmount))
+}
+
+// CurrencyProductCreditedAmountNotNil applies the NotNil predicate on the "currency_product_credited_amount" field.
+func CurrencyProductCreditedAmountNotNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotNull(FieldCurrencyProductCreditedAmount))
+}
+
+// DailyPurchaseLimitSnapshotEQ applies the EQ predicate on the "daily_purchase_limit_snapshot" field.
+func DailyPurchaseLimitSnapshotEQ(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldDailyPurchaseLimitSnapshot, v))
+}
+
+// DailyPurchaseLimitSnapshotNEQ applies the NEQ predicate on the "daily_purchase_limit_snapshot" field.
+func DailyPurchaseLimitSnapshotNEQ(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldDailyPurchaseLimitSnapshot, v))
+}
+
+// DailyPurchaseLimitSnapshotIn applies the In predicate on the "daily_purchase_limit_snapshot" field.
+func DailyPurchaseLimitSnapshotIn(vs ...int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldDailyPurchaseLimitSnapshot, vs...))
+}
+
+// DailyPurchaseLimitSnapshotNotIn applies the NotIn predicate on the "daily_purchase_limit_snapshot" field.
+func DailyPurchaseLimitSnapshotNotIn(vs ...int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldDailyPurchaseLimitSnapshot, vs...))
+}
+
+// DailyPurchaseLimitSnapshotGT applies the GT predicate on the "daily_purchase_limit_snapshot" field.
+func DailyPurchaseLimitSnapshotGT(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldDailyPurchaseLimitSnapshot, v))
+}
+
+// DailyPurchaseLimitSnapshotGTE applies the GTE predicate on the "daily_purchase_limit_snapshot" field.
+func DailyPurchaseLimitSnapshotGTE(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldDailyPurchaseLimitSnapshot, v))
+}
+
+// DailyPurchaseLimitSnapshotLT applies the LT predicate on the "daily_purchase_limit_snapshot" field.
+func DailyPurchaseLimitSnapshotLT(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldDailyPurchaseLimitSnapshot, v))
+}
+
+// DailyPurchaseLimitSnapshotLTE applies the LTE predicate on the "daily_purchase_limit_snapshot" field.
+func DailyPurchaseLimitSnapshotLTE(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldDailyPurchaseLimitSnapshot, v))
+}
+
+// TotalPurchaseLimitSnapshotEQ applies the EQ predicate on the "total_purchase_limit_snapshot" field.
+func TotalPurchaseLimitSnapshotEQ(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldTotalPurchaseLimitSnapshot, v))
+}
+
+// TotalPurchaseLimitSnapshotNEQ applies the NEQ predicate on the "total_purchase_limit_snapshot" field.
+func TotalPurchaseLimitSnapshotNEQ(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldTotalPurchaseLimitSnapshot, v))
+}
+
+// TotalPurchaseLimitSnapshotIn applies the In predicate on the "total_purchase_limit_snapshot" field.
+func TotalPurchaseLimitSnapshotIn(vs ...int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldTotalPurchaseLimitSnapshot, vs...))
+}
+
+// TotalPurchaseLimitSnapshotNotIn applies the NotIn predicate on the "total_purchase_limit_snapshot" field.
+func TotalPurchaseLimitSnapshotNotIn(vs ...int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldTotalPurchaseLimitSnapshot, vs...))
+}
+
+// TotalPurchaseLimitSnapshotGT applies the GT predicate on the "total_purchase_limit_snapshot" field.
+func TotalPurchaseLimitSnapshotGT(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldTotalPurchaseLimitSnapshot, v))
+}
+
+// TotalPurchaseLimitSnapshotGTE applies the GTE predicate on the "total_purchase_limit_snapshot" field.
+func TotalPurchaseLimitSnapshotGTE(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldTotalPurchaseLimitSnapshot, v))
+}
+
+// TotalPurchaseLimitSnapshotLT applies the LT predicate on the "total_purchase_limit_snapshot" field.
+func TotalPurchaseLimitSnapshotLT(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldTotalPurchaseLimitSnapshot, v))
+}
+
+// TotalPurchaseLimitSnapshotLTE applies the LTE predicate on the "total_purchase_limit_snapshot" field.
+func TotalPurchaseLimitSnapshotLTE(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldTotalPurchaseLimitSnapshot, v))
 }
 
 // ProviderInstanceIDEQ applies the EQ predicate on the "provider_instance_id" field.
