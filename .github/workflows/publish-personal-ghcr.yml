@@ -21,7 +21,7 @@ jobs:
   publish:
     name: Build and publish multi-platform image
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Check out source
