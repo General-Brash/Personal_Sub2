@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -16,6 +17,7 @@ import (
 
 type BankAPIService interface {
 	GetStatus(ctx context.Context, userID int64) (*service.BankStatus, error)
+	ListLedger(ctx context.Context, userID int64, page int) ([]service.BankLedgerItem, int64, error)
 	AdvanceAtomic(ctx context.Context, userID int64, amount float64, claim *service.IdempotencyAtomicClaim) (*service.BankAdvanceResult, error)
 	ExchangeAtomic(ctx context.Context, userID int64, permanentAmount float64, claim *service.IdempotencyAtomicClaim) (*service.BankExchangeResult, error)
 	RepayAtomic(ctx context.Context, userID int64, source service.BankRepaySource, amount float64, claim *service.IdempotencyAtomicClaim) (*service.BankRepayResult, error)
@@ -51,6 +53,37 @@ func (h *BankHandler) GetStatus(c *gin.Context) {
 		return
 	}
 	response.Success(c, status)
+}
+
+// ListLedger handles GET /api/v1/bank/ledger with a fixed five-row page.
+func (h *BankHandler) ListLedger(c *gin.Context) {
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	page, err := parseBankLedgerPage(c.Query("page"))
+	if err != nil {
+		response.BadRequest(c, "Invalid page")
+		return
+	}
+	items, total, err := h.service.ListLedger(c.Request.Context(), subject.UserID, page)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, items, total, page, service.UserBankLedgerPageSize)
+}
+
+func parseBankLedgerPage(raw string) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 1, nil
+	}
+	page, err := strconv.Atoi(raw)
+	if err != nil || page < 1 {
+		return 0, errors.New("page must be positive")
+	}
+	return page, nil
 }
 
 // Advance handles POST /api/v1/bank/advance.

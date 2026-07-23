@@ -5,6 +5,7 @@ import checkin from './checkin'
 import bank from './bank'
 import admin from './admin'
 import misc from './misc'
+import finance from './finance'
 
 export default {
   ...landing,
@@ -14,4 +15,5 @@ export default {
   ...bank,
   admin,
   ...misc,
+  ...finance,
 }

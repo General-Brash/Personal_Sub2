@@ -75,20 +75,46 @@
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.nextDayReward') }}</p>
             <p
               data-test="next-reward"
-              class="mt-2 min-w-0 max-w-full whitespace-nowrap text-sm font-semibold tabular-nums text-primary-600 dark:text-primary-400"
-              :style="fitSummaryValue(nextRewardText, 14)"
+              class="mt-2 flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 gap-y-0.5 tabular-nums"
             >
-              {{ nextRewardText }}
+              <span class="sr-only">{{ t('checkin.temporaryReward') }}:</span>
+              <span
+                data-test="next-temporary-reward"
+                class="min-w-0 max-w-full break-all text-lg font-semibold leading-6 text-emerald-600 dark:text-emerald-400"
+              >
+                {{ formatCredit(status.next_reward_amount) }}
+              </span>
+              <span aria-hidden="true" class="text-sm text-gray-400 dark:text-gray-500">+</span>
+              <span class="sr-only">{{ t('checkin.permanentReward') }}:</span>
+              <span
+                data-test="next-permanent-reward"
+                class="min-w-0 max-w-full break-all text-lg font-semibold leading-6 text-indigo-600 dark:text-indigo-400"
+              >
+                {{ formatCredit(status.next_permanent_reward_amount || '0.00000000') }}
+              </span>
             </p>
           </div>
           <div data-test="checkin-stat-card" class="card flex min-w-0 flex-col p-4">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.monthlyCumulativeReward') }}</p>
             <p
               data-test="monthly-reward-total"
-              class="mt-2 min-w-0 max-w-full whitespace-nowrap text-sm font-semibold tabular-nums text-gray-900 dark:text-white"
-              :style="fitSummaryValue(monthlyRewardText, 14)"
+              class="mt-2 flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 gap-y-0.5 tabular-nums"
             >
-              {{ monthlyRewardText }}
+              <span class="sr-only">{{ t('checkin.monthlyRewardTotal') }}:</span>
+              <span
+                data-test="monthly-temporary-reward-total"
+                class="min-w-0 max-w-full break-all text-lg font-semibold leading-6 text-emerald-600 dark:text-emerald-400"
+              >
+                {{ formatCredit(status.monthly_reward_total) }}
+              </span>
+              <span aria-hidden="true" class="text-sm text-gray-400 dark:text-gray-500">+</span>
+              <span class="sr-only">{{ t('checkin.monthlyPermanentRewardTotal') }}:</span>
+              <span
+                data-test="monthly-permanent-reward-total"
+                class="min-w-0 max-w-full break-all text-lg font-semibold leading-6 text-indigo-600 dark:text-indigo-400"
+              >
+                {{ formatCredit(status.monthly_permanent_reward_total || '0.00000000') }}
+              </span>
             </p>
           </div>
           <div data-test="checkin-stat-card" class="card flex min-w-0 flex-col p-4">
@@ -204,14 +230,6 @@ const checkInButtonLabel = computed(() => {
   if (!status.value?.enabled) return t('checkin.disabled')
   if (status.value.today_checked_in) return t('checkin.checkedIn')
   return t('checkin.checkIn')
-})
-const nextRewardText = computed(() => {
-  if (!status.value) return ''
-  return `${t('checkin.rewardDay', { day: status.value.next_reward_day })} / ${formatCredit(status.value.next_reward_amount)}+${formatCredit(status.value.next_permanent_reward_amount || '0.00000000')}`
-})
-const monthlyRewardText = computed(() => {
-  if (!status.value) return ''
-  return `${formatCredit(status.value.monthly_reward_total)}+${formatCredit(status.value.monthly_permanent_reward_total || '0.00000000')}`
 })
 const temporaryCreditText = computed(() => status.value ? formatCredit(status.value.temporary_credit_available) : '')
 

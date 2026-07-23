@@ -23,6 +23,8 @@ type MallPurchase struct {
 	ProductType string `json:"product_type,omitempty"`
 	// ProductID holds the value of the "product_id" field.
 	ProductID int64 `json:"product_id,omitempty"`
+	// ProductName holds the value of the "product_name" field.
+	ProductName string `json:"product_name,omitempty"`
 	// IdempotencyRecordID holds the value of the "idempotency_record_id" field.
 	IdempotencyRecordID int64 `json:"idempotency_record_id,omitempty"`
 	// PaymentCreditType holds the value of the "payment_credit_type" field.
@@ -41,6 +43,14 @@ type MallPurchase struct {
 	DailyTemporaryCreditAmount *float64 `json:"daily_temporary_credit_amount,omitempty"`
 	// SubscriptionExpiresAt holds the value of the "subscription_expires_at" field.
 	SubscriptionExpiresAt *time.Time `json:"subscription_expires_at,omitempty"`
+	// PermanentBalanceBefore holds the value of the "permanent_balance_before" field.
+	PermanentBalanceBefore *float64 `json:"permanent_balance_before,omitempty"`
+	// PermanentBalanceAfter holds the value of the "permanent_balance_after" field.
+	PermanentBalanceAfter *float64 `json:"permanent_balance_after,omitempty"`
+	// TemporaryBalanceBefore holds the value of the "temporary_balance_before" field.
+	TemporaryBalanceBefore *float64 `json:"temporary_balance_before,omitempty"`
+	// TemporaryBalanceAfter holds the value of the "temporary_balance_after" field.
+	TemporaryBalanceAfter *float64 `json:"temporary_balance_after,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -53,11 +63,11 @@ func (*MallPurchase) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case mallpurchase.FieldPrice, mallpurchase.FieldCreditedAmount, mallpurchase.FieldDailyTemporaryCreditAmount:
+		case mallpurchase.FieldPrice, mallpurchase.FieldCreditedAmount, mallpurchase.FieldDailyTemporaryCreditAmount, mallpurchase.FieldPermanentBalanceBefore, mallpurchase.FieldPermanentBalanceAfter, mallpurchase.FieldTemporaryBalanceBefore, mallpurchase.FieldTemporaryBalanceAfter:
 			values[i] = new(sql.NullFloat64)
 		case mallpurchase.FieldID, mallpurchase.FieldUserID, mallpurchase.FieldProductID, mallpurchase.FieldIdempotencyRecordID, mallpurchase.FieldBenefitDays:
 			values[i] = new(sql.NullInt64)
-		case mallpurchase.FieldProductType, mallpurchase.FieldPaymentCreditType, mallpurchase.FieldCreditedType, mallpurchase.FieldBenefitType, mallpurchase.FieldStatus:
+		case mallpurchase.FieldProductType, mallpurchase.FieldProductName, mallpurchase.FieldPaymentCreditType, mallpurchase.FieldCreditedType, mallpurchase.FieldBenefitType, mallpurchase.FieldStatus:
 			values[i] = new(sql.NullString)
 		case mallpurchase.FieldSubscriptionExpiresAt, mallpurchase.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -99,6 +109,12 @@ func (_m *MallPurchase) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field product_id", values[i])
 			} else if value.Valid {
 				_m.ProductID = value.Int64
+			}
+		case mallpurchase.FieldProductName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field product_name", values[i])
+			} else if value.Valid {
+				_m.ProductName = value.String
 			}
 		case mallpurchase.FieldIdempotencyRecordID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -160,6 +176,34 @@ func (_m *MallPurchase) assignValues(columns []string, values []any) error {
 				_m.SubscriptionExpiresAt = new(time.Time)
 				*_m.SubscriptionExpiresAt = value.Time
 			}
+		case mallpurchase.FieldPermanentBalanceBefore:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field permanent_balance_before", values[i])
+			} else if value.Valid {
+				_m.PermanentBalanceBefore = new(float64)
+				*_m.PermanentBalanceBefore = value.Float64
+			}
+		case mallpurchase.FieldPermanentBalanceAfter:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field permanent_balance_after", values[i])
+			} else if value.Valid {
+				_m.PermanentBalanceAfter = new(float64)
+				*_m.PermanentBalanceAfter = value.Float64
+			}
+		case mallpurchase.FieldTemporaryBalanceBefore:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field temporary_balance_before", values[i])
+			} else if value.Valid {
+				_m.TemporaryBalanceBefore = new(float64)
+				*_m.TemporaryBalanceBefore = value.Float64
+			}
+		case mallpurchase.FieldTemporaryBalanceAfter:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field temporary_balance_after", values[i])
+			} else if value.Valid {
+				_m.TemporaryBalanceAfter = new(float64)
+				*_m.TemporaryBalanceAfter = value.Float64
+			}
 		case mallpurchase.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
@@ -217,6 +261,9 @@ func (_m *MallPurchase) String() string {
 	builder.WriteString("product_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ProductID))
 	builder.WriteString(", ")
+	builder.WriteString("product_name=")
+	builder.WriteString(_m.ProductName)
+	builder.WriteString(", ")
 	builder.WriteString("idempotency_record_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IdempotencyRecordID))
 	builder.WriteString(", ")
@@ -254,6 +301,26 @@ func (_m *MallPurchase) String() string {
 	if v := _m.SubscriptionExpiresAt; v != nil {
 		builder.WriteString("subscription_expires_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.PermanentBalanceBefore; v != nil {
+		builder.WriteString("permanent_balance_before=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.PermanentBalanceAfter; v != nil {
+		builder.WriteString("permanent_balance_after=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.TemporaryBalanceBefore; v != nil {
+		builder.WriteString("temporary_balance_before=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.TemporaryBalanceAfter; v != nil {
+		builder.WriteString("temporary_balance_after=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("status=")

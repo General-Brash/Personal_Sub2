@@ -69,6 +69,11 @@ func ProductID(v int64) predicate.MallPurchase {
 	return predicate.MallPurchase(sql.FieldEQ(FieldProductID, v))
 }
 
+// ProductName applies equality check predicate on the "product_name" field. It's identical to ProductNameEQ.
+func ProductName(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldProductName, v))
+}
+
 // IdempotencyRecordID applies equality check predicate on the "idempotency_record_id" field. It's identical to IdempotencyRecordIDEQ.
 func IdempotencyRecordID(v int64) predicate.MallPurchase {
 	return predicate.MallPurchase(sql.FieldEQ(FieldIdempotencyRecordID, v))
@@ -112,6 +117,26 @@ func DailyTemporaryCreditAmount(v float64) predicate.MallPurchase {
 // SubscriptionExpiresAt applies equality check predicate on the "subscription_expires_at" field. It's identical to SubscriptionExpiresAtEQ.
 func SubscriptionExpiresAt(v time.Time) predicate.MallPurchase {
 	return predicate.MallPurchase(sql.FieldEQ(FieldSubscriptionExpiresAt, v))
+}
+
+// PermanentBalanceBefore applies equality check predicate on the "permanent_balance_before" field. It's identical to PermanentBalanceBeforeEQ.
+func PermanentBalanceBefore(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldPermanentBalanceBefore, v))
+}
+
+// PermanentBalanceAfter applies equality check predicate on the "permanent_balance_after" field. It's identical to PermanentBalanceAfterEQ.
+func PermanentBalanceAfter(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldPermanentBalanceAfter, v))
+}
+
+// TemporaryBalanceBefore applies equality check predicate on the "temporary_balance_before" field. It's identical to TemporaryBalanceBeforeEQ.
+func TemporaryBalanceBefore(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldTemporaryBalanceBefore, v))
+}
+
+// TemporaryBalanceAfter applies equality check predicate on the "temporary_balance_after" field. It's identical to TemporaryBalanceAfterEQ.
+func TemporaryBalanceAfter(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldTemporaryBalanceAfter, v))
 }
 
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
@@ -267,6 +292,71 @@ func ProductIDLT(v int64) predicate.MallPurchase {
 // ProductIDLTE applies the LTE predicate on the "product_id" field.
 func ProductIDLTE(v int64) predicate.MallPurchase {
 	return predicate.MallPurchase(sql.FieldLTE(FieldProductID, v))
+}
+
+// ProductNameEQ applies the EQ predicate on the "product_name" field.
+func ProductNameEQ(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldProductName, v))
+}
+
+// ProductNameNEQ applies the NEQ predicate on the "product_name" field.
+func ProductNameNEQ(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNEQ(FieldProductName, v))
+}
+
+// ProductNameIn applies the In predicate on the "product_name" field.
+func ProductNameIn(vs ...string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldIn(FieldProductName, vs...))
+}
+
+// ProductNameNotIn applies the NotIn predicate on the "product_name" field.
+func ProductNameNotIn(vs ...string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNotIn(FieldProductName, vs...))
+}
+
+// ProductNameGT applies the GT predicate on the "product_name" field.
+func ProductNameGT(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGT(FieldProductName, v))
+}
+
+// ProductNameGTE applies the GTE predicate on the "product_name" field.
+func ProductNameGTE(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGTE(FieldProductName, v))
+}
+
+// ProductNameLT applies the LT predicate on the "product_name" field.
+func ProductNameLT(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLT(FieldProductName, v))
+}
+
+// ProductNameLTE applies the LTE predicate on the "product_name" field.
+func ProductNameLTE(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLTE(FieldProductName, v))
+}
+
+// ProductNameContains applies the Contains predicate on the "product_name" field.
+func ProductNameContains(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldContains(FieldProductName, v))
+}
+
+// ProductNameHasPrefix applies the HasPrefix predicate on the "product_name" field.
+func ProductNameHasPrefix(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldHasPrefix(FieldProductName, v))
+}
+
+// ProductNameHasSuffix applies the HasSuffix predicate on the "product_name" field.
+func ProductNameHasSuffix(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldHasSuffix(FieldProductName, v))
+}
+
+// ProductNameEqualFold applies the EqualFold predicate on the "product_name" field.
+func ProductNameEqualFold(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEqualFold(FieldProductName, v))
+}
+
+// ProductNameContainsFold applies the ContainsFold predicate on the "product_name" field.
+func ProductNameContainsFold(v string) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldContainsFold(FieldProductName, v))
 }
 
 // IdempotencyRecordIDEQ applies the EQ predicate on the "idempotency_record_id" field.
@@ -762,6 +852,206 @@ func SubscriptionExpiresAtIsNil() predicate.MallPurchase {
 // SubscriptionExpiresAtNotNil applies the NotNil predicate on the "subscription_expires_at" field.
 func SubscriptionExpiresAtNotNil() predicate.MallPurchase {
 	return predicate.MallPurchase(sql.FieldNotNull(FieldSubscriptionExpiresAt))
+}
+
+// PermanentBalanceBeforeEQ applies the EQ predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeEQ(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldPermanentBalanceBefore, v))
+}
+
+// PermanentBalanceBeforeNEQ applies the NEQ predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeNEQ(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNEQ(FieldPermanentBalanceBefore, v))
+}
+
+// PermanentBalanceBeforeIn applies the In predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeIn(vs ...float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldIn(FieldPermanentBalanceBefore, vs...))
+}
+
+// PermanentBalanceBeforeNotIn applies the NotIn predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeNotIn(vs ...float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNotIn(FieldPermanentBalanceBefore, vs...))
+}
+
+// PermanentBalanceBeforeGT applies the GT predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeGT(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGT(FieldPermanentBalanceBefore, v))
+}
+
+// PermanentBalanceBeforeGTE applies the GTE predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeGTE(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGTE(FieldPermanentBalanceBefore, v))
+}
+
+// PermanentBalanceBeforeLT applies the LT predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeLT(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLT(FieldPermanentBalanceBefore, v))
+}
+
+// PermanentBalanceBeforeLTE applies the LTE predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeLTE(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLTE(FieldPermanentBalanceBefore, v))
+}
+
+// PermanentBalanceBeforeIsNil applies the IsNil predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeIsNil() predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldIsNull(FieldPermanentBalanceBefore))
+}
+
+// PermanentBalanceBeforeNotNil applies the NotNil predicate on the "permanent_balance_before" field.
+func PermanentBalanceBeforeNotNil() predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNotNull(FieldPermanentBalanceBefore))
+}
+
+// PermanentBalanceAfterEQ applies the EQ predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterEQ(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldPermanentBalanceAfter, v))
+}
+
+// PermanentBalanceAfterNEQ applies the NEQ predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterNEQ(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNEQ(FieldPermanentBalanceAfter, v))
+}
+
+// PermanentBalanceAfterIn applies the In predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterIn(vs ...float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldIn(FieldPermanentBalanceAfter, vs...))
+}
+
+// PermanentBalanceAfterNotIn applies the NotIn predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterNotIn(vs ...float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNotIn(FieldPermanentBalanceAfter, vs...))
+}
+
+// PermanentBalanceAfterGT applies the GT predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterGT(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGT(FieldPermanentBalanceAfter, v))
+}
+
+// PermanentBalanceAfterGTE applies the GTE predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterGTE(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGTE(FieldPermanentBalanceAfter, v))
+}
+
+// PermanentBalanceAfterLT applies the LT predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterLT(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLT(FieldPermanentBalanceAfter, v))
+}
+
+// PermanentBalanceAfterLTE applies the LTE predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterLTE(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLTE(FieldPermanentBalanceAfter, v))
+}
+
+// PermanentBalanceAfterIsNil applies the IsNil predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterIsNil() predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldIsNull(FieldPermanentBalanceAfter))
+}
+
+// PermanentBalanceAfterNotNil applies the NotNil predicate on the "permanent_balance_after" field.
+func PermanentBalanceAfterNotNil() predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNotNull(FieldPermanentBalanceAfter))
+}
+
+// TemporaryBalanceBeforeEQ applies the EQ predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeEQ(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldTemporaryBalanceBefore, v))
+}
+
+// TemporaryBalanceBeforeNEQ applies the NEQ predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeNEQ(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNEQ(FieldTemporaryBalanceBefore, v))
+}
+
+// TemporaryBalanceBeforeIn applies the In predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeIn(vs ...float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldIn(FieldTemporaryBalanceBefore, vs...))
+}
+
+// TemporaryBalanceBeforeNotIn applies the NotIn predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeNotIn(vs ...float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNotIn(FieldTemporaryBalanceBefore, vs...))
+}
+
+// TemporaryBalanceBeforeGT applies the GT predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeGT(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGT(FieldTemporaryBalanceBefore, v))
+}
+
+// TemporaryBalanceBeforeGTE applies the GTE predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeGTE(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGTE(FieldTemporaryBalanceBefore, v))
+}
+
+// TemporaryBalanceBeforeLT applies the LT predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeLT(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLT(FieldTemporaryBalanceBefore, v))
+}
+
+// TemporaryBalanceBeforeLTE applies the LTE predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeLTE(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLTE(FieldTemporaryBalanceBefore, v))
+}
+
+// TemporaryBalanceBeforeIsNil applies the IsNil predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeIsNil() predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldIsNull(FieldTemporaryBalanceBefore))
+}
+
+// TemporaryBalanceBeforeNotNil applies the NotNil predicate on the "temporary_balance_before" field.
+func TemporaryBalanceBeforeNotNil() predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNotNull(FieldTemporaryBalanceBefore))
+}
+
+// TemporaryBalanceAfterEQ applies the EQ predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterEQ(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldEQ(FieldTemporaryBalanceAfter, v))
+}
+
+// TemporaryBalanceAfterNEQ applies the NEQ predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterNEQ(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNEQ(FieldTemporaryBalanceAfter, v))
+}
+
+// TemporaryBalanceAfterIn applies the In predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterIn(vs ...float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldIn(FieldTemporaryBalanceAfter, vs...))
+}
+
+// TemporaryBalanceAfterNotIn applies the NotIn predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterNotIn(vs ...float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNotIn(FieldTemporaryBalanceAfter, vs...))
+}
+
+// TemporaryBalanceAfterGT applies the GT predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterGT(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGT(FieldTemporaryBalanceAfter, v))
+}
+
+// TemporaryBalanceAfterGTE applies the GTE predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterGTE(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldGTE(FieldTemporaryBalanceAfter, v))
+}
+
+// TemporaryBalanceAfterLT applies the LT predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterLT(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLT(FieldTemporaryBalanceAfter, v))
+}
+
+// TemporaryBalanceAfterLTE applies the LTE predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterLTE(v float64) predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldLTE(FieldTemporaryBalanceAfter, v))
+}
+
+// TemporaryBalanceAfterIsNil applies the IsNil predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterIsNil() predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldIsNull(FieldTemporaryBalanceAfter))
+}
+
+// TemporaryBalanceAfterNotNil applies the NotNil predicate on the "temporary_balance_after" field.
+func TemporaryBalanceAfterNotNil() predicate.MallPurchase {
+	return predicate.MallPurchase(sql.FieldNotNull(FieldTemporaryBalanceAfter))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

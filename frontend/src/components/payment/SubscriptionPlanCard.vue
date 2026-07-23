@@ -94,6 +94,10 @@
 
       <div class="flex-1" />
 
+      <p class="mb-2 text-[11px] text-gray-400 dark:text-gray-500">
+        {{ t('finance.sales', { count: plan.sales_count ?? 0 }) }}
+      </p>
+
       <div class="mb-3 flex items-end justify-between gap-3 border-t border-gray-100 pt-3 dark:border-dark-700">
         <div class="min-w-0">
           <p class="text-[11px] text-gray-400 dark:text-dark-500">{{ t('payment.purchaseCard.expectedReceive') }}</p>

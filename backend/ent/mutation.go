@@ -34218,6 +34218,7 @@ type MallPurchaseMutation struct {
 	product_type                     *string
 	product_id                       *int64
 	addproduct_id                    *int64
+	product_name                     *string
 	idempotency_record_id            *int64
 	addidempotency_record_id         *int64
 	payment_credit_type              *string
@@ -34232,6 +34233,14 @@ type MallPurchaseMutation struct {
 	daily_temporary_credit_amount    *float64
 	adddaily_temporary_credit_amount *float64
 	subscription_expires_at          *time.Time
+	permanent_balance_before         *float64
+	addpermanent_balance_before      *float64
+	permanent_balance_after          *float64
+	addpermanent_balance_after       *float64
+	temporary_balance_before         *float64
+	addtemporary_balance_before      *float64
+	temporary_balance_after          *float64
+	addtemporary_balance_after       *float64
 	status                           *string
 	created_at                       *time.Time
 	clearedFields                    map[string]struct{}
@@ -34484,6 +34493,42 @@ func (m *MallPurchaseMutation) AddedProductID() (r int64, exists bool) {
 func (m *MallPurchaseMutation) ResetProductID() {
 	m.product_id = nil
 	m.addproduct_id = nil
+}
+
+// SetProductName sets the "product_name" field.
+func (m *MallPurchaseMutation) SetProductName(s string) {
+	m.product_name = &s
+}
+
+// ProductName returns the value of the "product_name" field in the mutation.
+func (m *MallPurchaseMutation) ProductName() (r string, exists bool) {
+	v := m.product_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductName returns the old "product_name" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldProductName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductName: %w", err)
+	}
+	return oldValue.ProductName, nil
+}
+
+// ResetProductName resets all changes to the "product_name" field.
+func (m *MallPurchaseMutation) ResetProductName() {
+	m.product_name = nil
 }
 
 // SetIdempotencyRecordID sets the "idempotency_record_id" field.
@@ -34991,6 +35036,286 @@ func (m *MallPurchaseMutation) ResetSubscriptionExpiresAt() {
 	delete(m.clearedFields, mallpurchase.FieldSubscriptionExpiresAt)
 }
 
+// SetPermanentBalanceBefore sets the "permanent_balance_before" field.
+func (m *MallPurchaseMutation) SetPermanentBalanceBefore(f float64) {
+	m.permanent_balance_before = &f
+	m.addpermanent_balance_before = nil
+}
+
+// PermanentBalanceBefore returns the value of the "permanent_balance_before" field in the mutation.
+func (m *MallPurchaseMutation) PermanentBalanceBefore() (r float64, exists bool) {
+	v := m.permanent_balance_before
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPermanentBalanceBefore returns the old "permanent_balance_before" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldPermanentBalanceBefore(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPermanentBalanceBefore is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPermanentBalanceBefore requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPermanentBalanceBefore: %w", err)
+	}
+	return oldValue.PermanentBalanceBefore, nil
+}
+
+// AddPermanentBalanceBefore adds f to the "permanent_balance_before" field.
+func (m *MallPurchaseMutation) AddPermanentBalanceBefore(f float64) {
+	if m.addpermanent_balance_before != nil {
+		*m.addpermanent_balance_before += f
+	} else {
+		m.addpermanent_balance_before = &f
+	}
+}
+
+// AddedPermanentBalanceBefore returns the value that was added to the "permanent_balance_before" field in this mutation.
+func (m *MallPurchaseMutation) AddedPermanentBalanceBefore() (r float64, exists bool) {
+	v := m.addpermanent_balance_before
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearPermanentBalanceBefore clears the value of the "permanent_balance_before" field.
+func (m *MallPurchaseMutation) ClearPermanentBalanceBefore() {
+	m.permanent_balance_before = nil
+	m.addpermanent_balance_before = nil
+	m.clearedFields[mallpurchase.FieldPermanentBalanceBefore] = struct{}{}
+}
+
+// PermanentBalanceBeforeCleared returns if the "permanent_balance_before" field was cleared in this mutation.
+func (m *MallPurchaseMutation) PermanentBalanceBeforeCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldPermanentBalanceBefore]
+	return ok
+}
+
+// ResetPermanentBalanceBefore resets all changes to the "permanent_balance_before" field.
+func (m *MallPurchaseMutation) ResetPermanentBalanceBefore() {
+	m.permanent_balance_before = nil
+	m.addpermanent_balance_before = nil
+	delete(m.clearedFields, mallpurchase.FieldPermanentBalanceBefore)
+}
+
+// SetPermanentBalanceAfter sets the "permanent_balance_after" field.
+func (m *MallPurchaseMutation) SetPermanentBalanceAfter(f float64) {
+	m.permanent_balance_after = &f
+	m.addpermanent_balance_after = nil
+}
+
+// PermanentBalanceAfter returns the value of the "permanent_balance_after" field in the mutation.
+func (m *MallPurchaseMutation) PermanentBalanceAfter() (r float64, exists bool) {
+	v := m.permanent_balance_after
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPermanentBalanceAfter returns the old "permanent_balance_after" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldPermanentBalanceAfter(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPermanentBalanceAfter is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPermanentBalanceAfter requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPermanentBalanceAfter: %w", err)
+	}
+	return oldValue.PermanentBalanceAfter, nil
+}
+
+// AddPermanentBalanceAfter adds f to the "permanent_balance_after" field.
+func (m *MallPurchaseMutation) AddPermanentBalanceAfter(f float64) {
+	if m.addpermanent_balance_after != nil {
+		*m.addpermanent_balance_after += f
+	} else {
+		m.addpermanent_balance_after = &f
+	}
+}
+
+// AddedPermanentBalanceAfter returns the value that was added to the "permanent_balance_after" field in this mutation.
+func (m *MallPurchaseMutation) AddedPermanentBalanceAfter() (r float64, exists bool) {
+	v := m.addpermanent_balance_after
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearPermanentBalanceAfter clears the value of the "permanent_balance_after" field.
+func (m *MallPurchaseMutation) ClearPermanentBalanceAfter() {
+	m.permanent_balance_after = nil
+	m.addpermanent_balance_after = nil
+	m.clearedFields[mallpurchase.FieldPermanentBalanceAfter] = struct{}{}
+}
+
+// PermanentBalanceAfterCleared returns if the "permanent_balance_after" field was cleared in this mutation.
+func (m *MallPurchaseMutation) PermanentBalanceAfterCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldPermanentBalanceAfter]
+	return ok
+}
+
+// ResetPermanentBalanceAfter resets all changes to the "permanent_balance_after" field.
+func (m *MallPurchaseMutation) ResetPermanentBalanceAfter() {
+	m.permanent_balance_after = nil
+	m.addpermanent_balance_after = nil
+	delete(m.clearedFields, mallpurchase.FieldPermanentBalanceAfter)
+}
+
+// SetTemporaryBalanceBefore sets the "temporary_balance_before" field.
+func (m *MallPurchaseMutation) SetTemporaryBalanceBefore(f float64) {
+	m.temporary_balance_before = &f
+	m.addtemporary_balance_before = nil
+}
+
+// TemporaryBalanceBefore returns the value of the "temporary_balance_before" field in the mutation.
+func (m *MallPurchaseMutation) TemporaryBalanceBefore() (r float64, exists bool) {
+	v := m.temporary_balance_before
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemporaryBalanceBefore returns the old "temporary_balance_before" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldTemporaryBalanceBefore(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemporaryBalanceBefore is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemporaryBalanceBefore requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemporaryBalanceBefore: %w", err)
+	}
+	return oldValue.TemporaryBalanceBefore, nil
+}
+
+// AddTemporaryBalanceBefore adds f to the "temporary_balance_before" field.
+func (m *MallPurchaseMutation) AddTemporaryBalanceBefore(f float64) {
+	if m.addtemporary_balance_before != nil {
+		*m.addtemporary_balance_before += f
+	} else {
+		m.addtemporary_balance_before = &f
+	}
+}
+
+// AddedTemporaryBalanceBefore returns the value that was added to the "temporary_balance_before" field in this mutation.
+func (m *MallPurchaseMutation) AddedTemporaryBalanceBefore() (r float64, exists bool) {
+	v := m.addtemporary_balance_before
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearTemporaryBalanceBefore clears the value of the "temporary_balance_before" field.
+func (m *MallPurchaseMutation) ClearTemporaryBalanceBefore() {
+	m.temporary_balance_before = nil
+	m.addtemporary_balance_before = nil
+	m.clearedFields[mallpurchase.FieldTemporaryBalanceBefore] = struct{}{}
+}
+
+// TemporaryBalanceBeforeCleared returns if the "temporary_balance_before" field was cleared in this mutation.
+func (m *MallPurchaseMutation) TemporaryBalanceBeforeCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldTemporaryBalanceBefore]
+	return ok
+}
+
+// ResetTemporaryBalanceBefore resets all changes to the "temporary_balance_before" field.
+func (m *MallPurchaseMutation) ResetTemporaryBalanceBefore() {
+	m.temporary_balance_before = nil
+	m.addtemporary_balance_before = nil
+	delete(m.clearedFields, mallpurchase.FieldTemporaryBalanceBefore)
+}
+
+// SetTemporaryBalanceAfter sets the "temporary_balance_after" field.
+func (m *MallPurchaseMutation) SetTemporaryBalanceAfter(f float64) {
+	m.temporary_balance_after = &f
+	m.addtemporary_balance_after = nil
+}
+
+// TemporaryBalanceAfter returns the value of the "temporary_balance_after" field in the mutation.
+func (m *MallPurchaseMutation) TemporaryBalanceAfter() (r float64, exists bool) {
+	v := m.temporary_balance_after
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemporaryBalanceAfter returns the old "temporary_balance_after" field's value of the MallPurchase entity.
+// If the MallPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MallPurchaseMutation) OldTemporaryBalanceAfter(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemporaryBalanceAfter is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemporaryBalanceAfter requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemporaryBalanceAfter: %w", err)
+	}
+	return oldValue.TemporaryBalanceAfter, nil
+}
+
+// AddTemporaryBalanceAfter adds f to the "temporary_balance_after" field.
+func (m *MallPurchaseMutation) AddTemporaryBalanceAfter(f float64) {
+	if m.addtemporary_balance_after != nil {
+		*m.addtemporary_balance_after += f
+	} else {
+		m.addtemporary_balance_after = &f
+	}
+}
+
+// AddedTemporaryBalanceAfter returns the value that was added to the "temporary_balance_after" field in this mutation.
+func (m *MallPurchaseMutation) AddedTemporaryBalanceAfter() (r float64, exists bool) {
+	v := m.addtemporary_balance_after
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearTemporaryBalanceAfter clears the value of the "temporary_balance_after" field.
+func (m *MallPurchaseMutation) ClearTemporaryBalanceAfter() {
+	m.temporary_balance_after = nil
+	m.addtemporary_balance_after = nil
+	m.clearedFields[mallpurchase.FieldTemporaryBalanceAfter] = struct{}{}
+}
+
+// TemporaryBalanceAfterCleared returns if the "temporary_balance_after" field was cleared in this mutation.
+func (m *MallPurchaseMutation) TemporaryBalanceAfterCleared() bool {
+	_, ok := m.clearedFields[mallpurchase.FieldTemporaryBalanceAfter]
+	return ok
+}
+
+// ResetTemporaryBalanceAfter resets all changes to the "temporary_balance_after" field.
+func (m *MallPurchaseMutation) ResetTemporaryBalanceAfter() {
+	m.temporary_balance_after = nil
+	m.addtemporary_balance_after = nil
+	delete(m.clearedFields, mallpurchase.FieldTemporaryBalanceAfter)
+}
+
 // SetStatus sets the "status" field.
 func (m *MallPurchaseMutation) SetStatus(s string) {
 	m.status = &s
@@ -35097,7 +35422,7 @@ func (m *MallPurchaseMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MallPurchaseMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 19)
 	if m.user_id != nil {
 		fields = append(fields, mallpurchase.FieldUserID)
 	}
@@ -35106,6 +35431,9 @@ func (m *MallPurchaseMutation) Fields() []string {
 	}
 	if m.product_id != nil {
 		fields = append(fields, mallpurchase.FieldProductID)
+	}
+	if m.product_name != nil {
+		fields = append(fields, mallpurchase.FieldProductName)
 	}
 	if m.idempotency_record_id != nil {
 		fields = append(fields, mallpurchase.FieldIdempotencyRecordID)
@@ -35134,6 +35462,18 @@ func (m *MallPurchaseMutation) Fields() []string {
 	if m.subscription_expires_at != nil {
 		fields = append(fields, mallpurchase.FieldSubscriptionExpiresAt)
 	}
+	if m.permanent_balance_before != nil {
+		fields = append(fields, mallpurchase.FieldPermanentBalanceBefore)
+	}
+	if m.permanent_balance_after != nil {
+		fields = append(fields, mallpurchase.FieldPermanentBalanceAfter)
+	}
+	if m.temporary_balance_before != nil {
+		fields = append(fields, mallpurchase.FieldTemporaryBalanceBefore)
+	}
+	if m.temporary_balance_after != nil {
+		fields = append(fields, mallpurchase.FieldTemporaryBalanceAfter)
+	}
 	if m.status != nil {
 		fields = append(fields, mallpurchase.FieldStatus)
 	}
@@ -35154,6 +35494,8 @@ func (m *MallPurchaseMutation) Field(name string) (ent.Value, bool) {
 		return m.ProductType()
 	case mallpurchase.FieldProductID:
 		return m.ProductID()
+	case mallpurchase.FieldProductName:
+		return m.ProductName()
 	case mallpurchase.FieldIdempotencyRecordID:
 		return m.IdempotencyRecordID()
 	case mallpurchase.FieldPaymentCreditType:
@@ -35172,6 +35514,14 @@ func (m *MallPurchaseMutation) Field(name string) (ent.Value, bool) {
 		return m.DailyTemporaryCreditAmount()
 	case mallpurchase.FieldSubscriptionExpiresAt:
 		return m.SubscriptionExpiresAt()
+	case mallpurchase.FieldPermanentBalanceBefore:
+		return m.PermanentBalanceBefore()
+	case mallpurchase.FieldPermanentBalanceAfter:
+		return m.PermanentBalanceAfter()
+	case mallpurchase.FieldTemporaryBalanceBefore:
+		return m.TemporaryBalanceBefore()
+	case mallpurchase.FieldTemporaryBalanceAfter:
+		return m.TemporaryBalanceAfter()
 	case mallpurchase.FieldStatus:
 		return m.Status()
 	case mallpurchase.FieldCreatedAt:
@@ -35191,6 +35541,8 @@ func (m *MallPurchaseMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldProductType(ctx)
 	case mallpurchase.FieldProductID:
 		return m.OldProductID(ctx)
+	case mallpurchase.FieldProductName:
+		return m.OldProductName(ctx)
 	case mallpurchase.FieldIdempotencyRecordID:
 		return m.OldIdempotencyRecordID(ctx)
 	case mallpurchase.FieldPaymentCreditType:
@@ -35209,6 +35561,14 @@ func (m *MallPurchaseMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldDailyTemporaryCreditAmount(ctx)
 	case mallpurchase.FieldSubscriptionExpiresAt:
 		return m.OldSubscriptionExpiresAt(ctx)
+	case mallpurchase.FieldPermanentBalanceBefore:
+		return m.OldPermanentBalanceBefore(ctx)
+	case mallpurchase.FieldPermanentBalanceAfter:
+		return m.OldPermanentBalanceAfter(ctx)
+	case mallpurchase.FieldTemporaryBalanceBefore:
+		return m.OldTemporaryBalanceBefore(ctx)
+	case mallpurchase.FieldTemporaryBalanceAfter:
+		return m.OldTemporaryBalanceAfter(ctx)
 	case mallpurchase.FieldStatus:
 		return m.OldStatus(ctx)
 	case mallpurchase.FieldCreatedAt:
@@ -35242,6 +35602,13 @@ func (m *MallPurchaseMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProductID(v)
+		return nil
+	case mallpurchase.FieldProductName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductName(v)
 		return nil
 	case mallpurchase.FieldIdempotencyRecordID:
 		v, ok := value.(int64)
@@ -35306,6 +35673,34 @@ func (m *MallPurchaseMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSubscriptionExpiresAt(v)
 		return nil
+	case mallpurchase.FieldPermanentBalanceBefore:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPermanentBalanceBefore(v)
+		return nil
+	case mallpurchase.FieldPermanentBalanceAfter:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPermanentBalanceAfter(v)
+		return nil
+	case mallpurchase.FieldTemporaryBalanceBefore:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemporaryBalanceBefore(v)
+		return nil
+	case mallpurchase.FieldTemporaryBalanceAfter:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemporaryBalanceAfter(v)
+		return nil
 	case mallpurchase.FieldStatus:
 		v, ok := value.(string)
 		if !ok {
@@ -35349,6 +35744,18 @@ func (m *MallPurchaseMutation) AddedFields() []string {
 	if m.adddaily_temporary_credit_amount != nil {
 		fields = append(fields, mallpurchase.FieldDailyTemporaryCreditAmount)
 	}
+	if m.addpermanent_balance_before != nil {
+		fields = append(fields, mallpurchase.FieldPermanentBalanceBefore)
+	}
+	if m.addpermanent_balance_after != nil {
+		fields = append(fields, mallpurchase.FieldPermanentBalanceAfter)
+	}
+	if m.addtemporary_balance_before != nil {
+		fields = append(fields, mallpurchase.FieldTemporaryBalanceBefore)
+	}
+	if m.addtemporary_balance_after != nil {
+		fields = append(fields, mallpurchase.FieldTemporaryBalanceAfter)
+	}
 	return fields
 }
 
@@ -35371,6 +35778,14 @@ func (m *MallPurchaseMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBenefitDays()
 	case mallpurchase.FieldDailyTemporaryCreditAmount:
 		return m.AddedDailyTemporaryCreditAmount()
+	case mallpurchase.FieldPermanentBalanceBefore:
+		return m.AddedPermanentBalanceBefore()
+	case mallpurchase.FieldPermanentBalanceAfter:
+		return m.AddedPermanentBalanceAfter()
+	case mallpurchase.FieldTemporaryBalanceBefore:
+		return m.AddedTemporaryBalanceBefore()
+	case mallpurchase.FieldTemporaryBalanceAfter:
+		return m.AddedTemporaryBalanceAfter()
 	}
 	return nil, false
 }
@@ -35429,6 +35844,34 @@ func (m *MallPurchaseMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddDailyTemporaryCreditAmount(v)
 		return nil
+	case mallpurchase.FieldPermanentBalanceBefore:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPermanentBalanceBefore(v)
+		return nil
+	case mallpurchase.FieldPermanentBalanceAfter:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPermanentBalanceAfter(v)
+		return nil
+	case mallpurchase.FieldTemporaryBalanceBefore:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTemporaryBalanceBefore(v)
+		return nil
+	case mallpurchase.FieldTemporaryBalanceAfter:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTemporaryBalanceAfter(v)
+		return nil
 	}
 	return fmt.Errorf("unknown MallPurchase numeric field %s", name)
 }
@@ -35454,6 +35897,18 @@ func (m *MallPurchaseMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(mallpurchase.FieldSubscriptionExpiresAt) {
 		fields = append(fields, mallpurchase.FieldSubscriptionExpiresAt)
+	}
+	if m.FieldCleared(mallpurchase.FieldPermanentBalanceBefore) {
+		fields = append(fields, mallpurchase.FieldPermanentBalanceBefore)
+	}
+	if m.FieldCleared(mallpurchase.FieldPermanentBalanceAfter) {
+		fields = append(fields, mallpurchase.FieldPermanentBalanceAfter)
+	}
+	if m.FieldCleared(mallpurchase.FieldTemporaryBalanceBefore) {
+		fields = append(fields, mallpurchase.FieldTemporaryBalanceBefore)
+	}
+	if m.FieldCleared(mallpurchase.FieldTemporaryBalanceAfter) {
+		fields = append(fields, mallpurchase.FieldTemporaryBalanceAfter)
 	}
 	return fields
 }
@@ -35487,6 +35942,18 @@ func (m *MallPurchaseMutation) ClearField(name string) error {
 	case mallpurchase.FieldSubscriptionExpiresAt:
 		m.ClearSubscriptionExpiresAt()
 		return nil
+	case mallpurchase.FieldPermanentBalanceBefore:
+		m.ClearPermanentBalanceBefore()
+		return nil
+	case mallpurchase.FieldPermanentBalanceAfter:
+		m.ClearPermanentBalanceAfter()
+		return nil
+	case mallpurchase.FieldTemporaryBalanceBefore:
+		m.ClearTemporaryBalanceBefore()
+		return nil
+	case mallpurchase.FieldTemporaryBalanceAfter:
+		m.ClearTemporaryBalanceAfter()
+		return nil
 	}
 	return fmt.Errorf("unknown MallPurchase nullable field %s", name)
 }
@@ -35503,6 +35970,9 @@ func (m *MallPurchaseMutation) ResetField(name string) error {
 		return nil
 	case mallpurchase.FieldProductID:
 		m.ResetProductID()
+		return nil
+	case mallpurchase.FieldProductName:
+		m.ResetProductName()
 		return nil
 	case mallpurchase.FieldIdempotencyRecordID:
 		m.ResetIdempotencyRecordID()
@@ -35530,6 +36000,18 @@ func (m *MallPurchaseMutation) ResetField(name string) error {
 		return nil
 	case mallpurchase.FieldSubscriptionExpiresAt:
 		m.ResetSubscriptionExpiresAt()
+		return nil
+	case mallpurchase.FieldPermanentBalanceBefore:
+		m.ResetPermanentBalanceBefore()
+		return nil
+	case mallpurchase.FieldPermanentBalanceAfter:
+		m.ResetPermanentBalanceAfter()
+		return nil
+	case mallpurchase.FieldTemporaryBalanceBefore:
+		m.ResetTemporaryBalanceBefore()
+		return nil
+	case mallpurchase.FieldTemporaryBalanceAfter:
+		m.ResetTemporaryBalanceAfter()
 		return nil
 	case mallpurchase.FieldStatus:
 		m.ResetStatus()

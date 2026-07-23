@@ -1306,6 +1306,7 @@ var (
 		{Name: "user_id", Type: field.TypeInt64},
 		{Name: "product_type", Type: field.TypeString, Size: 20},
 		{Name: "product_id", Type: field.TypeInt64},
+		{Name: "product_name", Type: field.TypeString, Size: 100, Default: ""},
 		{Name: "idempotency_record_id", Type: field.TypeInt64, Unique: true},
 		{Name: "payment_credit_type", Type: field.TypeString, Size: 20},
 		{Name: "price", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
@@ -1315,6 +1316,10 @@ var (
 		{Name: "benefit_days", Type: field.TypeInt, Nullable: true},
 		{Name: "daily_temporary_credit_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "subscription_expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "permanent_balance_before", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "permanent_balance_after", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "temporary_balance_before", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "temporary_balance_after", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "completed"},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 	}
@@ -1327,12 +1332,12 @@ var (
 			{
 				Name:    "mallpurchase_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{MallPurchasesColumns[1], MallPurchasesColumns[14]},
+				Columns: []*schema.Column{MallPurchasesColumns[1], MallPurchasesColumns[19]},
 			},
 			{
 				Name:    "mallpurchase_product_type_product_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{MallPurchasesColumns[2], MallPurchasesColumns[3], MallPurchasesColumns[14]},
+				Columns: []*schema.Column{MallPurchasesColumns[2], MallPurchasesColumns[3], MallPurchasesColumns[19]},
 			},
 		},
 	}

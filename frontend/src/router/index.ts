@@ -233,6 +233,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/finance',
+    name: 'Finance',
+    component: () => import('@/views/user/FinanceView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Personal Ledger',
+      titleKey: 'finance.title',
+      descriptionKey: 'finance.description'
+    }
+  },
+  {
     path: '/keys',
     name: 'Keys',
     component: () => import('@/views/user/KeysView.vue'),
@@ -747,6 +759,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/orders/mall-transactions',
+    name: 'AdminMallTransactions',
+    component: () => import('@/views/admin/orders/AdminMallTransactionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Mall Transaction Log',
+      titleKey: 'finance.transactions.mallTitle'
+    }
+  },
+  {
     path: '/admin/orders/plans',
     name: 'AdminPaymentPlans',
     component: () => import('@/views/admin/orders/AdminPaymentPlansView.vue'),
@@ -755,6 +778,29 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Subscription Plans',
       titleKey: 'nav.paymentPlans'
+    }
+  },
+  {
+    path: '/admin/bank/transactions',
+    name: 'AdminBankTransactions',
+    component: () => import('@/views/admin/bank/AdminBankTransactionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Bank Transaction Log',
+      titleKey: 'finance.transactions.bankTitle'
+    }
+  },
+  {
+    path: '/admin/finance',
+    name: 'AdminFinance',
+    component: () => import('@/views/admin/FinanceView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'All-site Ledger',
+      titleKey: 'finance.allSiteTitle',
+      descriptionKey: 'finance.allSiteDescription'
     }
   },
 

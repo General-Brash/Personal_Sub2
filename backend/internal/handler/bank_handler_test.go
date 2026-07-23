@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +17,9 @@ import (
 
 type bankHandlerServiceStub struct {
 	statusUserID  int64
+	ledgerUserID  int64
+	ledgerPage    int
+	ledgerCalls   int
 	advanceCalls  int
 	exchangeCalls int
 	repayCalls    int
@@ -24,6 +28,13 @@ type bankHandlerServiceStub struct {
 func (s *bankHandlerServiceStub) GetStatus(_ context.Context, userID int64) (*service.BankStatus, error) {
 	s.statusUserID = userID
 	return &service.BankStatus{PermanentBalance: "8.00000000"}, nil
+}
+
+func (s *bankHandlerServiceStub) ListLedger(_ context.Context, userID int64, page int) ([]service.BankLedgerItem, int64, error) {
+	s.ledgerUserID = userID
+	s.ledgerPage = page
+	s.ledgerCalls++
+	return []service.BankLedgerItem{{ID: 6, Operation: "exchange"}}, 7, nil
 }
 
 func (s *bankHandlerServiceStub) AdvanceAtomic(context.Context, int64, float64, *service.IdempotencyAtomicClaim) (*service.BankAdvanceResult, error) {
@@ -55,6 +66,83 @@ func TestBankHandlerGetStatusUsesAuthenticatedUser(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, int64(42), svc.statusUserID)
 	require.Contains(t, recorder.Body.String(), `"permanent_balance":"8.00000000"`)
+}
+
+func TestBankHandlerListLedgerUsesAuthenticatedUserAndFixedPageSize(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &bankHandlerServiceStub{}
+	router := gin.New()
+	router.GET("/api/v1/bank/ledger", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
+	}, NewBankHandler(svc).ListLedger)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/bank/ledger?page=2&page_size=999&user_id=7", nil)
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, int64(42), svc.ledgerUserID)
+	require.Equal(t, 2, svc.ledgerPage)
+	var payload struct {
+		Data struct {
+			Items    []service.BankLedgerItem `json:"items"`
+			Total    int64                    `json:"total"`
+			Page     int                      `json:"page"`
+			PageSize int                      `json:"page_size"`
+			Pages    int                      `json:"pages"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.Equal(t, int64(7), payload.Data.Total)
+	require.Equal(t, 2, payload.Data.Page)
+	require.Equal(t, service.UserBankLedgerPageSize, payload.Data.PageSize)
+	require.Equal(t, 2, payload.Data.Pages)
+	require.Equal(t, int64(6), payload.Data.Items[0].ID)
+}
+
+func TestBankHandlerListLedgerDefaultsToFirstPage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &bankHandlerServiceStub{}
+	router := gin.New()
+	router.GET("/api/v1/bank/ledger", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
+	}, NewBankHandler(svc).ListLedger)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/bank/ledger", nil))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, 1, svc.ledgerPage)
+}
+
+func TestBankHandlerListLedgerRejectsMalformedPage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &bankHandlerServiceStub{}
+	router := gin.New()
+	router.GET("/api/v1/bank/ledger", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
+	}, NewBankHandler(svc).ListLedger)
+
+	for _, raw := range []string{"0", "-1", "1.5", "1%20OR%201=1", "999999999999999999999999999999"} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/bank/ledger?page="+raw, nil)
+		router.ServeHTTP(recorder, request)
+		require.Equal(t, http.StatusBadRequest, recorder.Code, raw)
+	}
+	require.Zero(t, svc.ledgerCalls)
+}
+
+func TestBankHandlerListLedgerRequiresAuthentication(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &bankHandlerServiceStub{}
+	router := gin.New()
+	router.GET("/api/v1/bank/ledger", NewBankHandler(svc).ListLedger)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/bank/ledger?page=1", nil))
+
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
+	require.Zero(t, svc.ledgerCalls)
 }
 
 func TestBankHandlerAdvanceValidatesRequestBeforeIdempotency(t *testing.T) {

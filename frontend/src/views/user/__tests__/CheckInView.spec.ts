@@ -114,18 +114,20 @@ describe('CheckInView', () => {
 
     expect(wrapper.findAll('[data-test="calendar-cell"]')).toHaveLength(42)
     expect(wrapper.get('[data-test="current-streak"]').text()).toContain('8')
-    expect(wrapper.get('[data-test="next-reward"]').text()).toBe('Day 7 / $2.50+$0.25')
+    expect(wrapper.get('[data-test="next-reward"]').text()).not.toContain('Day 7')
+    expect(wrapper.get('[data-test="next-reward"]').text()).not.toContain('/')
+    expect(wrapper.get('[data-test="next-temporary-reward"]').text()).toBe('$2.50')
+    expect(wrapper.get('[data-test="next-permanent-reward"]').text()).toBe('$0.25')
     expect(wrapper.get('[data-test="temporary-credit"]').text()).toContain('$5.25')
-    expect(wrapper.get('[data-test="monthly-reward-total"]').text()).toBe('$12.50+$0.75')
-    expect(wrapper.find('[data-test="next-permanent-reward"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="monthly-permanent-reward-total"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="monthly-temporary-reward-total"]').text()).toBe('$12.50')
+    expect(wrapper.get('[data-test="monthly-permanent-reward-total"]').text()).toBe('$0.75')
 
     const checkedDay = wrapper.get('[data-test="calendar-cell"][data-date="2026-07-03"]')
     expect(checkedDay.text()).toContain('$1.25')
     expect(checkedDay.text()).toContain('$0.13')
   })
 
-  it('keeps the five summary cards equal-height and their primary values on one line', async () => {
+  it('keeps the five summary cards equal-height and gives reward types distinct accessible colors', async () => {
     const wrapper = await mountView()
     const cards = wrapper.findAll('[data-test="checkin-stat-card"]')
 
@@ -134,18 +136,30 @@ describe('CheckInView', () => {
       expect(card.classes()).toEqual(expect.arrayContaining(['min-w-0', 'flex']))
     }
     for (const selector of [
-      '[data-test="current-streak"]',
-      '[data-test="next-reward"]',
-      '[data-test="monthly-reward-total"]',
-      '[data-test="temporary-credit"]',
+      '[data-test="next-temporary-reward"]',
+      '[data-test="monthly-temporary-reward-total"]',
     ]) {
-      const value = wrapper.get(selector)
-      expect(value.classes()).toContain('whitespace-nowrap')
-      expect(value.classes()).not.toContain('break-all')
+      expect(wrapper.get(selector).classes()).toEqual(expect.arrayContaining([
+        'text-lg',
+        'text-emerald-600',
+        'dark:text-emerald-400',
+      ]))
     }
+    for (const selector of [
+      '[data-test="next-permanent-reward"]',
+      '[data-test="monthly-permanent-reward-total"]',
+    ]) {
+      expect(wrapper.get(selector).classes()).toEqual(expect.arrayContaining([
+        'text-lg',
+        'text-indigo-600',
+        'dark:text-indigo-400',
+      ]))
+    }
+    expect(wrapper.get('[data-test="next-reward"]').text()).toContain('checkin.temporaryReward:')
+    expect(wrapper.get('[data-test="next-reward"]').text()).toContain('checkin.permanentReward:')
   })
 
-  it('shrinks long summary amounts without truncating, hiding, or wrapping their full values', async () => {
+  it('keeps long reward amounts complete and allows them to wrap inside their cards', async () => {
     const upperBoundReward = '999999999999.99999999'
     getCheckinStatus.mockResolvedValueOnce(baseStatus({
       next_reward_amount: upperBoundReward,
@@ -156,28 +170,24 @@ describe('CheckInView', () => {
     }))
     const wrapper = await mountView()
     const expectedAmount = '$1000000000000.00'
-    const values = [
-      [wrapper.get('[data-test="next-reward"]'), `Day 7 / ${expectedAmount}+${expectedAmount}`, 14],
-      [wrapper.get('[data-test="monthly-reward-total"]'), `${expectedAmount}+${expectedAmount}`, 14],
-      [wrapper.get('[data-test="temporary-credit"]'), expectedAmount, 18],
-    ] as const
+    const rewardValues = [
+      wrapper.get('[data-test="next-temporary-reward"]'),
+      wrapper.get('[data-test="next-permanent-reward"]'),
+      wrapper.get('[data-test="monthly-temporary-reward-total"]'),
+      wrapper.get('[data-test="monthly-permanent-reward-total"]'),
+    ]
 
-    for (const [value, expectedText, preferredFontSize] of values) {
-      expect(value.text()).toBe(expectedText)
-      expect(value.classes()).toEqual(expect.arrayContaining(['max-w-full', 'whitespace-nowrap']))
+    for (const value of rewardValues) {
+      expect(value.text()).toBe(expectedAmount)
+      expect(value.classes()).toEqual(expect.arrayContaining(['min-w-0', 'max-w-full', 'break-all', 'text-lg']))
       for (const forbiddenClass of ['truncate', 'overflow-hidden', 'text-ellipsis']) {
         expect(value.classes()).not.toContain(forbiddenClass)
       }
-
-      const style = value.attributes('style')
-      const fittedFontSize = Number.parseFloat(style.match(/font-size:\s*([\d.]+)px/)?.[1] ?? '')
-      expect(fittedFontSize).toBeLessThan(preferredFontSize)
-      expect(style).not.toContain('vw')
     }
 
-    const nextRewardStyle = values[0][0].attributes('style')
-    const nextRewardFontSize = Number.parseFloat(nextRewardStyle.match(/font-size:\s*([\d.]+)px/)?.[1] ?? '')
-    expect(nextRewardFontSize).toBeLessThanOrEqual(5)
+    expect(wrapper.get('[data-test="next-reward"]').classes()).toContain('flex-wrap')
+    expect(wrapper.get('[data-test="monthly-reward-total"]').classes()).toContain('flex-wrap')
+    expect(wrapper.get('[data-test="temporary-credit"]').text()).toBe(expectedAmount)
   })
 
   it('rounds calendar rewards to two places and keeps them constrained inside narrow cells', async () => {
@@ -236,7 +246,7 @@ describe('CheckInView', () => {
       getCheckinStatus.mockResolvedValueOnce(baseStatus({ next_reward_amount: rewardAmount }))
       const wrapper = await mountView()
 
-      expect(wrapper.get('[data-test="next-reward"]').text()).toContain(expected)
+      expect(wrapper.get('[data-test="next-temporary-reward"]').text()).toBe(expected)
     }
   )
 

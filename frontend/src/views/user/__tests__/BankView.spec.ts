@@ -15,6 +15,7 @@ const {
   authState,
   englishBankLabels,
   exchangePermanentForTemporary,
+  getBankLedger,
   getBankSettings,
   getBankStatus,
   requestBankAdvance,
@@ -30,6 +31,7 @@ const {
     'bank.exchange.preview': 'Estimated credit received',
   },
   exchangePermanentForTemporary: vi.fn(),
+  getBankLedger: vi.fn(),
   getBankSettings: vi.fn(),
   getBankStatus: vi.fn(),
   requestBankAdvance: vi.fn(),
@@ -42,6 +44,7 @@ const {
 
 vi.mock('@/api/bank', () => ({
   exchangePermanentForTemporary,
+  getBankLedger,
   getBankSettings,
   getBankStatus,
   requestBankAdvance,
@@ -105,13 +108,25 @@ const baseStatus = (overrides: Partial<BankStatus> = {}): BankStatus => ({
   ...overrides,
 })
 
+const ledgerItem = (id: number) => ({
+  id,
+  operation: 'exchange',
+  permanent_delta: '-1.00000000',
+  temporary_delta: '2.00000000',
+  debt_delta: '0.00000000',
+  debt_before: '0.00000000',
+  debt_after: '0.00000000',
+  created_at: `2026-07-19T08:${String(id).padStart(2, '0')}:00Z`,
+})
+
 const mountView = async (attachTo?: Element) => {
   const wrapper = mount(BankView, {
     ...(attachTo ? { attachTo } : {}),
     global: {
       stubs: {
         AppLayout: { template: '<main><slot /></main>' },
-        Icon: { template: '<i />' },
+        Icon: { props: ['name'], template: '<i :data-icon="name" />' },
+        RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
         BaseDialog: {
           props: ['show', 'title'],
           template: '<section v-if="show" data-test="dialog"><slot /><slot name="footer" /></section>',
@@ -139,6 +154,7 @@ describe('BankView', () => {
     authState.refreshUser = refreshUser
     localStorage.clear()
     exchangePermanentForTemporary.mockReset()
+    getBankLedger.mockReset()
     getBankSettings.mockReset()
     getBankStatus.mockReset()
     requestBankAdvance.mockReset()
@@ -148,6 +164,13 @@ describe('BankView', () => {
     showSuccess.mockReset()
     updateBankSettings.mockReset()
     getBankStatus.mockResolvedValue(baseStatus())
+    getBankLedger.mockResolvedValue({
+      items: baseStatus().ledger,
+      total: 1,
+      page: 1,
+      page_size: 5,
+      pages: 1,
+    })
     getBankSettings.mockResolvedValue(policy)
     requestBankAdvance.mockResolvedValue({ amount: '5.00000000' })
     repayBankDebt.mockResolvedValue({ source: 'temporary', credit_spent: '1.00000000', debt_reduced: '1.00000000' })
@@ -170,6 +193,95 @@ describe('BankView', () => {
     expect(wrapper.get('[data-test="temporary-debt"]').text()).toBe('1.00')
     expect(wrapper.get('[data-test="ledger-row"]').text()).toContain('-1.25')
     expect(wrapper.get('[data-test="ledger-row"]').text()).toContain('+2.50')
+  })
+
+  it('renders exactly five ledger rows per page and keeps the selected page on refresh', async () => {
+    const items = Array.from({ length: 11 }, (_, index) => ledgerItem(index + 1))
+    getBankLedger.mockImplementation(async (page: number) => ({
+      items: items.slice((page - 1) * 5, page * 5),
+      total: items.length,
+      page,
+      page_size: 5 as const,
+      pages: 3,
+    }))
+
+    const wrapper = await mountView()
+
+    expect(getBankLedger).toHaveBeenCalledWith(1)
+    expect(wrapper.findAll('[data-test="ledger-row"]')).toHaveLength(5)
+    expect(wrapper.get('[data-test="ledger-pagination"]').exists()).toBe(true)
+
+    await wrapper.get('[aria-label="pagination.next"]').trigger('click')
+    await flushPromises()
+    expect(getBankLedger).toHaveBeenLastCalledWith(2)
+    expect(wrapper.findAll('[data-test="ledger-row"]')).toHaveLength(5)
+
+    await wrapper.get('[aria-label="bank.ledger.refresh"]').trigger('click')
+    await flushPromises()
+    expect(getBankLedger).toHaveBeenLastCalledWith(2)
+  })
+
+  it('returns the ledger to page one after a successful bank operation', async () => {
+    const items = Array.from({ length: 11 }, (_, index) => ledgerItem(index + 1))
+    getBankLedger.mockImplementation(async (page: number) => ({
+      items: items.slice((page - 1) * 5, page * 5),
+      total: items.length,
+      page,
+      page_size: 5 as const,
+      pages: 3,
+    }))
+    const wrapper = await mountView()
+    await wrapper.get('[aria-label="pagination.next"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-test="advance-input"]').setValue('5.00000000')
+    await wrapper.get('[data-test="advance-submit"]').trigger('submit')
+    await flushPromises()
+
+    expect(getBankLedger).toHaveBeenLastCalledWith(1)
+  })
+
+  it('falls back to the last valid ledger page when data shrinks during refresh', async () => {
+    const items = Array.from({ length: 11 }, (_, index) => ledgerItem(index + 1))
+    let shrunk = false
+    getBankLedger.mockImplementation(async (page: number) => {
+      if (shrunk && page > 1) {
+        return { items: [], total: 4, page, page_size: 5 as const, pages: 1 }
+      }
+      const visibleItems = shrunk ? items.slice(0, 4) : items.slice((page - 1) * 5, page * 5)
+      return {
+        items: visibleItems,
+        total: shrunk ? 4 : items.length,
+        page,
+        page_size: 5 as const,
+        pages: shrunk ? 1 : 3,
+      }
+    })
+
+    const wrapper = await mountView()
+    await wrapper.get('[aria-label="pagination.goToPage:3"]').trigger('click')
+    await flushPromises()
+    expect(getBankLedger).toHaveBeenLastCalledWith(3)
+
+    shrunk = true
+    await wrapper.get('[aria-label="bank.ledger.refresh"]').trigger('click')
+    await flushPromises()
+
+    expect(getBankLedger.mock.calls.slice(-2).map(([page]) => page)).toEqual([3, 1])
+    expect(wrapper.findAll('[data-test="ledger-row"]')).toHaveLength(4)
+    expect(wrapper.find('[data-test="ledger-pagination"]').exists()).toBe(false)
+  })
+
+  it('keeps the bank page usable when the ledger request fails and can retry it', async () => {
+    getBankLedger.mockRejectedValueOnce(new Error('ledger unavailable'))
+    const wrapper = await mountView()
+
+    expect(wrapper.get('[data-test="permanent-balance"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="ledger-load-error"]').exists()).toBe(true)
+
+    await wrapper.get('[data-test="ledger-load-error"] button').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="ledger-row"]').exists()).toBe(true)
   })
 
   it('switches both operations inside one segmented card and renders directional flow targets', async () => {
@@ -357,6 +469,124 @@ describe('BankView', () => {
     expect(refreshUser).toHaveBeenCalledTimes(2)
   })
 
+  it('previews an exchange across multiple daily pricing tiers', async () => {
+    const tieredPolicy: BankPolicy = {
+      ...policy,
+      exchange_tiers: [
+        { up_to: '50.00000000', rate: '2.00000000' },
+        { up_to: '150.00000000', rate: '1.90000000' },
+        { up_to: null, rate: '1.80000000' },
+      ],
+    }
+    getBankStatus.mockResolvedValueOnce(baseStatus({
+      permanent_balance: '100.00000000',
+      policy: tieredPolicy,
+      exchange_progress: {
+        date: '2026-07-19',
+        permanent_exchanged_today: '40.00000000',
+        current_tier_index: 0,
+        current_tier_rate: '2.00000000',
+        current_tier_up_to: '50.00000000',
+        next_tier_rate: '1.90000000',
+        amount_until_next_tier: '10.00000000',
+      },
+    }))
+
+    const wrapper = await mountView()
+    await showExchangeMode(wrapper)
+    await wrapper.get('[data-test="exchange-input"]').setValue('30.00000000')
+
+    expect(wrapper.get('[data-test="exchange-daily-used"]').text()).toContain('40.00')
+    expect(wrapper.get('[data-test="exchange-preview-amount"]').text()).toBe('58.00')
+    const tooltipTrigger = wrapper.get('[data-test="exchange-tier-tooltip-trigger"]')
+    await tooltipTrigger.trigger('mouseenter')
+    await flushPromises()
+    const tooltip = document.querySelector('[data-test="exchange-tier-tooltip"]') as HTMLElement | null
+    expect(tooltip).not.toBeNull()
+    expect(tooltipTrigger.get('[data-icon="questionCircle"]').exists()).toBe(true)
+    expect(tooltipTrigger.attributes('aria-describedby')).toBe('exchange-tier-tooltip')
+    expect(tooltipTrigger.attributes('aria-expanded')).toBe('true')
+    expect(tooltip?.querySelectorAll('li')).toHaveLength(3)
+    expect(tooltip?.textContent).toContain('1 : 2.00')
+    expect(tooltip?.textContent).toContain('1 : 1.90')
+    expect(tooltip?.textContent).toContain('1 : 1.80')
+    expect(tooltip?.querySelector('li')?.className).toContain('text-indigo-200')
+  })
+
+  it('clamps the tier tooltip inside narrow, two-column, and desktop viewports', async () => {
+    getBankStatus.mockResolvedValueOnce(baseStatus({
+      policy: {
+        ...policy,
+        exchange_tiers: [
+          { up_to: '50.00000000', rate: '2.00000000' },
+          { up_to: null, rate: '1.90000000' },
+        ],
+      },
+      exchange_progress: {
+        date: '2026-07-19',
+        permanent_exchanged_today: '40.00000000',
+        current_tier_index: 0,
+        current_tier_rate: '2.00000000',
+        current_tier_up_to: '50.00000000',
+        next_tier_rate: '1.90000000',
+        amount_until_next_tier: '10.00000000',
+      },
+    }))
+    vi.stubGlobal('innerWidth', 320)
+    vi.stubGlobal('innerHeight', 800)
+
+    const wrapper = await mountView(document.body)
+    await showExchangeMode(wrapper)
+    const summary = wrapper.get('[data-test="exchange-progress-summary"]')
+    const trigger = wrapper.get('[data-test="exchange-tier-tooltip-trigger"]')
+    const tooltip = document.querySelector('[data-test="exchange-tier-tooltip"]') as HTMLElement
+    expect(summary.classes()).toEqual(expect.arrayContaining([
+      'grid-cols-1',
+      'min-[390px]:grid-cols-2',
+      'sm:grid-cols-4',
+    ]))
+    expect(trigger.classes()).toEqual(expect.arrayContaining(['h-6', 'w-6']))
+    Object.defineProperty(tooltip, 'offsetWidth', { configurable: true, value: 288 })
+    Object.defineProperty(tooltip, 'offsetHeight', { configurable: true, value: 140 })
+    const rectSpy = vi.spyOn(trigger.element, 'getBoundingClientRect')
+    rectSpy.mockReturnValue({
+      left: 8, right: 32, top: 100, bottom: 124, width: 24, height: 24,
+      x: 8, y: 100, toJSON: () => ({}),
+    } as DOMRect)
+
+    await trigger.trigger('focus')
+    await flushPromises()
+    expect(tooltip.style.left).toBe('16px')
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+
+    await trigger.trigger('mouseenter')
+    await trigger.trigger('mouseleave')
+    await flushPromises()
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+
+    vi.stubGlobal('innerWidth', 500)
+    rectSpy.mockReturnValue({
+      left: 468, right: 492, top: 100, bottom: 124, width: 24, height: 24,
+      x: 468, y: 100, toJSON: () => ({}),
+    } as DOMRect)
+    window.dispatchEvent(new Event('resize'))
+    await flushPromises()
+    expect(tooltip.style.left).toBe('196px')
+
+    vi.stubGlobal('innerWidth', 1200)
+    rectSpy.mockReturnValue({
+      left: 600, right: 624, top: 100, bottom: 124, width: 24, height: 24,
+      x: 600, y: 100, toJSON: () => ({}),
+    } as DOMRect)
+    window.dispatchEvent(new Event('resize'))
+    await flushPromises()
+    expect(tooltip.style.left).toBe('468px')
+
+    await trigger.trigger('keydown', { key: 'Escape' })
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(tooltip.style.display).toBe('none')
+  })
+
   it('previews and submits early repayment with either configured source ratio', async () => {
     getBankStatus.mockResolvedValue(baseStatus({
       temporary_debt: '5.00000000',
@@ -388,60 +618,22 @@ describe('BankView', () => {
   })
 
   it.each([
-    ['23:54:59', '2026-07-19T15:54:59.000Z', false],
-    ['23:55:00', '2026-07-19T15:55:00.000Z', true],
-    ['00:04:59', '2026-07-19T16:04:59.000Z', true],
-    ['00:05:00', '2026-07-19T16:05:00.000Z', false],
-  ])('applies the Beijing exchange window at %s', async (_label, timestamp, blocked) => {
+    ['23:55:00', '2026-07-19T15:55:00.000Z'],
+    ['00:04:59', '2026-07-19T16:04:59.000Z'],
+  ])('allows exchange at the former Beijing maintenance-window time %s', async (_label, timestamp) => {
     vi.setSystemTime(new Date(timestamp))
 
     const wrapper = await mountView()
     await showExchangeMode(wrapper)
     const input = wrapper.get('[data-test="exchange-input"]')
 
-    expect(input.attributes('disabled') !== undefined).toBe(blocked)
-    expect(wrapper.find('[data-test="exchange-maintenance"]').exists()).toBe(blocked)
-    if (blocked) {
-      expect(wrapper.get('[data-test="exchange-submit"]').attributes('disabled')).toBeDefined()
-    } else {
-      await input.setValue('1.00000000')
-      expect(wrapper.get('[data-test="exchange-submit"]').attributes('disabled')).toBeUndefined()
-    }
-  })
-
-  it('rechecks the exchange window immediately before submitting', async () => {
-    vi.setSystemTime(new Date('2026-07-19T15:54:59.000Z'))
-    const wrapper = await mountView()
-    await showExchangeMode(wrapper)
-    const input = wrapper.get('[data-test="exchange-input"]')
-
+    expect(input.attributes('disabled')).toBeUndefined()
     await input.setValue('1.00000000')
     expect(wrapper.get('[data-test="exchange-submit"]').attributes('disabled')).toBeUndefined()
-
-    vi.setSystemTime(new Date('2026-07-19T15:55:00.000Z'))
-    await wrapper.get('[data-test="exchange-submit"]').trigger('submit')
-
-    expect(exchangePermanentForTemporary).not.toHaveBeenCalled()
-    expect(showError).toHaveBeenCalledWith('bank.exchangeMaintenance')
-    expect(wrapper.get('[data-test="exchange-maintenance"]').exists()).toBe(true)
-  })
-
-  it('localizes the server maintenance-window rejection', async () => {
-    vi.setSystemTime(new Date('2026-07-19T15:54:59.000Z'))
-    exchangePermanentForTemporary.mockRejectedValueOnce({
-      status: 403,
-      code: 'BANK_EXCHANGE_MAINTENANCE_WINDOW',
-      message: 'server-only message',
-    })
-    const wrapper = await mountView()
-    await showExchangeMode(wrapper)
-
-    await wrapper.get('[data-test="exchange-input"]').setValue('1.00000000')
     await wrapper.get('[data-test="exchange-submit"]').trigger('submit')
     await flushPromises()
 
     expect(exchangePermanentForTemporary).toHaveBeenCalledTimes(1)
-    expect(showError).toHaveBeenCalledWith('bank.exchangeMaintenance')
   })
 
   it('compares the full eight-decimal balance without floating-point rounding', async () => {
@@ -505,7 +697,7 @@ describe('BankView', () => {
     },
   )
 
-  it('allows admins to load, validate, and save the bank policy', async () => {
+  it('allows admins to save exchange tiers and derives the compatibility rate from the first tier', async () => {
     authState.isAdmin = true
     const updatedPolicy: BankPolicy = {
       advance_min_amount: '6.00000000',
@@ -516,7 +708,21 @@ describe('BankView', () => {
       unused_advance_debt_reduction_ratio: '0.75000000',
       early_repay_temporary_ratio: '1.00000000',
       early_repay_permanent_ratio: '2.00000000',
+      exchange_tiers: [
+        { up_to: '50.00000000', rate: '3.00000000' },
+        { up_to: '150.00000000', rate: '1.90000000' },
+        { up_to: null, rate: '1.80000000' },
+      ],
     }
+    getBankSettings.mockResolvedValueOnce({
+      ...updatedPolicy,
+      exchange_rate: '2.00000000',
+      exchange_tiers: [
+        { up_to: '50.00000000', rate: '2.00000000' },
+        { up_to: '150.00000000', rate: '1.90000000' },
+        { up_to: null, rate: '1.80000000' },
+      ],
+    })
     updateBankSettings.mockResolvedValueOnce(updatedPolicy)
     const wrapper = await mountView()
 
@@ -528,13 +734,127 @@ describe('BankView', () => {
     await wrapper.get('[data-test="settings-max"]').setValue(updatedPolicy.advance_max_amount)
     await wrapper.get('[data-test="settings-grace-days"]').setValue('5')
     await wrapper.get('[data-test="settings-debt-ratio"]').setValue(updatedPolicy.debt_conversion_ratio)
-    await wrapper.get('[data-test="settings-exchange-rate"]').setValue(updatedPolicy.exchange_rate)
+    expect(wrapper.find('[data-test="settings-exchange-rate"]').exists()).toBe(false)
+    await wrapper.get('[data-test="settings-section-exchange"]').trigger('click')
+    await wrapper.get('[data-test="settings-tier-rate-0"]').setValue('3.00000000')
     await wrapper.get('[data-test="settings-save"]').trigger('click')
     await flushPromises()
 
     expect(updateBankSettings).toHaveBeenCalledWith(updatedPolicy, expect.stringMatching(/^bank-settings-/))
     expect(showSuccess).toHaveBeenCalledWith('bank.messages.settingsSaved')
     expect(wrapper.find('[data-test="dialog"]').exists()).toBe(false)
+  })
+
+  it('shows two decimals in bank settings while preserving untouched and edited precision on save', async () => {
+    authState.isAdmin = true
+    const precisePolicy: BankPolicy = {
+      ...policy,
+      advance_min_amount: '5.12345678',
+      advance_max_amount: '20.98765432',
+      debt_conversion_ratio: '1.23456789',
+      unused_advance_debt_reduction_ratio: '0.76543210',
+      early_repay_temporary_ratio: '0.91234567',
+      early_repay_permanent_ratio: '1.87654321',
+      exchange_tiers: [
+        { up_to: '50.12345678', rate: '2.12345678' },
+        { up_to: null, rate: '1.87654321' },
+      ],
+    }
+    getBankSettings.mockResolvedValueOnce(precisePolicy)
+    updateBankSettings.mockResolvedValueOnce(precisePolicy)
+
+    const wrapper = await mountView()
+    await wrapper.get('[data-test="bank-settings-button"]').trigger('click')
+    await flushPromises()
+
+    expect((wrapper.get('[data-test="settings-min"]').element as HTMLInputElement).value).toBe('5.12')
+    expect((wrapper.get('[data-test="settings-max"]').element as HTMLInputElement).value).toBe('20.99')
+    expect((wrapper.get('[data-test="settings-debt-ratio"]').element as HTMLInputElement).value).toBe('1.23')
+    expect((wrapper.get('[data-test="settings-grace-days"]').element as HTMLInputElement).value).toBe('3')
+
+    await wrapper.get('[data-test="settings-section-exchange"]').trigger('click')
+    expect((wrapper.get('[data-test="settings-tier-upper-0"]').element as HTMLInputElement).value).toBe('50.12')
+    expect((wrapper.get('[data-test="settings-tier-rate-0"]').element as HTMLInputElement).value).toBe('2.12')
+
+    await wrapper.get('[data-test="settings-min"]').setValue('6.12345678')
+    await wrapper.get('[data-test="settings-tier-rate-0"]').setValue('2.23456789')
+    await wrapper.get('[data-test="settings-save"]').trigger('click')
+    await flushPromises()
+
+    expect(updateBankSettings).toHaveBeenCalledWith(expect.objectContaining({
+      advance_min_amount: '6.12345678',
+      advance_max_amount: '20.98765432',
+      debt_conversion_ratio: '1.23456789',
+      unused_advance_debt_reduction_ratio: '0.76543210',
+      early_repay_temporary_ratio: '0.91234567',
+      early_repay_permanent_ratio: '1.87654321',
+      exchange_rate: '2.23456789',
+      exchange_tiers: [
+        { up_to: '50.12345678', rate: '2.23456789' },
+        { up_to: null, rate: '1.87654321' },
+      ],
+    }), expect.stringMatching(/^bank-settings-/))
+  })
+
+  it('exposes bank setting sections as linked tabs with roving keyboard focus', async () => {
+    authState.isAdmin = true
+    const wrapper = await mountView(document.body)
+
+    await wrapper.get('[data-test="bank-settings-button"]').trigger('click')
+    await flushPromises()
+
+    const advanceTab = wrapper.get('[data-test="settings-section-advance"]')
+    const exchangeTab = wrapper.get('[data-test="settings-section-exchange"]')
+    const repayTab = wrapper.get('[data-test="settings-section-repay"]')
+    const advancePanel = wrapper.get(`#${advanceTab.attributes('aria-controls')}`)
+    const exchangePanel = wrapper.get(`#${exchangeTab.attributes('aria-controls')}`)
+    const repayPanel = wrapper.get(`#${repayTab.attributes('aria-controls')}`)
+    const exchangeElement = exchangeTab.element as HTMLElement
+
+    expect(advanceTab.attributes('role')).toBe('tab')
+    expect(advanceTab.attributes('aria-selected')).toBe('true')
+    expect(advanceTab.attributes('tabindex')).toBe('0')
+    expect(exchangeTab.attributes('tabindex')).toBe('-1')
+    expect(advancePanel.attributes('role')).toBe('tabpanel')
+    expect(advancePanel.attributes('aria-labelledby')).toBe(advanceTab.attributes('id'))
+    expect(advancePanel.attributes('aria-hidden')).toBe('false')
+    expect(exchangePanel.attributes('aria-hidden')).toBe('true')
+
+    exchangeElement.focus()
+    await exchangeTab.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(exchangeTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(exchangeTab.element)
+
+    await exchangeTab.trigger('keydown', { key: 'ArrowLeft' })
+    await flushPromises()
+    expect(advanceTab.attributes('aria-selected')).toBe('true')
+
+    await advanceTab.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(exchangeTab.attributes('aria-selected')).toBe('true')
+    expect(exchangeTab.attributes('tabindex')).toBe('0')
+    expect(exchangePanel.attributes('aria-hidden')).toBe('false')
+    expect(document.activeElement).toBe(exchangeTab.element)
+
+    await exchangeTab.trigger('keydown', { key: 'End' })
+    await flushPromises()
+    expect(repayTab.attributes('aria-selected')).toBe('true')
+    expect(repayPanel.attributes('aria-labelledby')).toBe(repayTab.attributes('id'))
+    expect(document.activeElement).toBe(repayTab.element)
+
+    await repayTab.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(advanceTab.attributes('aria-selected')).toBe('true')
+
+    await advanceTab.trigger('keydown', { key: 'ArrowLeft' })
+    await flushPromises()
+    expect(repayTab.attributes('aria-selected')).toBe('true')
+
+    await repayTab.trigger('keydown', { key: 'Home' })
+    await flushPromises()
+    expect(advanceTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(advanceTab.element)
   })
 
   it('offers a retry after the initial bank status request fails', async () => {

@@ -3,8 +3,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import AdminCurrencyProductsView from '../AdminCurrencyProductsView.vue'
 import type { CurrencyProduct } from '@/types/payment'
 
-const { getCurrencyProducts, createCurrencyProduct, updateCurrencyProduct, deleteCurrencyProduct, showError, showSuccess } = vi.hoisted(() => ({
+const { getCurrencyProducts, getMallAnalytics, createCurrencyProduct, updateCurrencyProduct, deleteCurrencyProduct, showError, showSuccess } = vi.hoisted(() => ({
   getCurrencyProducts: vi.fn(),
+  getMallAnalytics: vi.fn(),
   createCurrencyProduct: vi.fn(),
   updateCurrencyProduct: vi.fn(),
   deleteCurrencyProduct: vi.fn(),
@@ -15,6 +16,7 @@ const { getCurrencyProducts, createCurrencyProduct, updateCurrencyProduct, delet
 vi.mock('@/api/admin/payment', () => {
   const paymentAPI = {
     getCurrencyProducts,
+    getMallAnalytics,
     createCurrencyProduct,
     updateCurrencyProduct,
     deleteCurrencyProduct,
@@ -84,10 +86,15 @@ function mountView() {
     global: {
       stubs: {
         AppLayout: { template: '<div><slot /></div>' },
+        RouterLink: { template: '<a><slot /></a>' },
         DataTable: DataTableStub,
         BaseDialog: BaseDialogStub,
         ConfirmDialog: ConfirmDialogStub,
         ShelfSectionTabs: true,
+        DailyRevenueChart: {
+          props: ['data', 'title', 'revenueLabel'],
+          template: '<div data-test="daily-revenue-chart">{{ title }}|{{ revenueLabel }}|{{ data.length }}</div>',
+        },
         Select: {
           props: ['modelValue', 'options'],
           emits: ['update:modelValue'],
@@ -107,6 +114,25 @@ function mountView() {
 describe('AdminCurrencyProductsView', () => {
   beforeEach(() => {
     getCurrencyProducts.mockReset().mockResolvedValue({ data: [product] })
+    getMallAnalytics.mockReset().mockResolvedValue({
+      data: {
+        days: 30,
+        total_sales: 3,
+        total_revenue: '',
+        revenue_totals: [
+          { currency: 'CNY', unit: 'fiat', revenue: '30.00', sales_count: 2 },
+          { currency: '', unit: 'credit', revenue: '4.00', sales_count: 1 },
+        ],
+        products: [
+          { product_type: 'currency', product_id: 7, product_name: 'Starter credit', sales_count: 2, revenue: '30.00', currency: 'CNY', unit: 'fiat' },
+          { product_type: 'subscription', product_id: 8, product_name: 'Pro plan', sales_count: 1, revenue: '4.00', currency: '', unit: 'credit' },
+        ],
+        daily: [
+          { date: '2026-07-22', sales_count: 2, revenue: '30.00', currency: 'CNY', unit: 'fiat' },
+          { date: '2026-07-22', sales_count: 1, revenue: '4.00', currency: '', unit: 'credit' },
+        ],
+      },
+    })
     createCurrencyProduct.mockReset().mockResolvedValue({ data: product })
     updateCurrencyProduct.mockReset().mockResolvedValue({ data: product })
     deleteCurrencyProduct.mockReset().mockResolvedValue({ data: null })
@@ -134,6 +160,24 @@ describe('AdminCurrencyProductsView', () => {
     expect(wrapper.get('[data-test="currency-products-empty"]').text()).toBe('commerce.shelf.empty')
     expect(wrapper.find('[data-test="generic-empty"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('empty.noData')
+  })
+
+  it('keeps analytics revenue separated by fiat currency and credit unit', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-test="toggle-shelf-analytics"]').trigger('click')
+    await flushPromises()
+
+    const totals = wrapper.findAll('[data-test="analytics-revenue-total"]').map((item) => item.text())
+    expect(totals).toEqual([
+      'finance.analytics.revenueUnit¥30.00',
+      'finance.analytics.revenueUnit4.00 finance.units.credit',
+    ])
+    expect(wrapper.text()).not.toContain('$34.00')
+    expect(wrapper.findAll('[data-test="daily-revenue-chart"]')).toHaveLength(2)
+    expect(wrapper.text()).toContain('2 / ¥30.00')
+    expect(wrapper.text()).toContain('1 / 4.00 finance.units.credit')
   })
 
   it('creates a product from the publish form and refreshes the list', async () => {

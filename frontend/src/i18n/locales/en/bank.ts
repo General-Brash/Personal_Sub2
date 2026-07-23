@@ -141,6 +141,11 @@ export default {
       preview: 'Estimated credit received',
       submitting: 'Exchanging',
       confirm: 'Confirm exchange',
+      tierTooltipAriaLabel: 'View all tiered exchange rates',
+      tierTooltipTitle: 'Daily tiered rates (Beijing time)',
+      tierRangeFirst: '0.00 to {upper}',
+      tierRange: '{lower} to {upper}',
+      tierRangeUnlimited: '{lower} and above',
     },
     repay: {
       title: 'Early repayment',
@@ -155,12 +160,13 @@ export default {
       submitting: 'Repaying',
       confirm: 'Confirm repayment',
     },
-    exchangeMaintenance: 'Exchange is paused for daily settlement from 23:55 to 00:05 Beijing time.',
     ledger: {
       title: 'Bank ledger',
       description: 'Records advances, exchanges, debt offsets, and permanent credit settlements.',
       refresh: 'Refresh bank ledger',
       empty: 'No bank records.',
+      loadFailed: 'Failed to load the bank ledger.',
+      refreshFailed: 'Failed to refresh the bank ledger. Please try again.',
       columns: {
         time: 'Time',
         operation: 'Operation',

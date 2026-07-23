@@ -8,17 +8,26 @@
             {{ t('bank.description') }}
           </p>
         </div>
-        <button
-          v-if="authStore.isAdmin"
-          data-test="bank-settings-button"
-          type="button"
-          class="btn btn-secondary inline-flex min-h-10 items-center justify-center gap-2 self-start"
-          :disabled="settingsLoading"
-          @click="openSettings"
-        >
-          <Icon name="cog" size="sm" />
-          {{ t('bank.actions.settings') }}
-        </button>
+        <div v-if="authStore.isAdmin" class="flex flex-wrap gap-2 self-start">
+          <RouterLink
+            to="/admin/bank/transactions"
+            data-test="bank-transactions-button"
+            class="btn btn-secondary inline-flex min-h-10 items-center justify-center gap-2"
+          >
+            <Icon name="clipboard" size="sm" />
+            {{ t('finance.transactions.bankTitle') }}
+          </RouterLink>
+          <button
+            data-test="bank-settings-button"
+            type="button"
+            class="btn btn-secondary inline-flex min-h-10 items-center justify-center gap-2"
+            :disabled="settingsLoading"
+            @click="openSettings"
+          >
+            <Icon name="cog" size="sm" />
+            {{ t('bank.actions.settings') }}
+          </button>
+        </div>
       </header>
 
       <section v-if="loading" data-test="bank-loading" class="card flex min-h-48 items-center justify-center">
@@ -147,13 +156,6 @@
                 </h2>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {{ activeBankModeDescription }}
-                </p>
-                <p
-                  v-if="activeBankMode === 'exchange' && exchangeMaintenanceActive"
-                  data-test="exchange-maintenance"
-                  class="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400"
-                >
-                  {{ t('bank.exchangeMaintenance') }}
                 </p>
               </div>
             </div>
@@ -312,6 +314,74 @@
             class="mt-5 space-y-4"
             @submit.prevent="submitExchange"
           >
+            <div v-if="status.exchange_progress" data-test="exchange-progress-summary" class="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2 sm:grid-cols-4">
+              <div class="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/20">
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('finance.bank.currentDay') }}</p>
+                <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ status.exchange_progress.date }}</p>
+              </div>
+              <div class="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/20">
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('finance.bank.dailyUsed') }}</p>
+                <p data-test="exchange-daily-used" class="mt-1 font-mono text-sm font-semibold text-gray-900 dark:text-white">${{ formatAmount(status.exchange_progress.permanent_exchanged_today) }}</p>
+              </div>
+              <div class="relative rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 pr-9 dark:border-indigo-900/60 dark:bg-indigo-950/20">
+                <div class="absolute right-2 top-2">
+                  <button
+                    ref="exchangeTierTooltipTrigger"
+                    type="button"
+                    data-test="exchange-tier-tooltip-trigger"
+                    class="inline-flex h-6 w-6 items-center justify-center rounded-full text-indigo-500 transition-colors hover:bg-indigo-100 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:text-indigo-300 dark:hover:bg-indigo-900/60 dark:hover:text-indigo-200"
+                    :aria-label="t('bank.exchange.tierTooltipAriaLabel')"
+                    aria-describedby="exchange-tier-tooltip"
+                    :aria-expanded="exchangeTierTooltipVisible"
+                    @mouseenter="setExchangeTierTooltipInteraction('hover', true)"
+                    @mouseleave="setExchangeTierTooltipInteraction('hover', false)"
+                    @focus="setExchangeTierTooltipInteraction('focus', true)"
+                    @blur="setExchangeTierTooltipInteraction('focus', false)"
+                    @keydown.esc.prevent="closeExchangeTierTooltip"
+                  >
+                    <Icon name="questionCircle" size="sm" />
+                  </button>
+                  <Teleport to="body">
+                    <div
+                      id="exchange-tier-tooltip"
+                      ref="exchangeTierTooltip"
+                      v-show="exchangeTierTooltipVisible"
+                      data-test="exchange-tier-tooltip"
+                      role="tooltip"
+                      class="pointer-events-none fixed z-[99999] w-72 max-w-[calc(100vw-2rem)] rounded-lg bg-gray-900 p-3 text-left text-xs leading-relaxed text-white shadow-xl ring-1 ring-white/10 dark:bg-gray-800"
+                      :style="exchangeTierTooltipStyle"
+                    >
+                      <p class="font-semibold">{{ t('bank.exchange.tierTooltipTitle') }}</p>
+                      <ul class="mt-1.5 space-y-1">
+                        <li
+                          v-for="tier in exchangeTierTooltipRows"
+                          :key="tier.index"
+                          class="flex items-start justify-between gap-3"
+                          :class="tier.current ? 'text-indigo-200' : 'text-gray-200'"
+                        >
+                          <span>{{ tier.range }}</span>
+                          <span class="shrink-0 font-mono">1 : {{ tier.rate }}</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </Teleport>
+                </div>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('finance.bank.tier') }}</p>
+                <p data-test="exchange-current-tier" class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">#{{ status.exchange_progress.current_tier_index + 1 }}</p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('finance.bank.rate', { rate: formatAmount(status.exchange_progress.current_tier_rate) }) }}</p>
+              </div>
+              <div class="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/20">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('finance.bank.progress') }}</p>
+                  <span class="text-[11px] font-mono text-indigo-700 dark:text-indigo-300">{{ exchangeTierProgressPercent.toFixed(1) }}%</span>
+                </div>
+                <div class="mt-2 h-2 overflow-hidden rounded-full bg-indigo-100 dark:bg-indigo-900/60">
+                  <div class="h-full rounded-full bg-indigo-500 transition-all" :style="{ width: `${exchangeTierProgressPercent}%` }" />
+                </div>
+                <p v-if="status.exchange_progress.amount_until_next_tier != null" class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{{ t('finance.bank.untilNext', { amount: formatAmount(status.exchange_progress.amount_until_next_tier) }) }}</p>
+                <p v-else class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{{ t('finance.bank.unlimited') }}</p>
+              </div>
+            </div>
             <div
               data-test="exchange-flow-grid"
               class="grid grid-cols-1 items-stretch gap-3 min-[390px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[390px]:gap-2 sm:gap-4"
@@ -329,7 +399,7 @@
                   autocomplete="off"
                   class="input mt-2 min-w-0 font-mono"
                   :class="exchangeError ? 'input-error ring-2 ring-red-500/20' : ''"
-                  :disabled="exchangeSubmitting || hasInvalidPermanentBalance || exchangeMaintenanceActive"
+                  :disabled="exchangeSubmitting || hasInvalidPermanentBalance"
                   placeholder="0.00"
                   @input="exchangeTouched = true"
                 />
@@ -338,7 +408,7 @@
 
               <div class="flex min-w-12 flex-col items-center justify-center gap-2 sm:min-w-20">
                 <p data-test="exchange-rate" class="max-w-full break-words text-center text-xs font-medium text-gray-500 dark:text-gray-400 min-[390px]:max-w-20">
-                  {{ t('bank.exchange.rate', { rate: formatAmount(status.policy.exchange_rate) }) }}
+                  {{ t('bank.exchange.rate', { rate: formatAmount(currentExchangeRate) }) }}
                 </p>
                 <span class="flex h-9 w-9 rotate-90 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300 min-[390px]:rotate-0">
                   <Icon name="arrowRight" size="sm" />
@@ -471,17 +541,27 @@
               class="inline-flex h-9 w-9 items-center justify-center self-end rounded-lg text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-dark-700 sm:self-auto"
               :aria-label="t('bank.ledger.refresh')"
               :title="t('bank.actions.refresh')"
-              :disabled="refreshing"
-              @click="loadStatus(true)"
+              :disabled="refreshing || ledgerRefreshing"
+              @click="refreshBankData"
             >
-              <Icon name="refresh" size="sm" :class="refreshing ? 'animate-spin' : ''" />
+              <Icon name="refresh" size="sm" :class="refreshing || ledgerRefreshing ? 'animate-spin' : ''" />
             </button>
           </div>
 
-          <div v-if="!status.ledger.length" data-test="empty-ledger" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+          <div v-if="ledgerLoading && !ledgerItems.length" data-test="ledger-loading" class="flex min-h-40 items-center justify-center px-5 py-10">
+            <Icon name="refresh" size="lg" class="animate-spin text-primary-600" />
+          </div>
+          <div v-else-if="ledgerLoadFailed && !ledgerItems.length" data-test="ledger-load-error" class="flex min-h-40 flex-col items-center justify-center gap-3 px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+            <p>{{ t('bank.ledger.loadFailed') }}</p>
+            <button type="button" class="btn btn-secondary" :disabled="ledgerLoading" @click="loadLedger(ledgerPage)">{{ t('bank.actions.reload') }}</button>
+          </div>
+          <div v-else-if="!ledgerItems.length" data-test="empty-ledger" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
             {{ t('bank.ledger.empty') }}
           </div>
           <div v-else class="overflow-x-auto">
+            <p v-if="ledgerLoadFailed" data-test="ledger-stale-error" class="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300">
+              {{ t('bank.ledger.refreshFailed') }}
+            </p>
             <table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-dark-700">
               <thead class="bg-gray-50 dark:bg-dark-900/40">
                 <tr class="text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
@@ -494,7 +574,7 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 bg-white dark:divide-dark-700 dark:bg-dark-800">
-                <tr v-for="item in status.ledger" :key="item.id" data-test="ledger-row" class="text-gray-700 dark:text-gray-300">
+                <tr v-for="item in ledgerItems" :key="item.id" data-test="ledger-row" class="text-gray-700 dark:text-gray-300">
                   <td class="whitespace-nowrap px-5 py-3">{{ formatDateTime(item.created_at) }}</td>
                   <td class="whitespace-nowrap px-5 py-3 font-medium text-gray-900 dark:text-white">{{ operationLabel(item.operation) }}</td>
                   <td class="whitespace-nowrap px-5 py-3 text-right font-mono" :class="deltaClass(item.permanent_delta)">{{ formatSignedAmount(item.permanent_delta) }}</td>
@@ -504,6 +584,15 @@
                 </tr>
               </tbody>
             </table>
+            <Pagination
+              v-if="ledgerTotal > ledgerPageSize"
+              data-test="ledger-pagination"
+              :total="ledgerTotal"
+              :page="ledgerPage"
+              :page-size="ledgerPageSize"
+              :show-page-size-selector="false"
+              @update:page="loadLedger"
+            />
           </div>
         </section>
       </template>
@@ -524,45 +613,70 @@
         <button type="button" class="btn btn-secondary" @click="loadSettings">{{ t('bank.actions.reload') }}</button>
       </div>
       <form v-else class="space-y-5" @submit.prevent="saveSettings">
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label for="bank-min-advance" class="input-label">{{ t('bank.settings.advanceMin') }}</label>
-            <input id="bank-min-advance" v-model.trim="settingsForm.advance_min_amount" data-test="settings-min" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
+        <div role="tablist" aria-orientation="horizontal" :aria-label="t('bank.settings.title')" class="relative grid min-h-11 grid-cols-3 overflow-hidden rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
+          <span aria-hidden="true" class="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-white shadow-sm transition-transform dark:bg-dark-800" :style="{ width: 'calc(33.333333% - 0.166667rem)', transform: `translateX(${activeSettingsSection === 'advance' ? '0' : activeSettingsSection === 'exchange' ? '100%' : '200%'})` }" />
+          <button id="bank-settings-tab-advance" ref="advanceSettingsTab" type="button" role="tab" data-test="settings-section-advance" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'advance' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'advance'" :tabindex="activeSettingsSection === 'advance' ? 0 : -1" aria-controls="bank-settings-panel-advance" @keydown="handleSettingsSectionKeydown($event, 'advance')" @click="selectSettingsSection('advance')">{{ t('bank.advance.title') }}</button>
+          <button id="bank-settings-tab-exchange" ref="exchangeSettingsTab" type="button" role="tab" data-test="settings-section-exchange" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'exchange' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'exchange'" :tabindex="activeSettingsSection === 'exchange' ? 0 : -1" aria-controls="bank-settings-panel-exchange" @keydown="handleSettingsSectionKeydown($event, 'exchange')" @click="selectSettingsSection('exchange')">{{ t('bank.exchange.title') }}</button>
+          <button id="bank-settings-tab-repay" ref="repaySettingsTab" type="button" role="tab" data-test="settings-section-repay" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'repay' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'repay'" :tabindex="activeSettingsSection === 'repay' ? 0 : -1" aria-controls="bank-settings-panel-repay" @keydown="handleSettingsSectionKeydown($event, 'repay')" @click="selectSettingsSection('repay')">{{ t('bank.repay.title') }}</button>
+        </div>
+
+        <div id="bank-settings-panel-advance" v-show="activeSettingsSection === 'advance'" role="tabpanel" aria-labelledby="bank-settings-tab-advance" :aria-hidden="activeSettingsSection !== 'advance'" class="space-y-5">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label for="bank-min-advance" class="input-label">{{ t('bank.settings.advanceMin') }}</label>
+              <input id="bank-min-advance" v-model.trim="settingsForm.advance_min_amount" data-test="settings-min" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" @input="markSettingsFieldDirty('advance_min_amount')" />
+            </div>
+            <div>
+              <label for="bank-max-advance" class="input-label">{{ t('bank.settings.advanceMax') }}</label>
+              <input id="bank-max-advance" v-model.trim="settingsForm.advance_max_amount" data-test="settings-max" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" @input="markSettingsFieldDirty('advance_max_amount')" />
+            </div>
           </div>
           <div>
-            <label for="bank-max-advance" class="input-label">{{ t('bank.settings.advanceMax') }}</label>
-            <input id="bank-max-advance" v-model.trim="settingsForm.advance_max_amount" data-test="settings-max" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
+            <label for="bank-grace-days" class="input-label">{{ t('bank.settings.graceDays') }}</label>
+            <input id="bank-grace-days" v-model.trim="settingsForm.debt_grace_days" data-test="settings-grace-days" type="number" min="1" max="365" step="1" class="input mt-1" :disabled="settingsSaving" />
+            <p class="input-hint mt-1.5">{{ t('bank.settings.graceDaysHint') }}</p>
+          </div>
+          <div>
+            <label for="bank-debt-ratio" class="input-label">{{ t('bank.settings.debtRatio') }}</label>
+            <input id="bank-debt-ratio" v-model.trim="settingsForm.debt_conversion_ratio" data-test="settings-debt-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" @input="markSettingsFieldDirty('debt_conversion_ratio')" />
+            <p class="input-hint mt-1.5">{{ t('bank.settings.debtRatioHint') }}</p>
+          </div>
+          <div>
+            <label for="bank-unused-advance-ratio" class="input-label">{{ t('bank.settings.unusedAdvanceRatio') }}</label>
+            <input id="bank-unused-advance-ratio" v-model.trim="settingsForm.unused_advance_debt_reduction_ratio" data-test="settings-unused-advance-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" @input="markSettingsFieldDirty('unused_advance_debt_reduction_ratio')" />
+            <p class="input-hint mt-1.5">{{ t('bank.settings.unusedAdvanceRatioHint') }}</p>
           </div>
         </div>
-        <div>
-          <label for="bank-grace-days" class="input-label">{{ t('bank.settings.graceDays') }}</label>
-          <input id="bank-grace-days" v-model.trim="settingsForm.debt_grace_days" data-test="settings-grace-days" type="number" min="1" max="365" step="1" class="input mt-1" :disabled="settingsSaving" />
-          <p class="input-hint mt-1.5">{{ t('bank.settings.graceDaysHint') }}</p>
+
+        <div id="bank-settings-panel-exchange" v-show="activeSettingsSection === 'exchange'" role="tabpanel" aria-labelledby="bank-settings-tab-exchange" :aria-hidden="activeSettingsSection !== 'exchange'" class="space-y-4">
+          <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+            <div class="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('finance.bank.tiers') }}</h3>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('finance.bank.tierValidation') }}</p>
+              </div>
+              <button type="button" class="btn btn-secondary h-9" :disabled="settingsSaving" @click="addExchangeTier">{{ t('finance.bank.addTier') }}</button>
+            </div>
+            <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <span>{{ t('finance.bank.tierTo') }}</span><span>{{ t('finance.bank.tierRate') }}</span><span />
+            </div>
+            <div v-for="(tier, index) in settingsForm.exchange_tiers" :key="index" class="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
+              <input v-model.trim="tier.up_to" :data-test="`settings-tier-upper-${index}`" type="text" inputmode="decimal" class="input font-mono" :placeholder="t('finance.bank.unlimited')" :disabled="settingsSaving" @input="markTierFieldDirty(tier, 'up_to')" />
+              <input v-model.trim="tier.rate" :data-test="`settings-tier-rate-${index}`" type="text" inputmode="decimal" class="input font-mono" :disabled="settingsSaving" @input="markTierFieldDirty(tier, 'rate')" />
+              <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-900/20" :disabled="settingsSaving || settingsForm.exchange_tiers.length <= 1" :title="t('finance.bank.removeTier')" @click="removeExchangeTier(index)"><Icon name="trash" size="sm" /></button>
+            </div>
+          </div>
         </div>
-        <div>
-          <label for="bank-debt-ratio" class="input-label">{{ t('bank.settings.debtRatio') }}</label>
-          <input id="bank-debt-ratio" v-model.trim="settingsForm.debt_conversion_ratio" data-test="settings-debt-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
-          <p class="input-hint mt-1.5">{{ t('bank.settings.debtRatioHint') }}</p>
-        </div>
-        <div>
-          <label for="bank-exchange-rate" class="input-label">{{ t('bank.settings.exchangeRate') }}</label>
-          <input id="bank-exchange-rate" v-model.trim="settingsForm.exchange_rate" data-test="settings-exchange-rate" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
-          <p class="input-hint mt-1.5">{{ t('bank.settings.exchangeRateHint') }}</p>
-        </div>
-        <div>
-          <label for="bank-unused-advance-ratio" class="input-label">{{ t('bank.settings.unusedAdvanceRatio') }}</label>
-          <input id="bank-unused-advance-ratio" v-model.trim="settingsForm.unused_advance_debt_reduction_ratio" data-test="settings-unused-advance-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
-          <p class="input-hint mt-1.5">{{ t('bank.settings.unusedAdvanceRatioHint') }}</p>
-        </div>
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+        <div id="bank-settings-panel-repay" v-show="activeSettingsSection === 'repay'" role="tabpanel" aria-labelledby="bank-settings-tab-repay" :aria-hidden="activeSettingsSection !== 'repay'" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label for="bank-early-temporary-ratio" class="input-label">{{ t('bank.settings.earlyTemporaryRatio') }}</label>
-            <input id="bank-early-temporary-ratio" v-model.trim="settingsForm.early_repay_temporary_ratio" data-test="settings-early-temporary-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
+            <input id="bank-early-temporary-ratio" v-model.trim="settingsForm.early_repay_temporary_ratio" data-test="settings-early-temporary-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" @input="markSettingsFieldDirty('early_repay_temporary_ratio')" />
             <p class="input-hint mt-1.5">{{ t('bank.settings.earlyTemporaryRatioHint') }}</p>
           </div>
           <div>
             <label for="bank-early-permanent-ratio" class="input-label">{{ t('bank.settings.earlyPermanentRatio') }}</label>
-            <input id="bank-early-permanent-ratio" v-model.trim="settingsForm.early_repay_permanent_ratio" data-test="settings-early-permanent-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" />
+            <input id="bank-early-permanent-ratio" v-model.trim="settingsForm.early_repay_permanent_ratio" data-test="settings-early-permanent-ratio" type="text" inputmode="decimal" class="input mt-1 font-mono" :disabled="settingsSaving" @input="markSettingsFieldDirty('early_repay_permanent_ratio')" />
             <p class="input-hint mt-1.5">{{ t('bank.settings.earlyPermanentRatioHint') }}</p>
           </div>
         </div>
@@ -592,21 +706,43 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import { useI18n } from 'vue-i18n'
 import {
   exchangePermanentForTemporary,
+  getBankLedger,
   getBankSettings,
   getBankStatus,
   repayBankDebt,
   requestBankAdvance,
   updateBankSettings,
   type BankRepaySource,
+  type BankExchangeTier,
+  type BankLedgerItem,
   type BankPolicy,
   type BankStatus,
 } from '@/api/bank'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoneyDisplay } from '@/utils/format'
+
+type SettingsAmountField =
+  | 'advance_min_amount'
+  | 'advance_max_amount'
+  | 'debt_conversion_ratio'
+  | 'exchange_rate'
+  | 'unused_advance_debt_reduction_ratio'
+  | 'early_repay_temporary_ratio'
+  | 'early_repay_permanent_ratio'
+
+interface SettingsTierForm {
+  up_to: string
+  rate: string
+  exact_up_to: string
+  exact_rate: string
+  up_to_dirty: boolean
+  rate_dirty: boolean
+}
 
 interface SettingsForm {
   advance_min_amount: string
@@ -617,20 +753,12 @@ interface SettingsForm {
   unused_advance_debt_reduction_ratio: string
   early_repay_temporary_ratio: string
   early_repay_permanent_ratio: string
+  exchange_tiers: SettingsTierForm[]
 }
 
 const decimalAmountPattern = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,8})?$/
 const zeroAmount = '0.00000000'
 const amountScale = 100_000_000n
-const exchangeMaintenanceErrorCode = 'BANK_EXCHANGE_MAINTENANCE_WINDOW'
-const shanghaiTimeFormatter = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Asia/Shanghai',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23',
-})
-
 const { locale, t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
@@ -638,12 +766,25 @@ const status = ref<BankStatus | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)
 const loadFailed = ref(false)
+const ledgerItems = ref<BankLedgerItem[]>([])
+const ledgerPage = ref(1)
+const ledgerTotal = ref(0)
+const ledgerLoading = ref(true)
+const ledgerRefreshing = ref(false)
+const ledgerLoadFailed = ref(false)
+const ledgerPageSize = 5
 type BankMode = 'advance' | 'exchange' | 'repay'
 
 const activeBankMode = ref<BankMode>('advance')
 const advanceModeTab = ref<HTMLButtonElement | null>(null)
 const exchangeModeTab = ref<HTMLButtonElement | null>(null)
 const repayModeTab = ref<HTMLButtonElement | null>(null)
+const exchangeTierTooltipTrigger = ref<HTMLButtonElement | null>(null)
+const exchangeTierTooltip = ref<HTMLElement | null>(null)
+const exchangeTierTooltipVisible = ref(false)
+const exchangeTierTooltipStyle = ref<Record<string, string>>({ top: '0px', left: '0px' })
+let exchangeTierTooltipHovered = false
+let exchangeTierTooltipFocused = false
 const advanceAmount = ref('')
 const exchangeAmount = ref('')
 const repayAmount = ref('')
@@ -655,14 +796,22 @@ const repayTouched = ref(false)
 const advanceSubmitting = ref(false)
 const exchangeSubmitting = ref(false)
 const repaySubmitting = ref(false)
-const exchangeMaintenanceActive = ref(isExchangeMaintenanceWindow())
 const showSettingsDialog = ref(false)
 const settingsLoading = ref(false)
 const settingsLoadFailed = ref(false)
 const settingsSaving = ref(false)
 const settingsError = ref('')
+type SettingsSection = 'advance' | 'exchange' | 'repay'
+const activeSettingsSection = ref<SettingsSection>('advance')
+const advanceSettingsTab = ref<HTMLButtonElement | null>(null)
+const exchangeSettingsTab = ref<HTMLButtonElement | null>(null)
+const repaySettingsTab = ref<HTMLButtonElement | null>(null)
+const loadedPolicyHadTiers = ref(false)
+const tiersDirty = ref(false)
+const settingsExactValues = {} as Record<SettingsAmountField, string>
+const settingsDirtyFields = new Set<SettingsAmountField>()
 let latestStatusRequest = 0
-let exchangeMaintenanceTimer: number | undefined
+let latestLedgerRequest = 0
 
 const settingsForm = reactive<SettingsForm>({
   advance_min_amount: '',
@@ -673,6 +822,7 @@ const settingsForm = reactive<SettingsForm>({
   unused_advance_debt_reduction_ratio: '',
   early_repay_temporary_ratio: '',
   early_repay_permanent_ratio: '',
+  exchange_tiers: [],
 })
 
 const hasInvalidPermanentBalance = computed(() => Boolean(
@@ -693,7 +843,7 @@ const activeBankModeTitle = computed(() => activeBankMode.value === 'advance' ? 
 const activeBankModeDescription = computed(() => activeBankMode.value === 'advance'
   ? t('bank.advance.description')
   : activeBankMode.value === 'exchange'
-    ? t('bank.exchange.description', { rate: formatAmount(status.value?.policy.exchange_rate) })
+    ? t('bank.exchange.description', { rate: formatAmount(currentExchangeRate.value) })
     : t('bank.repay.description'))
 const bankModeIndicatorStyle = computed(() => ({
   width: 'calc(33.333333% - 0.166667rem)',
@@ -743,15 +893,115 @@ const advanceWalletAddition = computed(() => {
 const canSubmitExchange = computed(() => Boolean(
   status.value
   && !hasInvalidPermanentBalance.value
-  && !exchangeMaintenanceActive.value
   && !exchangeSubmitting.value
   && exchangeAmount.value
   && !exchangeError.value,
 ))
 
-const estimatedTemporaryAmount = computed(() => multiplyAmounts(
+const exchangeTiers = computed<BankExchangeTier[]>(() => status.value?.policy.exchange_tiers?.length
+  ? status.value.policy.exchange_tiers
+  : [{ up_to: null, rate: status.value?.policy.exchange_rate ?? '0' }])
+
+const exchangeTierTooltipRows = computed(() => {
+  let previousUpper = zeroAmount
+  return exchangeTiers.value.map((tier, index) => {
+    const lower = formatAmount(previousUpper)
+    const upper = tier.up_to == null ? null : formatAmount(tier.up_to)
+    const range = upper === null
+      ? t('bank.exchange.tierRangeUnlimited', { lower })
+      : index === 0
+        ? t('bank.exchange.tierRangeFirst', { upper })
+        : t('bank.exchange.tierRange', { lower, upper })
+    if (tier.up_to != null) previousUpper = tier.up_to
+    return {
+      index,
+      range,
+      rate: formatAmount(tier.rate),
+      current: status.value?.exchange_progress?.current_tier_index === index,
+    }
+  })
+})
+
+function updateExchangeTierTooltipPosition(): void {
+  const trigger = exchangeTierTooltipTrigger.value
+  const tooltip = exchangeTierTooltip.value
+  if (!trigger || !tooltip) return
+
+  const rect = trigger.getBoundingClientRect()
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1280
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 720
+  const viewportMargin = 16
+  const triggerGap = 8
+  const availableWidth = Math.max(0, viewportWidth - viewportMargin * 2)
+  const tooltipWidth = Math.min(tooltip.offsetWidth || 288, availableWidth)
+  const tooltipHeight = tooltip.offsetHeight || 160
+
+  let left = rect.left + rect.width / 2 - tooltipWidth / 2
+  left = Math.max(viewportMargin, Math.min(left, viewportWidth - viewportMargin - tooltipWidth))
+
+  let top = rect.bottom + triggerGap
+  if (top + tooltipHeight > viewportHeight - viewportMargin) {
+    top = Math.max(viewportMargin, rect.top - tooltipHeight - triggerGap)
+  }
+
+  exchangeTierTooltipStyle.value = {
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+  }
+}
+
+function removeExchangeTierTooltipListeners(): void {
+  window.removeEventListener('scroll', updateExchangeTierTooltipPosition, true)
+  window.removeEventListener('resize', updateExchangeTierTooltipPosition)
+}
+
+function setExchangeTierTooltipInteraction(source: 'hover' | 'focus', active: boolean): void {
+  if (source === 'hover') exchangeTierTooltipHovered = active
+  else exchangeTierTooltipFocused = active
+
+  const shouldShow = exchangeTierTooltipHovered || exchangeTierTooltipFocused
+  exchangeTierTooltipVisible.value = shouldShow
+  if (!shouldShow) {
+    removeExchangeTierTooltipListeners()
+    return
+  }
+
+  void nextTick(() => {
+    updateExchangeTierTooltipPosition()
+    window.addEventListener('scroll', updateExchangeTierTooltipPosition, true)
+    window.addEventListener('resize', updateExchangeTierTooltipPosition)
+  })
+}
+
+function closeExchangeTierTooltip(): void {
+  exchangeTierTooltipHovered = false
+  exchangeTierTooltipFocused = false
+  exchangeTierTooltipVisible.value = false
+  removeExchangeTierTooltipListeners()
+}
+
+const currentExchangeRate = computed(() => status.value?.exchange_progress?.current_tier_rate
+  ?? exchangeTiers.value[0]?.rate
+  ?? status.value?.policy.exchange_rate
+  ?? zeroAmount)
+
+const exchangeTierProgressPercent = computed(() => {
+  const progress = status.value?.exchange_progress
+  if (!progress || progress.current_tier_up_to == null) return 100
+  const upper = parseScaledAmount(progress.current_tier_up_to)
+  const used = parseScaledAmount(progress.permanent_exchanged_today)
+  const previousUpper = progress.current_tier_index > 0
+    ? parseScaledAmount(exchangeTiers.value[progress.current_tier_index - 1]?.up_to)
+    : 0n
+  if (upper === null || used === null || previousUpper === null || upper <= previousUpper) return 0
+  const consumed = used > previousUpper ? used - previousUpper : 0n
+  return Number((consumed * 10000n) / (upper - previousUpper)) / 100
+})
+
+const estimatedTemporaryAmount = computed(() => calculateTieredExchange(
   exchangeAmount.value,
-  status.value?.policy.exchange_rate,
+  status.value?.exchange_progress?.permanent_exchanged_today ?? zeroAmount,
+  exchangeTiers.value,
 ))
 
 const activeRepayRatio = computed(() => status.value?.policy[
@@ -818,6 +1068,49 @@ async function loadStatus(background = false, refreshUserAfter = true): Promise<
   }
 }
 
+async function loadLedger(page = ledgerPage.value, background = false): Promise<void> {
+  const requestedPage = Math.max(1, Math.trunc(page) || 1)
+  const request = ++latestLedgerRequest
+  if (background) ledgerRefreshing.value = true
+  else ledgerLoading.value = true
+  ledgerLoadFailed.value = false
+
+  try {
+    const response = await getBankLedger(requestedPage)
+    if (request !== latestLedgerRequest) return
+
+    const lastPage = Math.max(1, response.pages || Math.ceil(response.total / ledgerPageSize))
+    if (response.total > 0 && requestedPage > lastPage) {
+      ledgerPage.value = lastPage
+      await loadLedger(lastPage, background)
+      return
+    }
+
+    ledgerItems.value = response.items.slice(0, ledgerPageSize)
+    ledgerTotal.value = Math.max(0, response.total)
+    ledgerPage.value = response.total === 0
+      ? 1
+      : Math.min(Math.max(1, response.page || requestedPage), lastPage)
+  } catch (error) {
+    if (request !== latestLedgerRequest) return
+    console.error('Failed to load bank ledger:', error)
+    ledgerLoadFailed.value = true
+    if (ledgerItems.value.length) appStore.showError(errorMessage(error, t('bank.ledger.refreshFailed')))
+  } finally {
+    if (request === latestLedgerRequest) {
+      ledgerLoading.value = false
+      ledgerRefreshing.value = false
+    }
+  }
+}
+
+async function refreshBankData(): Promise<void> {
+  await Promise.all([
+    loadStatus(true),
+    loadLedger(ledgerPage.value, true),
+  ])
+}
+
 async function submitAdvance(): Promise<void> {
   advanceTouched.value = true
   if (!canSubmitAdvance.value) return
@@ -831,7 +1124,7 @@ async function submitAdvance(): Promise<void> {
     advanceAmount.value = ''
     advanceTouched.value = false
     appStore.showSuccess(t('bank.messages.advanceSucceeded'))
-    await Promise.all([loadStatus(true, false), refreshUserSilently()])
+    await Promise.all([loadStatus(true, false), loadLedger(1, true), refreshUserSilently()])
   } catch (error) {
     console.error('Failed to request bank advance:', error)
     appStore.showError(errorMessage(error, t('bank.errors.advanceFailed')))
@@ -842,11 +1135,6 @@ async function submitAdvance(): Promise<void> {
 
 async function submitExchange(): Promise<void> {
   exchangeTouched.value = true
-  updateExchangeMaintenanceState()
-  if (exchangeMaintenanceActive.value) {
-    appStore.showError(t('bank.exchangeMaintenance'))
-    return
-  }
   if (!canSubmitExchange.value) return
   exchangeSubmitting.value = true
   try {
@@ -858,12 +1146,10 @@ async function submitExchange(): Promise<void> {
     exchangeAmount.value = ''
     exchangeTouched.value = false
     appStore.showSuccess(t('bank.messages.exchangeSucceeded'))
-    await Promise.all([loadStatus(true, false), refreshUserSilently()])
+    await Promise.all([loadStatus(true, false), loadLedger(1, true), refreshUserSilently()])
   } catch (error) {
     console.error('Failed to exchange permanent credit:', error)
-    appStore.showError(isExchangeMaintenanceError(error)
-      ? t('bank.exchangeMaintenance')
-      : errorMessage(error, t('bank.errors.exchangeFailed')))
+    appStore.showError(errorMessage(error, t('bank.errors.exchangeFailed')))
   } finally {
     exchangeSubmitting.value = false
   }
@@ -891,7 +1177,7 @@ async function submitRepay(): Promise<void> {
     repayAmount.value = ''
     repayTouched.value = false
     appStore.showSuccess(t('bank.messages.repaySucceeded'))
-    await Promise.all([loadStatus(true, false), refreshUserSilently()])
+    await Promise.all([loadStatus(true, false), loadLedger(1, true), refreshUserSilently()])
   } catch (error) {
     console.error('Failed to repay bank debt:', error)
     appStore.showError(errorMessage(error, t('bank.errors.repayFailed')))
@@ -949,14 +1235,17 @@ async function saveSettings(): Promise<void> {
 
 function validatedSettingsPolicy(): BankPolicy | null {
   settingsError.value = ''
+  const exchangeRate = settingsForm.exchange_tiers[0]
+    ? tierFieldValue(settingsForm.exchange_tiers[0], 'rate')
+    : settingsAmountValue('exchange_rate')
   const fields = [
-    settingsForm.advance_min_amount,
-    settingsForm.advance_max_amount,
-    settingsForm.debt_conversion_ratio,
-    settingsForm.exchange_rate,
-    settingsForm.unused_advance_debt_reduction_ratio,
-    settingsForm.early_repay_temporary_ratio,
-    settingsForm.early_repay_permanent_ratio,
+    settingsAmountValue('advance_min_amount'),
+    settingsAmountValue('advance_max_amount'),
+    settingsAmountValue('debt_conversion_ratio'),
+    exchangeRate,
+    settingsAmountValue('unused_advance_debt_reduction_ratio'),
+    settingsAmountValue('early_repay_temporary_ratio'),
+    settingsAmountValue('early_repay_permanent_ratio'),
   ]
   const values = fields.map(parseScaledAmount)
   if (values.some((value) => value === null || value <= 0n)) {
@@ -972,27 +1261,141 @@ function validatedSettingsPolicy(): BankPolicy | null {
     settingsError.value = t('bank.validation.invalidGraceDays')
     return null
   }
+  const tiers = validatedExchangeTiers()
+  if (!tiers) return null
   return {
-    advance_min_amount: settingsForm.advance_min_amount,
-    advance_max_amount: settingsForm.advance_max_amount,
+    advance_min_amount: fields[0],
+    advance_max_amount: fields[1],
     debt_grace_days: graceDays,
-    debt_conversion_ratio: settingsForm.debt_conversion_ratio,
-    exchange_rate: settingsForm.exchange_rate,
-    unused_advance_debt_reduction_ratio: settingsForm.unused_advance_debt_reduction_ratio,
-    early_repay_temporary_ratio: settingsForm.early_repay_temporary_ratio,
-    early_repay_permanent_ratio: settingsForm.early_repay_permanent_ratio,
+    debt_conversion_ratio: fields[2],
+    exchange_rate: exchangeRate,
+    unused_advance_debt_reduction_ratio: fields[4],
+    early_repay_temporary_ratio: fields[5],
+    early_repay_permanent_ratio: fields[6],
+    ...((loadedPolicyHadTiers.value || tiersDirty.value) ? { exchange_tiers: tiers } : {}),
   }
 }
 
 function applyPolicyToForm(policy: BankPolicy): void {
-  settingsForm.advance_min_amount = policy.advance_min_amount
-  settingsForm.advance_max_amount = policy.advance_max_amount
+  applySettingsAmount('advance_min_amount', policy.advance_min_amount)
+  applySettingsAmount('advance_max_amount', policy.advance_max_amount)
   settingsForm.debt_grace_days = String(policy.debt_grace_days)
-  settingsForm.debt_conversion_ratio = policy.debt_conversion_ratio
-  settingsForm.exchange_rate = policy.exchange_rate
-  settingsForm.unused_advance_debt_reduction_ratio = policy.unused_advance_debt_reduction_ratio
-  settingsForm.early_repay_temporary_ratio = policy.early_repay_temporary_ratio
-  settingsForm.early_repay_permanent_ratio = policy.early_repay_permanent_ratio
+  applySettingsAmount('debt_conversion_ratio', policy.debt_conversion_ratio)
+  applySettingsAmount('exchange_rate', policy.exchange_rate)
+  applySettingsAmount('unused_advance_debt_reduction_ratio', policy.unused_advance_debt_reduction_ratio)
+  applySettingsAmount('early_repay_temporary_ratio', policy.early_repay_temporary_ratio)
+  applySettingsAmount('early_repay_permanent_ratio', policy.early_repay_permanent_ratio)
+  settingsDirtyFields.clear()
+  loadedPolicyHadTiers.value = Boolean(policy.exchange_tiers?.length)
+  tiersDirty.value = false
+  settingsForm.exchange_tiers.splice(0, settingsForm.exchange_tiers.length, ...(
+    policy.exchange_tiers?.length
+      ? policy.exchange_tiers.map((tier) => createSettingsTier(tier.up_to, tier.rate))
+      : [createSettingsTier(null, policy.exchange_rate)]
+  ))
+}
+
+function applySettingsAmount(field: SettingsAmountField, value: string): void {
+  settingsExactValues[field] = value
+  settingsForm[field] = formatAmount(value)
+}
+
+function markSettingsFieldDirty(field: SettingsAmountField): void {
+  settingsDirtyFields.add(field)
+}
+
+function settingsAmountValue(field: SettingsAmountField): string {
+  return (settingsDirtyFields.has(field)
+    ? settingsForm[field]
+    : settingsExactValues[field] ?? settingsForm[field]).trim()
+}
+
+function createSettingsTier(upTo: string | null, rate: string): SettingsTierForm {
+  return {
+    up_to: upTo == null ? '' : formatAmount(upTo),
+    rate: formatAmount(rate),
+    exact_up_to: upTo ?? '',
+    exact_rate: rate,
+    up_to_dirty: false,
+    rate_dirty: false,
+  }
+}
+
+function markTierFieldDirty(tier: SettingsTierForm, field: 'up_to' | 'rate'): void {
+  tier[`${field}_dirty`] = true
+  tiersDirty.value = true
+}
+
+function tierFieldValue(tier: SettingsTierForm, field: 'up_to' | 'rate'): string {
+  return (tier[`${field}_dirty`] ? tier[field] : tier[`exact_${field}`]).trim()
+}
+
+function validatedExchangeTiers(): BankExchangeTier[] | null {
+  if (!settingsForm.exchange_tiers.length) {
+    settingsError.value = t('finance.bank.tierValidation')
+    return null
+  }
+  const tiers: BankExchangeTier[] = []
+  let previousUpper = 0n
+  for (const [index, tier] of settingsForm.exchange_tiers.entries()) {
+    const rawRate = tierFieldValue(tier, 'rate')
+    const rate = parseScaledAmount(rawRate)
+    if (rate === null || rate <= 0n) {
+      settingsError.value = t('finance.bank.tierValidation')
+      return null
+    }
+    const isLast = index === settingsForm.exchange_tiers.length - 1
+    const rawUpper = tierFieldValue(tier, 'up_to')
+    if (!rawUpper) {
+      if (!isLast) {
+        settingsError.value = t('finance.bank.tierValidation')
+        return null
+      }
+      tiers.push({ up_to: null, rate: rawRate })
+      continue
+    }
+    const upper = parseScaledAmount(rawUpper)
+    if (upper === null || upper <= previousUpper) {
+      settingsError.value = t('finance.bank.tierValidation')
+      return null
+    }
+    tiers.push({ up_to: rawUpper, rate: rawRate })
+    previousUpper = upper
+  }
+  if (tiers[tiers.length - 1]?.up_to !== null) {
+    settingsError.value = t('finance.bank.tierValidation')
+    return null
+  }
+  return tiers
+}
+
+function addExchangeTier(): void {
+  const last = settingsForm.exchange_tiers[settingsForm.exchange_tiers.length - 1]
+  if (last && !last.up_to) {
+    last.up_to = '100.00'
+    last.up_to_dirty = true
+  }
+  const nextRate = last?.rate || settingsForm.exchange_rate || '1.00'
+  settingsForm.exchange_tiers.push({
+    up_to: '',
+    rate: nextRate,
+    exact_up_to: '',
+    exact_rate: nextRate,
+    up_to_dirty: true,
+    rate_dirty: true,
+  })
+  tiersDirty.value = true
+}
+
+function removeExchangeTier(index: number): void {
+  if (settingsForm.exchange_tiers.length <= 1) return
+  settingsForm.exchange_tiers.splice(index, 1)
+  const last = settingsForm.exchange_tiers[settingsForm.exchange_tiers.length - 1]
+  if (last) {
+    last.up_to = ''
+    last.up_to_dirty = true
+  }
+  tiersDirty.value = true
 }
 
 function parseScaledAmount(value: string | null | undefined): bigint | null {
@@ -1039,6 +1442,36 @@ function multiplyAmounts(left: string, right: string | undefined): string {
   const integer = product / amountScale
   const fraction = String(product % amountScale).padStart(8, '0')
   return `${integer}.${fraction}`
+}
+
+function calculateTieredExchange(amount: string, alreadyUsed: string, tiers: BankExchangeTier[]): string {
+  let remaining = parseScaledAmount(amount)
+  let cursor = parseScaledAmount(alreadyUsed)
+  if (remaining === null || remaining <= 0n || cursor === null) return zeroAmount
+  let temporaryTotal = 0n
+  let lowerBound = 0n
+
+  for (const tier of tiers) {
+    if (remaining <= 0n) break
+    const rate = parseScaledAmount(tier.rate)
+    if (rate === null || rate <= 0n) return zeroAmount
+    const upperBound = tier.up_to === null ? null : parseScaledAmount(tier.up_to)
+    if (upperBound !== null && upperBound <= lowerBound) return zeroAmount
+    if (upperBound !== null && cursor >= upperBound) {
+      lowerBound = upperBound
+      continue
+    }
+    const capacity = upperBound === null ? remaining : upperBound - (cursor > lowerBound ? cursor : lowerBound)
+    const allocated = capacity < remaining ? capacity : remaining
+    if (allocated > 0n) {
+      temporaryTotal += (allocated * rate + amountScale / 2n) / amountScale
+      remaining -= allocated
+      cursor += allocated
+    }
+    if (upperBound !== null) lowerBound = upperBound
+  }
+
+  return formatScaledAmount(temporaryTotal)
 }
 
 function formatDateTime(value: string | null | undefined): string {
@@ -1110,22 +1543,6 @@ function createIdempotencyKey(scope: string): string {
   return `${scope}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-function isExchangeMaintenanceWindow(now = new Date()): boolean {
-  const parts = Object.fromEntries(
-    shanghaiTimeFormatter
-      .formatToParts(now)
-      .filter((part) => part.type === 'hour' || part.type === 'minute')
-      .map((part) => [part.type, Number(part.value)]),
-  ) as { hour?: number, minute?: number }
-  const hour = parts.hour ?? -1
-  const minute = parts.minute ?? -1
-  return (hour === 23 && minute >= 55) || (hour === 0 && minute < 5)
-}
-
-function updateExchangeMaintenanceState(now = new Date()): void {
-  exchangeMaintenanceActive.value = isExchangeMaintenanceWindow(now)
-}
-
 function selectBankMode(mode: BankMode, focusTab = false): void {
   activeBankMode.value = mode
   if (!focusTab) return
@@ -1150,24 +1567,38 @@ function handleBankModeKeydown(event: KeyboardEvent, currentMode: BankMode): voi
   selectBankMode(nextMode, true)
 }
 
-function scheduleExchangeMaintenanceRefresh(): void {
-  if (exchangeMaintenanceTimer !== undefined) window.clearTimeout(exchangeMaintenanceTimer)
-  const now = new Date()
-  updateExchangeMaintenanceState(now)
-  const nextMinuteDelay = 60_000 - (now.getSeconds() * 1_000 + now.getMilliseconds())
-  exchangeMaintenanceTimer = window.setTimeout(scheduleExchangeMaintenanceRefresh, nextMinuteDelay)
+function selectSettingsSection(section: SettingsSection, focusTab = false): void {
+  activeSettingsSection.value = section
+  if (!focusTab) return
+
+  void nextTick(() => {
+    const tab = section === 'advance'
+      ? advanceSettingsTab.value
+      : section === 'exchange'
+        ? exchangeSettingsTab.value
+        : repaySettingsTab.value
+    tab?.focus()
+  })
 }
 
-function isExchangeMaintenanceError(error: unknown): boolean {
-  if (typeof error !== 'object' || !error) return false
-  const apiError = error as {
-    status?: unknown
-    code?: unknown
-    response?: { status?: unknown, data?: { code?: unknown } }
+function handleSettingsSectionKeydown(event: KeyboardEvent, currentSection: SettingsSection): void {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    selectSettingsSection(currentSection, true)
+    return
   }
-  const status = Number(apiError.status ?? apiError.response?.status)
-  const code = String(apiError.code ?? apiError.response?.data?.code ?? '').toUpperCase()
-  return status >= 400 && status < 500 && code === exchangeMaintenanceErrorCode
+
+  let nextSection: SettingsSection | null = null
+  const sections: SettingsSection[] = ['advance', 'exchange', 'repay']
+  const currentIndex = sections.indexOf(currentSection)
+  if (event.key === 'Home') nextSection = 'advance'
+  else if (event.key === 'End') nextSection = 'repay'
+  else if (event.key === 'ArrowRight') nextSection = sections[(currentIndex + 1) % sections.length]
+  else if (event.key === 'ArrowLeft') nextSection = sections[(currentIndex - 1 + sections.length) % sections.length]
+  if (!nextSection) return
+
+  event.preventDefault()
+  selectSettingsSection(nextSection, true)
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -1191,11 +1622,11 @@ async function refreshUserSilently(): Promise<void> {
 }
 
 onMounted(() => {
-  scheduleExchangeMaintenanceRefresh()
   void loadStatus()
+  void loadLedger(1)
 })
 
 onBeforeUnmount(() => {
-  if (exchangeMaintenanceTimer !== undefined) window.clearTimeout(exchangeMaintenanceTimer)
+  removeExchangeTierTooltipListeners()
 })
 </script>

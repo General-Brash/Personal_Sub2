@@ -53,4 +53,12 @@ describe('payment api', () => {
       { headers: { 'Idempotency-Key': 'mall-purchase-12' } },
     )
   })
+
+  it('loads a fixed-size personal ledger window', async () => {
+    await paymentAPI.getLedger({ page: 3, days: 15 })
+
+    expect(get).toHaveBeenCalledWith('/user/ledger', {
+      params: { page: 3, page_size: 20, days: 15 },
+    })
+  })
 })

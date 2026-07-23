@@ -84,6 +84,20 @@ func (_u *MallPurchaseUpdate) AddProductID(v int64) *MallPurchaseUpdate {
 	return _u
 }
 
+// SetProductName sets the "product_name" field.
+func (_u *MallPurchaseUpdate) SetProductName(v string) *MallPurchaseUpdate {
+	_u.mutation.SetProductName(v)
+	return _u
+}
+
+// SetNillableProductName sets the "product_name" field if the given value is not nil.
+func (_u *MallPurchaseUpdate) SetNillableProductName(v *string) *MallPurchaseUpdate {
+	if v != nil {
+		_u.SetProductName(*v)
+	}
+	return _u
+}
+
 // SetIdempotencyRecordID sets the "idempotency_record_id" field.
 func (_u *MallPurchaseUpdate) SetIdempotencyRecordID(v int64) *MallPurchaseUpdate {
 	_u.mutation.ResetIdempotencyRecordID()
@@ -281,6 +295,114 @@ func (_u *MallPurchaseUpdate) ClearSubscriptionExpiresAt() *MallPurchaseUpdate {
 	return _u
 }
 
+// SetPermanentBalanceBefore sets the "permanent_balance_before" field.
+func (_u *MallPurchaseUpdate) SetPermanentBalanceBefore(v float64) *MallPurchaseUpdate {
+	_u.mutation.ResetPermanentBalanceBefore()
+	_u.mutation.SetPermanentBalanceBefore(v)
+	return _u
+}
+
+// SetNillablePermanentBalanceBefore sets the "permanent_balance_before" field if the given value is not nil.
+func (_u *MallPurchaseUpdate) SetNillablePermanentBalanceBefore(v *float64) *MallPurchaseUpdate {
+	if v != nil {
+		_u.SetPermanentBalanceBefore(*v)
+	}
+	return _u
+}
+
+// AddPermanentBalanceBefore adds value to the "permanent_balance_before" field.
+func (_u *MallPurchaseUpdate) AddPermanentBalanceBefore(v float64) *MallPurchaseUpdate {
+	_u.mutation.AddPermanentBalanceBefore(v)
+	return _u
+}
+
+// ClearPermanentBalanceBefore clears the value of the "permanent_balance_before" field.
+func (_u *MallPurchaseUpdate) ClearPermanentBalanceBefore() *MallPurchaseUpdate {
+	_u.mutation.ClearPermanentBalanceBefore()
+	return _u
+}
+
+// SetPermanentBalanceAfter sets the "permanent_balance_after" field.
+func (_u *MallPurchaseUpdate) SetPermanentBalanceAfter(v float64) *MallPurchaseUpdate {
+	_u.mutation.ResetPermanentBalanceAfter()
+	_u.mutation.SetPermanentBalanceAfter(v)
+	return _u
+}
+
+// SetNillablePermanentBalanceAfter sets the "permanent_balance_after" field if the given value is not nil.
+func (_u *MallPurchaseUpdate) SetNillablePermanentBalanceAfter(v *float64) *MallPurchaseUpdate {
+	if v != nil {
+		_u.SetPermanentBalanceAfter(*v)
+	}
+	return _u
+}
+
+// AddPermanentBalanceAfter adds value to the "permanent_balance_after" field.
+func (_u *MallPurchaseUpdate) AddPermanentBalanceAfter(v float64) *MallPurchaseUpdate {
+	_u.mutation.AddPermanentBalanceAfter(v)
+	return _u
+}
+
+// ClearPermanentBalanceAfter clears the value of the "permanent_balance_after" field.
+func (_u *MallPurchaseUpdate) ClearPermanentBalanceAfter() *MallPurchaseUpdate {
+	_u.mutation.ClearPermanentBalanceAfter()
+	return _u
+}
+
+// SetTemporaryBalanceBefore sets the "temporary_balance_before" field.
+func (_u *MallPurchaseUpdate) SetTemporaryBalanceBefore(v float64) *MallPurchaseUpdate {
+	_u.mutation.ResetTemporaryBalanceBefore()
+	_u.mutation.SetTemporaryBalanceBefore(v)
+	return _u
+}
+
+// SetNillableTemporaryBalanceBefore sets the "temporary_balance_before" field if the given value is not nil.
+func (_u *MallPurchaseUpdate) SetNillableTemporaryBalanceBefore(v *float64) *MallPurchaseUpdate {
+	if v != nil {
+		_u.SetTemporaryBalanceBefore(*v)
+	}
+	return _u
+}
+
+// AddTemporaryBalanceBefore adds value to the "temporary_balance_before" field.
+func (_u *MallPurchaseUpdate) AddTemporaryBalanceBefore(v float64) *MallPurchaseUpdate {
+	_u.mutation.AddTemporaryBalanceBefore(v)
+	return _u
+}
+
+// ClearTemporaryBalanceBefore clears the value of the "temporary_balance_before" field.
+func (_u *MallPurchaseUpdate) ClearTemporaryBalanceBefore() *MallPurchaseUpdate {
+	_u.mutation.ClearTemporaryBalanceBefore()
+	return _u
+}
+
+// SetTemporaryBalanceAfter sets the "temporary_balance_after" field.
+func (_u *MallPurchaseUpdate) SetTemporaryBalanceAfter(v float64) *MallPurchaseUpdate {
+	_u.mutation.ResetTemporaryBalanceAfter()
+	_u.mutation.SetTemporaryBalanceAfter(v)
+	return _u
+}
+
+// SetNillableTemporaryBalanceAfter sets the "temporary_balance_after" field if the given value is not nil.
+func (_u *MallPurchaseUpdate) SetNillableTemporaryBalanceAfter(v *float64) *MallPurchaseUpdate {
+	if v != nil {
+		_u.SetTemporaryBalanceAfter(*v)
+	}
+	return _u
+}
+
+// AddTemporaryBalanceAfter adds value to the "temporary_balance_after" field.
+func (_u *MallPurchaseUpdate) AddTemporaryBalanceAfter(v float64) *MallPurchaseUpdate {
+	_u.mutation.AddTemporaryBalanceAfter(v)
+	return _u
+}
+
+// ClearTemporaryBalanceAfter clears the value of the "temporary_balance_after" field.
+func (_u *MallPurchaseUpdate) ClearTemporaryBalanceAfter() *MallPurchaseUpdate {
+	_u.mutation.ClearTemporaryBalanceAfter()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *MallPurchaseUpdate) SetStatus(v string) *MallPurchaseUpdate {
 	_u.mutation.SetStatus(v)
@@ -334,6 +456,11 @@ func (_u *MallPurchaseUpdate) check() error {
 			return &ValidationError{Name: "product_type", err: fmt.Errorf(`ent: validator failed for field "MallPurchase.product_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ProductName(); ok {
+		if err := mallpurchase.ProductNameValidator(v); err != nil {
+			return &ValidationError{Name: "product_name", err: fmt.Errorf(`ent: validator failed for field "MallPurchase.product_name": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PaymentCreditType(); ok {
 		if err := mallpurchase.PaymentCreditTypeValidator(v); err != nil {
 			return &ValidationError{Name: "payment_credit_type", err: fmt.Errorf(`ent: validator failed for field "MallPurchase.payment_credit_type": %w`, err)}
@@ -383,6 +510,9 @@ func (_u *MallPurchaseUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.AddedProductID(); ok {
 		_spec.AddField(mallpurchase.FieldProductID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.ProductName(); ok {
+		_spec.SetField(mallpurchase.FieldProductName, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.IdempotencyRecordID(); ok {
 		_spec.SetField(mallpurchase.FieldIdempotencyRecordID, field.TypeInt64, value)
@@ -443,6 +573,42 @@ func (_u *MallPurchaseUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.SubscriptionExpiresAtCleared() {
 		_spec.ClearField(mallpurchase.FieldSubscriptionExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PermanentBalanceBefore(); ok {
+		_spec.SetField(mallpurchase.FieldPermanentBalanceBefore, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPermanentBalanceBefore(); ok {
+		_spec.AddField(mallpurchase.FieldPermanentBalanceBefore, field.TypeFloat64, value)
+	}
+	if _u.mutation.PermanentBalanceBeforeCleared() {
+		_spec.ClearField(mallpurchase.FieldPermanentBalanceBefore, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.PermanentBalanceAfter(); ok {
+		_spec.SetField(mallpurchase.FieldPermanentBalanceAfter, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPermanentBalanceAfter(); ok {
+		_spec.AddField(mallpurchase.FieldPermanentBalanceAfter, field.TypeFloat64, value)
+	}
+	if _u.mutation.PermanentBalanceAfterCleared() {
+		_spec.ClearField(mallpurchase.FieldPermanentBalanceAfter, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.TemporaryBalanceBefore(); ok {
+		_spec.SetField(mallpurchase.FieldTemporaryBalanceBefore, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTemporaryBalanceBefore(); ok {
+		_spec.AddField(mallpurchase.FieldTemporaryBalanceBefore, field.TypeFloat64, value)
+	}
+	if _u.mutation.TemporaryBalanceBeforeCleared() {
+		_spec.ClearField(mallpurchase.FieldTemporaryBalanceBefore, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.TemporaryBalanceAfter(); ok {
+		_spec.SetField(mallpurchase.FieldTemporaryBalanceAfter, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTemporaryBalanceAfter(); ok {
+		_spec.AddField(mallpurchase.FieldTemporaryBalanceAfter, field.TypeFloat64, value)
+	}
+	if _u.mutation.TemporaryBalanceAfterCleared() {
+		_spec.ClearField(mallpurchase.FieldTemporaryBalanceAfter, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(mallpurchase.FieldStatus, field.TypeString, value)
@@ -520,6 +686,20 @@ func (_u *MallPurchaseUpdateOne) SetNillableProductID(v *int64) *MallPurchaseUpd
 // AddProductID adds value to the "product_id" field.
 func (_u *MallPurchaseUpdateOne) AddProductID(v int64) *MallPurchaseUpdateOne {
 	_u.mutation.AddProductID(v)
+	return _u
+}
+
+// SetProductName sets the "product_name" field.
+func (_u *MallPurchaseUpdateOne) SetProductName(v string) *MallPurchaseUpdateOne {
+	_u.mutation.SetProductName(v)
+	return _u
+}
+
+// SetNillableProductName sets the "product_name" field if the given value is not nil.
+func (_u *MallPurchaseUpdateOne) SetNillableProductName(v *string) *MallPurchaseUpdateOne {
+	if v != nil {
+		_u.SetProductName(*v)
+	}
 	return _u
 }
 
@@ -720,6 +900,114 @@ func (_u *MallPurchaseUpdateOne) ClearSubscriptionExpiresAt() *MallPurchaseUpdat
 	return _u
 }
 
+// SetPermanentBalanceBefore sets the "permanent_balance_before" field.
+func (_u *MallPurchaseUpdateOne) SetPermanentBalanceBefore(v float64) *MallPurchaseUpdateOne {
+	_u.mutation.ResetPermanentBalanceBefore()
+	_u.mutation.SetPermanentBalanceBefore(v)
+	return _u
+}
+
+// SetNillablePermanentBalanceBefore sets the "permanent_balance_before" field if the given value is not nil.
+func (_u *MallPurchaseUpdateOne) SetNillablePermanentBalanceBefore(v *float64) *MallPurchaseUpdateOne {
+	if v != nil {
+		_u.SetPermanentBalanceBefore(*v)
+	}
+	return _u
+}
+
+// AddPermanentBalanceBefore adds value to the "permanent_balance_before" field.
+func (_u *MallPurchaseUpdateOne) AddPermanentBalanceBefore(v float64) *MallPurchaseUpdateOne {
+	_u.mutation.AddPermanentBalanceBefore(v)
+	return _u
+}
+
+// ClearPermanentBalanceBefore clears the value of the "permanent_balance_before" field.
+func (_u *MallPurchaseUpdateOne) ClearPermanentBalanceBefore() *MallPurchaseUpdateOne {
+	_u.mutation.ClearPermanentBalanceBefore()
+	return _u
+}
+
+// SetPermanentBalanceAfter sets the "permanent_balance_after" field.
+func (_u *MallPurchaseUpdateOne) SetPermanentBalanceAfter(v float64) *MallPurchaseUpdateOne {
+	_u.mutation.ResetPermanentBalanceAfter()
+	_u.mutation.SetPermanentBalanceAfter(v)
+	return _u
+}
+
+// SetNillablePermanentBalanceAfter sets the "permanent_balance_after" field if the given value is not nil.
+func (_u *MallPurchaseUpdateOne) SetNillablePermanentBalanceAfter(v *float64) *MallPurchaseUpdateOne {
+	if v != nil {
+		_u.SetPermanentBalanceAfter(*v)
+	}
+	return _u
+}
+
+// AddPermanentBalanceAfter adds value to the "permanent_balance_after" field.
+func (_u *MallPurchaseUpdateOne) AddPermanentBalanceAfter(v float64) *MallPurchaseUpdateOne {
+	_u.mutation.AddPermanentBalanceAfter(v)
+	return _u
+}
+
+// ClearPermanentBalanceAfter clears the value of the "permanent_balance_after" field.
+func (_u *MallPurchaseUpdateOne) ClearPermanentBalanceAfter() *MallPurchaseUpdateOne {
+	_u.mutation.ClearPermanentBalanceAfter()
+	return _u
+}
+
+// SetTemporaryBalanceBefore sets the "temporary_balance_before" field.
+func (_u *MallPurchaseUpdateOne) SetTemporaryBalanceBefore(v float64) *MallPurchaseUpdateOne {
+	_u.mutation.ResetTemporaryBalanceBefore()
+	_u.mutation.SetTemporaryBalanceBefore(v)
+	return _u
+}
+
+// SetNillableTemporaryBalanceBefore sets the "temporary_balance_before" field if the given value is not nil.
+func (_u *MallPurchaseUpdateOne) SetNillableTemporaryBalanceBefore(v *float64) *MallPurchaseUpdateOne {
+	if v != nil {
+		_u.SetTemporaryBalanceBefore(*v)
+	}
+	return _u
+}
+
+// AddTemporaryBalanceBefore adds value to the "temporary_balance_before" field.
+func (_u *MallPurchaseUpdateOne) AddTemporaryBalanceBefore(v float64) *MallPurchaseUpdateOne {
+	_u.mutation.AddTemporaryBalanceBefore(v)
+	return _u
+}
+
+// ClearTemporaryBalanceBefore clears the value of the "temporary_balance_before" field.
+func (_u *MallPurchaseUpdateOne) ClearTemporaryBalanceBefore() *MallPurchaseUpdateOne {
+	_u.mutation.ClearTemporaryBalanceBefore()
+	return _u
+}
+
+// SetTemporaryBalanceAfter sets the "temporary_balance_after" field.
+func (_u *MallPurchaseUpdateOne) SetTemporaryBalanceAfter(v float64) *MallPurchaseUpdateOne {
+	_u.mutation.ResetTemporaryBalanceAfter()
+	_u.mutation.SetTemporaryBalanceAfter(v)
+	return _u
+}
+
+// SetNillableTemporaryBalanceAfter sets the "temporary_balance_after" field if the given value is not nil.
+func (_u *MallPurchaseUpdateOne) SetNillableTemporaryBalanceAfter(v *float64) *MallPurchaseUpdateOne {
+	if v != nil {
+		_u.SetTemporaryBalanceAfter(*v)
+	}
+	return _u
+}
+
+// AddTemporaryBalanceAfter adds value to the "temporary_balance_after" field.
+func (_u *MallPurchaseUpdateOne) AddTemporaryBalanceAfter(v float64) *MallPurchaseUpdateOne {
+	_u.mutation.AddTemporaryBalanceAfter(v)
+	return _u
+}
+
+// ClearTemporaryBalanceAfter clears the value of the "temporary_balance_after" field.
+func (_u *MallPurchaseUpdateOne) ClearTemporaryBalanceAfter() *MallPurchaseUpdateOne {
+	_u.mutation.ClearTemporaryBalanceAfter()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *MallPurchaseUpdateOne) SetStatus(v string) *MallPurchaseUpdateOne {
 	_u.mutation.SetStatus(v)
@@ -784,6 +1072,11 @@ func (_u *MallPurchaseUpdateOne) check() error {
 	if v, ok := _u.mutation.ProductType(); ok {
 		if err := mallpurchase.ProductTypeValidator(v); err != nil {
 			return &ValidationError{Name: "product_type", err: fmt.Errorf(`ent: validator failed for field "MallPurchase.product_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ProductName(); ok {
+		if err := mallpurchase.ProductNameValidator(v); err != nil {
+			return &ValidationError{Name: "product_name", err: fmt.Errorf(`ent: validator failed for field "MallPurchase.product_name": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.PaymentCreditType(); ok {
@@ -853,6 +1146,9 @@ func (_u *MallPurchaseUpdateOne) sqlSave(ctx context.Context) (_node *MallPurcha
 	if value, ok := _u.mutation.AddedProductID(); ok {
 		_spec.AddField(mallpurchase.FieldProductID, field.TypeInt64, value)
 	}
+	if value, ok := _u.mutation.ProductName(); ok {
+		_spec.SetField(mallpurchase.FieldProductName, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.IdempotencyRecordID(); ok {
 		_spec.SetField(mallpurchase.FieldIdempotencyRecordID, field.TypeInt64, value)
 	}
@@ -912,6 +1208,42 @@ func (_u *MallPurchaseUpdateOne) sqlSave(ctx context.Context) (_node *MallPurcha
 	}
 	if _u.mutation.SubscriptionExpiresAtCleared() {
 		_spec.ClearField(mallpurchase.FieldSubscriptionExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PermanentBalanceBefore(); ok {
+		_spec.SetField(mallpurchase.FieldPermanentBalanceBefore, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPermanentBalanceBefore(); ok {
+		_spec.AddField(mallpurchase.FieldPermanentBalanceBefore, field.TypeFloat64, value)
+	}
+	if _u.mutation.PermanentBalanceBeforeCleared() {
+		_spec.ClearField(mallpurchase.FieldPermanentBalanceBefore, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.PermanentBalanceAfter(); ok {
+		_spec.SetField(mallpurchase.FieldPermanentBalanceAfter, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPermanentBalanceAfter(); ok {
+		_spec.AddField(mallpurchase.FieldPermanentBalanceAfter, field.TypeFloat64, value)
+	}
+	if _u.mutation.PermanentBalanceAfterCleared() {
+		_spec.ClearField(mallpurchase.FieldPermanentBalanceAfter, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.TemporaryBalanceBefore(); ok {
+		_spec.SetField(mallpurchase.FieldTemporaryBalanceBefore, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTemporaryBalanceBefore(); ok {
+		_spec.AddField(mallpurchase.FieldTemporaryBalanceBefore, field.TypeFloat64, value)
+	}
+	if _u.mutation.TemporaryBalanceBeforeCleared() {
+		_spec.ClearField(mallpurchase.FieldTemporaryBalanceBefore, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.TemporaryBalanceAfter(); ok {
+		_spec.SetField(mallpurchase.FieldTemporaryBalanceAfter, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTemporaryBalanceAfter(); ok {
+		_spec.AddField(mallpurchase.FieldTemporaryBalanceAfter, field.TypeFloat64, value)
+	}
+	if _u.mutation.TemporaryBalanceAfterCleared() {
+		_spec.ClearField(mallpurchase.FieldTemporaryBalanceAfter, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(mallpurchase.FieldStatus, field.TypeString, value)

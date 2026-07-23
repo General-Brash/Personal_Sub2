@@ -40,6 +40,20 @@ func (_c *MallPurchaseCreate) SetProductID(v int64) *MallPurchaseCreate {
 	return _c
 }
 
+// SetProductName sets the "product_name" field.
+func (_c *MallPurchaseCreate) SetProductName(v string) *MallPurchaseCreate {
+	_c.mutation.SetProductName(v)
+	return _c
+}
+
+// SetNillableProductName sets the "product_name" field if the given value is not nil.
+func (_c *MallPurchaseCreate) SetNillableProductName(v *string) *MallPurchaseCreate {
+	if v != nil {
+		_c.SetProductName(*v)
+	}
+	return _c
+}
+
 // SetIdempotencyRecordID sets the "idempotency_record_id" field.
 func (_c *MallPurchaseCreate) SetIdempotencyRecordID(v int64) *MallPurchaseCreate {
 	_c.mutation.SetIdempotencyRecordID(v)
@@ -142,6 +156,62 @@ func (_c *MallPurchaseCreate) SetNillableSubscriptionExpiresAt(v *time.Time) *Ma
 	return _c
 }
 
+// SetPermanentBalanceBefore sets the "permanent_balance_before" field.
+func (_c *MallPurchaseCreate) SetPermanentBalanceBefore(v float64) *MallPurchaseCreate {
+	_c.mutation.SetPermanentBalanceBefore(v)
+	return _c
+}
+
+// SetNillablePermanentBalanceBefore sets the "permanent_balance_before" field if the given value is not nil.
+func (_c *MallPurchaseCreate) SetNillablePermanentBalanceBefore(v *float64) *MallPurchaseCreate {
+	if v != nil {
+		_c.SetPermanentBalanceBefore(*v)
+	}
+	return _c
+}
+
+// SetPermanentBalanceAfter sets the "permanent_balance_after" field.
+func (_c *MallPurchaseCreate) SetPermanentBalanceAfter(v float64) *MallPurchaseCreate {
+	_c.mutation.SetPermanentBalanceAfter(v)
+	return _c
+}
+
+// SetNillablePermanentBalanceAfter sets the "permanent_balance_after" field if the given value is not nil.
+func (_c *MallPurchaseCreate) SetNillablePermanentBalanceAfter(v *float64) *MallPurchaseCreate {
+	if v != nil {
+		_c.SetPermanentBalanceAfter(*v)
+	}
+	return _c
+}
+
+// SetTemporaryBalanceBefore sets the "temporary_balance_before" field.
+func (_c *MallPurchaseCreate) SetTemporaryBalanceBefore(v float64) *MallPurchaseCreate {
+	_c.mutation.SetTemporaryBalanceBefore(v)
+	return _c
+}
+
+// SetNillableTemporaryBalanceBefore sets the "temporary_balance_before" field if the given value is not nil.
+func (_c *MallPurchaseCreate) SetNillableTemporaryBalanceBefore(v *float64) *MallPurchaseCreate {
+	if v != nil {
+		_c.SetTemporaryBalanceBefore(*v)
+	}
+	return _c
+}
+
+// SetTemporaryBalanceAfter sets the "temporary_balance_after" field.
+func (_c *MallPurchaseCreate) SetTemporaryBalanceAfter(v float64) *MallPurchaseCreate {
+	_c.mutation.SetTemporaryBalanceAfter(v)
+	return _c
+}
+
+// SetNillableTemporaryBalanceAfter sets the "temporary_balance_after" field if the given value is not nil.
+func (_c *MallPurchaseCreate) SetNillableTemporaryBalanceAfter(v *float64) *MallPurchaseCreate {
+	if v != nil {
+		_c.SetTemporaryBalanceAfter(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *MallPurchaseCreate) SetStatus(v string) *MallPurchaseCreate {
 	_c.mutation.SetStatus(v)
@@ -205,6 +275,10 @@ func (_c *MallPurchaseCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *MallPurchaseCreate) defaults() {
+	if _, ok := _c.mutation.ProductName(); !ok {
+		v := mallpurchase.DefaultProductName
+		_c.mutation.SetProductName(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := mallpurchase.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -230,6 +304,14 @@ func (_c *MallPurchaseCreate) check() error {
 	}
 	if _, ok := _c.mutation.ProductID(); !ok {
 		return &ValidationError{Name: "product_id", err: errors.New(`ent: missing required field "MallPurchase.product_id"`)}
+	}
+	if _, ok := _c.mutation.ProductName(); !ok {
+		return &ValidationError{Name: "product_name", err: errors.New(`ent: missing required field "MallPurchase.product_name"`)}
+	}
+	if v, ok := _c.mutation.ProductName(); ok {
+		if err := mallpurchase.ProductNameValidator(v); err != nil {
+			return &ValidationError{Name: "product_name", err: fmt.Errorf(`ent: validator failed for field "MallPurchase.product_name": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.IdempotencyRecordID(); !ok {
 		return &ValidationError{Name: "idempotency_record_id", err: errors.New(`ent: missing required field "MallPurchase.idempotency_record_id"`)}
@@ -305,6 +387,10 @@ func (_c *MallPurchaseCreate) createSpec() (*MallPurchase, *sqlgraph.CreateSpec)
 		_spec.SetField(mallpurchase.FieldProductID, field.TypeInt64, value)
 		_node.ProductID = value
 	}
+	if value, ok := _c.mutation.ProductName(); ok {
+		_spec.SetField(mallpurchase.FieldProductName, field.TypeString, value)
+		_node.ProductName = value
+	}
 	if value, ok := _c.mutation.IdempotencyRecordID(); ok {
 		_spec.SetField(mallpurchase.FieldIdempotencyRecordID, field.TypeInt64, value)
 		_node.IdempotencyRecordID = value
@@ -340,6 +426,22 @@ func (_c *MallPurchaseCreate) createSpec() (*MallPurchase, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.SubscriptionExpiresAt(); ok {
 		_spec.SetField(mallpurchase.FieldSubscriptionExpiresAt, field.TypeTime, value)
 		_node.SubscriptionExpiresAt = &value
+	}
+	if value, ok := _c.mutation.PermanentBalanceBefore(); ok {
+		_spec.SetField(mallpurchase.FieldPermanentBalanceBefore, field.TypeFloat64, value)
+		_node.PermanentBalanceBefore = &value
+	}
+	if value, ok := _c.mutation.PermanentBalanceAfter(); ok {
+		_spec.SetField(mallpurchase.FieldPermanentBalanceAfter, field.TypeFloat64, value)
+		_node.PermanentBalanceAfter = &value
+	}
+	if value, ok := _c.mutation.TemporaryBalanceBefore(); ok {
+		_spec.SetField(mallpurchase.FieldTemporaryBalanceBefore, field.TypeFloat64, value)
+		_node.TemporaryBalanceBefore = &value
+	}
+	if value, ok := _c.mutation.TemporaryBalanceAfter(); ok {
+		_spec.SetField(mallpurchase.FieldTemporaryBalanceAfter, field.TypeFloat64, value)
+		_node.TemporaryBalanceAfter = &value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(mallpurchase.FieldStatus, field.TypeString, value)
@@ -446,6 +548,18 @@ func (u *MallPurchaseUpsert) UpdateProductID() *MallPurchaseUpsert {
 // AddProductID adds v to the "product_id" field.
 func (u *MallPurchaseUpsert) AddProductID(v int64) *MallPurchaseUpsert {
 	u.Add(mallpurchase.FieldProductID, v)
+	return u
+}
+
+// SetProductName sets the "product_name" field.
+func (u *MallPurchaseUpsert) SetProductName(v string) *MallPurchaseUpsert {
+	u.Set(mallpurchase.FieldProductName, v)
+	return u
+}
+
+// UpdateProductName sets the "product_name" field to the value that was provided on create.
+func (u *MallPurchaseUpsert) UpdateProductName() *MallPurchaseUpsert {
+	u.SetExcluded(mallpurchase.FieldProductName)
 	return u
 }
 
@@ -623,6 +737,102 @@ func (u *MallPurchaseUpsert) ClearSubscriptionExpiresAt() *MallPurchaseUpsert {
 	return u
 }
 
+// SetPermanentBalanceBefore sets the "permanent_balance_before" field.
+func (u *MallPurchaseUpsert) SetPermanentBalanceBefore(v float64) *MallPurchaseUpsert {
+	u.Set(mallpurchase.FieldPermanentBalanceBefore, v)
+	return u
+}
+
+// UpdatePermanentBalanceBefore sets the "permanent_balance_before" field to the value that was provided on create.
+func (u *MallPurchaseUpsert) UpdatePermanentBalanceBefore() *MallPurchaseUpsert {
+	u.SetExcluded(mallpurchase.FieldPermanentBalanceBefore)
+	return u
+}
+
+// AddPermanentBalanceBefore adds v to the "permanent_balance_before" field.
+func (u *MallPurchaseUpsert) AddPermanentBalanceBefore(v float64) *MallPurchaseUpsert {
+	u.Add(mallpurchase.FieldPermanentBalanceBefore, v)
+	return u
+}
+
+// ClearPermanentBalanceBefore clears the value of the "permanent_balance_before" field.
+func (u *MallPurchaseUpsert) ClearPermanentBalanceBefore() *MallPurchaseUpsert {
+	u.SetNull(mallpurchase.FieldPermanentBalanceBefore)
+	return u
+}
+
+// SetPermanentBalanceAfter sets the "permanent_balance_after" field.
+func (u *MallPurchaseUpsert) SetPermanentBalanceAfter(v float64) *MallPurchaseUpsert {
+	u.Set(mallpurchase.FieldPermanentBalanceAfter, v)
+	return u
+}
+
+// UpdatePermanentBalanceAfter sets the "permanent_balance_after" field to the value that was provided on create.
+func (u *MallPurchaseUpsert) UpdatePermanentBalanceAfter() *MallPurchaseUpsert {
+	u.SetExcluded(mallpurchase.FieldPermanentBalanceAfter)
+	return u
+}
+
+// AddPermanentBalanceAfter adds v to the "permanent_balance_after" field.
+func (u *MallPurchaseUpsert) AddPermanentBalanceAfter(v float64) *MallPurchaseUpsert {
+	u.Add(mallpurchase.FieldPermanentBalanceAfter, v)
+	return u
+}
+
+// ClearPermanentBalanceAfter clears the value of the "permanent_balance_after" field.
+func (u *MallPurchaseUpsert) ClearPermanentBalanceAfter() *MallPurchaseUpsert {
+	u.SetNull(mallpurchase.FieldPermanentBalanceAfter)
+	return u
+}
+
+// SetTemporaryBalanceBefore sets the "temporary_balance_before" field.
+func (u *MallPurchaseUpsert) SetTemporaryBalanceBefore(v float64) *MallPurchaseUpsert {
+	u.Set(mallpurchase.FieldTemporaryBalanceBefore, v)
+	return u
+}
+
+// UpdateTemporaryBalanceBefore sets the "temporary_balance_before" field to the value that was provided on create.
+func (u *MallPurchaseUpsert) UpdateTemporaryBalanceBefore() *MallPurchaseUpsert {
+	u.SetExcluded(mallpurchase.FieldTemporaryBalanceBefore)
+	return u
+}
+
+// AddTemporaryBalanceBefore adds v to the "temporary_balance_before" field.
+func (u *MallPurchaseUpsert) AddTemporaryBalanceBefore(v float64) *MallPurchaseUpsert {
+	u.Add(mallpurchase.FieldTemporaryBalanceBefore, v)
+	return u
+}
+
+// ClearTemporaryBalanceBefore clears the value of the "temporary_balance_before" field.
+func (u *MallPurchaseUpsert) ClearTemporaryBalanceBefore() *MallPurchaseUpsert {
+	u.SetNull(mallpurchase.FieldTemporaryBalanceBefore)
+	return u
+}
+
+// SetTemporaryBalanceAfter sets the "temporary_balance_after" field.
+func (u *MallPurchaseUpsert) SetTemporaryBalanceAfter(v float64) *MallPurchaseUpsert {
+	u.Set(mallpurchase.FieldTemporaryBalanceAfter, v)
+	return u
+}
+
+// UpdateTemporaryBalanceAfter sets the "temporary_balance_after" field to the value that was provided on create.
+func (u *MallPurchaseUpsert) UpdateTemporaryBalanceAfter() *MallPurchaseUpsert {
+	u.SetExcluded(mallpurchase.FieldTemporaryBalanceAfter)
+	return u
+}
+
+// AddTemporaryBalanceAfter adds v to the "temporary_balance_after" field.
+func (u *MallPurchaseUpsert) AddTemporaryBalanceAfter(v float64) *MallPurchaseUpsert {
+	u.Add(mallpurchase.FieldTemporaryBalanceAfter, v)
+	return u
+}
+
+// ClearTemporaryBalanceAfter clears the value of the "temporary_balance_after" field.
+func (u *MallPurchaseUpsert) ClearTemporaryBalanceAfter() *MallPurchaseUpsert {
+	u.SetNull(mallpurchase.FieldTemporaryBalanceAfter)
+	return u
+}
+
 // SetStatus sets the "status" field.
 func (u *MallPurchaseUpsert) SetStatus(v string) *MallPurchaseUpsert {
 	u.Set(mallpurchase.FieldStatus, v)
@@ -733,6 +943,20 @@ func (u *MallPurchaseUpsertOne) AddProductID(v int64) *MallPurchaseUpsertOne {
 func (u *MallPurchaseUpsertOne) UpdateProductID() *MallPurchaseUpsertOne {
 	return u.Update(func(s *MallPurchaseUpsert) {
 		s.UpdateProductID()
+	})
+}
+
+// SetProductName sets the "product_name" field.
+func (u *MallPurchaseUpsertOne) SetProductName(v string) *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetProductName(v)
+	})
+}
+
+// UpdateProductName sets the "product_name" field to the value that was provided on create.
+func (u *MallPurchaseUpsertOne) UpdateProductName() *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdateProductName()
 	})
 }
 
@@ -936,6 +1160,118 @@ func (u *MallPurchaseUpsertOne) UpdateSubscriptionExpiresAt() *MallPurchaseUpser
 func (u *MallPurchaseUpsertOne) ClearSubscriptionExpiresAt() *MallPurchaseUpsertOne {
 	return u.Update(func(s *MallPurchaseUpsert) {
 		s.ClearSubscriptionExpiresAt()
+	})
+}
+
+// SetPermanentBalanceBefore sets the "permanent_balance_before" field.
+func (u *MallPurchaseUpsertOne) SetPermanentBalanceBefore(v float64) *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetPermanentBalanceBefore(v)
+	})
+}
+
+// AddPermanentBalanceBefore adds v to the "permanent_balance_before" field.
+func (u *MallPurchaseUpsertOne) AddPermanentBalanceBefore(v float64) *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.AddPermanentBalanceBefore(v)
+	})
+}
+
+// UpdatePermanentBalanceBefore sets the "permanent_balance_before" field to the value that was provided on create.
+func (u *MallPurchaseUpsertOne) UpdatePermanentBalanceBefore() *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdatePermanentBalanceBefore()
+	})
+}
+
+// ClearPermanentBalanceBefore clears the value of the "permanent_balance_before" field.
+func (u *MallPurchaseUpsertOne) ClearPermanentBalanceBefore() *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.ClearPermanentBalanceBefore()
+	})
+}
+
+// SetPermanentBalanceAfter sets the "permanent_balance_after" field.
+func (u *MallPurchaseUpsertOne) SetPermanentBalanceAfter(v float64) *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetPermanentBalanceAfter(v)
+	})
+}
+
+// AddPermanentBalanceAfter adds v to the "permanent_balance_after" field.
+func (u *MallPurchaseUpsertOne) AddPermanentBalanceAfter(v float64) *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.AddPermanentBalanceAfter(v)
+	})
+}
+
+// UpdatePermanentBalanceAfter sets the "permanent_balance_after" field to the value that was provided on create.
+func (u *MallPurchaseUpsertOne) UpdatePermanentBalanceAfter() *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdatePermanentBalanceAfter()
+	})
+}
+
+// ClearPermanentBalanceAfter clears the value of the "permanent_balance_after" field.
+func (u *MallPurchaseUpsertOne) ClearPermanentBalanceAfter() *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.ClearPermanentBalanceAfter()
+	})
+}
+
+// SetTemporaryBalanceBefore sets the "temporary_balance_before" field.
+func (u *MallPurchaseUpsertOne) SetTemporaryBalanceBefore(v float64) *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetTemporaryBalanceBefore(v)
+	})
+}
+
+// AddTemporaryBalanceBefore adds v to the "temporary_balance_before" field.
+func (u *MallPurchaseUpsertOne) AddTemporaryBalanceBefore(v float64) *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.AddTemporaryBalanceBefore(v)
+	})
+}
+
+// UpdateTemporaryBalanceBefore sets the "temporary_balance_before" field to the value that was provided on create.
+func (u *MallPurchaseUpsertOne) UpdateTemporaryBalanceBefore() *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdateTemporaryBalanceBefore()
+	})
+}
+
+// ClearTemporaryBalanceBefore clears the value of the "temporary_balance_before" field.
+func (u *MallPurchaseUpsertOne) ClearTemporaryBalanceBefore() *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.ClearTemporaryBalanceBefore()
+	})
+}
+
+// SetTemporaryBalanceAfter sets the "temporary_balance_after" field.
+func (u *MallPurchaseUpsertOne) SetTemporaryBalanceAfter(v float64) *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetTemporaryBalanceAfter(v)
+	})
+}
+
+// AddTemporaryBalanceAfter adds v to the "temporary_balance_after" field.
+func (u *MallPurchaseUpsertOne) AddTemporaryBalanceAfter(v float64) *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.AddTemporaryBalanceAfter(v)
+	})
+}
+
+// UpdateTemporaryBalanceAfter sets the "temporary_balance_after" field to the value that was provided on create.
+func (u *MallPurchaseUpsertOne) UpdateTemporaryBalanceAfter() *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdateTemporaryBalanceAfter()
+	})
+}
+
+// ClearTemporaryBalanceAfter clears the value of the "temporary_balance_after" field.
+func (u *MallPurchaseUpsertOne) ClearTemporaryBalanceAfter() *MallPurchaseUpsertOne {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.ClearTemporaryBalanceAfter()
 	})
 }
 
@@ -1220,6 +1556,20 @@ func (u *MallPurchaseUpsertBulk) UpdateProductID() *MallPurchaseUpsertBulk {
 	})
 }
 
+// SetProductName sets the "product_name" field.
+func (u *MallPurchaseUpsertBulk) SetProductName(v string) *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetProductName(v)
+	})
+}
+
+// UpdateProductName sets the "product_name" field to the value that was provided on create.
+func (u *MallPurchaseUpsertBulk) UpdateProductName() *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdateProductName()
+	})
+}
+
 // SetIdempotencyRecordID sets the "idempotency_record_id" field.
 func (u *MallPurchaseUpsertBulk) SetIdempotencyRecordID(v int64) *MallPurchaseUpsertBulk {
 	return u.Update(func(s *MallPurchaseUpsert) {
@@ -1420,6 +1770,118 @@ func (u *MallPurchaseUpsertBulk) UpdateSubscriptionExpiresAt() *MallPurchaseUpse
 func (u *MallPurchaseUpsertBulk) ClearSubscriptionExpiresAt() *MallPurchaseUpsertBulk {
 	return u.Update(func(s *MallPurchaseUpsert) {
 		s.ClearSubscriptionExpiresAt()
+	})
+}
+
+// SetPermanentBalanceBefore sets the "permanent_balance_before" field.
+func (u *MallPurchaseUpsertBulk) SetPermanentBalanceBefore(v float64) *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetPermanentBalanceBefore(v)
+	})
+}
+
+// AddPermanentBalanceBefore adds v to the "permanent_balance_before" field.
+func (u *MallPurchaseUpsertBulk) AddPermanentBalanceBefore(v float64) *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.AddPermanentBalanceBefore(v)
+	})
+}
+
+// UpdatePermanentBalanceBefore sets the "permanent_balance_before" field to the value that was provided on create.
+func (u *MallPurchaseUpsertBulk) UpdatePermanentBalanceBefore() *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdatePermanentBalanceBefore()
+	})
+}
+
+// ClearPermanentBalanceBefore clears the value of the "permanent_balance_before" field.
+func (u *MallPurchaseUpsertBulk) ClearPermanentBalanceBefore() *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.ClearPermanentBalanceBefore()
+	})
+}
+
+// SetPermanentBalanceAfter sets the "permanent_balance_after" field.
+func (u *MallPurchaseUpsertBulk) SetPermanentBalanceAfter(v float64) *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetPermanentBalanceAfter(v)
+	})
+}
+
+// AddPermanentBalanceAfter adds v to the "permanent_balance_after" field.
+func (u *MallPurchaseUpsertBulk) AddPermanentBalanceAfter(v float64) *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.AddPermanentBalanceAfter(v)
+	})
+}
+
+// UpdatePermanentBalanceAfter sets the "permanent_balance_after" field to the value that was provided on create.
+func (u *MallPurchaseUpsertBulk) UpdatePermanentBalanceAfter() *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdatePermanentBalanceAfter()
+	})
+}
+
+// ClearPermanentBalanceAfter clears the value of the "permanent_balance_after" field.
+func (u *MallPurchaseUpsertBulk) ClearPermanentBalanceAfter() *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.ClearPermanentBalanceAfter()
+	})
+}
+
+// SetTemporaryBalanceBefore sets the "temporary_balance_before" field.
+func (u *MallPurchaseUpsertBulk) SetTemporaryBalanceBefore(v float64) *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetTemporaryBalanceBefore(v)
+	})
+}
+
+// AddTemporaryBalanceBefore adds v to the "temporary_balance_before" field.
+func (u *MallPurchaseUpsertBulk) AddTemporaryBalanceBefore(v float64) *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.AddTemporaryBalanceBefore(v)
+	})
+}
+
+// UpdateTemporaryBalanceBefore sets the "temporary_balance_before" field to the value that was provided on create.
+func (u *MallPurchaseUpsertBulk) UpdateTemporaryBalanceBefore() *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdateTemporaryBalanceBefore()
+	})
+}
+
+// ClearTemporaryBalanceBefore clears the value of the "temporary_balance_before" field.
+func (u *MallPurchaseUpsertBulk) ClearTemporaryBalanceBefore() *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.ClearTemporaryBalanceBefore()
+	})
+}
+
+// SetTemporaryBalanceAfter sets the "temporary_balance_after" field.
+func (u *MallPurchaseUpsertBulk) SetTemporaryBalanceAfter(v float64) *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.SetTemporaryBalanceAfter(v)
+	})
+}
+
+// AddTemporaryBalanceAfter adds v to the "temporary_balance_after" field.
+func (u *MallPurchaseUpsertBulk) AddTemporaryBalanceAfter(v float64) *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.AddTemporaryBalanceAfter(v)
+	})
+}
+
+// UpdateTemporaryBalanceAfter sets the "temporary_balance_after" field to the value that was provided on create.
+func (u *MallPurchaseUpsertBulk) UpdateTemporaryBalanceAfter() *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.UpdateTemporaryBalanceAfter()
+	})
+}
+
+// ClearTemporaryBalanceAfter clears the value of the "temporary_balance_after" field.
+func (u *MallPurchaseUpsertBulk) ClearTemporaryBalanceAfter() *MallPurchaseUpsertBulk {
+	return u.Update(func(s *MallPurchaseUpsert) {
+		s.ClearTemporaryBalanceAfter()
 	})
 }
 

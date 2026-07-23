@@ -8,7 +8,15 @@
 
       <ShelfSectionTabs active-section="currency" />
 
-      <div class="flex items-center justify-end gap-2">
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <RouterLink to="/admin/orders/mall-transactions" class="btn btn-secondary inline-flex items-center gap-2">
+          <Icon name="clipboard" size="sm" />
+          {{ t('finance.transactions.mallTitle') }}
+        </RouterLink>
+        <button type="button" class="btn btn-secondary inline-flex items-center gap-2" data-test="toggle-shelf-analytics" @click="toggleAnalytics">
+          <Icon name="chart" size="sm" />
+          {{ t('finance.analytics.title') }}
+        </button>
         <button type="button" class="btn btn-secondary h-10 w-10 p-0" :title="t('common.refresh')" :disabled="loading" @click="loadProducts">
           <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
         </button>
@@ -17,6 +25,65 @@
           {{ t('commerce.shelf.createCurrencyProduct') }}
         </button>
       </div>
+
+      <section v-if="showAnalytics" data-test="shelf-analytics" class="card space-y-4 p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('finance.analytics.title') }}</h2>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('finance.analytics.description') }}</p>
+          </div>
+          <div class="inline-flex rounded-lg border border-gray-200 bg-gray-100 p-1 dark:border-dark-600 dark:bg-dark-800">
+            <button v-for="days in analyticsDays" :key="days" type="button" class="rounded-md px-3 py-1 text-xs font-medium" :class="analyticsRange === days ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-700 dark:text-primary-300' : 'text-gray-500'" @click="loadAnalytics(days)">
+              {{ t('finance.analytics.days', { days }) }}
+            </button>
+          </div>
+        </div>
+        <div v-if="analyticsLoading" class="py-10 text-center text-sm text-gray-500">{{ t('finance.loading') }}</div>
+        <template v-else-if="analytics">
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600"><p class="text-xs text-gray-500">{{ t('finance.analytics.totalSales') }}</p><p class="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{{ analytics.total_sales }}</p></div>
+            <div v-for="total in analyticsRevenueTotals" :key="financialAmountKey(total)" data-test="analytics-revenue-total" class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+              <p class="text-xs text-gray-500">{{ t('finance.analytics.revenueUnit', { unit: financialUnitLabel(total.currency, total.unit, translate) }) }}</p>
+              <p class="mt-1 font-mono text-xl font-semibold text-emerald-600 dark:text-emerald-400">{{ formatFinancialAmount(total.revenue, total.currency, total.unit, translate) }}</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div>
+              <h3 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">{{ t('finance.analytics.categories') }}</h3>
+              <div class="space-y-3">
+                <div v-for="category in analyticsCategoryTotals" :key="category.product_type" class="border-b border-gray-100 py-2 text-sm dark:border-dark-700">
+                  <div class="flex items-center justify-between gap-3">
+                    <span>{{ productTypeLabel(category.product_type) }}</span>
+                    <span class="font-mono text-gray-600 dark:text-gray-300">{{ category.sales_count }} {{ t('finance.analytics.sales') }}</span>
+                  </div>
+                  <div v-for="total in category.revenue_totals" :key="financialAmountKey(total)" class="mt-1 text-right font-mono text-xs text-gray-500 dark:text-gray-400">
+                    {{ formatFinancialAmount(total.revenue, total.currency, total.unit, translate) }}
+                  </div>
+                </div>
+                <p v-if="!analyticsCategoryTotals.length" class="text-sm text-gray-500">{{ t('finance.analytics.noData') }}</p>
+              </div>
+            </div>
+            <div>
+              <h3 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">{{ t('finance.analytics.products') }}</h3>
+              <div v-if="!analytics.products?.length" class="text-sm text-gray-500">{{ t('finance.analytics.noData') }}</div>
+              <div v-for="row in analytics.products" :key="analyticsProductKey(row)" class="flex items-center justify-between border-b border-gray-100 py-2 text-sm dark:border-dark-700">
+                <span class="min-w-0 truncate">{{ row.product_name }} <span class="text-xs text-gray-400">({{ productTypeLabel(row.product_type) }})</span></span>
+                <span class="ml-3 shrink-0 font-mono text-gray-600 dark:text-gray-300">{{ row.sales_count }} / {{ formatFinancialAmount(row.revenue, row.currency, row.unit, translate) }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <DailyRevenueChart
+              v-for="group in analyticsDailyGroups"
+              :key="group.key"
+              :title="t('finance.analytics.dailyUnit', { unit: financialUnitLabel(group.currency, group.unit, translate) })"
+              :revenue-label="financialUnitLabel(group.currency, group.unit, translate)"
+              :data="group.points"
+              :loading="false"
+            />
+          </div>
+        </template>
+      </section>
 
       <DataTable :columns="columns" :data="products" :loading="loading">
         <template #cell-name="{ row }">
@@ -32,6 +99,9 @@
         <template #cell-credited_amount="{ value, row }">
           <span class="font-mono text-sm text-emerald-600 dark:text-emerald-400">${{ formatMoneyDisplay(value) }}</span>
           <span class="ml-1 text-xs text-gray-500 dark:text-gray-400">{{ creditTypeLabel(row.credited_type) }}</span>
+        </template>
+        <template #cell-sales_count="{ row }">
+          <span class="font-mono text-sm text-gray-700 dark:text-gray-300">{{ row.sales_count ?? 0 }}</span>
         </template>
         <template #cell-for_sale="{ row }">
           <span
@@ -177,6 +247,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminPaymentAPI } from '@/api/admin/payment'
+import type { MallAnalyticsProduct, MallAnalyticsResponse, MallAnalyticsRevenueTotal } from '@/types/finance'
 import type { CurrencyProduct, CurrencyProductInput } from '@/types/payment'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -187,10 +258,13 @@ import Select from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ShelfSectionTabs from '@/components/admin/payment/ShelfSectionTabs.vue'
+import DailyRevenueChart from '@/components/admin/payment/DailyRevenueChart.vue'
 import { useAppStore } from '@/stores/app'
+import { financialAmountKey, financialUnitLabel, formatFinancialAmount, sumFinancialAmounts, type FinanceTranslate } from '@/components/finance/financialDisplay'
 import { formatMoneyDisplay } from '@/utils/format'
 
 const { t } = useI18n()
+const translate = t as unknown as FinanceTranslate
 const appStore = useAppStore()
 const products = ref<CurrencyProduct[]>([])
 const loading = ref(false)
@@ -198,6 +272,42 @@ const saving = ref(false)
 const showEditor = ref(false)
 const editingProduct = ref<CurrencyProduct | null>(null)
 const deletingProduct = ref<CurrencyProduct | null>(null)
+const showAnalytics = ref(false)
+const analyticsLoading = ref(false)
+const analytics = ref<MallAnalyticsResponse | null>(null)
+const analyticsRange = ref(30)
+const analyticsDays = [7, 30, 90]
+
+const analyticsRevenueTotals = computed<MallAnalyticsRevenueTotal[]>(() => {
+  const explicit = analytics.value?.revenue_totals ?? []
+  if (explicit.length) return explicit
+  return aggregateRevenueTotals(analytics.value?.products ?? [])
+})
+
+const analyticsCategoryTotals = computed(() => {
+  const grouped = new Map<string, { product_type: string; sales_count: number; revenue_totals: MallAnalyticsRevenueTotal[] }>()
+  for (const product of analytics.value?.products ?? []) {
+    const category = grouped.get(product.product_type) ?? { product_type: product.product_type, sales_count: 0, revenue_totals: [] }
+    category.sales_count += product.sales_count
+    const key = financialAmountKey(product)
+    const existing = category.revenue_totals.find((total) => financialAmountKey(total) === key)
+    if (existing) existing.revenue = sumFinancialAmounts([existing.revenue, product.revenue])
+    else category.revenue_totals.push({ currency: product.currency, unit: product.unit, revenue: product.revenue, sales_count: product.sales_count })
+    grouped.set(product.product_type, category)
+  }
+  return [...grouped.values()]
+})
+
+const analyticsDailyGroups = computed(() => {
+  const grouped = new Map<string, { key: string; currency: string; unit: string; points: Array<{ date: string; amount: number; count: number }> }>()
+  for (const point of analytics.value?.daily ?? []) {
+    const key = financialAmountKey(point)
+    const group = grouped.get(key) ?? { key, currency: point.currency, unit: point.unit, points: [] }
+    group.points.push({ date: point.date, amount: Number(point.revenue) || 0, count: point.sales_count })
+    grouped.set(key, group)
+  }
+  return [...grouped.values()]
+})
 const creditTypeOptions = computed(() => [
   { value: 'permanent', label: t('commerce.creditType.permanent') },
   { value: 'temporary', label: t('commerce.creditType.temporary') },
@@ -208,6 +318,7 @@ const columns = computed<Column[]>(() => [
   { key: 'name', label: t('commerce.shelf.name') },
   { key: 'payment_price', label: t('commerce.shelf.paymentPrice') },
   { key: 'credited_amount', label: t('commerce.shelf.creditedAmount') },
+  { key: 'sales_count', label: t('finance.analytics.sales') },
   { key: 'for_sale', label: t('commerce.shelf.forSale') },
   { key: 'sort_order', label: t('commerce.shelf.sortOrder') },
   { key: 'actions', label: t('common.actions') },
@@ -241,6 +352,54 @@ async function loadProducts(): Promise<void> {
     loading.value = false
   }
 }
+
+async function loadAnalytics(days = analyticsRange.value): Promise<void> {
+  analyticsRange.value = days
+  analyticsLoading.value = true
+  try {
+    const response = await adminPaymentAPI.getMallAnalytics(days)
+    analytics.value = response.data
+  } catch (error) {
+    console.error('Failed to load mall analytics:', error)
+    appStore.showError(t('finance.transactions.loadFailed'))
+  } finally {
+    analyticsLoading.value = false
+  }
+}
+
+function toggleAnalytics(): void {
+  showAnalytics.value = !showAnalytics.value
+  if (showAnalytics.value && !analytics.value) void loadAnalytics()
+}
+
+function aggregateRevenueTotals(products: MallAnalyticsProduct[]): MallAnalyticsRevenueTotal[] {
+  const grouped = new Map<string, MallAnalyticsRevenueTotal>()
+  for (const product of products) {
+    const key = financialAmountKey(product)
+    const existing = grouped.get(key)
+    if (existing) {
+      existing.revenue = sumFinancialAmounts([existing.revenue, product.revenue])
+      existing.sales_count += product.sales_count
+    } else {
+      grouped.set(key, {
+        currency: product.currency,
+        unit: product.unit,
+        revenue: product.revenue,
+        sales_count: product.sales_count,
+      })
+    }
+  }
+  return [...grouped.values()]
+}
+
+function analyticsProductKey(row: MallAnalyticsProduct): string {
+  return `${row.product_type}:${row.product_id}:${financialAmountKey(row)}`
+}
+
+function productTypeLabel(value: string): string {
+  return value === 'subscription' ? t('finance.transactions.subscription') : t('finance.transactions.currency')
+}
+
 
 function openEditor(product?: CurrencyProduct): void {
   editingProduct.value = product ?? null

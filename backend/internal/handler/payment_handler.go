@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -22,11 +23,31 @@ type PaymentHandler struct {
 	paymentService *service.PaymentService
 	configService  *service.PaymentConfigService
 	mallService    *service.MallService
+	financeService MallFinancialService
+	salesService   MallSalesService
 }
 
 func (h *PaymentHandler) SetMallService(mallService *service.MallService) {
 	if h != nil {
 		h.mallService = mallService
+		h.financeService = mallService
+		h.salesService = mallService
+	}
+}
+
+// SetFinancialService allows focused handler tests to provide a lightweight
+// finance stub while production keeps using the injected MallService.
+func (h *PaymentHandler) SetFinancialService(financeService MallFinancialService) {
+	if h != nil {
+		h.financeService = financeService
+	}
+}
+
+// SetMallSalesService allows focused handler tests to provide sales totals
+// without constructing the full mall service.
+func (h *PaymentHandler) SetMallSalesService(salesService MallSalesService) {
+	if h != nil {
+		h.salesService = salesService
 	}
 }
 
@@ -57,6 +78,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	salesCounts := h.loadMallSalesCountsBestEffort(c.Request.Context())
 	// Enrich plans with group platform for frontend color coding
 	type planWithPlatform struct {
 		ID                         int64    `json:"id"`
@@ -82,6 +104,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		BenefitType                string   `json:"benefit_type"`
 		PaymentCreditType          string   `json:"payment_credit_type"`
 		DailyTemporaryCreditAmount float64  `json:"daily_temporary_credit_amount"`
+		SalesCount                 int64    `json:"sales_count"`
 	}
 	groupInfo := h.configService.GetGroupInfoMap(c.Request.Context(), plans)
 	result := make([]planWithPlatform, 0, len(plans))
@@ -98,6 +121,65 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 			ProductName: p.ProductName, ForSale: p.ForSale, SortOrder: p.SortOrder,
 			BenefitType: p.BenefitType, PaymentCreditType: p.PaymentCreditType,
 			DailyTemporaryCreditAmount: p.DailyTemporaryCreditAmount,
+			SalesCount:                 mallSalesCount(salesCounts, service.MallProductTypeSubscription, p.ID),
+		})
+	}
+	response.Success(c, result)
+}
+
+type adminSubscriptionPlanWithSalesCount struct {
+	*dbent.SubscriptionPlan
+	SalesCount int64 `json:"sales_count"`
+}
+
+type adminCurrencyProductWithSalesCount struct {
+	*dbent.CurrencyProduct
+	SalesCount int64 `json:"sales_count"`
+}
+
+// ListAdminPlans returns every subscription plan with its completed-sale
+// count while preserving the existing entity-shaped admin response.
+// GET /api/v1/admin/payment/plans
+func (h *PaymentHandler) ListAdminPlans(c *gin.Context) {
+	plans, err := h.configService.ListPlans(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	salesCounts, err := h.loadMallSalesCounts(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	result := make([]adminSubscriptionPlanWithSalesCount, 0, len(plans))
+	for _, plan := range plans {
+		result = append(result, adminSubscriptionPlanWithSalesCount{
+			SubscriptionPlan: plan,
+			SalesCount:       mallSalesCount(salesCounts, service.MallProductTypeSubscription, plan.ID),
+		})
+	}
+	response.Success(c, result)
+}
+
+// ListAdminCurrencyProducts returns every fixed product with its completed-
+// sale count while preserving the existing entity-shaped admin response.
+// GET /api/v1/admin/payment/currency-products
+func (h *PaymentHandler) ListAdminCurrencyProducts(c *gin.Context) {
+	products, err := h.configService.ListCurrencyProducts(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	salesCounts, err := h.loadMallSalesCounts(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	result := make([]adminCurrencyProductWithSalesCount, 0, len(products))
+	for _, product := range products {
+		result = append(result, adminCurrencyProductWithSalesCount{
+			CurrencyProduct: product,
+			SalesCount:      mallSalesCount(salesCounts, service.MallProductTypeCurrency, product.ID),
 		})
 	}
 	response.Success(c, result)
@@ -129,6 +211,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 
 	// Fetch plans with group info
 	plans, _ := h.configService.ListPlansForSale(ctx)
+	salesCounts := h.loadMallSalesCountsBestEffort(ctx)
 	usage, err := h.paymentService.GetPurchaseLimitUsage(ctx, subject.UserID)
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -155,6 +238,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 			BenefitType:                p.BenefitType,
 			PaymentCreditType:          p.PaymentCreditType,
 			DailyTemporaryCreditAmount: p.DailyTemporaryCreditAmount,
+			SalesCount:                 mallSalesCount(salesCounts, service.MallProductTypeSubscription, p.ID),
 			DailyPurchaseLimit:         purchaseLimit.DailyLimit, DailyPurchaseRemaining: purchaseLimit.DailyRemaining,
 			TotalPurchaseLimit: purchaseLimit.TotalLimit, TotalPurchaseRemaining: purchaseLimit.TotalRemaining,
 		})
@@ -172,6 +256,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 			PaymentPrice: product.PaymentPrice, CreditedPermanentAmount: product.CreditedPermanentAmount,
 			PaymentCreditType: product.PaymentCreditType, CreditedType: product.CreditedType, CreditedAmount: product.CreditedAmount,
 			SortOrder: product.SortOrder, IsActive: product.IsActive, ForSale: product.ForSale,
+			SalesCount:         mallSalesCount(salesCounts, service.MallProductTypeCurrency, product.ID),
 			DailyPurchaseLimit: purchaseLimit.DailyLimit, DailyPurchaseRemaining: purchaseLimit.DailyRemaining,
 			TotalPurchaseLimit: purchaseLimit.TotalLimit, TotalPurchaseRemaining: purchaseLimit.TotalRemaining,
 			CreatedAt: product.CreatedAt, UpdatedAt: product.UpdatedAt,
@@ -252,6 +337,7 @@ type checkoutPlan struct {
 	BenefitType                string   `json:"benefit_type"`
 	PaymentCreditType          string   `json:"payment_credit_type"`
 	DailyTemporaryCreditAmount float64  `json:"daily_temporary_credit_amount"`
+	SalesCount                 int64    `json:"sales_count"`
 }
 
 type checkoutCurrencyProduct struct {
@@ -266,12 +352,33 @@ type checkoutCurrencyProduct struct {
 	SortOrder               int       `json:"sort_order"`
 	IsActive                bool      `json:"is_active"`
 	ForSale                 bool      `json:"for_sale"`
+	SalesCount              int64     `json:"sales_count"`
 	DailyPurchaseLimit      int       `json:"daily_purchase_limit"`
 	DailyPurchaseRemaining  int       `json:"daily_purchase_remaining"`
 	TotalPurchaseLimit      int       `json:"total_purchase_limit"`
 	TotalPurchaseRemaining  int       `json:"total_purchase_remaining"`
 	CreatedAt               time.Time `json:"created_at"`
 	UpdatedAt               time.Time `json:"updated_at"`
+}
+
+func (h *PaymentHandler) loadMallSalesCounts(ctx context.Context) (map[service.MallSalesKey]int64, error) {
+	if h == nil || h.salesService == nil {
+		return map[service.MallSalesKey]int64{}, nil
+	}
+	return h.salesService.GetMallSalesCounts(ctx)
+}
+
+func (h *PaymentHandler) loadMallSalesCountsBestEffort(ctx context.Context) map[service.MallSalesKey]int64 {
+	counts, err := h.loadMallSalesCounts(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "load mall sales counts failed; continuing without sales totals", "error", err)
+		return map[service.MallSalesKey]int64{}
+	}
+	return counts
+}
+
+func mallSalesCount(counts map[service.MallSalesKey]int64, productType service.MallProductType, productID int64) int64 {
+	return counts[service.MallSalesKey{ProductType: productType, ProductID: productID}]
 }
 
 // GetMallBalance returns a read-only internal-credit summary.

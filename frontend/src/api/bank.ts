@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import type { FinancialAmountUnit, FixedPageResponse, BankTransactionItem } from '@/types/finance'
 
 /**
  * Bank amounts are deliberately represented as decimal strings. The backend
@@ -6,6 +7,21 @@ import { apiClient } from './client'
  * values to JavaScript numbers at the API boundary would lose precision.
  */
 export type BankAmount = string
+
+export interface BankExchangeTier {
+  up_to: BankAmount | null
+  rate: BankAmount
+}
+
+export interface BankExchangeProgress {
+  date: string
+  permanent_exchanged_today: BankAmount
+  current_tier_index: number
+  current_tier_rate: BankAmount
+  current_tier_up_to?: BankAmount | null
+  next_tier_rate?: BankAmount | null
+  amount_until_next_tier?: BankAmount | null
+}
 
 export interface BankPolicy {
   advance_min_amount: BankAmount
@@ -16,6 +32,7 @@ export interface BankPolicy {
   unused_advance_debt_reduction_ratio: BankAmount
   early_repay_temporary_ratio: BankAmount
   early_repay_permanent_ratio: BankAmount
+  exchange_tiers?: BankExchangeTier[]
 }
 
 export interface BankAdvance {
@@ -30,6 +47,10 @@ export interface BankAdvance {
 
 export interface BankLedgerItem {
   id: number
+  row_id: string
+  source: string
+  currency: string
+  unit: FinancialAmountUnit
   operation: string
   loan_id?: number | null
   grant_id?: number | null
@@ -41,6 +62,14 @@ export interface BankLedgerItem {
   created_at: string
 }
 
+export interface BankLedgerPage {
+  items: BankLedgerItem[]
+  total: number
+  page: number
+  page_size: 5
+  pages: number
+}
+
 export interface BankStatus {
   permanent_balance: BankAmount
   temporary_credit_available: BankAmount
@@ -50,6 +79,7 @@ export interface BankStatus {
   active_advance: BankAdvance | null
   policy: BankPolicy
   ledger: BankLedgerItem[]
+  exchange_progress?: BankExchangeProgress | null
 }
 
 export interface BankAdvanceResult {
@@ -68,6 +98,9 @@ export interface BankExchangeResult {
   permanent_balance: BankAmount
   temporary_debt: BankAmount
   expires_at: string
+  daily_permanent_exchanged?: BankAmount
+  exchange_progress?: BankExchangeProgress | null
+  tier_allocations?: Array<{ tier_index: number; permanent_amount: BankAmount; rate: BankAmount; temporary_amount: BankAmount }>
 }
 
 export type BankRepaySource = 'temporary' | 'permanent'
@@ -83,6 +116,14 @@ export interface BankRepayResult {
 
 export async function getBankStatus(): Promise<BankStatus> {
   const response = await apiClient.get<BankStatus>('/bank/status')
+  return response.data
+}
+
+/** Load one fixed-size page of the authenticated user's bank ledger. */
+export async function getBankLedger(page = 1): Promise<BankLedgerPage> {
+  const response = await apiClient.get<BankLedgerPage>('/bank/ledger', {
+    params: { page },
+  })
   return response.data
 }
 
@@ -140,11 +181,22 @@ export async function updateBankSettings(
   return response.data
 }
 
+/** Load admin bank transactions with an explicit transaction amount and balance snapshots. */
+export async function getBankTransactions(params?: { page?: number; user_id?: number }): Promise<FixedPageResponse<BankTransactionItem>> {
+  const response = await apiClient.get<FixedPageResponse<BankTransactionItem>>(
+    '/admin/settings/bank/transactions',
+    { params: { page: params?.page ?? 1, page_size: 20, ...params } },
+  )
+  return response.data
+}
+
 export const bankAPI = {
   getStatus: getBankStatus,
+  getLedger: getBankLedger,
   advance: requestBankAdvance,
   exchange: exchangePermanentForTemporary,
   repay: repayBankDebt,
   getSettings: getBankSettings,
   updateSettings: updateBankSettings,
+  getTransactions: getBankTransactions,
 }

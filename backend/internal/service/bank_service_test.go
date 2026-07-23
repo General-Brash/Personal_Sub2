@@ -4,24 +4,23 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"net/http"
 	"regexp"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
 func expectBankPolicy(mock sqlmock.Sqlmock, policy BankPolicy) {
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT key, value FROM settings WHERE key IN ($1,$2,$3,$4,$5,$6,$7,$8)")).
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT key, value FROM settings WHERE key IN ($1,$2,$3,$4,$5,$6,$7,$8,$9)")).
 		WithArgs(
 			SettingKeyBankAdvanceMinAmount,
 			SettingKeyBankAdvanceMaxAmount,
 			SettingKeyBankDebtGraceDays,
 			SettingKeyBankDebtConversionRatio,
 			SettingKeyBankExchangeRate,
+			SettingKeyBankExchangeTiers,
 			SettingKeyBankUnusedAdvanceDebtReductionRatio,
 			SettingKeyBankEarlyRepayTemporaryRatio,
 			SettingKeyBankEarlyRepayPermanentRatio,
@@ -32,6 +31,7 @@ func expectBankPolicy(mock sqlmock.Sqlmock, policy BankPolicy) {
 			AddRow(SettingKeyBankDebtGraceDays, policy.DebtGraceDays).
 			AddRow(SettingKeyBankDebtConversionRatio, formatLedgerAmount(policy.DebtConversionRatio)).
 			AddRow(SettingKeyBankExchangeRate, formatLedgerAmount(policy.ExchangeRate)).
+			AddRow(SettingKeyBankExchangeTiers, marshalBankExchangeTiers(policy.ExchangeTiers)).
 			AddRow(SettingKeyBankUnusedAdvanceDebtReductionRatio, formatLedgerAmount(policy.UnusedAdvanceDebtReductionRatio)).
 			AddRow(SettingKeyBankEarlyRepayTemporaryRatio, formatLedgerAmount(policy.EarlyRepayTemporaryRatio)).
 			AddRow(SettingKeyBankEarlyRepayPermanentRatio, formatLedgerAmount(policy.EarlyRepayPermanentRatio)))
@@ -70,34 +70,6 @@ func TestBankPolicyDefaultsAndValidation(t *testing.T) {
 
 	policy.AdvanceMaxAmount = 4
 	require.ErrorIs(t, policy.Validate(), ErrBankPolicyInvalid)
-}
-
-func TestBankExchangeMaintenanceWindowBoundaries(t *testing.T) {
-	for _, testCase := range []struct {
-		name    string
-		hour    int
-		minute  int
-		second  int
-		blocked bool
-	}{
-		{name: "23:54:59 allowed", hour: 23, minute: 54, second: 59},
-		{name: "23:55:00 blocked", hour: 23, minute: 55, blocked: true},
-		{name: "00:04:59 blocked", hour: 0, minute: 4, second: 59, blocked: true},
-		{name: "00:05:00 allowed", hour: 0, minute: 5},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			at := time.Date(2026, time.July, 20, testCase.hour, testCase.minute, testCase.second, 0, beijingLocation).UTC()
-			require.Equal(t, testCase.blocked, bankExchangeInMaintenanceWindow(at))
-		})
-	}
-
-	require.Equal(t, http.StatusForbidden, infraerrors.Code(ErrBankExchangeMaintenanceWindow))
-	require.Equal(t, "BANK_EXCHANGE_MAINTENANCE_WINDOW", infraerrors.Reason(ErrBankExchangeMaintenanceWindow))
-	require.Equal(t, map[string]string{
-		"timezone":     "Asia/Shanghai",
-		"window_start": "23:55:00",
-		"window_end":   "00:05:00",
-	}, ErrBankExchangeMaintenanceWindow.Metadata)
 }
 
 func TestSettleBankDebtLockedBeforeDueDoesNothing(t *testing.T) {
@@ -278,9 +250,15 @@ func TestExchangeAtomicSettlesDebtThatBecomesDueInsideTransactionBeforeDeduction
 		WithArgs(userID).
 		WillReturnRows(sqlmock.NewRows([]string{"balance", "temporary_credit_debt", "temporary_credit_debt_due_at"}).
 			AddRow("20.00000000", "0.00000000", nil))
+	mock.ExpectQuery("SELECT permanent_exchanged::text FROM bank_exchange_daily_usage").
+		WithArgs(userID, "2026-07-19").
+		WillReturnRows(sqlmock.NewRows([]string{"permanent_exchanged"}).AddRow("0.00000000"))
 	mock.ExpectQuery("UPDATE users").
 		WithArgs("5.00000000", userID).
 		WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow("15.00000000"))
+	mock.ExpectQuery("INSERT INTO bank_exchange_daily_usage").
+		WithArgs(userID, "2026-07-19", "5.00000000").
+		WillReturnRows(sqlmock.NewRows([]string{"permanent_exchanged"}).AddRow("5.00000000"))
 	mock.ExpectQuery("SELECT balance, temporary_credit_debt FROM users").
 		WithArgs(userID).
 		WillReturnRows(sqlmock.NewRows([]string{"balance", "temporary_credit_debt"}).
@@ -307,47 +285,91 @@ func TestExchangeAtomicSettlesDebtThatBecomesDueInsideTransactionBeforeDeduction
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestExchangeAtomicRejectsMaintenanceWindowInsideTransaction(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+func TestExchangeAtomicAllowsDayBoundaryAndUsesDatabaseBusinessDate(t *testing.T) {
+	for _, testCase := range []struct {
+		name         string
+		businessNow  time.Time
+		expectedDate string
+	}{
+		{
+			name:         "late evening remains on current Beijing date",
+			businessNow:  time.Date(2026, time.July, 19, 23, 55, 0, 0, beijingLocation),
+			expectedDate: "2026-07-19",
+		},
+		{
+			name:         "early morning uses next Beijing date",
+			businessNow:  time.Date(2026, time.July, 20, 0, 4, 59, 0, beijingLocation),
+			expectedDate: "2026-07-20",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = db.Close() })
 
-	userID := int64(42)
-	blockedAt := time.Date(2026, time.July, 19, 23, 55, 0, 0, beijingLocation)
-	policy := DefaultBankPolicy()
-	repo := &temporaryCreditRepositoryRecorder{}
-	service := NewBankService(db, repo, nil)
-	claim := newAtomicClaimForTest(blockedAt.Add(24 * time.Hour))
+			userID := int64(42)
+			policy := DefaultBankPolicy()
+			repo := &temporaryCreditRepositoryRecorder{}
+			service := NewBankService(db, repo, nil)
+			claim := newAtomicClaimForTest(testCase.businessNow.Add(24 * time.Hour))
+			eligibilityNow := testCase.businessNow.Add(-time.Second)
 
-	mock.ExpectBegin()
-	expectBankPolicy(mock, policy)
-	mock.ExpectQuery("SELECT balance, temporary_credit_debt, temporary_credit_debt_due_at").
-		WithArgs(userID).
-		WillReturnRows(sqlmock.NewRows([]string{"balance", "temporary_credit_debt", "temporary_credit_debt_due_at"}).
-			AddRow("30.00000000", "0.00000000", nil))
-	mock.ExpectQuery(`SELECT clock_timestamp\(\)`).
-		WillReturnRows(sqlmock.NewRows([]string{"clock_timestamp"}).AddRow(blockedAt.Add(-time.Second)))
-	expectNoExpiredBankAdvance(mock, userID, blockedAt.Add(-time.Second))
-	mock.ExpectCommit()
+			mock.ExpectBegin()
+			expectBankPolicy(mock, policy)
+			mock.ExpectQuery("SELECT balance, temporary_credit_debt, temporary_credit_debt_due_at").
+				WithArgs(userID).
+				WillReturnRows(sqlmock.NewRows([]string{"balance", "temporary_credit_debt", "temporary_credit_debt_due_at"}).
+					AddRow("30.00000000", "0.00000000", nil))
+			mock.ExpectQuery(`SELECT clock_timestamp\(\)`).
+				WillReturnRows(sqlmock.NewRows([]string{"clock_timestamp"}).AddRow(eligibilityNow))
+			expectNoExpiredBankAdvance(mock, userID, eligibilityNow)
+			mock.ExpectCommit()
 
-	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT balance, temporary_credit_debt, temporary_credit_debt_due_at").
-		WithArgs(userID).
-		WillReturnRows(sqlmock.NewRows([]string{"balance", "temporary_credit_debt", "temporary_credit_debt_due_at"}).
-			AddRow("30.00000000", "0.00000000", nil))
-	expectBankPolicy(mock, policy)
-	mock.ExpectQuery(`SELECT clock_timestamp\(\)`).
-		WillReturnRows(sqlmock.NewRows([]string{"clock_timestamp"}).AddRow(blockedAt))
-	expectNoExpiredBankAdvance(mock, userID, blockedAt)
-	mock.ExpectRollback()
+			mock.ExpectBegin()
+			mock.ExpectQuery("SELECT balance, temporary_credit_debt, temporary_credit_debt_due_at").
+				WithArgs(userID).
+				WillReturnRows(sqlmock.NewRows([]string{"balance", "temporary_credit_debt", "temporary_credit_debt_due_at"}).
+					AddRow("30.00000000", "0.00000000", nil))
+			expectBankPolicy(mock, policy)
+			mock.ExpectQuery(`SELECT clock_timestamp\(\)`).
+				WillReturnRows(sqlmock.NewRows([]string{"clock_timestamp"}).AddRow(testCase.businessNow))
+			expectNoExpiredBankAdvance(mock, userID, testCase.businessNow)
+			mock.ExpectQuery("SELECT balance, temporary_credit_debt, temporary_credit_debt_due_at").
+				WithArgs(userID).
+				WillReturnRows(sqlmock.NewRows([]string{"balance", "temporary_credit_debt", "temporary_credit_debt_due_at"}).
+					AddRow("30.00000000", "0.00000000", nil))
+			mock.ExpectQuery("SELECT permanent_exchanged::text FROM bank_exchange_daily_usage").
+				WithArgs(userID, testCase.expectedDate).
+				WillReturnRows(sqlmock.NewRows([]string{"permanent_exchanged"}).AddRow("0.00000000"))
+			mock.ExpectQuery("UPDATE users").
+				WithArgs("5.00000000", userID).
+				WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow("25.00000000"))
+			mock.ExpectQuery("INSERT INTO bank_exchange_daily_usage").
+				WithArgs(userID, testCase.expectedDate, "5.00000000").
+				WillReturnRows(sqlmock.NewRows([]string{"permanent_exchanged"}).AddRow("5.00000000"))
+			mock.ExpectQuery("SELECT balance, temporary_credit_debt FROM users").
+				WithArgs(userID).
+				WillReturnRows(sqlmock.NewRows([]string{"balance", "temporary_credit_debt"}).
+					AddRow("25.00000000", "0.00000000"))
+			mock.ExpectQuery("SELECT COALESCE\\(SUM\\(remaining_amount\\), 0\\)").
+				WithArgs(userID, testCase.businessNow).
+				WillReturnRows(sqlmock.NewRows([]string{"available"}).AddRow("5.00000000"))
+			mock.ExpectExec("INSERT INTO bank_ledger").
+				WithArgs(userID, int64(42), "-5.00000000", "5.00000000", "0.00000000", "0.00000000", sqlmock.AnyArg()).
+				WillReturnResult(sqlmock.NewResult(1, 1))
+			mock.ExpectExec("UPDATE idempotency_records").
+				WillReturnResult(sqlmock.NewResult(0, 1))
+			mock.ExpectCommit()
 
-	result, err := service.ExchangeAtomic(context.Background(), userID, 5, claim)
+			result, err := service.ExchangeAtomic(context.Background(), userID, 5, claim)
 
-	require.Nil(t, result)
-	require.ErrorIs(t, err, ErrBankExchangeMaintenanceWindow)
-	require.Equal(t, http.StatusForbidden, infraerrors.Code(err))
-	require.Nil(t, repo.created)
-	require.NoError(t, mock.ExpectationsWereMet())
+			require.NoError(t, err)
+			require.Equal(t, "5.00000000", result.PermanentSpent)
+			require.Equal(t, testCase.expectedDate, result.ExchangeProgress.Date)
+			require.NotNil(t, repo.created)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }
 
 func TestCheckPermanentBalanceEligibilitySettlesDueDebtBeforeRejecting(t *testing.T) {

@@ -295,37 +295,19 @@ async function mountStoreTabs(checkoutOverrides: Partial<CheckoutInfoResponse> =
   return wrapper
 }
 
-describe('PaymentView store tabs', () => {
-  it('links tabs to panels and moves roving focus with keyboard navigation', async () => {
+describe('PaymentView unified store layout', () => {
+  it('shows currency and subscription sections together without a top-level switcher', async () => {
     const wrapper = await mountStoreTabs()
-    const rechargeTab = wrapper.get('#store-tab-recharge')
-    const subscriptionTab = wrapper.get('#store-tab-subscription')
     const rechargePanel = wrapper.get('#store-panel-recharge')
     const subscriptionPanel = wrapper.get('#store-panel-subscription')
 
-    expect(rechargeTab.attributes('aria-controls')).toBe('store-panel-recharge')
-    expect(subscriptionTab.attributes('aria-controls')).toBe('store-panel-subscription')
-    expect(rechargePanel.attributes('aria-labelledby')).toBe('store-tab-recharge')
-    expect(subscriptionPanel.attributes('aria-labelledby')).toBe('store-tab-subscription')
-    expect(rechargeTab.attributes('tabindex')).toBe('0')
-    expect(subscriptionTab.attributes('tabindex')).toBe('-1')
     expect(rechargePanel.attributes('hidden')).toBeUndefined()
-    expect(subscriptionPanel.attributes('hidden')).toBeDefined()
-
-    await rechargeTab.trigger('keydown', { key: 'ArrowRight' })
-    await flushPromises()
-
-    expect(subscriptionTab.attributes('aria-selected')).toBe('true')
-    expect(subscriptionTab.attributes('tabindex')).toBe('0')
-    expect(rechargePanel.attributes('hidden')).toBeDefined()
     expect(subscriptionPanel.attributes('hidden')).toBeUndefined()
-    expect(document.activeElement).toBe(subscriptionTab.element)
-
-    await subscriptionTab.trigger('keydown', { key: 'Home' })
-    await flushPromises()
-
-    expect(rechargeTab.attributes('aria-selected')).toBe('true')
-    expect(document.activeElement).toBe(rechargeTab.element)
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    expect(
+      rechargePanel.element.compareDocumentPosition(subscriptionPanel.element)
+        & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     wrapper.unmount()
   })
 
@@ -346,8 +328,8 @@ describe('PaymentView store tabs', () => {
       }],
     })
 
-    expect(currencyWrapper.get('#store-tab-recharge').attributes('aria-selected')).toBe('true')
     expect(currencyWrapper.get('#store-panel-recharge').attributes('hidden')).toBeUndefined()
+    expect(currencyWrapper.get('#store-panel-subscription').attributes('hidden')).toBeUndefined()
     await currencyWrapper.get('[data-test="currency-product-21"]').trigger('click')
     expect(currencyWrapper.get('[data-test="purchase-confirm-dialog"]').exists()).toBe(true)
     currencyWrapper.unmount()

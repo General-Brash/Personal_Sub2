@@ -14,6 +14,12 @@ import type {
   ProviderInstance
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
+import type {
+  FixedPageResponse,
+  LedgerResponse,
+  MallAnalyticsResponse,
+  MallTransactionItem,
+} from '@/types/finance'
 
 /** Admin-facing payment config returned by GET /admin/payment/config */
 export interface AdminPaymentConfig {
@@ -100,6 +106,25 @@ export const adminPaymentAPI = {
     order_type?: string
   }) {
     return apiClient.get<BasePaginationResponse<PaymentOrder>>('/admin/payment/orders', { params })
+  },
+
+  /** Get the consolidated ledger for all users or one selected user. */
+  getLedger(params?: { page?: number; user_id?: number; category?: string; days?: number }) {
+    return apiClient.get<LedgerResponse>('/admin/payment/ledger', {
+      params: { page: params?.page ?? 1, page_size: 20, ...params },
+    })
+  },
+
+  /** Get successful mall purchases with balance snapshots. */
+  getMallTransactions(params?: { page?: number; user_id?: number; product_type?: string }) {
+    return apiClient.get<FixedPageResponse<MallTransactionItem>>('/admin/payment/mall/transactions', {
+      params: { page: params?.page ?? 1, page_size: 20, ...params },
+    })
+  },
+
+  /** Get mall sales/revenue analytics for the selected number of days. */
+  getMallAnalytics(days = 30) {
+    return apiClient.get<MallAnalyticsResponse>('/admin/payment/mall/analytics', { params: { days } })
   },
 
   /** Get a specific order by ID */

@@ -149,6 +149,7 @@ export interface SubscriptionPlan {
   daily_purchase_remaining?: number
   total_purchase_limit?: number
   total_purchase_remaining?: number
+  sales_count?: number
 }
 
 export interface PurchaseLimitFields {
@@ -173,6 +174,7 @@ export interface CurrencyProduct extends PurchaseLimitFields {
   for_sale?: boolean
   created_at?: string
   updated_at?: string
+  sales_count?: number
 }
 
 export interface CurrencyProductInput {

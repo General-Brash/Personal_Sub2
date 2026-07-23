@@ -141,6 +141,11 @@ export default {
       preview: '预计获取额度',
       submitting: '兑换中',
       confirm: '确认兑换',
+      tierTooltipAriaLabel: '查看全部梯度汇率',
+      tierTooltipTitle: '当日梯度汇率（北京时间）',
+      tierRangeFirst: '0.00 至 {upper}',
+      tierRange: '{lower} 至 {upper}',
+      tierRangeUnlimited: '{lower} 以上',
     },
     repay: {
       title: '提前还债',
@@ -155,12 +160,13 @@ export default {
       submitting: '还债中',
       confirm: '确认还债',
     },
-    exchangeMaintenance: '系统结算中，每日北京时间 23:55 至次日 00:05 暂停兑换。',
     ledger: {
       title: '银行账本',
       description: '记录预支、兑换、抵债和永久额度结算。',
       refresh: '刷新银行账本',
       empty: '暂无银行记录。',
+      loadFailed: '银行账本加载失败。',
+      refreshFailed: '银行账本刷新失败，请重试。',
       columns: {
         time: '时间',
         operation: '操作',

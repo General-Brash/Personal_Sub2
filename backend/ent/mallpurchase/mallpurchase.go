@@ -19,6 +19,8 @@ const (
 	FieldProductType = "product_type"
 	// FieldProductID holds the string denoting the product_id field in the database.
 	FieldProductID = "product_id"
+	// FieldProductName holds the string denoting the product_name field in the database.
+	FieldProductName = "product_name"
 	// FieldIdempotencyRecordID holds the string denoting the idempotency_record_id field in the database.
 	FieldIdempotencyRecordID = "idempotency_record_id"
 	// FieldPaymentCreditType holds the string denoting the payment_credit_type field in the database.
@@ -37,6 +39,14 @@ const (
 	FieldDailyTemporaryCreditAmount = "daily_temporary_credit_amount"
 	// FieldSubscriptionExpiresAt holds the string denoting the subscription_expires_at field in the database.
 	FieldSubscriptionExpiresAt = "subscription_expires_at"
+	// FieldPermanentBalanceBefore holds the string denoting the permanent_balance_before field in the database.
+	FieldPermanentBalanceBefore = "permanent_balance_before"
+	// FieldPermanentBalanceAfter holds the string denoting the permanent_balance_after field in the database.
+	FieldPermanentBalanceAfter = "permanent_balance_after"
+	// FieldTemporaryBalanceBefore holds the string denoting the temporary_balance_before field in the database.
+	FieldTemporaryBalanceBefore = "temporary_balance_before"
+	// FieldTemporaryBalanceAfter holds the string denoting the temporary_balance_after field in the database.
+	FieldTemporaryBalanceAfter = "temporary_balance_after"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -51,6 +61,7 @@ var Columns = []string{
 	FieldUserID,
 	FieldProductType,
 	FieldProductID,
+	FieldProductName,
 	FieldIdempotencyRecordID,
 	FieldPaymentCreditType,
 	FieldPrice,
@@ -60,6 +71,10 @@ var Columns = []string{
 	FieldBenefitDays,
 	FieldDailyTemporaryCreditAmount,
 	FieldSubscriptionExpiresAt,
+	FieldPermanentBalanceBefore,
+	FieldPermanentBalanceAfter,
+	FieldTemporaryBalanceBefore,
+	FieldTemporaryBalanceAfter,
 	FieldStatus,
 	FieldCreatedAt,
 }
@@ -77,6 +92,10 @@ func ValidColumn(column string) bool {
 var (
 	// ProductTypeValidator is a validator for the "product_type" field. It is called by the builders before save.
 	ProductTypeValidator func(string) error
+	// DefaultProductName holds the default value on creation for the "product_name" field.
+	DefaultProductName string
+	// ProductNameValidator is a validator for the "product_name" field. It is called by the builders before save.
+	ProductNameValidator func(string) error
 	// PaymentCreditTypeValidator is a validator for the "payment_credit_type" field. It is called by the builders before save.
 	PaymentCreditTypeValidator func(string) error
 	// CreditedTypeValidator is a validator for the "credited_type" field. It is called by the builders before save.
@@ -112,6 +131,11 @@ func ByProductType(opts ...sql.OrderTermOption) OrderOption {
 // ByProductID orders the results by the product_id field.
 func ByProductID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProductID, opts...).ToFunc()
+}
+
+// ByProductName orders the results by the product_name field.
+func ByProductName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProductName, opts...).ToFunc()
 }
 
 // ByIdempotencyRecordID orders the results by the idempotency_record_id field.
@@ -157,6 +181,26 @@ func ByDailyTemporaryCreditAmount(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionExpiresAt orders the results by the subscription_expires_at field.
 func BySubscriptionExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionExpiresAt, opts...).ToFunc()
+}
+
+// ByPermanentBalanceBefore orders the results by the permanent_balance_before field.
+func ByPermanentBalanceBefore(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPermanentBalanceBefore, opts...).ToFunc()
+}
+
+// ByPermanentBalanceAfter orders the results by the permanent_balance_after field.
+func ByPermanentBalanceAfter(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPermanentBalanceAfter, opts...).ToFunc()
+}
+
+// ByTemporaryBalanceBefore orders the results by the temporary_balance_before field.
+func ByTemporaryBalanceBefore(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTemporaryBalanceBefore, opts...).ToFunc()
+}
+
+// ByTemporaryBalanceAfter orders the results by the temporary_balance_after field.
+func ByTemporaryBalanceAfter(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTemporaryBalanceAfter, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

@@ -717,6 +717,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
       featureFlag: flagMall,
     },
     { path: '/bank', label: t('bank.title'), icon: CreditCardIcon },
+    { path: '/finance', label: t('finance.title'), icon: ChartIcon },
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
@@ -826,9 +827,13 @@ const adminNavItems = computed((): NavItem[] => {
       children: [
         { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: ChartIcon },
         { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderIcon },
+        { path: '/admin/orders/shelves', label: t('commerce.shelf.title'), icon: RechargeSubscriptionIcon },
         { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: CreditCardIcon },
+        { path: '/admin/orders/mall-transactions', label: t('finance.transactions.mallTitle'), icon: OrderListIcon },
       ],
     },
+    { path: '/admin/bank/transactions', label: t('finance.transactions.bankTitle'), icon: CreditCardIcon, hideInSimpleMode: true },
+    { path: '/admin/finance', label: t('finance.allSiteTitle'), icon: ChartIcon },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
   ]

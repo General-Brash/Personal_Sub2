@@ -45,12 +45,14 @@ type MallPurchaseResult struct {
 
 type mallCurrencyProduct struct {
 	id, dailyLimit, totalLimit int64
+	name                       string
 	price, creditedAmount      float64
 	paymentType, creditedType  MallCreditType
 }
 
 type mallSubscriptionPlan struct {
 	id, groupID            int64
+	name                   string
 	price, dailyAmount     float64
 	validityDays           int
 	dailyLimit, totalLimit int
@@ -108,7 +110,11 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	now, balance, err := lockMallUser(ctx, tx, userID)
+	now, _, err := lockMallUser(ctx, tx, userID)
+	if err != nil {
+		return nil, err
+	}
+	balanceBefore, err := loadMallBalance(ctx, tx, userID, &now)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +136,7 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 		}, now); err != nil {
 			return nil, err
 		}
-		purchaseID, err := insertMallCurrencyPurchase(ctx, tx, userID, claim.recordID, product)
+		purchaseID, err := insertMallCurrencyPurchase(ctx, tx, userID, claim.recordID, product, balanceBefore)
 		if err != nil {
 			return nil, err
 		}
@@ -175,7 +181,7 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 		}, now); err != nil {
 			return nil, err
 		}
-		purchaseID, err := insertMallSubscriptionPurchase(ctx, tx, userID, claim.recordID, plan)
+		purchaseID, err := insertMallSubscriptionPurchase(ctx, tx, userID, claim.recordID, plan, balanceBefore)
 		if err != nil {
 			return nil, err
 		}
@@ -217,6 +223,12 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 	}
 	result.PermanentBalance = summary.PermanentBalance
 	result.TemporaryCreditAvailable = summary.TemporaryCreditAvailable
+	if _, err := tx.ExecContext(ctx, `
+UPDATE mall_purchases
+SET permanent_balance_after = $1, temporary_balance_after = $2
+WHERE id = $3`, summary.PermanentBalance, summary.TemporaryCreditAvailable, result.PurchaseID); err != nil {
+		return nil, fmt.Errorf("record mall purchase balance snapshot: %w", err)
+	}
 	if err := claim.PersistSuccess(ctx, tx, result); err != nil {
 		return nil, err
 	}
@@ -227,7 +239,6 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 	if subscriptionGroupID > 0 && s.subscription != nil {
 		_ = s.subscription.invalidateSubscriptionCaches(userID, subscriptionGroupID)
 	}
-	_ = balance
 	return result, nil
 }
 
@@ -251,11 +262,11 @@ func loadMallCurrencyProduct(ctx context.Context, tx *sql.Tx, productID int64) (
 	var product mallCurrencyProduct
 	var priceRaw, creditedRaw, paymentTypeRaw, creditedTypeRaw string
 	if err := tx.QueryRowContext(ctx, `
-SELECT id, payment_price::text, payment_credit_type, credited_type, credited_amount::text,
+	SELECT id, name, payment_price::text, payment_credit_type, credited_type, credited_amount::text,
        daily_purchase_limit, total_purchase_limit
 FROM currency_products
 WHERE id = $1 AND is_active = TRUE AND for_sale = TRUE
-FOR SHARE`, productID).Scan(&product.id, &priceRaw, &paymentTypeRaw, &creditedTypeRaw, &creditedRaw, &product.dailyLimit, &product.totalLimit); err != nil {
+	FOR SHARE`, productID).Scan(&product.id, &product.name, &priceRaw, &paymentTypeRaw, &creditedTypeRaw, &creditedRaw, &product.dailyLimit, &product.totalLimit); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrMallProductNotAvailable
 		}
@@ -281,12 +292,12 @@ func loadMallSubscriptionPlan(ctx context.Context, tx *sql.Tx, planID int64) (*m
 	var plan mallSubscriptionPlan
 	var priceRaw, dailyRaw, paymentTypeRaw, benefitTypeRaw, validityUnit string
 	if err := tx.QueryRowContext(ctx, `
-SELECT id, group_id, price::text, payment_credit_type, benefit_type,
+	SELECT id, name, group_id, price::text, payment_credit_type, benefit_type,
        daily_temporary_credit_amount::text, validity_days, validity_unit,
        daily_purchase_limit, total_purchase_limit
 FROM subscription_plans
 WHERE id = $1 AND for_sale = TRUE
-FOR SHARE`, planID).Scan(&plan.id, &plan.groupID, &priceRaw, &paymentTypeRaw, &benefitTypeRaw, &dailyRaw,
+	FOR SHARE`, planID).Scan(&plan.id, &plan.name, &plan.groupID, &priceRaw, &paymentTypeRaw, &benefitTypeRaw, &dailyRaw,
 		&plan.validityDays, &validityUnit, &plan.dailyLimit, &plan.totalLimit); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrMallProductNotAvailable
@@ -364,21 +375,22 @@ WHERE id = $2 AND deleted_at IS NULL`, formatLedgerAmount(amount), userID)
 	return nil
 }
 
-func insertMallCurrencyPurchase(ctx context.Context, tx *sql.Tx, userID, claimID int64, product *mallCurrencyProduct) (int64, error) {
+func insertMallCurrencyPurchase(ctx context.Context, tx *sql.Tx, userID, claimID int64, product *mallCurrencyProduct, balanceBefore *MallBalanceSummary) (int64, error) {
 	var purchaseID int64
 	err := tx.QueryRowContext(ctx, `
 INSERT INTO mall_purchases
-    (user_id, product_type, product_id, idempotency_record_id, payment_credit_type, price,
-     credited_type, credited_amount, status)
-VALUES ($1, 'currency', $2, $3, $4, $5, $6, $7, 'completed')
-RETURNING id`, userID, product.id, claimID, product.paymentType, formatLedgerAmount(product.price), product.creditedType, formatLedgerAmount(product.creditedAmount)).Scan(&purchaseID)
+	    (user_id, product_type, product_id, product_name, idempotency_record_id, payment_credit_type, price,
+	     credited_type, credited_amount, permanent_balance_before, temporary_balance_before, status)
+VALUES ($1, 'currency', $2, $3, $4, $5, $6, $7, $8, $9, $10, 'completed')
+RETURNING id`, userID, product.id, product.name, claimID, product.paymentType, formatLedgerAmount(product.price), product.creditedType,
+		formatLedgerAmount(product.creditedAmount), balanceBefore.PermanentBalance, balanceBefore.TemporaryCreditAvailable).Scan(&purchaseID)
 	if err != nil {
 		return 0, fmt.Errorf("create mall currency purchase: %w", err)
 	}
 	return purchaseID, nil
 }
 
-func insertMallSubscriptionPurchase(ctx context.Context, tx *sql.Tx, userID, claimID int64, plan *mallSubscriptionPlan) (int64, error) {
+func insertMallSubscriptionPurchase(ctx context.Context, tx *sql.Tx, userID, claimID int64, plan *mallSubscriptionPlan, balanceBefore *MallBalanceSummary) (int64, error) {
 	var purchaseID int64
 	var dailyAmount any
 	if plan.benefitType == SubscriptionBenefitDailyTemporaryCredit {
@@ -386,10 +398,11 @@ func insertMallSubscriptionPurchase(ctx context.Context, tx *sql.Tx, userID, cla
 	}
 	err := tx.QueryRowContext(ctx, `
 INSERT INTO mall_purchases
-    (user_id, product_type, product_id, idempotency_record_id, payment_credit_type, price,
-     benefit_type, benefit_days, daily_temporary_credit_amount, status)
-VALUES ($1, 'subscription', $2, $3, $4, $5, $6, $7, $8, 'completed')
-RETURNING id`, userID, plan.id, claimID, plan.paymentType, formatLedgerAmount(plan.price), plan.benefitType, plan.validityDays, dailyAmount).Scan(&purchaseID)
+	    (user_id, product_type, product_id, product_name, idempotency_record_id, payment_credit_type, price,
+	     benefit_type, benefit_days, daily_temporary_credit_amount, permanent_balance_before, temporary_balance_before, status)
+VALUES ($1, 'subscription', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'completed')
+RETURNING id`, userID, plan.id, plan.name, claimID, plan.paymentType, formatLedgerAmount(plan.price), plan.benefitType,
+		plan.validityDays, dailyAmount, balanceBefore.PermanentBalance, balanceBefore.TemporaryCreditAvailable).Scan(&purchaseID)
 	if err != nil {
 		return 0, fmt.Errorf("create mall subscription purchase: %w", err)
 	}

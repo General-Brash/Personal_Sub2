@@ -21,11 +21,12 @@ const (
 	SettingKeyBankDebtGraceDays                   = "bank_debt_grace_days"
 	SettingKeyBankDebtConversionRatio             = "bank_debt_conversion_ratio"
 	SettingKeyBankExchangeRate                    = "bank_exchange_rate"
+	SettingKeyBankExchangeTiers                   = "bank_exchange_tiers"
 	SettingKeyBankUnusedAdvanceDebtReductionRatio = "bank_unused_advance_debt_reduction_ratio"
 	SettingKeyBankEarlyRepayTemporaryRatio        = "bank_early_repay_temporary_ratio"
 	SettingKeyBankEarlyRepayPermanentRatio        = "bank_early_repay_permanent_ratio"
 	bankSettlementInterval                        = time.Minute
-	bankLedgerPageSize                            = 50
+	UserBankLedgerPageSize                        = 5
 )
 
 var (
@@ -36,28 +37,25 @@ var (
 	ErrBankPermanentInsufficient     = infraerrors.Conflict("PERMANENT_BALANCE_INSUFFICIENT", "permanent balance is insufficient for exchange")
 	ErrBankDebtSettlementPending     = infraerrors.ServiceUnavailable("BANK_DEBT_SETTLEMENT_PENDING", "bank debt settlement is pending")
 	ErrBankAmountInvalid             = infraerrors.BadRequest("INVALID_BANK_AMOUNT", "bank amount is invalid")
+	ErrBankLedgerPageInvalid         = infraerrors.BadRequest("INVALID_BANK_LEDGER_PAGE", "bank ledger page is invalid")
 	ErrBankRepaySourceInvalid        = infraerrors.BadRequest("INVALID_BANK_REPAY_SOURCE", "bank repayment source is invalid")
 	ErrBankNoOutstandingDebt         = infraerrors.Conflict("BANK_DEBT_NOT_OUTSTANDING", "bank debt is not outstanding")
 	ErrBankTemporaryInsufficient     = infraerrors.Conflict("TEMPORARY_CREDIT_INSUFFICIENT", "temporary credit is insufficient for repayment")
-	ErrBankExchangeMaintenanceWindow = infraerrors.Forbidden("BANK_EXCHANGE_MAINTENANCE_WINDOW", "bank exchange is unavailable daily from 23:55 to 00:05 Asia/Shanghai").WithMetadata(map[string]string{
-		"timezone":     "Asia/Shanghai",
-		"window_start": "23:55:00",
-		"window_end":   "00:05:00",
-	})
 )
 
 // BankPolicy is the persisted administrator policy. Amount fields are kept as
 // float64 internally and serialized as fixed eight-decimal strings at the API
 // boundary, matching the existing credit-ledger contract.
 type BankPolicy struct {
-	AdvanceMinAmount                float64 `json:"advance_min_amount"`
-	AdvanceMaxAmount                float64 `json:"advance_max_amount"`
-	DebtGraceDays                   int     `json:"debt_grace_days"`
-	DebtConversionRatio             float64 `json:"debt_conversion_ratio"`
-	ExchangeRate                    float64 `json:"exchange_rate"`
-	UnusedAdvanceDebtReductionRatio float64 `json:"unused_advance_debt_reduction_ratio"`
-	EarlyRepayTemporaryRatio        float64 `json:"early_repay_temporary_ratio"`
-	EarlyRepayPermanentRatio        float64 `json:"early_repay_permanent_ratio"`
+	AdvanceMinAmount                float64            `json:"advance_min_amount"`
+	AdvanceMaxAmount                float64            `json:"advance_max_amount"`
+	DebtGraceDays                   int                `json:"debt_grace_days"`
+	DebtConversionRatio             float64            `json:"debt_conversion_ratio"`
+	ExchangeRate                    float64            `json:"exchange_rate"`
+	UnusedAdvanceDebtReductionRatio float64            `json:"unused_advance_debt_reduction_ratio"`
+	EarlyRepayTemporaryRatio        float64            `json:"early_repay_temporary_ratio"`
+	EarlyRepayPermanentRatio        float64            `json:"early_repay_permanent_ratio"`
+	ExchangeTiers                   []BankExchangeTier `json:"exchange_tiers,omitempty"`
 }
 
 func DefaultBankPolicy() BankPolicy {
@@ -105,6 +103,9 @@ func (p BankPolicy) Validate() error {
 	if p.DebtGraceDays < 1 || p.DebtGraceDays > 365 {
 		return ErrBankPolicyInvalid
 	}
+	if _, err := normalizeBankExchangeTiers(p.ExchangeTiers, p.ExchangeRate); err != nil {
+		return ErrBankPolicyInvalid
+	}
 	return nil
 }
 
@@ -119,6 +120,15 @@ func (p BankPolicy) normalized() (BankPolicy, error) {
 	p.UnusedAdvanceDebtReductionRatio, _ = normalizeLedgerAmount(p.UnusedAdvanceDebtReductionRatio)
 	p.EarlyRepayTemporaryRatio, _ = normalizeLedgerAmount(p.EarlyRepayTemporaryRatio)
 	p.EarlyRepayPermanentRatio, _ = normalizeLedgerAmount(p.EarlyRepayPermanentRatio)
+	var tierErr error
+	p.ExchangeTiers, tierErr = normalizeBankExchangeTiers(p.ExchangeTiers, p.ExchangeRate)
+	if tierErr != nil {
+		return BankPolicy{}, ErrBankPolicyInvalid
+	}
+	if len(p.ExchangeTiers) > 0 {
+		// Keep the legacy flat-rate field meaningful for old clients.
+		p.ExchangeRate = p.ExchangeTiers[0].Rate
+	}
 	return p, nil
 }
 
@@ -131,9 +141,13 @@ type BankPolicyDTO struct {
 	UnusedAdvanceDebtReductionRatio string `json:"unused_advance_debt_reduction_ratio"`
 	EarlyRepayTemporaryRatio        string `json:"early_repay_temporary_ratio"`
 	EarlyRepayPermanentRatio        string `json:"early_repay_permanent_ratio"`
+	// Nil means an update omitted the field or sent null; an explicit empty
+	// array resets to the legacy flat ExchangeRate tier.
+	ExchangeTiers []BankExchangeTierDTO `json:"exchange_tiers"`
 }
 
 func (p BankPolicy) DTO() BankPolicyDTO {
+	tiers, _ := normalizeBankExchangeTiers(p.ExchangeTiers, p.ExchangeRate)
 	return BankPolicyDTO{
 		AdvanceMinAmount:                formatLedgerAmount(p.AdvanceMinAmount),
 		AdvanceMaxAmount:                formatLedgerAmount(p.AdvanceMaxAmount),
@@ -143,6 +157,7 @@ func (p BankPolicy) DTO() BankPolicyDTO {
 		UnusedAdvanceDebtReductionRatio: formatLedgerAmount(p.UnusedAdvanceDebtReductionRatio),
 		EarlyRepayTemporaryRatio:        formatLedgerAmount(p.EarlyRepayTemporaryRatio),
 		EarlyRepayPermanentRatio:        formatLedgerAmount(p.EarlyRepayPermanentRatio),
+		ExchangeTiers:                   bankExchangeTierDTOs(tiers),
 	}
 }
 
@@ -159,9 +174,12 @@ func bankPolicyFromDTO(dto BankPolicyDTO) (BankPolicy, error) {
 	if err != nil {
 		return BankPolicy{}, ErrBankPolicyInvalid
 	}
-	exchange, err := ParseStrictPositiveLedgerAmount(dto.ExchangeRate)
-	if err != nil {
-		return BankPolicy{}, ErrBankPolicyInvalid
+	exchange := float64(1)
+	if strings.TrimSpace(dto.ExchangeRate) != "" {
+		exchange, err = ParseStrictPositiveLedgerAmount(dto.ExchangeRate)
+		if err != nil {
+			return BankPolicy{}, ErrBankPolicyInvalid
+		}
 	}
 	unusedReduction, err := ParseStrictPositiveLedgerAmount(dto.UnusedAdvanceDebtReductionRatio)
 	if err != nil {
@@ -175,6 +193,10 @@ func bankPolicyFromDTO(dto BankPolicyDTO) (BankPolicy, error) {
 	if err != nil {
 		return BankPolicy{}, ErrBankPolicyInvalid
 	}
+	tiers, err := parseBankExchangeTierDTOs(dto.ExchangeTiers, exchange)
+	if err != nil {
+		return BankPolicy{}, ErrBankPolicyInvalid
+	}
 	return (BankPolicy{
 		AdvanceMinAmount:                min,
 		AdvanceMaxAmount:                max,
@@ -184,6 +206,7 @@ func bankPolicyFromDTO(dto BankPolicyDTO) (BankPolicy, error) {
 		UnusedAdvanceDebtReductionRatio: unusedReduction,
 		EarlyRepayTemporaryRatio:        temporaryRepay,
 		EarlyRepayPermanentRatio:        permanentRepay,
+		ExchangeTiers:                   tiers,
 	}).normalized()
 }
 
@@ -198,27 +221,47 @@ type BankAdvanceStatus struct {
 }
 
 type BankLedgerItem struct {
-	ID             int64     `json:"id"`
-	Operation      string    `json:"operation"`
-	LoanID         *int64    `json:"loan_id,omitempty"`
-	GrantID        *int64    `json:"grant_id,omitempty"`
-	PermanentDelta string    `json:"permanent_delta"`
-	TemporaryDelta string    `json:"temporary_delta"`
-	DebtDelta      string    `json:"debt_delta"`
-	DebtBefore     string    `json:"debt_before"`
-	DebtAfter      string    `json:"debt_after"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID                     int64          `json:"id"`
+	RowID                  string         `json:"row_id"`
+	Source                 string         `json:"source"`
+	Currency               string         `json:"currency"`
+	Unit                   string         `json:"unit"`
+	Operation              string         `json:"operation"`
+	LoanID                 *int64         `json:"loan_id,omitempty"`
+	GrantID                *int64         `json:"grant_id,omitempty"`
+	PermanentDelta         string         `json:"permanent_delta"`
+	TemporaryDelta         string         `json:"temporary_delta"`
+	DebtDelta              string         `json:"debt_delta"`
+	DebtBefore             string         `json:"debt_before"`
+	DebtAfter              string         `json:"debt_after"`
+	PermanentBalanceBefore *string        `json:"permanent_balance_before,omitempty"`
+	PermanentBalanceAfter  *string        `json:"permanent_balance_after,omitempty"`
+	TemporaryBalanceBefore *string        `json:"temporary_balance_before,omitempty"`
+	TemporaryBalanceAfter  *string        `json:"temporary_balance_after,omitempty"`
+	Metadata               map[string]any `json:"metadata,omitempty"`
+	CreatedAt              time.Time      `json:"created_at"`
+}
+
+type BankExchangeProgress struct {
+	Date                    string  `json:"date"`
+	PermanentExchangedToday string  `json:"permanent_exchanged_today"`
+	CurrentTierIndex        int     `json:"current_tier_index"`
+	CurrentTierRate         string  `json:"current_tier_rate"`
+	CurrentTierUpTo         *string `json:"current_tier_up_to,omitempty"`
+	NextTierRate            *string `json:"next_tier_rate,omitempty"`
+	AmountUntilNextTier     *string `json:"amount_until_next_tier,omitempty"`
 }
 
 type BankStatus struct {
-	PermanentBalance                 string             `json:"permanent_balance"`
-	TemporaryCreditAvailable         string             `json:"temporary_credit_available"`
-	TemporaryCreditEarliestExpiresAt *time.Time         `json:"temporary_credit_earliest_expires_at"`
-	TemporaryDebt                    string             `json:"temporary_debt"`
-	TemporaryDebtDueAt               *time.Time         `json:"temporary_debt_due_at"`
-	ActiveAdvance                    *BankAdvanceStatus `json:"active_advance"`
-	Policy                           BankPolicyDTO      `json:"policy"`
-	Ledger                           []BankLedgerItem   `json:"ledger"`
+	PermanentBalance                 string               `json:"permanent_balance"`
+	TemporaryCreditAvailable         string               `json:"temporary_credit_available"`
+	TemporaryCreditEarliestExpiresAt *time.Time           `json:"temporary_credit_earliest_expires_at"`
+	TemporaryDebt                    string               `json:"temporary_debt"`
+	TemporaryDebtDueAt               *time.Time           `json:"temporary_debt_due_at"`
+	ActiveAdvance                    *BankAdvanceStatus   `json:"active_advance"`
+	Policy                           BankPolicyDTO        `json:"policy"`
+	Ledger                           []BankLedgerItem     `json:"ledger"`
+	ExchangeProgress                 BankExchangeProgress `json:"exchange_progress"`
 }
 
 type BankAdvanceResult struct {
@@ -231,12 +274,15 @@ type BankAdvanceResult struct {
 }
 
 type BankExchangeResult struct {
-	PermanentSpent     string    `json:"permanent_spent"`
-	TemporaryGranted   string    `json:"temporary_granted"`
-	TemporaryAvailable string    `json:"temporary_available"`
-	PermanentBalance   string    `json:"permanent_balance"`
-	TemporaryDebt      string    `json:"temporary_debt"`
-	ExpiresAt          time.Time `json:"expires_at"`
+	PermanentSpent          string                       `json:"permanent_spent"`
+	TemporaryGranted        string                       `json:"temporary_granted"`
+	TemporaryAvailable      string                       `json:"temporary_available"`
+	PermanentBalance        string                       `json:"permanent_balance"`
+	TemporaryDebt           string                       `json:"temporary_debt"`
+	ExpiresAt               time.Time                    `json:"expires_at"`
+	DailyPermanentExchanged string                       `json:"daily_permanent_exchanged"`
+	ExchangeProgress        BankExchangeProgress         `json:"exchange_progress"`
+	TierAllocations         []BankExchangeTierAllocation `json:"tier_allocations"`
 }
 
 type BankRepaySource string
@@ -331,6 +377,7 @@ var bankPolicyKeys = []string{
 	SettingKeyBankDebtGraceDays,
 	SettingKeyBankDebtConversionRatio,
 	SettingKeyBankExchangeRate,
+	SettingKeyBankExchangeTiers,
 	SettingKeyBankUnusedAdvanceDebtReductionRatio,
 	SettingKeyBankEarlyRepayTemporaryRatio,
 	SettingKeyBankEarlyRepayPermanentRatio,
@@ -390,6 +437,12 @@ func loadBankPolicy(ctx context.Context, q bankQueryer) (BankPolicy, error) {
 			return BankPolicy{}, ErrBankPolicyInvalid
 		}
 	}
+	if raw, ok := values[SettingKeyBankExchangeTiers]; ok && strings.TrimSpace(raw) != "" {
+		policy.ExchangeTiers, err = parseStoredBankExchangeTiers(raw, policy.ExchangeRate)
+		if err != nil {
+			return BankPolicy{}, ErrBankPolicyInvalid
+		}
+	}
 	if raw, ok := values[SettingKeyBankUnusedAdvanceDebtReductionRatio]; ok {
 		policy.UnusedAdvanceDebtReductionRatio, err = ParseStrictPositiveLedgerAmount(raw)
 		if err != nil {
@@ -422,6 +475,7 @@ func bankPolicyValues(policy BankPolicy) (map[string]string, error) {
 		SettingKeyBankDebtGraceDays:                   strconv.Itoa(normalized.DebtGraceDays),
 		SettingKeyBankDebtConversionRatio:             formatLedgerAmount(normalized.DebtConversionRatio),
 		SettingKeyBankExchangeRate:                    formatLedgerAmount(normalized.ExchangeRate),
+		SettingKeyBankExchangeTiers:                   marshalBankExchangeTiers(normalized.ExchangeTiers),
 		SettingKeyBankUnusedAdvanceDebtReductionRatio: formatLedgerAmount(normalized.UnusedAdvanceDebtReductionRatio),
 		SettingKeyBankEarlyRepayTemporaryRatio:        formatLedgerAmount(normalized.EarlyRepayTemporaryRatio),
 		SettingKeyBankEarlyRepayPermanentRatio:        formatLedgerAmount(normalized.EarlyRepayPermanentRatio),
@@ -442,12 +496,6 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = clock_times
 		}
 	}
 	return nil
-}
-
-func bankExchangeInMaintenanceWindow(now time.Time) bool {
-	beijingNow := now.In(beijingLocation)
-	secondsSinceMidnight := beijingNow.Hour()*60*60 + beijingNow.Minute()*60 + beijingNow.Second()
-	return secondsSinceMidnight >= 23*60*60+55*60 || secondsSinceMidnight < 5*60
 }
 
 func marshalBankMetadata(values map[string]any) []byte {
@@ -493,6 +541,17 @@ func (s *BankService) UpdatePolicyAtomic(
 		return nil, fmt.Errorf("begin bank policy transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if dto.ExchangeTiers == nil {
+		current, err := loadBankPolicy(ctx, tx)
+		if err != nil {
+			return nil, err
+		}
+		policy.ExchangeTiers = current.ExchangeTiers
+		policy, err = policy.normalized()
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err := writeBankPolicyTx(ctx, tx, policy); err != nil {
 		return nil, err
 	}
@@ -540,7 +599,20 @@ WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&balance, &debt, &debtDue); 
 	if err != nil {
 		return nil, err
 	}
-	ledger, err := loadBankLedger(ctx, s.db, userID, bankLedgerPageSize)
+	ledger, err := loadBankLedgerPage(ctx, s.db, userID, 0)
+	if err != nil {
+		return nil, err
+	}
+	localDate := time.Now().In(beijingLocation).Format("2006-01-02")
+	var localBusinessDate time.Time
+	if err := s.db.QueryRowContext(ctx, `SELECT (clock_timestamp() AT TIME ZONE 'Asia/Shanghai')::date`).Scan(&localBusinessDate); err != nil {
+		// The date is only a display aid; keep status available on legacy
+		// installations that have not yet applied migration 190.
+		localDate = time.Now().In(beijingLocation).Format("2006-01-02")
+	} else {
+		localDate = localBusinessDate.Format("2006-01-02")
+	}
+	dailyExchanged, err := loadBankExchangeDailyUsage(ctx, s.db, userID, localDate, false)
 	if err != nil {
 		return nil, err
 	}
@@ -562,7 +634,38 @@ WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&balance, &debt, &debtDue); 
 		ActiveAdvance:                    advance,
 		Policy:                           policy.DTO(),
 		Ledger:                           ledger,
+		ExchangeProgress:                 bankExchangeProgress(policy.ExchangeTiers, localDate, dailyExchanged),
 	}, nil
+}
+
+// ListLedger returns one fixed-size page of the authenticated user's bank
+// history. Counting and listing always share the same user predicate so a
+// caller cannot broaden the query beyond its own ledger.
+func (s *BankService) ListLedger(ctx context.Context, userID int64, page int) ([]BankLedgerItem, int64, error) {
+	if s == nil || s.db == nil {
+		return nil, 0, errors.New("bank service database is nil")
+	}
+	if userID <= 0 {
+		return nil, 0, ErrUserNotFound
+	}
+	if page < 1 {
+		return nil, 0, ErrBankLedgerPageInvalid
+	}
+
+	var total int64
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bank_ledger WHERE user_id = $1`, userID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count bank ledger: %w", err)
+	}
+	if total == 0 || int64(page-1) > (total-1)/UserBankLedgerPageSize {
+		return []BankLedgerItem{}, total, nil
+	}
+
+	offset := int64(page-1) * UserBankLedgerPageSize
+	items, err := loadBankLedgerPage(ctx, s.db, userID, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (s *BankService) AdvanceAtomic(
@@ -723,11 +826,9 @@ func (s *BankService) ExchangeAtomic(
 	if err := tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&businessNow); err != nil {
 		return nil, fmt.Errorf("sample bank exchange clock: %w", err)
 	}
+	localDate := businessNow.In(beijingLocation).Format("2006-01-02")
 	if _, _, _, err := reconcileBankDebtLocked(ctx, tx, userID, balance, debtBefore, dueAt, policy, businessNow); err != nil {
 		return nil, err
-	}
-	if bankExchangeInMaintenanceWindow(businessNow) {
-		return nil, ErrBankExchangeMaintenanceWindow
 	}
 	balance, debtBefore, _, err = lockBankUser(ctx, tx, userID)
 	if err != nil {
@@ -739,7 +840,11 @@ func (s *BankService) ExchangeAtomic(
 	if balance+ledgerAmountEpsilon < permanentAmount {
 		return nil, ErrBankPermanentInsufficient
 	}
-	temporaryAmount, err := normalizeLedgerAmount(permanentAmount * policy.ExchangeRate)
+	dailyBefore, err := loadBankExchangeDailyUsage(ctx, tx, userID, localDate, true)
+	if err != nil {
+		return nil, err
+	}
+	temporaryAmount, tierAllocations, err := calculateBankTieredExchange(policy.ExchangeTiers, dailyBefore, permanentAmount)
 	if err != nil || temporaryAmount <= 0 {
 		return nil, ErrBankAmountInvalid
 	}
@@ -763,6 +868,10 @@ RETURNING balance`, formatLedgerAmount(permanentAmount), userID).Scan(&deductedB
 	if err != nil {
 		return nil, fmt.Errorf("create bank exchange grant: %w", err)
 	}
+	dailyAfter, err := incrementBankExchangeDailyUsage(ctx, tx, userID, localDate, permanentAmount)
+	if err != nil {
+		return nil, err
+	}
 	var balanceAfter, debtAfter float64
 	if err := tx.QueryRowContext(ctx, `SELECT balance, temporary_credit_debt FROM users WHERE id = $1`, userID).Scan(&balanceAfter, &debtAfter); err != nil {
 		return nil, fmt.Errorf("load bank balances after exchange: %w", err)
@@ -781,17 +890,27 @@ VALUES ($1, 'exchange', $2, $1, $3, $4, 0, $5, $6, $7)`,
 		formatLedgerAmount(temporaryAmount),
 		formatLedgerAmount(debtBefore),
 		formatLedgerAmount(debtAfter),
-		marshalBankMetadata(map[string]any{"exchange_rate": formatLedgerAmount(policy.ExchangeRate)}),
+		marshalBankMetadata(map[string]any{
+			"exchange_rate":          formatLedgerAmount(policy.ExchangeRate),
+			"exchange_tiers":         bankExchangeTierDTOs(policy.ExchangeTiers),
+			"tier_allocations":       tierAllocations,
+			"exchange_local_date":    localDate,
+			"daily_permanent_before": formatLedgerAmount(dailyBefore),
+			"daily_permanent_after":  formatLedgerAmount(dailyAfter),
+		}),
 	); err != nil {
 		return nil, fmt.Errorf("record bank exchange ledger: %w", err)
 	}
 	result := &BankExchangeResult{
-		PermanentSpent:     formatLedgerAmount(permanentAmount),
-		TemporaryGranted:   formatLedgerAmount(temporaryAmount),
-		TemporaryAvailable: formatLedgerAmount(temporaryAvailable),
-		PermanentBalance:   formatLedgerAmount(balanceAfter),
-		TemporaryDebt:      formatLedgerAmount(debtAfter),
-		ExpiresAt:          grant.ExpiresAt().UTC(),
+		PermanentSpent:          formatLedgerAmount(permanentAmount),
+		TemporaryGranted:        formatLedgerAmount(temporaryAmount),
+		TemporaryAvailable:      formatLedgerAmount(temporaryAvailable),
+		PermanentBalance:        formatLedgerAmount(balanceAfter),
+		TemporaryDebt:           formatLedgerAmount(debtAfter),
+		ExpiresAt:               grant.ExpiresAt().UTC(),
+		DailyPermanentExchanged: formatLedgerAmount(dailyAfter),
+		ExchangeProgress:        bankExchangeProgress(policy.ExchangeTiers, localDate, dailyAfter),
+		TierAllocations:         tierAllocations,
 	}
 	if err := claim.PersistSuccess(ctx, tx, result); err != nil {
 		return nil, err
@@ -1425,25 +1544,27 @@ WHERE user_id = $1 AND status = 'active'`, userID).Scan(
 	return &item, nil
 }
 
-func loadBankLedger(ctx context.Context, q bankQueryer, userID int64, limit int) ([]BankLedgerItem, error) {
-	if limit < 1 || limit > bankLedgerPageSize {
-		limit = bankLedgerPageSize
-	}
+func loadBankLedgerPage(ctx context.Context, q bankQueryer, userID int64, offset int64) ([]BankLedgerItem, error) {
 	rows, err := q.QueryContext(ctx, `
-SELECT id, operation, loan_id, grant_id, permanent_delta, temporary_delta, debt_delta, debt_before, debt_after, created_at
+	SELECT id, operation, loan_id, grant_id, permanent_delta, temporary_delta, debt_delta, debt_before, debt_after,
+       permanent_balance_before::text, permanent_balance_after::text,
+       temporary_balance_before::text, temporary_balance_after::text,
+       metadata, created_at
 FROM bank_ledger
 WHERE user_id = $1
 ORDER BY created_at DESC, id DESC
-LIMIT $2`, userID, limit)
+LIMIT $2 OFFSET $3`, userID, UserBankLedgerPageSize, offset)
 	if err != nil {
 		return nil, fmt.Errorf("load bank ledger: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	items := make([]BankLedgerItem, 0)
+	items := make([]BankLedgerItem, 0, UserBankLedgerPageSize)
 	for rows.Next() {
 		var item BankLedgerItem
 		var loanID, grantID sql.NullInt64
 		var permanent, temporary, debtDelta, debtBefore, debtAfter float64
+		var permanentBefore, permanentAfter, temporaryBefore, temporaryAfter sql.NullString
+		var metadataRaw []byte
 		if err := rows.Scan(
 			&item.ID,
 			&item.Operation,
@@ -1454,6 +1575,11 @@ LIMIT $2`, userID, limit)
 			&debtDelta,
 			&debtBefore,
 			&debtAfter,
+			&permanentBefore,
+			&permanentAfter,
+			&temporaryBefore,
+			&temporaryAfter,
+			&metadataRaw,
 			&item.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan bank ledger: %w", err)
@@ -1466,11 +1592,33 @@ LIMIT $2`, userID, limit)
 			id := grantID.Int64
 			item.GrantID = &id
 		}
+		item.RowID = financialLedgerRowID("bank", item.ID)
+		item.Source = "bank"
+		item.Unit = LedgerUnitCredit
 		item.PermanentDelta = formatLedgerAmount(permanent)
 		item.TemporaryDelta = formatLedgerAmount(temporary)
 		item.DebtDelta = formatLedgerAmount(debtDelta)
 		item.DebtBefore = formatLedgerAmount(debtBefore)
 		item.DebtAfter = formatLedgerAmount(debtAfter)
+		if permanentBefore.Valid {
+			value := permanentBefore.String
+			item.PermanentBalanceBefore = &value
+		}
+		if permanentAfter.Valid {
+			value := permanentAfter.String
+			item.PermanentBalanceAfter = &value
+		}
+		if temporaryBefore.Valid {
+			value := temporaryBefore.String
+			item.TemporaryBalanceBefore = &value
+		}
+		if temporaryAfter.Valid {
+			value := temporaryAfter.String
+			item.TemporaryBalanceAfter = &value
+		}
+		if len(metadataRaw) > 0 {
+			_ = json.Unmarshal(metadataRaw, &item.Metadata)
+		}
 		item.CreatedAt = item.CreatedAt.UTC()
 		items = append(items, item)
 	}
@@ -1478,6 +1626,55 @@ LIMIT $2`, userID, limit)
 		return nil, fmt.Errorf("iterate bank ledger: %w", err)
 	}
 	return items, nil
+}
+
+func loadBankExchangeDailyUsage(ctx context.Context, q bankQueryer, userID int64, date string, forUpdate bool) (float64, error) {
+	query := `
+SELECT permanent_exchanged::text
+FROM bank_exchange_daily_usage
+WHERE user_id = $1 AND usage_date = $2::date`
+	if forUpdate {
+		query += " FOR UPDATE"
+	}
+	var raw string
+	err := q.QueryRowContext(ctx, query, userID, date).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("load daily bank exchange usage: %w", err)
+	}
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse daily bank exchange usage: %w", err)
+	}
+	value, err = normalizeDerivedLedgerAmount(value)
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("invalid daily bank exchange usage")
+	}
+	return value, nil
+}
+
+func incrementBankExchangeDailyUsage(ctx context.Context, tx *sql.Tx, userID int64, date string, amount float64) (float64, error) {
+	var raw string
+	if err := tx.QueryRowContext(ctx, `
+INSERT INTO bank_exchange_daily_usage (user_id, usage_date, permanent_exchanged, created_at, updated_at)
+VALUES ($1, $2::date, $3, clock_timestamp(), clock_timestamp())
+ON CONFLICT (user_id, usage_date) DO UPDATE
+SET permanent_exchanged = bank_exchange_daily_usage.permanent_exchanged + EXCLUDED.permanent_exchanged,
+    updated_at = clock_timestamp()
+RETURNING permanent_exchanged::text`, userID, date, formatLedgerAmount(amount)).Scan(&raw); err != nil {
+		return 0, fmt.Errorf("increment daily bank exchange usage: %w", err)
+	}
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse incremented daily bank exchange usage: %w", err)
+	}
+	value, err = normalizeDerivedLedgerAmount(value)
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("invalid incremented daily bank exchange usage")
+	}
+	return value, nil
 }
 
 func (s *BankService) invalidateBankCredits(ctx context.Context, userID int64, permanentChanged bool) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -17,6 +18,7 @@ import (
 type AdminBankAPIService interface {
 	GetPolicy(ctx context.Context) (service.BankPolicyDTO, error)
 	UpdatePolicyAtomic(ctx context.Context, actorID int64, policy service.BankPolicyDTO, claim *service.IdempotencyAtomicClaim) (*service.BankPolicyDTO, error)
+	ListAdminLedger(ctx context.Context, userID int64, page int) ([]service.BankAdminLedgerItem, int64, error)
 }
 
 type BankHandler struct {
@@ -35,6 +37,53 @@ func (h *BankHandler) GetPolicy(c *gin.Context) {
 		return
 	}
 	response.Success(c, policy)
+}
+
+// ListTransactions returns administrator-only bank transaction history.
+// GET /api/v1/admin/settings/bank/transactions
+//
+// The service owns the fixed page size and stable ordering.  The handler only
+// accepts a positive page number and an optional positive user id so malformed
+// filters cannot accidentally broaden a scoped query into a site-wide query.
+func (h *BankHandler) ListTransactions(c *gin.Context) {
+	page, err := parseFixedLedgerPage(c.Query("page"))
+	if err != nil {
+		response.BadRequest(c, "Invalid page")
+		return
+	}
+	userID, err := parseOptionalPositiveID(c.Query("user_id"))
+	if err != nil {
+		response.BadRequest(c, "Invalid user_id")
+		return
+	}
+	items, total, err := h.service.ListAdminLedger(c.Request.Context(), userID, page)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, items, total, page, 20)
+}
+
+func parseFixedLedgerPage(raw string) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 1, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 {
+		return 0, errors.New("page must be positive")
+	}
+	return value, nil
+}
+
+func parseOptionalPositiveID(raw string) (int64, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 0, nil
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 1 {
+		return 0, errors.New("id must be positive")
+	}
+	return value, nil
 }
 
 // UpdatePolicy handles PUT /api/v1/admin/settings/bank.

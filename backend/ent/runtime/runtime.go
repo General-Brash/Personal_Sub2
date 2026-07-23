@@ -1393,26 +1393,32 @@ func init() {
 	mallpurchaseDescProductType := mallpurchaseFields[1].Descriptor()
 	// mallpurchase.ProductTypeValidator is a validator for the "product_type" field. It is called by the builders before save.
 	mallpurchase.ProductTypeValidator = mallpurchaseDescProductType.Validators[0].(func(string) error)
+	// mallpurchaseDescProductName is the schema descriptor for product_name field.
+	mallpurchaseDescProductName := mallpurchaseFields[3].Descriptor()
+	// mallpurchase.DefaultProductName holds the default value on creation for the product_name field.
+	mallpurchase.DefaultProductName = mallpurchaseDescProductName.Default.(string)
+	// mallpurchase.ProductNameValidator is a validator for the "product_name" field. It is called by the builders before save.
+	mallpurchase.ProductNameValidator = mallpurchaseDescProductName.Validators[0].(func(string) error)
 	// mallpurchaseDescPaymentCreditType is the schema descriptor for payment_credit_type field.
-	mallpurchaseDescPaymentCreditType := mallpurchaseFields[4].Descriptor()
+	mallpurchaseDescPaymentCreditType := mallpurchaseFields[5].Descriptor()
 	// mallpurchase.PaymentCreditTypeValidator is a validator for the "payment_credit_type" field. It is called by the builders before save.
 	mallpurchase.PaymentCreditTypeValidator = mallpurchaseDescPaymentCreditType.Validators[0].(func(string) error)
 	// mallpurchaseDescCreditedType is the schema descriptor for credited_type field.
-	mallpurchaseDescCreditedType := mallpurchaseFields[6].Descriptor()
+	mallpurchaseDescCreditedType := mallpurchaseFields[7].Descriptor()
 	// mallpurchase.CreditedTypeValidator is a validator for the "credited_type" field. It is called by the builders before save.
 	mallpurchase.CreditedTypeValidator = mallpurchaseDescCreditedType.Validators[0].(func(string) error)
 	// mallpurchaseDescBenefitType is the schema descriptor for benefit_type field.
-	mallpurchaseDescBenefitType := mallpurchaseFields[8].Descriptor()
+	mallpurchaseDescBenefitType := mallpurchaseFields[9].Descriptor()
 	// mallpurchase.BenefitTypeValidator is a validator for the "benefit_type" field. It is called by the builders before save.
 	mallpurchase.BenefitTypeValidator = mallpurchaseDescBenefitType.Validators[0].(func(string) error)
 	// mallpurchaseDescStatus is the schema descriptor for status field.
-	mallpurchaseDescStatus := mallpurchaseFields[12].Descriptor()
+	mallpurchaseDescStatus := mallpurchaseFields[17].Descriptor()
 	// mallpurchase.DefaultStatus holds the default value on creation for the status field.
 	mallpurchase.DefaultStatus = mallpurchaseDescStatus.Default.(string)
 	// mallpurchase.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	mallpurchase.StatusValidator = mallpurchaseDescStatus.Validators[0].(func(string) error)
 	// mallpurchaseDescCreatedAt is the schema descriptor for created_at field.
-	mallpurchaseDescCreatedAt := mallpurchaseFields[13].Descriptor()
+	mallpurchaseDescCreatedAt := mallpurchaseFields[18].Descriptor()
 	// mallpurchase.DefaultCreatedAt holds the default value on creation for the created_at field.
 	mallpurchase.DefaultCreatedAt = mallpurchaseDescCreatedAt.Default.(func() time.Time)
 	paymentauditlogFields := schema.PaymentAuditLog{}.Fields()

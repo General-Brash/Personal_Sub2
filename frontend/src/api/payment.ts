@@ -17,6 +17,7 @@ import type {
   PaymentOrder
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
+import type { LedgerResponse } from '@/types/finance'
 
 export interface PublicOrderVerifyResult {
   out_trade_no: string
@@ -67,6 +68,13 @@ export const paymentAPI = {
   /** Get current user's orders */
   getMyOrders(params?: { page?: number; page_size?: number; status?: string }) {
     return apiClient.get<BasePaginationResponse<PaymentOrder>>('/payment/orders/my', { params })
+  },
+
+  /** Get the current user's consolidated personal ledger. */
+  getLedger(params?: { page?: number; days?: 1 | 7 | 15 }) {
+    return apiClient.get<LedgerResponse>('/user/ledger', {
+      params: { page: params?.page ?? 1, page_size: 20, days: params?.days },
+    })
   },
 
   /** Get a specific order by ID */

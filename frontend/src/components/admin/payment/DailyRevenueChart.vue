@@ -1,7 +1,7 @@
 <template>
   <div class="card p-4">
     <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-      {{ t('payment.admin.dailyRevenue') }}
+      {{ title || t('payment.admin.dailyRevenue') }}
     </h3>
     <div class="h-64">
       <div v-if="loading" class="flex h-full items-center justify-center">
@@ -41,6 +41,8 @@ const { t } = useI18n()
 const props = defineProps<{
   data: { date: string; amount: number; count: number }[]
   loading?: boolean
+  title?: string
+  revenueLabel?: string
 }>()
 
 const chartData = computed(() => {
@@ -49,7 +51,7 @@ const chartData = computed(() => {
     labels: props.data.map(d => d.date),
     datasets: [
       {
-        label: t('payment.admin.revenue'),
+        label: props.revenueLabel || t('payment.admin.revenue'),
         data: props.data.map(d => d.amount),
         borderColor: 'rgb(59, 130, 246)',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -82,7 +84,7 @@ const chartOptions = {
       type: 'linear' as const,
       display: true,
       position: 'left' as const,
-      title: { display: true, text: t('payment.admin.revenue') },
+      title: { display: true, text: props.revenueLabel || t('payment.admin.revenue') },
     },
     y1: {
       type: 'linear' as const,

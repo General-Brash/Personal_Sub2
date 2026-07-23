@@ -20,37 +20,6 @@
         <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
       </div>
       <template v-else>
-        <!-- Tab Switcher (hide during payment and subscription confirm) -->
-        <div
-          v-if="tabs.length > 1 && paymentPhase === 'select'"
-          role="tablist"
-          aria-orientation="horizontal"
-          :aria-label="t('commerce.sections.store')"
-          class="relative grid min-h-11 grid-cols-2 overflow-hidden rounded-lg bg-gray-100 p-1 dark:bg-dark-700"
-        >
-          <span
-            aria-hidden="true"
-            class="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-white shadow-sm transition-transform duration-200 ease-out dark:bg-dark-800"
-            :class="activeTab === 'subscription' ? 'translate-x-full' : 'translate-x-0'"
-            style="width: calc(50% - 0.25rem)"
-          />
-          <button
-            v-for="tab in tabs"
-            :key="tab.key"
-            :id="`store-tab-${tab.key}`"
-            type="button"
-            role="tab"
-            class="relative z-10 min-w-0 px-3 py-2 text-sm font-medium transition-colors"
-            :class="activeTab === tab.key ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
-            :aria-selected="activeTab === tab.key"
-            :aria-controls="`store-panel-${tab.key}`"
-            :tabindex="activeTab === tab.key ? 0 : -1"
-            @keydown="handleStoreTabKeydown($event, tab.key)"
-            @click="selectStoreTab(tab.key)"
-          >
-            {{ tab.label }}
-          </button>
-        </div>
         <!-- Payment in progress (shared by recharge and subscription) -->
         <template v-if="paymentPhase === 'paying'">
           <PaymentStatusPanel
@@ -66,15 +35,11 @@
             @settled="onPaymentSettled"
           />
         </template>
-        <!-- Tab content (select phase) -->
+        <!-- Store content (select phase) -->
         <template v-else>
-          <!-- Top-up Tab -->
+          <!-- Currency products -->
           <section
             id="store-panel-recharge"
-            role="tabpanel"
-            aria-labelledby="store-tab-recharge"
-            :hidden="activeTab !== 'recharge'"
-            :aria-hidden="activeTab !== 'recharge'"
             class="space-y-6"
           >
             <!-- Recharge Account Card -->
@@ -131,6 +96,9 @@
                         ${{ formatMoneyDisplay(product.payment_price) }} {{ creditTypeLabel(product.payment_credit_type) }}
                       </strong>
                     </span>
+                  </span>
+                  <span class="mt-2 block text-[11px] text-gray-400 dark:text-gray-500">
+                    {{ t('finance.sales', { count: product.sales_count ?? 0 }) }}
                   </span>
                   <span v-if="currencyProductDisabledReason(product)" class="mt-3 block text-xs font-medium text-amber-600 dark:text-amber-300" :data-test="`currency-product-disabled-${product.id}`">
                     {{ currencyProductDisabledReason(product) }}
@@ -198,15 +166,14 @@
             </button>
             </template>
           </section>
-          <!-- Subscribe Tab -->
+          <!-- Subscription products -->
           <section
             id="store-panel-subscription"
-            role="tabpanel"
-            aria-labelledby="store-tab-subscription"
-            :hidden="activeTab !== 'subscription'"
-            :aria-hidden="activeTab !== 'subscription'"
-            class="space-y-6"
+            class="space-y-6 border-t border-gray-200 pt-6 dark:border-dark-700"
           >
+            <div>
+              <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('commerce.sections.subscription') }}</h2>
+            </div>
             <!-- Subscription confirm (inline, replaces plan list) -->
             <template v-if="legacyExternalCheckoutEnabled && selectedPlan">
               <div class="card p-5">
@@ -394,7 +361,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -465,7 +432,6 @@ const loading = ref(true)
 const submitting = ref(false)
 const errorMessage = ref('')
 const errorHintMessage = ref('')
-const activeTab = ref<'recharge' | 'subscription'>('recharge')
 const amount = ref<number | null>(null)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
@@ -661,14 +627,6 @@ const visibleMethods = computed(() => getVisibleMethods(checkout.value.methods))
 const enabledMethods = computed(() => Object.keys(visibleMethods.value))
 const validAmount = computed(() => amount.value ?? 0)
 const currencyProducts = computed(() => checkout.value.currency_products ?? [])
-const tabs = computed(() => {
-  const result: { key: 'recharge' | 'subscription'; label: string }[] = []
-  if (!checkout.value.balance_disabled || currencyProducts.value.length > 0) {
-    result.push({ key: 'recharge', label: t('commerce.sections.currency') })
-  }
-  result.push({ key: 'subscription', label: t('commerce.sections.subscription') })
-  return result
-})
 const mallBalance = computed(() => checkout.value.balance ?? {
   permanent_balance: String(user.value?.balance ?? 0),
   temporary_credit_available: '0',
@@ -991,29 +949,6 @@ function planHasPeakRate(plan: SubscriptionPlan): boolean {
 
 function planPeakRateLabel(plan: SubscriptionPlan): string {
   return formatPeakRateWindow(plan, serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset))
-}
-
-type StoreTab = 'recharge' | 'subscription'
-
-async function selectStoreTab(tab: StoreTab, focus = false): Promise<void> {
-  activeTab.value = tab
-  if (!focus) return
-
-  await nextTick()
-  document.getElementById(`store-tab-${tab}`)?.focus()
-}
-
-function handleStoreTabKeydown(event: KeyboardEvent, current: StoreTab): void {
-  let next: StoreTab | null = null
-  if (event.key === 'Home') next = 'recharge'
-  else if (event.key === 'End') next = 'subscription'
-  else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    next = current === 'recharge' ? 'subscription' : 'recharge'
-  }
-  if (!next) return
-
-  event.preventDefault()
-  void selectStoreTab(next, true)
 }
 
 function selectCurrencyProduct(product: CurrencyProduct): void {
@@ -1531,12 +1466,8 @@ onMounted(async () => {
       }
     }
     await resumeWechatPaymentFromQuery()
-    if (checkout.value.balance_disabled && currencyProducts.value.length === 0) {
-      activeTab.value = 'subscription'
-    }
     // Handle renewal navigation: ?tab=subscription&group=123
     if (route.query.tab === 'subscription') {
-      activeTab.value = 'subscription'
       if (route.query.group) {
         const groupId = Number(route.query.group)
         const groupPlans = checkout.value.plans.filter(p => p.group_id === groupId)

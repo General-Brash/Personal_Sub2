@@ -84,6 +84,9 @@ func RegisterPaymentRoutes(
 	{
 		// Dashboard
 		adminGroup.GET("/dashboard", adminPaymentHandler.GetDashboard)
+		adminGroup.GET("/ledger", paymentHandler.GetAdminFinancialLedger)
+		adminGroup.GET("/mall/transactions", paymentHandler.ListAdminMallTransactions)
+		adminGroup.GET("/mall/analytics", paymentHandler.GetAdminMallAnalytics)
 
 		// Config
 		adminGroup.GET("/config", adminPaymentHandler.GetConfig)
@@ -103,7 +106,7 @@ func RegisterPaymentRoutes(
 		// Subscription Plans
 		plans := adminGroup.Group("/plans")
 		{
-			plans.GET("", adminPaymentHandler.ListPlans)
+			plans.GET("", paymentHandler.ListAdminPlans)
 			plans.POST("", adminPaymentHandler.CreatePlan)
 			plans.PUT("/:id", adminPaymentHandler.UpdatePlan)
 			plans.DELETE("/:id", adminPaymentHandler.DeletePlan)
@@ -111,7 +114,7 @@ func RegisterPaymentRoutes(
 
 		currencyProducts := adminGroup.Group("/currency-products")
 		{
-			currencyProducts.GET("", adminPaymentHandler.ListCurrencyProducts)
+			currencyProducts.GET("", paymentHandler.ListAdminCurrencyProducts)
 			currencyProducts.POST("", adminPaymentHandler.CreateCurrencyProduct)
 			currencyProducts.PUT("/:id", adminPaymentHandler.UpdateCurrencyProduct)
 			currencyProducts.DELETE("/:id", adminPaymentHandler.DeleteCurrencyProduct)

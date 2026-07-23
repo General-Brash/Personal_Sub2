@@ -12,8 +12,10 @@ vi.mock('@/api/client', () => ({
 
 import {
   exchangePermanentForTemporary,
+  getBankLedger,
   getBankSettings,
   getBankStatus,
+  getBankTransactions,
   repayBankDebt,
   requestBankAdvance,
   updateBankSettings,
@@ -58,6 +60,22 @@ describe('bank api', () => {
     expect(result.permanent_balance).toBe('12.34567890')
   })
 
+  it('loads a fixed five-row user ledger page without sending a page size', async () => {
+    const response = {
+      items: [{ id: 6, permanent_delta: '-1.00000000' }],
+      total: 11,
+      page: 2,
+      page_size: 5 as const,
+      pages: 3,
+    }
+    get.mockResolvedValue({ data: response })
+
+    const result = await getBankLedger(2)
+
+    expect(get).toHaveBeenCalledWith('/bank/ledger', { params: { page: 2 } })
+    expect(result).toEqual(response)
+  })
+
   it('submits bank mutations with amount strings and idempotency keys', async () => {
     post
       .mockResolvedValueOnce({ data: { amount: '5.00000000' } })
@@ -93,5 +111,24 @@ describe('bank api', () => {
     expect(put).toHaveBeenCalledWith('/admin/settings/bank', policy, {
       headers: { 'Idempotency-Key': 'settings-key' },
     })
+  })
+
+  it('loads the fixed-size admin bank transaction log', async () => {
+    const response = {
+      items: [{ transaction_amount: '5.00000000' }],
+      total: 1,
+      page: 2,
+      page_size: 20,
+      pages: 1,
+    }
+    get.mockResolvedValue({ data: response })
+
+    const result = await getBankTransactions({ page: 2, user_id: 9 })
+
+    expect(get).toHaveBeenCalledWith('/admin/settings/bank/transactions', {
+      params: { page: 2, page_size: 20, user_id: 9 },
+    })
+    expect(result).toEqual(response)
+    expect(result.items[0]?.transaction_amount).toBe('5.00000000')
   })
 })
