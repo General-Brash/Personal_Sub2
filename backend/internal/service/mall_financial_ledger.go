@@ -537,9 +537,10 @@ func (s *MallService) queryFinancialLedger(ctx context.Context, userID int64, pa
 	}
 	end, todayStart, sevenStart, fifteenStart := financialWindowBounds()
 	itemStart := fifteenStart
-	if days == 1 {
+	switch days {
+	case 1:
 		itemStart = todayStart
-	} else if days == 7 {
+	case 7:
 		itemStart = sevenStart
 	}
 	cte := financialLedgerCTE(userID, itemStart, end)
@@ -580,9 +581,10 @@ func (s *MallService) queryFinancialLedger(ctx context.Context, userID int64, pa
 		return nil, err
 	}
 	summaryWindow := "fifteen_days"
-	if days == 1 {
+	switch days {
+	case 1:
 		summaryWindow = "today"
-	} else if days == 7 {
+	case 7:
 		summaryWindow = "seven_days"
 	}
 	summary := windows[summaryWindow].Categories

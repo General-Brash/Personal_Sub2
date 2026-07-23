@@ -603,7 +603,7 @@ WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&balance, &debt, &debtDue); 
 	if err != nil {
 		return nil, err
 	}
-	localDate := time.Now().In(beijingLocation).Format("2006-01-02")
+	var localDate string
 	var localBusinessDate time.Time
 	if err := s.db.QueryRowContext(ctx, `SELECT (clock_timestamp() AT TIME ZONE 'Asia/Shanghai')::date`).Scan(&localBusinessDate); err != nil {
 		// The date is only a display aid; keep status available on legacy

@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"math"
-	"sort"
 )
 
 // BankExchangeTier is a marginal-rate band. UpTo is an inclusive cumulative
@@ -200,18 +199,4 @@ func bankExchangeProgress(tiers []BankExchangeTier, date string, cumulative floa
 		}
 	}
 	return progress
-}
-
-func sortBankExchangeTiers(tiers []BankExchangeTier) []BankExchangeTier {
-	copyTiers := append([]BankExchangeTier(nil), tiers...)
-	sort.SliceStable(copyTiers, func(i, j int) bool {
-		if copyTiers[i].UpTo == nil {
-			return false
-		}
-		if copyTiers[j].UpTo == nil {
-			return true
-		}
-		return *copyTiers[i].UpTo < *copyTiers[j].UpTo
-	})
-	return copyTiers
 }
