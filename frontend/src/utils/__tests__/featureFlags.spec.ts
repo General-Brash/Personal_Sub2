@@ -17,6 +17,10 @@ const pageVisibilityFlags = [
   FeatureFlags.adminSubscriptions,
   FeatureFlags.adminPromoCodes,
   FeatureFlags.adminChannelManagement,
+  FeatureFlags.adminFinance,
+  FeatureFlags.adminBankTransactions,
+  FeatureFlags.adminAuditLogs,
+  FeatureFlags.adminOps,
 ]
 
 describe('page visibility feature flags', () => {
@@ -32,6 +36,10 @@ describe('page visibility feature flags', () => {
       { key: 'admin_subscriptions_enabled', mode: 'opt-out' },
       { key: 'admin_promo_codes_enabled', mode: 'opt-out' },
       { key: 'admin_channel_management_enabled', mode: 'opt-out' },
+      { key: 'admin_finance_enabled', mode: 'opt-out' },
+      { key: 'admin_bank_transactions_enabled', mode: 'opt-out' },
+      { key: 'admin_audit_logs_enabled', mode: 'opt-out' },
+      { key: 'admin_ops_enabled', mode: 'opt-out' },
     ])
   })
 

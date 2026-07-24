@@ -38,6 +38,10 @@ function mountSection() {
       adminSubscriptionsEnabled: true,
       adminPromoCodesEnabled: true,
       adminChannelManagementEnabled: false,
+      adminFinanceEnabled: true,
+      adminBankTransactionsEnabled: false,
+      adminAuditLogsEnabled: true,
+      adminOpsEnabled: false,
     },
     global: {
       stubs: {
@@ -48,12 +52,12 @@ function mountSection() {
 }
 
 describe('PageVisibilitySettingsSection', () => {
-  it('renders two un-nested page groups with six toggles', () => {
+  it('renders two un-nested page groups with ten toggles', () => {
     const wrapper = mountSection()
 
     expect(wrapper.findAll('.card')).toHaveLength(1)
     expect(wrapper.find('.card .card').exists()).toBe(false)
-    expect(wrapper.findAll('[role="switch"]')).toHaveLength(6)
+    expect(wrapper.findAll('[role="switch"]')).toHaveLength(10)
     expect(wrapper.text()).toContain('admin.settings.features.pageVisibility.userPages')
     expect(wrapper.text()).toContain('admin.settings.features.pageVisibility.adminPages')
   })
@@ -83,5 +87,9 @@ describe('PageVisibilitySettingsSection', () => {
     expect(wrapper.emitted('update:adminSubscriptionsEnabled')).toEqual([[false]])
     expect(wrapper.emitted('update:adminPromoCodesEnabled')).toEqual([[false]])
     expect(wrapper.emitted('update:adminChannelManagementEnabled')).toEqual([[true]])
+    expect(wrapper.emitted('update:adminFinanceEnabled')).toEqual([[false]])
+    expect(wrapper.emitted('update:adminBankTransactionsEnabled')).toEqual([[true]])
+    expect(wrapper.emitted('update:adminAuditLogsEnabled')).toEqual([[false]])
+    expect(wrapper.emitted('update:adminOpsEnabled')).toEqual([[true]])
   })
 })

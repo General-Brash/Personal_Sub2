@@ -48,17 +48,19 @@ type OpsCleanupService struct {
 	cfg               *config.Config
 	channelMonitorSvc *ChannelMonitorService
 	settingRepo       SettingRepository
+	usageCleanup      *UsageCleanupService
 
 	instanceID string
 
 	// mu 守护 cron 实例切换 + effective 配置切换。
 	// 这里不再用 startOnce/stopOnce，是因为 Reload 需要"停旧 cron 重启新 cron"，
 	// 而 Once 一旦触发就无法再次执行；改为 started/stopped 布尔配合 mu。
-	mu        sync.Mutex
-	cron      *cron.Cron
-	started   bool
-	stopped   bool
-	effective config.OpsCleanupConfig
+	mu               sync.Mutex
+	cron             *cron.Cron
+	started          bool
+	stopped          bool
+	effective        config.OpsCleanupConfig
+	effectiveTargets map[string]OpsRetentionPolicy
 
 	warnNoRedisOnce sync.Once
 }
@@ -70,8 +72,9 @@ func NewOpsCleanupService(
 	cfg *config.Config,
 	channelMonitorSvc *ChannelMonitorService,
 	settingRepo SettingRepository,
+	usageCleanup ...*UsageCleanupService,
 ) *OpsCleanupService {
-	return &OpsCleanupService{
+	svc := &OpsCleanupService{
 		opsRepo:           opsRepo,
 		db:                db,
 		redisClient:       redisClient,
@@ -80,6 +83,10 @@ func NewOpsCleanupService(
 		settingRepo:       settingRepo,
 		instanceID:        uuid.NewString(),
 	}
+	if len(usageCleanup) > 0 {
+		svc.usageCleanup = usageCleanup[0]
+	}
+	return svc
 }
 
 // Start 首次启动 cron 调度。Enabled / Schedule 由 effective 配置决定（settings 优先 cfg）。
@@ -138,10 +145,13 @@ func (s *OpsCleanupService) stopCronLocked() {
 // applyScheduleLocked 重新计算 effective 配置并按其 schedule 重建 cron。调用方持锁。
 // 若 effective.Enabled=false（用户在 UI 关闭清理），停旧 cron 后直接返回，不创建新 cron。
 func (s *OpsCleanupService) applyScheduleLocked(ctx context.Context) error {
+	previousEffective := s.effective
+	previousTargets := s.effectiveTargets
+	previousCron := s.cron
 	s.computeEffectiveLocked(ctx)
-	s.stopCronLocked()
 
 	if !s.effective.Enabled {
+		s.stopCronLocked()
 		logger.LegacyPrintf("service.ops_cleanup", "[OpsCleanup] cron disabled by settings")
 		return nil
 	}
@@ -160,8 +170,12 @@ func (s *OpsCleanupService) applyScheduleLocked(ctx context.Context) error {
 
 	c := cron.New(cron.WithParser(opsCleanupCronParser), cron.WithLocation(loc))
 	if _, err := c.AddFunc(schedule, func() { s.runScheduled() }); err != nil {
+		s.effective = previousEffective
+		s.effectiveTargets = previousTargets
+		s.cron = previousCron
 		return fmt.Errorf("invalid schedule %q: %w", schedule, err)
 	}
+	s.stopCronLocked()
 	c.Start()
 	s.cron = c
 	logger.LegacyPrintf("service.ops_cleanup",
@@ -195,7 +209,7 @@ func (s *OpsCleanupService) Reload(ctx context.Context) error {
 // 优先级：UI 写入的 settings.ops_advanced_settings.data_retention（权威）覆盖 cfg.Ops.Cleanup 的副本。
 //   - Enabled：settings 直接覆盖
 //   - Schedule：settings 非空时覆盖，否则保留 cfg
-//   - *RetentionDays：settings >=0 时覆盖（包括 0=TRUNCATE），<0 沿用 cfg
+//   - *RetentionDays：settings >=0 时覆盖（0=禁用），<0 沿用 cfg
 //
 // 若 settings 表无该 key（ErrSettingNotFound）或解析失败，整体 fallback 到 cfg.Ops.Cleanup。
 func (s *OpsCleanupService) computeEffectiveLocked(ctx context.Context) {
@@ -203,7 +217,11 @@ func (s *OpsCleanupService) computeEffectiveLocked(ctx context.Context) {
 	if s.cfg != nil {
 		base = s.cfg.Ops.Cleanup
 	}
-	defer func() { s.effective = base }()
+	targets := defaultOpsRetentionPolicies(base.ErrorLogRetentionDays, base.MinuteMetricsRetentionDays, base.HourlyMetricsRetentionDays)
+	defer func() {
+		s.effective = base
+		s.effectiveTargets = targets
+	}()
 
 	if s.settingRepo == nil {
 		return
@@ -219,12 +237,13 @@ func (s *OpsCleanupService) computeEffectiveLocked(ctx context.Context) {
 		}
 		return
 	}
-	var adv OpsAdvancedSettings
+	adv := *defaultOpsAdvancedSettings()
 	if err := json.Unmarshal([]byte(raw), &adv); err != nil {
 		logger.LegacyPrintf("service.ops_cleanup",
 			"[OpsCleanup] parse advanced settings failed, using cfg: %v", err)
 		return
 	}
+	normalizeOpsAdvancedSettings(&adv)
 	dr := adv.DataRetention
 	base.Enabled = dr.CleanupEnabled
 	if sched := strings.TrimSpace(dr.CleanupSchedule); sched != "" {
@@ -239,6 +258,10 @@ func (s *OpsCleanupService) computeEffectiveLocked(ctx context.Context) {
 	if dr.HourlyMetricsRetentionDays >= 0 {
 		base.HourlyMetricsRetentionDays = dr.HourlyMetricsRetentionDays
 	}
+	targets = make(map[string]OpsRetentionPolicy, len(dr.Targets))
+	for key, policy := range dr.Targets {
+		targets[key] = policy
+	}
 }
 
 // snapshotEffective 取一份 effective 副本（runCleanupOnce 等读路径使用）。
@@ -246,6 +269,16 @@ func (s *OpsCleanupService) snapshotEffective() config.OpsCleanupConfig {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.effective
+}
+
+func (s *OpsCleanupService) snapshotEffectiveTargets() map[string]OpsRetentionPolicy {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]OpsRetentionPolicy, len(s.effectiveTargets))
+	for key, policy := range s.effectiveTargets {
+		out[key] = policy
+	}
+	return out
 }
 
 // refreshEffectiveBeforeRun 在 cron 触发时刷新 effective，让 retention 改动当次即生效。
@@ -294,20 +327,23 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 		return out, nil
 	}
 
-	effective := s.snapshotEffective()
+	policies := s.snapshotEffectiveTargets()
 	now := time.Now().UTC()
 
 	targets := []opsCleanupTarget{
-		{effective.ErrorLogRetentionDays, "ops_error_logs", "created_at", false, &out.errorLogs},
-		{effective.ErrorLogRetentionDays, "ops_alert_events", "created_at", false, &out.alertEvents},
-		{effective.ErrorLogRetentionDays, "ops_system_logs", "created_at", false, &out.systemLogs},
-		{effective.ErrorLogRetentionDays, "ops_system_log_cleanup_audits", "created_at", false, &out.logAudits},
-		{effective.MinuteMetricsRetentionDays, "ops_system_metrics", "created_at", false, &out.systemMetrics},
-		{effective.HourlyMetricsRetentionDays, "ops_metrics_hourly", "bucket_start", false, &out.hourlyPreagg},
-		{effective.HourlyMetricsRetentionDays, "ops_metrics_daily", "bucket_date", true, &out.dailyPreagg},
+		{policies["ops_error_logs"].RetentionDays, "ops_error_logs", "created_at", false, &out.errorLogs},
+		{policies["ops_alert_events"].RetentionDays, "ops_alert_events", "created_at", false, &out.alertEvents},
+		{policies["ops_system_logs"].RetentionDays, "ops_system_logs", "created_at", false, &out.systemLogs},
+		{policies["ops_system_log_cleanup_audits"].RetentionDays, "ops_system_log_cleanup_audits", "created_at", false, &out.logAudits},
+		{policies["ops_system_metrics"].RetentionDays, "ops_system_metrics", "created_at", false, &out.systemMetrics},
+		{policies["ops_metrics_hourly"].RetentionDays, "ops_metrics_hourly", "bucket_start", false, &out.hourlyPreagg},
+		{policies["ops_metrics_daily"].RetentionDays, "ops_metrics_daily", "bucket_date", true, &out.dailyPreagg},
 	}
 
 	for _, t := range targets {
+		if policy := policies[t.table]; !policy.Enabled || policy.RetentionDays <= 0 {
+			continue
+		}
 		cutoff, truncate, ok := opsCleanupPlan(now, t.retentionDays)
 		if !ok {
 			continue
@@ -317,6 +353,14 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 			return out, err
 		}
 		*t.counter = n
+	}
+
+	if policy := policies["usage_logs"]; policy.Enabled && policy.RetentionDays > 0 && s.usageCleanup != nil {
+		deleted, err := s.usageCleanup.RunRetention(ctx, now.AddDate(0, 0, -policy.RetentionDays))
+		if err != nil {
+			return out, err
+		}
+		out.usageLogs = deleted
 	}
 
 	// Channel monitor 每日维护（聚合昨日明细 + 软删过期明细/聚合）。

@@ -36,6 +36,10 @@ describe('check-in api', () => {
       temporary_credit_earliest_expires_at: '2026-07-13T16:00:00Z',
       monthly_reward_total: '3.00000000',
       monthly_permanent_reward_total: '0.50000000',
+      reward_tiers: [
+        { day: 1, amount: '1.00000000', permanent_amount: '0.00000000' },
+        { day: 2, amount: '1.50000000', permanent_amount: '0.25000000' },
+      ],
       calendar: [
         {
           checkin_date: '2026-07-12',

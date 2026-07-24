@@ -59,6 +59,10 @@ function createPublicSettings(overrides: Partial<PublicSettings> = {}): PublicSe
     admin_subscriptions_enabled: true,
     admin_promo_codes_enabled: true,
     admin_channel_management_enabled: true,
+    admin_finance_enabled: true,
+    admin_bank_transactions_enabled: true,
+    admin_audit_logs_enabled: true,
+    admin_ops_enabled: true,
     service_quota_enabled: false,
     affiliate_enabled: false,
     ...overrides,
@@ -337,6 +341,10 @@ describe('useAppStore', () => {
         admin_subscriptions_enabled: true,
         admin_promo_codes_enabled: true,
         admin_channel_management_enabled: true,
+        admin_finance_enabled: true,
+        admin_bank_transactions_enabled: true,
+        admin_audit_logs_enabled: true,
+        admin_ops_enabled: true,
       })
       expect(getPublicSettings).not.toHaveBeenCalled()
     })

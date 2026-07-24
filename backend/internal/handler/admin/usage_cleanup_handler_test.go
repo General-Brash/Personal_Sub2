@@ -55,6 +55,26 @@ func (s *cleanupRepoStub) ListTasks(ctx context.Context, params pagination.Pagin
 	return s.listTasks, s.listResult, s.listErr
 }
 
+func (s *cleanupRepoStub) GetTask(ctx context.Context, taskID int64) (*service.UsageCleanupTask, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.statusByID == nil {
+		return nil, sql.ErrNoRows
+	}
+	status, ok := s.statusByID[taskID]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	for _, task := range s.created {
+		if task.ID == taskID {
+			clone := *task
+			clone.Status = status
+			return &clone, nil
+		}
+	}
+	return &service.UsageCleanupTask{ID: taskID, Status: status}, nil
+}
+
 func (s *cleanupRepoStub) ClaimNextPendingTask(ctx context.Context, staleRunningAfterSeconds int64) (*service.UsageCleanupTask, error) {
 	return nil, nil
 }

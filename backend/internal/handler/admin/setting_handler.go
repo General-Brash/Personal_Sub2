@@ -338,6 +338,10 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		AdminSubscriptionsEnabled:     settings.AdminSubscriptionsEnabled,
 		AdminPromoCodesEnabled:        settings.AdminPromoCodesEnabled,
 		AdminChannelManagementEnabled: settings.AdminChannelManagementEnabled,
+		AdminFinanceEnabled:           settings.AdminFinanceEnabled,
+		AdminBankTransactionsEnabled:  settings.AdminBankTransactionsEnabled,
+		AdminAuditLogsEnabled:         settings.AdminAuditLogsEnabled,
+		AdminOpsEnabled:               settings.AdminOpsEnabled,
 
 		AffiliateEnabled: settings.AffiliateEnabled,
 

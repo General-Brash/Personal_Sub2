@@ -13,6 +13,10 @@ export interface OpsRequestOptions {
   signal?: AbortSignal
 }
 
+export interface DataCleanupRequestOptions {
+  signal?: AbortSignal
+}
+
 export type OpsUpstreamErrorEvent = {
   at_unix_ms?: number
   platform?: string
@@ -803,9 +807,74 @@ export interface OpsAdvancedSettings {
 export interface OpsDataRetentionSettings {
   cleanup_enabled: boolean
   cleanup_schedule: string
+  targets: Record<string, OpsRetentionPolicy>
   error_log_retention_days: number
   minute_metrics_retention_days: number
   hourly_metrics_retention_days: number
+}
+
+export interface OpsRetentionPolicy {
+  enabled: boolean
+  retention_days: number
+}
+
+export interface DataCleanupConfig {
+  data_retention: OpsDataRetentionSettings
+  audit_log_retention_days: number
+}
+
+export type DataCleanupMode = 'range' | 'all'
+
+export interface DataCleanupFilter {
+  category: string
+  mode: DataCleanupMode
+  start_time?: string
+  end_time?: string
+}
+
+export interface DataCleanupPreview {
+  category: string
+  mode: DataCleanupMode
+  matched_rows: number
+  blocked_rows: number
+  confirmation: string
+  requires_totp: boolean
+  max_range_days: number
+  deletion_warning?: string
+  preview_token: string
+}
+
+export interface DataCleanupExecuteRequest extends DataCleanupFilter {
+  preview_rows: number
+  confirmation: string
+  totp_code?: string
+  preview_token: string
+}
+
+export interface DataCleanupExecuteResult {
+  audit_id: number
+  status: 'pending' | 'succeeded'
+  deleted_rows: number
+  task_id?: number
+}
+
+export interface DataCleanupAudit {
+  id: number
+  operator_id?: number
+  operator_email?: string
+  auth_method: string
+  category: string
+  mode: DataCleanupMode
+  filters: string
+  preview_rows: number
+  blocked_rows: number
+  deleted_rows: number
+  status: string
+  error_message: string
+  started_at: string
+  finished_at?: string
+  created_at: string
+  task_id?: number
 }
 
 export interface OpsAggregationSettings {
@@ -1303,6 +1372,31 @@ export async function updateAdvancedSettings(config: OpsAdvancedSettings): Promi
   return data
 }
 
+export async function getDataCleanupConfig(options: DataCleanupRequestOptions = {}): Promise<DataCleanupConfig> {
+  const { data } = await apiClient.get<DataCleanupConfig>('/admin/ops/data-cleanup/config', { signal: options.signal })
+  return data
+}
+
+export async function updateDataCleanupConfig(config: DataCleanupConfig, options: DataCleanupRequestOptions = {}): Promise<DataCleanupConfig> {
+  const { data } = await apiClient.put<DataCleanupConfig>('/admin/ops/data-cleanup/config', config, { signal: options.signal })
+  return data
+}
+
+export async function previewDataCleanup(filter: DataCleanupFilter, options: DataCleanupRequestOptions = {}): Promise<DataCleanupPreview> {
+  const { data } = await apiClient.post<DataCleanupPreview>('/admin/ops/data-cleanup/preview', filter, { signal: options.signal })
+  return data
+}
+
+export async function executeDataCleanup(payload: DataCleanupExecuteRequest, options: DataCleanupRequestOptions = {}): Promise<DataCleanupExecuteResult> {
+  const { data } = await apiClient.post<DataCleanupExecuteResult>('/admin/ops/data-cleanup/execute', payload, { signal: options.signal })
+  return data
+}
+
+export async function listDataCleanupAudits(options: DataCleanupRequestOptions = {}): Promise<DataCleanupAudit[]> {
+  const { data } = await apiClient.get<DataCleanupAudit[]>('/admin/ops/data-cleanup/audits', { signal: options.signal })
+  return data
+}
+
 // ==================== Metric Thresholds ====================
 
 async function getMetricThresholds(): Promise<OpsMetricThresholds> {
@@ -1360,6 +1454,11 @@ export const opsAPI = {
   resetRuntimeLogConfig,
   getAdvancedSettings,
   updateAdvancedSettings,
+  getDataCleanupConfig,
+  updateDataCleanupConfig,
+  previewDataCleanup,
+  executeDataCleanup,
+  listDataCleanupAudits,
   getMetricThresholds,
   updateMetricThresholds,
   listSystemLogs,

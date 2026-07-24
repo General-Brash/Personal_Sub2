@@ -188,6 +188,10 @@ type SystemSettings struct {
 	AdminSubscriptionsEnabled     bool `json:"admin_subscriptions_enabled"`
 	AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
 	AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
+	AdminFinanceEnabled           bool `json:"admin_finance_enabled"`
+	AdminBankTransactionsEnabled  bool `json:"admin_bank_transactions_enabled"`
+	AdminAuditLogsEnabled         bool `json:"admin_audit_logs_enabled"`
+	AdminOpsEnabled               bool `json:"admin_ops_enabled"`
 
 	// Claude Code version check
 	MinClaudeCodeVersion string
@@ -346,6 +350,10 @@ type PublicSettings struct {
 	AdminSubscriptionsEnabled     bool `json:"admin_subscriptions_enabled"`
 	AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
 	AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
+	AdminFinanceEnabled           bool `json:"admin_finance_enabled"`
+	AdminBankTransactionsEnabled  bool `json:"admin_bank_transactions_enabled"`
+	AdminAuditLogsEnabled         bool `json:"admin_audit_logs_enabled"`
+	AdminOpsEnabled               bool `json:"admin_ops_enabled"`
 
 	// Affiliate (邀请返利) feature toggle
 	AffiliateEnabled bool `json:"affiliate_enabled"`

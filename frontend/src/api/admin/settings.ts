@@ -659,6 +659,10 @@ export interface SystemSettings {
   admin_subscriptions_enabled: boolean;
   admin_promo_codes_enabled: boolean;
   admin_channel_management_enabled: boolean;
+  admin_finance_enabled: boolean;
+  admin_bank_transactions_enabled: boolean;
+  admin_audit_logs_enabled: boolean;
+  admin_ops_enabled: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
@@ -934,6 +938,10 @@ export interface UpdateSettingsRequest {
   admin_subscriptions_enabled?: boolean;
   admin_promo_codes_enabled?: boolean;
   admin_channel_management_enabled?: boolean;
+  admin_finance_enabled?: boolean;
+  admin_bank_transactions_enabled?: boolean;
+  admin_audit_logs_enabled?: boolean;
+  admin_ops_enabled?: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;

@@ -472,6 +472,10 @@ const baseSettingsResponse = {
   admin_subscriptions_enabled: true,
   admin_promo_codes_enabled: true,
   admin_channel_management_enabled: true,
+  admin_finance_enabled: true,
+  admin_bank_transactions_enabled: true,
+  admin_audit_logs_enabled: true,
+  admin_ops_enabled: true,
   // 平台限额嵌套字段（新后端契约）
   default_platform_quotas: {
     anthropic:   { daily: null, weekly: null, monthly: null },
@@ -497,7 +501,6 @@ function mountView() {
         ProxySelector: true,
         ImageUpload: ImageUploadStub,
         BackupSettings: true,
-        CheckinSettingsCard: true,
         PageVisibilitySettingsSection: true,
       },
     },
@@ -633,14 +636,6 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(wrapper.text()).not.toContain("支付来源");
   });
 
-  it('connects daily check-in settings to the existing features tab', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    await openFeaturesTab(wrapper)
-
-    expect(wrapper.find('checkin-settings-card-stub').exists()).toBe(true)
-  })
-
   it('connects page visibility settings to the features tab', async () => {
     const wrapper = mountView()
     await flushPromises()
@@ -663,6 +658,10 @@ describe("admin SettingsView payment visible method controls", () => {
         admin_subscriptions_enabled: true,
         admin_promo_codes_enabled: true,
         admin_channel_management_enabled: true,
+        admin_finance_enabled: true,
+        admin_bank_transactions_enabled: true,
+        admin_audit_logs_enabled: true,
+        admin_ops_enabled: true,
       }),
     )
   })
@@ -874,7 +873,6 @@ describe("admin SettingsView payment visible method controls", () => {
           ProxySelector: true,
           ImageUpload: ImageUploadStub,
           BackupSettings: true,
-          CheckinSettingsCard: true,
         },
       },
     });
@@ -1028,7 +1026,6 @@ describe("admin SettingsView payment visible method controls", () => {
           ProxySelector: true,
           ImageUpload: ImageUploadStub,
           BackupSettings: true,
-          CheckinSettingsCard: true,
         },
       },
     });

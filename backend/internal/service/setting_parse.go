@@ -68,6 +68,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyAdminSubscriptionsEnabled:                 "true",
 		SettingKeyAdminPromoCodesEnabled:                    "true",
 		SettingKeyAdminChannelManagementEnabled:             "true",
+		SettingKeyAdminFinanceEnabled:                       "true",
+		SettingKeyAdminBankTransactionsEnabled:              "true",
+		SettingKeyAdminAuditLogsEnabled:                     "true",
+		SettingKeyAdminOpsEnabled:                           "true",
 		SettingKeyWeChatConnectEnabled:                      "false",
 		SettingKeyWeChatConnectAppID:                        "",
 		SettingKeyWeChatConnectAppSecret:                    "",
@@ -733,6 +737,10 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.AdminSubscriptionsEnabled = !isFalseSettingValue(settings[SettingKeyAdminSubscriptionsEnabled])
 	result.AdminPromoCodesEnabled = !isFalseSettingValue(settings[SettingKeyAdminPromoCodesEnabled])
 	result.AdminChannelManagementEnabled = !isFalseSettingValue(settings[SettingKeyAdminChannelManagementEnabled])
+	result.AdminFinanceEnabled = !isFalseSettingValue(settings[SettingKeyAdminFinanceEnabled])
+	result.AdminBankTransactionsEnabled = !isFalseSettingValue(settings[SettingKeyAdminBankTransactionsEnabled])
+	result.AdminAuditLogsEnabled = !isFalseSettingValue(settings[SettingKeyAdminAuditLogsEnabled])
+	result.AdminOpsEnabled = !isFalseSettingValue(settings[SettingKeyAdminOpsEnabled])
 
 	// Affiliate (邀请返利) feature (default: disabled; strict true)
 	result.AffiliateEnabled = settings[SettingKeyAffiliateEnabled] == "true"

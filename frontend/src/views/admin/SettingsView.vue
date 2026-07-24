@@ -5897,8 +5897,6 @@
 	        <!-- Tab: Features (功能开关) -->
         <div v-show="activeTab === 'features'" class="space-y-6">
 
-        <CheckinSettingsCard />
-
         <PageVisibilitySettingsSection
           v-model:user-channel-status-enabled="form.user_channel_status_enabled"
           v-model:mall-enabled="form.mall_enabled"
@@ -5906,6 +5904,10 @@
           v-model:admin-subscriptions-enabled="form.admin_subscriptions_enabled"
           v-model:admin-promo-codes-enabled="form.admin_promo_codes_enabled"
           v-model:admin-channel-management-enabled="form.admin_channel_management_enabled"
+          v-model:admin-finance-enabled="form.admin_finance_enabled"
+          v-model:admin-bank-transactions-enabled="form.admin_bank_transactions_enabled"
+          v-model:admin-audit-logs-enabled="form.admin_audit_logs_enabled"
+          v-model:admin-ops-enabled="form.admin_ops_enabled"
         />
 
         <div class="card">
@@ -7529,7 +7531,6 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
-import CheckinSettingsCard from "@/components/admin/settings/CheckinSettingsCard.vue";
 import PageVisibilitySettingsSection from "@/components/admin/settings/PageVisibilitySettingsSection.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
@@ -8440,6 +8441,10 @@ const form = reactive<SettingsForm>({
   admin_subscriptions_enabled: true,
   admin_promo_codes_enabled: true,
   admin_channel_management_enabled: true,
+  admin_finance_enabled: true,
+  admin_bank_transactions_enabled: true,
+  admin_audit_logs_enabled: true,
+  admin_ops_enabled: true,
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: false,
   // Allow user view error requests
@@ -9843,6 +9848,10 @@ async function saveSettings() {
       admin_subscriptions_enabled: form.admin_subscriptions_enabled,
       admin_promo_codes_enabled: form.admin_promo_codes_enabled,
       admin_channel_management_enabled: form.admin_channel_management_enabled,
+      admin_finance_enabled: form.admin_finance_enabled,
+      admin_bank_transactions_enabled: form.admin_bank_transactions_enabled,
+      admin_audit_logs_enabled: form.admin_audit_logs_enabled,
+      admin_ops_enabled: form.admin_ops_enabled,
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
       allow_user_view_error_requests: form.allow_user_view_error_requests,

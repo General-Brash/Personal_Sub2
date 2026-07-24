@@ -122,6 +122,33 @@ func (s *cleanupRepoStub) ListTasks(ctx context.Context, params pagination.Pagin
 	return s.listTasks, s.listResult, s.listErr
 }
 
+func (s *cleanupRepoStub) GetTask(ctx context.Context, taskID int64) (*UsageCleanupTask, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.statusErr != nil {
+		return nil, s.statusErr
+	}
+	status, ok := s.statusByID[taskID]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	for _, task := range s.created {
+		if task.ID == taskID {
+			clone := *task
+			clone.Status = status
+			return &clone, nil
+		}
+	}
+	for _, task := range s.claimQueue {
+		if task.ID == taskID {
+			clone := *task
+			clone.Status = status
+			return &clone, nil
+		}
+	}
+	return &UsageCleanupTask{ID: taskID, Status: status}, nil
+}
+
 func (s *cleanupRepoStub) ClaimNextPendingTask(ctx context.Context, staleRunningAfterSeconds int64) (*UsageCleanupTask, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -824,6 +851,61 @@ func TestUsageCleanupServiceDefaultsAndLifecycle(t *testing.T) {
 
 	svcMissingDeps := NewUsageCleanupService(nil, nil, nil, cfgFallback)
 	svcMissingDeps.Start()
+}
+
+func TestUsageCleanupServiceDataCleanupSnapshotCapsRowsAndRecomputesAllRange(t *testing.T) {
+	start := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(48 * time.Hour)
+	repo := &cleanupRepoStub{
+		statusByID: map[int64]string{21: UsageCleanupStatusRunning},
+		deleteQueue: []cleanupDeleteResponse{
+			{deleted: 2},
+			{deleted: 2},
+		},
+	}
+	dashboardRepo := &dashboardRepoStub{}
+	dashboard := &DashboardAggregationService{repo: dashboardRepo, cfg: config.DashboardAggregationConfig{Enabled: true}}
+	svc := NewUsageCleanupService(repo, nil, dashboard, &config.Config{UsageCleanup: config.UsageCleanupConfig{Enabled: true, BatchSize: 5}})
+	task := &UsageCleanupTask{
+		ID: 21,
+		Filters: UsageCleanupFilters{
+			All:                      true,
+			StartTime:                start,
+			EndTime:                  end,
+			DataCleanupAuditID:       8,
+			DataCleanupSnapshotMaxID: 100,
+			DataCleanupSnapshotRows:  2,
+		},
+	}
+
+	svc.executeTask(context.Background(), task)
+	require.Len(t, repo.deleteCalls, 1)
+	require.Equal(t, 2, repo.deleteCalls[0].limit)
+	require.Equal(t, int64(2), task.DeletedRows)
+	require.Eventually(t, func() bool { return dashboardRepo.recomputeCalls == 1 }, time.Second, 10*time.Millisecond)
+}
+
+func TestUsageCleanupServiceCancelNotifiesDataCleanupAudit(t *testing.T) {
+	task := &UsageCleanupTask{
+		ID:      31,
+		Status:  UsageCleanupStatusPending,
+		Filters: UsageCleanupFilters{DataCleanupAuditID: 77},
+	}
+	repo := &cleanupRepoStub{
+		created:    []*UsageCleanupTask{task},
+		statusByID: map[int64]string{31: UsageCleanupStatusPending},
+	}
+	svc := NewUsageCleanupService(repo, nil, nil, &config.Config{UsageCleanup: config.UsageCleanupConfig{Enabled: true}})
+	var gotAuditID int64
+	var gotStatus string
+	svc.SetDataCleanupCompletionHook(func(_ context.Context, completed *UsageCleanupTask, status string, _ error) {
+		gotAuditID = completed.Filters.DataCleanupAuditID
+		gotStatus = status
+	})
+
+	require.NoError(t, svc.CancelTask(context.Background(), 31, 9))
+	require.Equal(t, int64(77), gotAuditID)
+	require.Equal(t, UsageCleanupStatusCanceled, gotStatus)
 }
 
 func TestSanitizeUsageCleanupFiltersModelEmpty(t *testing.T) {

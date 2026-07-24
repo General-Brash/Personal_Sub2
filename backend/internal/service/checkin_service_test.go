@@ -347,6 +347,13 @@ func TestCheckinService_GetStatusReturnsShanghaiMonthCalendarAndNextReward(t *te
 	require.Equal(t, expiresAt.UTC(), *status.TemporaryCreditEarliestExpiresAt)
 	require.Equal(t, "7.00000000", status.MonthlyRewardTotal)
 	require.Equal(t, "2.50000000", status.MonthlyPermanentRewardTotal)
+	require.Len(t, status.RewardTiers, 7)
+	require.Equal(t, DailyCheckinRewardTierStatus{
+		Day:             1,
+		Amount:          "1.00000000",
+		PermanentAmount: "0.00000000",
+	}, status.RewardTiers[0])
+	require.Equal(t, 7, status.RewardTiers[6].Day)
 	require.Len(t, status.Calendar, 1)
 	require.Equal(t, "2026-07-13", status.Calendar[0].CheckinDate)
 	require.Equal(t, "0.50000000", status.Calendar[0].PermanentRewardAmount)

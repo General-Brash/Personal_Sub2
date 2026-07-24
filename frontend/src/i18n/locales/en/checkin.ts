@@ -12,6 +12,7 @@ export default {
     nextDayReward: 'Next-day reward',
     permanentReward: 'Permanent credit',
     rewardDay: 'Day {day}',
+    rewardTierCapNotice: 'After day {day}, the day {day} reward continues to apply.',
     reward: 'Reward',
     resultTitle: 'Check-in result',
     temporaryReward: 'Temporary credit reward',

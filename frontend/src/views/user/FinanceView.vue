@@ -7,8 +7,9 @@
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('finance.description') }}</p>
         </div>
         <RouterLink
-          v-if="authStore.isAdmin"
+          v-if="showAdminFinance"
           to="/admin/finance"
+          data-test="admin-finance-button"
           class="btn btn-secondary inline-flex min-h-10 items-center justify-center gap-2 self-start"
         >
           <Icon name="users" size="sm" />
@@ -23,10 +24,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { computed } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import LedgerWorkspace from '@/components/finance/LedgerWorkspace.vue'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const showAdminFinance = computed(() => authStore.isAdmin && isFeatureFlagEnabled(FeatureFlags.adminFinance))
 </script>

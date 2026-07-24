@@ -56,6 +56,10 @@ func TestSettingService_InitializeDefaultSettings_PageVisibilityDefaultsToEnable
 	require.Equal(t, "true", repo.updates[SettingKeyAdminSubscriptionsEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyAdminPromoCodesEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyAdminChannelManagementEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyAdminFinanceEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyAdminBankTransactionsEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyAdminAuditLogsEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyAdminOpsEnabled])
 }
 
 func TestSettingService_GetAllSettings_PageVisibilityDefaultsToEnabledWhenMissing(t *testing.T) {
@@ -68,6 +72,10 @@ func TestSettingService_GetAllSettings_PageVisibilityDefaultsToEnabledWhenMissin
 	require.True(t, settings.AdminSubscriptionsEnabled)
 	require.True(t, settings.AdminPromoCodesEnabled)
 	require.True(t, settings.AdminChannelManagementEnabled)
+	require.True(t, settings.AdminFinanceEnabled)
+	require.True(t, settings.AdminBankTransactionsEnabled)
+	require.True(t, settings.AdminAuditLogsEnabled)
+	require.True(t, settings.AdminOpsEnabled)
 }
 
 func TestSettingService_GetAllSettings_PageVisibilityHonorsExplicitFalse(t *testing.T) {
@@ -77,6 +85,10 @@ func TestSettingService_GetAllSettings_PageVisibilityHonorsExplicitFalse(t *test
 		SettingKeyAdminSubscriptionsEnabled:     "false",
 		SettingKeyAdminPromoCodesEnabled:        "false",
 		SettingKeyAdminChannelManagementEnabled: "false",
+		SettingKeyAdminFinanceEnabled:           "false",
+		SettingKeyAdminBankTransactionsEnabled:  "false",
+		SettingKeyAdminAuditLogsEnabled:         "false",
+		SettingKeyAdminOpsEnabled:               "false",
 	}}, &config.Config{})
 
 	settings, err := svc.GetAllSettings(context.Background())
@@ -86,6 +98,10 @@ func TestSettingService_GetAllSettings_PageVisibilityHonorsExplicitFalse(t *test
 	require.False(t, settings.AdminSubscriptionsEnabled)
 	require.False(t, settings.AdminPromoCodesEnabled)
 	require.False(t, settings.AdminChannelManagementEnabled)
+	require.False(t, settings.AdminFinanceEnabled)
+	require.False(t, settings.AdminBankTransactionsEnabled)
+	require.False(t, settings.AdminAuditLogsEnabled)
+	require.False(t, settings.AdminOpsEnabled)
 }
 
 func TestSettingService_UpdateSettings_PersistsPageVisibility(t *testing.T) {
@@ -98,6 +114,10 @@ func TestSettingService_UpdateSettings_PersistsPageVisibility(t *testing.T) {
 		AdminSubscriptionsEnabled:     true,
 		AdminPromoCodesEnabled:        false,
 		AdminChannelManagementEnabled: true,
+		AdminFinanceEnabled:           false,
+		AdminBankTransactionsEnabled:  true,
+		AdminAuditLogsEnabled:         false,
+		AdminOpsEnabled:               true,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "false", repo.updates[SettingKeyUserChannelStatusEnabled])
@@ -105,6 +125,10 @@ func TestSettingService_UpdateSettings_PersistsPageVisibility(t *testing.T) {
 	require.Equal(t, "true", repo.updates[SettingKeyAdminSubscriptionsEnabled])
 	require.Equal(t, "false", repo.updates[SettingKeyAdminPromoCodesEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyAdminChannelManagementEnabled])
+	require.Equal(t, "false", repo.updates[SettingKeyAdminFinanceEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyAdminBankTransactionsEnabled])
+	require.Equal(t, "false", repo.updates[SettingKeyAdminAuditLogsEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyAdminOpsEnabled])
 }
 
 func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse(t *testing.T) {
@@ -118,6 +142,10 @@ func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse
 		require.True(t, settings.AdminSubscriptionsEnabled)
 		require.True(t, settings.AdminPromoCodesEnabled)
 		require.True(t, settings.AdminChannelManagementEnabled)
+		require.True(t, settings.AdminFinanceEnabled)
+		require.True(t, settings.AdminBankTransactionsEnabled)
+		require.True(t, settings.AdminAuditLogsEnabled)
+		require.True(t, settings.AdminOpsEnabled)
 	})
 
 	t.Run("explicit false disables each page", func(t *testing.T) {
@@ -127,6 +155,10 @@ func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse
 			SettingKeyAdminSubscriptionsEnabled:     "false",
 			SettingKeyAdminPromoCodesEnabled:        "false",
 			SettingKeyAdminChannelManagementEnabled: "false",
+			SettingKeyAdminFinanceEnabled:           "false",
+			SettingKeyAdminBankTransactionsEnabled:  "false",
+			SettingKeyAdminAuditLogsEnabled:         "false",
+			SettingKeyAdminOpsEnabled:               "false",
 		}}, &config.Config{})
 
 		settings, err := svc.GetPublicSettings(context.Background())
@@ -136,6 +168,10 @@ func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse
 		require.False(t, settings.AdminSubscriptionsEnabled)
 		require.False(t, settings.AdminPromoCodesEnabled)
 		require.False(t, settings.AdminChannelManagementEnabled)
+		require.False(t, settings.AdminFinanceEnabled)
+		require.False(t, settings.AdminBankTransactionsEnabled)
+		require.False(t, settings.AdminAuditLogsEnabled)
+		require.False(t, settings.AdminOpsEnabled)
 	})
 }
 
@@ -146,6 +182,10 @@ func TestSettingService_GetPublicSettingsForInjection_IncludesPageVisibility(t *
 		SettingKeyAdminSubscriptionsEnabled:     "false",
 		SettingKeyAdminPromoCodesEnabled:        "false",
 		SettingKeyAdminChannelManagementEnabled: "false",
+		SettingKeyAdminFinanceEnabled:           "false",
+		SettingKeyAdminBankTransactionsEnabled:  "false",
+		SettingKeyAdminAuditLogsEnabled:         "false",
+		SettingKeyAdminOpsEnabled:               "false",
 	}}, &config.Config{})
 
 	raw, err := svc.GetPublicSettingsForInjection(context.Background())
@@ -157,4 +197,8 @@ func TestSettingService_GetPublicSettingsForInjection_IncludesPageVisibility(t *
 	require.False(t, payload.AdminSubscriptionsEnabled)
 	require.False(t, payload.AdminPromoCodesEnabled)
 	require.False(t, payload.AdminChannelManagementEnabled)
+	require.False(t, payload.AdminFinanceEnabled)
+	require.False(t, payload.AdminBankTransactionsEnabled)
+	require.False(t, payload.AdminAuditLogsEnabled)
+	require.False(t, payload.AdminOpsEnabled)
 }

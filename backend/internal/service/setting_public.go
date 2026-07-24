@@ -226,6 +226,10 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAdminSubscriptionsEnabled,
 		SettingKeyAdminPromoCodesEnabled,
 		SettingKeyAdminChannelManagementEnabled,
+		SettingKeyAdminFinanceEnabled,
+		SettingKeyAdminBankTransactionsEnabled,
+		SettingKeyAdminAuditLogsEnabled,
+		SettingKeyAdminOpsEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeyAllowUserViewErrorRequests,
@@ -344,6 +348,10 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		AdminSubscriptionsEnabled:     !isFalseSettingValue(settings[SettingKeyAdminSubscriptionsEnabled]),
 		AdminPromoCodesEnabled:        !isFalseSettingValue(settings[SettingKeyAdminPromoCodesEnabled]),
 		AdminChannelManagementEnabled: !isFalseSettingValue(settings[SettingKeyAdminChannelManagementEnabled]),
+		AdminFinanceEnabled:           !isFalseSettingValue(settings[SettingKeyAdminFinanceEnabled]),
+		AdminBankTransactionsEnabled:  !isFalseSettingValue(settings[SettingKeyAdminBankTransactionsEnabled]),
+		AdminAuditLogsEnabled:         !isFalseSettingValue(settings[SettingKeyAdminAuditLogsEnabled]),
+		AdminOpsEnabled:               !isFalseSettingValue(settings[SettingKeyAdminOpsEnabled]),
 
 		AffiliateEnabled: settings[SettingKeyAffiliateEnabled] == "true",
 
@@ -513,6 +521,10 @@ type PublicSettingsInjectionPayload struct {
 	AdminSubscriptionsEnabled            bool `json:"admin_subscriptions_enabled"`
 	AdminPromoCodesEnabled               bool `json:"admin_promo_codes_enabled"`
 	AdminChannelManagementEnabled        bool `json:"admin_channel_management_enabled"`
+	AdminFinanceEnabled                  bool `json:"admin_finance_enabled"`
+	AdminBankTransactionsEnabled         bool `json:"admin_bank_transactions_enabled"`
+	AdminAuditLogsEnabled                bool `json:"admin_audit_logs_enabled"`
+	AdminOpsEnabled                      bool `json:"admin_ops_enabled"`
 	AffiliateEnabled                     bool `json:"affiliate_enabled"`
 	RiskControlEnabled                   bool `json:"risk_control_enabled"`
 	AllowUserViewErrorRequests           bool `json:"allow_user_view_error_requests"`
@@ -584,6 +596,10 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AdminSubscriptionsEnabled:            settings.AdminSubscriptionsEnabled,
 		AdminPromoCodesEnabled:               settings.AdminPromoCodesEnabled,
 		AdminChannelManagementEnabled:        settings.AdminChannelManagementEnabled,
+		AdminFinanceEnabled:                  settings.AdminFinanceEnabled,
+		AdminBankTransactionsEnabled:         settings.AdminBankTransactionsEnabled,
+		AdminAuditLogsEnabled:                settings.AdminAuditLogsEnabled,
+		AdminOpsEnabled:                      settings.AdminOpsEnabled,
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,
 		AllowUserViewErrorRequests:           settings.AllowUserViewErrorRequests,

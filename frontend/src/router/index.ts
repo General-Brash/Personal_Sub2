@@ -456,7 +456,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Ops Monitoring',
       titleKey: 'admin.ops.title',
-      descriptionKey: 'admin.ops.description'
+      descriptionKey: 'admin.ops.description',
+      requiredFeatureFlag: FeatureFlags.adminOps
     }
   },
   {
@@ -468,7 +469,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Audit Logs',
       titleKey: 'admin.audit.title',
-      descriptionKey: 'admin.audit.description'
+      descriptionKey: 'admin.audit.description',
+      requiredFeatureFlag: FeatureFlags.adminAuditLogs
     }
   },
   {
@@ -788,7 +790,8 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       requiresAdmin: true,
       title: 'Bank Transaction Log',
-      titleKey: 'finance.transactions.bankTitle'
+      titleKey: 'finance.transactions.bankTitle',
+      requiredFeatureFlag: FeatureFlags.adminBankTransactions
     }
   },
   {
@@ -800,7 +803,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'All-site Ledger',
       titleKey: 'finance.allSiteTitle',
-      descriptionKey: 'finance.allSiteDescription'
+      descriptionKey: 'finance.allSiteDescription',
+      requiredFeatureFlag: FeatureFlags.adminFinance
     }
   },
 

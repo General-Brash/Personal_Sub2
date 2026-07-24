@@ -105,7 +105,18 @@
 
       <!-- Settings Dialog (hidden in fullscreen mode) -->
       <template v-if="!isFullscreen">
-        <OpsSettingsDialog :show="showSettingsDialog" @close="showSettingsDialog = false" @saved="onSettingsSaved" />
+        <OpsSettingsDialog
+          :show="showSettingsDialog"
+          @close="showSettingsDialog = false"
+          @saved="onSettingsSaved"
+          @open-cleanup="openDataCleanup"
+        />
+        <OpsDataCleanupDialog
+          :show="showDataCleanupDialog"
+          @close="showDataCleanupDialog = false"
+          @back="backToOpsSettings"
+          @saved="onSettingsSaved"
+        />
 
         <BaseDialog :show="showAlertRulesCard" :title="t('admin.ops.alertRules.title')" width="extra-wide" @close="showAlertRulesCard = false">
           <OpsAlertRulesCard />
@@ -137,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useDebounceFn, useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -168,6 +179,7 @@ import OpsOpenAITokenStatsCard from './components/OpsOpenAITokenStatsCard.vue'
 import OpsSystemLogTable from './components/OpsSystemLogTable.vue'
 import OpsRequestDetailsModal, { type OpsRequestDetailsPreset } from './components/OpsRequestDetailsModal.vue'
 import OpsSettingsDialog from './components/OpsSettingsDialog.vue'
+import OpsDataCleanupDialog from './components/OpsDataCleanupDialog.vue'
 import OpsAlertRulesCard from './components/OpsAlertRulesCard.vue'
 
 const route = useRoute()
@@ -376,7 +388,20 @@ const requestDetailsPreset = ref<OpsRequestDetailsPreset>({
 })
 
 const showSettingsDialog = ref(false)
+const showDataCleanupDialog = ref(false)
 const showAlertRulesCard = ref(false)
+
+async function openDataCleanup() {
+  showSettingsDialog.value = false
+  await nextTick()
+  showDataCleanupDialog.value = true
+}
+
+async function backToOpsSettings() {
+  showDataCleanupDialog.value = false
+  await nextTick()
+  showSettingsDialog.value = true
+}
 
 applyRouteQueryToState()
 

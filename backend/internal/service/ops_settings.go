@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"fmt"
 	"strings"
 	"time"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 const (
@@ -362,6 +364,7 @@ func defaultOpsAdvancedSettings() *OpsAdvancedSettings {
 		DataRetention: OpsDataRetentionSettings{
 			CleanupEnabled:             false,
 			CleanupSchedule:            opsCleanupDefaultSchedule,
+			Targets:                    defaultOpsRetentionPolicies(30, 30, 30),
 			ErrorLogRetentionDays:      30,
 			MinuteMetricsRetentionDays: 30,
 			HourlyMetricsRetentionDays: 30,
@@ -381,6 +384,39 @@ func defaultOpsAdvancedSettings() *OpsAdvancedSettings {
 	}
 }
 
+func defaultOpsRetentionPolicies(errorDays, minuteDays, hourlyDays int) map[string]OpsRetentionPolicy {
+	return map[string]OpsRetentionPolicy{
+		"ops_error_logs":                {Enabled: true, RetentionDays: errorDays},
+		"ops_alert_events":              {Enabled: true, RetentionDays: errorDays},
+		"ops_system_logs":               {Enabled: true, RetentionDays: errorDays},
+		"ops_system_log_cleanup_audits": {Enabled: true, RetentionDays: errorDays},
+		"ops_system_metrics":            {Enabled: true, RetentionDays: minuteDays},
+		"ops_metrics_hourly":            {Enabled: true, RetentionDays: hourlyDays},
+		"ops_metrics_daily":             {Enabled: true, RetentionDays: hourlyDays},
+		"usage_logs":                    {Enabled: false, RetentionDays: 90},
+	}
+}
+
+func ensureOpsRetentionPolicies(cfg *OpsDataRetentionSettings) {
+	if cfg == nil {
+		return
+	}
+	defaults := defaultOpsRetentionPolicies(
+		cfg.ErrorLogRetentionDays,
+		cfg.MinuteMetricsRetentionDays,
+		cfg.HourlyMetricsRetentionDays,
+	)
+	if cfg.Targets == nil {
+		cfg.Targets = defaults
+		return
+	}
+	for key, policy := range defaults {
+		if _, ok := cfg.Targets[key]; !ok {
+			cfg.Targets[key] = policy
+		}
+	}
+}
+
 func normalizeOpsAdvancedSettings(cfg *OpsAdvancedSettings) {
 	if cfg == nil {
 		return
@@ -391,8 +427,8 @@ func normalizeOpsAdvancedSettings(cfg *OpsAdvancedSettings) {
 	if cfg.DataRetention.CleanupSchedule == "" {
 		cfg.DataRetention.CleanupSchedule = opsCleanupDefaultSchedule
 	}
-	// 保留天数：0 表示每次定时清理全部（清空所有），> 0 表示按天数保留；
-	// 仅在拿到非法的负数时回填默认值，避免覆盖用户主动设的 0。
+	// 保留天数：0 表示禁用该项自动清理，> 0 表示按天数保留。
+	// 仅在拿到非法的负数时回填默认值。
 	if cfg.DataRetention.ErrorLogRetentionDays < 0 {
 		cfg.DataRetention.ErrorLogRetentionDays = 30
 	}
@@ -402,6 +438,7 @@ func normalizeOpsAdvancedSettings(cfg *OpsAdvancedSettings) {
 	if cfg.DataRetention.HourlyMetricsRetentionDays < 0 {
 		cfg.DataRetention.HourlyMetricsRetentionDays = 30
 	}
+	ensureOpsRetentionPolicies(&cfg.DataRetention)
 	// Normalize auto refresh interval (default 30 seconds)
 	if cfg.AutoRefreshIntervalSec <= 0 {
 		cfg.AutoRefreshIntervalSec = 30
@@ -422,7 +459,7 @@ func validateOpsAdvancedSettings(cfg *OpsAdvancedSettings) error {
 	if cfg == nil {
 		return errors.New("invalid config")
 	}
-	// 保留天数：0 表示每次清理全部，1-365 表示按天数保留。
+	// 保留天数：0 表示禁用，1-365 表示按天数保留。
 	if cfg.DataRetention.ErrorLogRetentionDays < 0 || cfg.DataRetention.ErrorLogRetentionDays > 365 {
 		return errors.New("error_log_retention_days must be between 0 and 365")
 	}
@@ -431,6 +468,17 @@ func validateOpsAdvancedSettings(cfg *OpsAdvancedSettings) error {
 	}
 	if cfg.DataRetention.HourlyMetricsRetentionDays < 0 || cfg.DataRetention.HourlyMetricsRetentionDays > 365 {
 		return errors.New("hourly_metrics_retention_days must be between 0 and 365")
+	}
+	for target, policy := range cfg.DataRetention.Targets {
+		if _, ok := defaultOpsRetentionPolicies(30, 30, 30)[target]; !ok {
+			return fmt.Errorf("unsupported cleanup target %q", target)
+		}
+		if policy.RetentionDays < 0 || policy.RetentionDays > 365 {
+			return fmt.Errorf("retention_days for %s must be between 0 and 365", target)
+		}
+	}
+	if _, err := opsCleanupCronParser.Parse(strings.TrimSpace(cfg.DataRetention.CleanupSchedule)); err != nil {
+		return fmt.Errorf("cleanup_schedule is invalid: %w", err)
 	}
 	if cfg.AutoRefreshIntervalSec < 15 || cfg.AutoRefreshIntervalSec > 300 {
 		return errors.New("auto_refresh_interval_seconds must be between 15 and 300")
@@ -459,8 +507,21 @@ func (s *OpsService) GetOpsAdvancedSettings(ctx context.Context) (*OpsAdvancedSe
 	}
 
 	cfg := defaultOpsAdvancedSettings()
+	var storedShape struct {
+		DataRetention struct {
+			Targets json.RawMessage `json:"targets"`
+		} `json:"data_retention"`
+	}
+	_ = json.Unmarshal([]byte(raw), &storedShape)
 	if err := json.Unmarshal([]byte(raw), cfg); err != nil {
 		return defaultCfg, nil
+	}
+	if len(storedShape.DataRetention.Targets) == 0 || string(storedShape.DataRetention.Targets) == "null" {
+		cfg.DataRetention.Targets = defaultOpsRetentionPolicies(
+			cfg.DataRetention.ErrorLogRetentionDays,
+			cfg.DataRetention.MinuteMetricsRetentionDays,
+			cfg.DataRetention.HourlyMetricsRetentionDays,
+		)
 	}
 
 	normalizeOpsAdvancedSettings(cfg)
@@ -478,36 +539,124 @@ func (s *OpsService) UpdateOpsAdvancedSettings(ctx context.Context, cfg *OpsAdva
 		return nil, errors.New("invalid config")
 	}
 
+	normalizeOpsAdvancedSettings(cfg)
 	if err := validateOpsAdvancedSettings(cfg); err != nil {
 		return nil, err
 	}
-
-	normalizeOpsAdvancedSettings(cfg)
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, err
 	}
+	previousRaw, previousErr := s.settingRepo.GetValue(ctx, SettingKeyOpsAdvancedSettings)
+	if previousErr != nil && !errors.Is(previousErr, ErrSettingNotFound) {
+		return nil, previousErr
+	}
 	if err := s.settingRepo.Set(ctx, SettingKeyOpsAdvancedSettings, string(raw)); err != nil {
 		return nil, err
-	}
-	// Push the new quota auto-pause settings straight into the in-memory cache that
-	// the OpenAI scheduling hot path reads, so the next request observes the new value
-	// without waiting for the background refresher's TTL.
-	if s.quotaAutoPauseSink != nil {
-		s.quotaAutoPauseSink(cfg.OpenAIAccountQuotaAutoPause)
 	}
 
 	// notify cleanup service to reload schedule/enabled.
 	if s.cleanupReloader != nil {
 		if rerr := s.cleanupReloader.Reload(ctx); rerr != nil {
-			logger.LegacyPrintf("service.ops_settings",
-				"[OpsSettings] cleanup reload after advanced-settings update failed: %v", rerr)
+			rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			rollbackErr := restoreSettingValue(rollbackCtx, s.settingRepo, SettingKeyOpsAdvancedSettings, previousRaw, previousErr == nil)
+			if rollbackErr == nil {
+				rollbackErr = s.cleanupReloader.Reload(rollbackCtx)
+			}
+			cancel()
+			if rollbackErr != nil {
+				return nil, fmt.Errorf("reload cleanup schedule: %v; rollback failed: %w", rerr, rollbackErr)
+			}
+			return nil, fmt.Errorf("reload cleanup schedule: %w", rerr)
 		}
+	}
+	// Push the new quota auto-pause settings only after cleanup reload succeeds.
+	if s.quotaAutoPauseSink != nil {
+		s.quotaAutoPauseSink(cfg.OpenAIAccountQuotaAutoPause)
 	}
 
 	updated := &OpsAdvancedSettings{}
 	_ = json.Unmarshal(raw, updated)
 	return updated, nil
+}
+
+func (s *OpsService) UpdateDataCleanupSettings(ctx context.Context, retention OpsDataRetentionSettings, auditRetentionDays int) (*OpsAdvancedSettings, error) {
+	if s == nil || s.settingRepo == nil {
+		return nil, errors.New("setting repository not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if auditRetentionDays < 0 || auditRetentionDays > 3650 {
+		return nil, infraerrors.BadRequest("DATA_CLEANUP_AUDIT_RETENTION_INVALID", "audit log retention days must be between 0 and 3650")
+	}
+	advanced, err := s.GetOpsAdvancedSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	advanced.DataRetention = retention
+	normalizeOpsAdvancedSettings(advanced)
+	if err := validateOpsAdvancedSettings(advanced); err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(advanced)
+	if err != nil {
+		return nil, err
+	}
+	keys := []string{SettingKeyOpsAdvancedSettings, SettingKeyAuditLogRetentionDays}
+	previous, err := s.settingRepo.GetMultiple(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	updates := map[string]string{
+		SettingKeyOpsAdvancedSettings:   string(raw),
+		SettingKeyAuditLogRetentionDays: fmt.Sprintf("%d", auditRetentionDays),
+	}
+	if err := s.settingRepo.SetMultiple(ctx, updates); err != nil {
+		return nil, err
+	}
+	if s.cleanupReloader != nil {
+		if reloadErr := s.cleanupReloader.Reload(ctx); reloadErr != nil {
+			rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			rollbackErr := restoreSettingValues(rollbackCtx, s.settingRepo, keys, previous)
+			if rollbackErr == nil {
+				rollbackErr = s.cleanupReloader.Reload(rollbackCtx)
+			}
+			cancel()
+			if rollbackErr != nil {
+				return nil, fmt.Errorf("reload cleanup schedule: %v; rollback failed: %w", reloadErr, rollbackErr)
+			}
+			return nil, fmt.Errorf("reload cleanup schedule: %w", reloadErr)
+		}
+	}
+	return advanced, nil
+}
+
+func restoreSettingValue(ctx context.Context, repo SettingRepository, key, value string, existed bool) error {
+	if existed {
+		return repo.Set(ctx, key, value)
+	}
+	return repo.Delete(ctx, key)
+}
+
+func restoreSettingValues(ctx context.Context, repo SettingRepository, keys []string, previous map[string]string) error {
+	toRestore := make(map[string]string, len(previous))
+	for _, key := range keys {
+		if value, ok := previous[key]; ok {
+			toRestore[key] = value
+		}
+	}
+	if err := repo.SetMultiple(ctx, toRestore); err != nil {
+		return err
+	}
+	for _, key := range keys {
+		if _, ok := previous[key]; !ok {
+			if err := repo.Delete(ctx, key); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // =========================

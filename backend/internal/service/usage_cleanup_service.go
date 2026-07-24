@@ -35,6 +35,9 @@ type UsageCleanupService struct {
 
 	workerCtx    context.Context
 	workerCancel context.CancelFunc
+
+	completionMu   sync.RWMutex
+	completionHook func(context.Context, *UsageCleanupTask, string, error)
 }
 
 func NewUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboard *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
@@ -49,10 +52,37 @@ func NewUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWhee
 	}
 }
 
+// SetDataCleanupCompletionHook connects task completion to the independent
+// destructive-cleanup audit trail. It is intentionally a single startup hook.
+func (s *UsageCleanupService) SetDataCleanupCompletionHook(hook func(context.Context, *UsageCleanupTask, string, error)) {
+	if s == nil {
+		return
+	}
+	s.completionMu.Lock()
+	s.completionHook = hook
+	s.completionMu.Unlock()
+}
+
+func (s *UsageCleanupService) notifyDataCleanupCompletion(ctx context.Context, task *UsageCleanupTask, status string, err error) {
+	if s == nil || task == nil || task.Filters.DataCleanupAuditID <= 0 {
+		return
+	}
+	s.completionMu.RLock()
+	hook := s.completionHook
+	s.completionMu.RUnlock()
+	if hook != nil {
+		hook(ctx, task, status, err)
+	}
+}
+
 func describeUsageCleanupFilters(filters UsageCleanupFilters) string {
 	var parts []string
-	parts = append(parts, "start="+filters.StartTime.UTC().Format(time.RFC3339))
-	parts = append(parts, "end="+filters.EndTime.UTC().Format(time.RFC3339))
+	if filters.All {
+		parts = append(parts, "all=true")
+	} else {
+		parts = append(parts, "start="+filters.StartTime.UTC().Format(time.RFC3339))
+		parts = append(parts, "end="+filters.EndTime.UTC().Format(time.RFC3339))
+	}
 	if filters.UserID != nil {
 		parts = append(parts, fmt.Sprintf("user_id=%d", *filters.UserID))
 	}
@@ -120,6 +150,34 @@ func (s *UsageCleanupService) ListTasks(ctx context.Context, params pagination.P
 		return nil, nil, fmt.Errorf("cleanup service not ready")
 	}
 	return s.repo.ListTasks(ctx, params)
+}
+
+// RunRetention removes usage rows older than cutoff through the same bounded
+// repository path used by cleanup tasks. Scheduling and leader election are
+// owned by OpsCleanupService, so this method does not start another worker.
+func (s *UsageCleanupService) RunRetention(ctx context.Context, cutoff time.Time) (int64, error) {
+	if s == nil || s.repo == nil {
+		return 0, fmt.Errorf("cleanup service not ready")
+	}
+	filters := UsageCleanupFilters{
+		StartTime: time.Unix(0, 0).UTC(),
+		EndTime:   cutoff.UTC(),
+	}
+	var total int64
+	for {
+		deleted, err := s.repo.DeleteUsageLogsBatch(ctx, filters, s.batchSize())
+		if err != nil {
+			return total, err
+		}
+		total += deleted
+		if deleted < int64(s.batchSize()) {
+			break
+		}
+	}
+	if total > 0 && s.dashboard != nil {
+		_ = s.dashboard.TriggerRecomputeRange(filters.StartTime, filters.EndTime)
+	}
+	return total, nil
 }
 
 func (s *UsageCleanupService) CreateTask(ctx context.Context, filters UsageCleanupFilters, createdBy int64) (*UsageCleanupTask, error) {
@@ -205,15 +263,29 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 		canceled, err := s.isTaskCanceled(ctx, task.ID)
 		if err != nil {
 			s.markTaskFailed(task.ID, deletedTotal, err)
+			task.DeletedRows = deletedTotal
+			s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusFailed, err)
 			return
 		}
 		if canceled {
 			logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task canceled: task=%d deleted_rows=%d duration=%s", task.ID, deletedTotal, time.Since(start))
+			task.DeletedRows = deletedTotal
+			s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusCanceled, nil)
 			return
 		}
 
 		batchNum++
-		deleted, err := s.repo.DeleteUsageLogsBatch(ctx, task.Filters, batchSize)
+		deleteLimit := batchSize
+		if task.Filters.DataCleanupAuditID > 0 {
+			remaining := task.Filters.DataCleanupSnapshotRows - deletedTotal
+			if remaining <= 0 {
+				break
+			}
+			if remaining < int64(deleteLimit) {
+				deleteLimit = int(remaining)
+			}
+		}
+		deleted, err := s.repo.DeleteUsageLogsBatch(ctx, task.Filters, deleteLimit)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				// 任务被中断（例如服务停止/超时），保持 running 状态，后续通过 stale reclaim 续跑。
@@ -221,6 +293,8 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 				return
 			}
 			s.markTaskFailed(task.ID, deletedTotal, err)
+			task.DeletedRows = deletedTotal
+			s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusFailed, err)
 			return
 		}
 		deletedTotal += deleted
@@ -231,10 +305,10 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 			}
 			cancel()
 		}
-		if batchNum <= 3 || batchNum%20 == 0 || deleted < int64(batchSize) {
+		if batchNum <= 3 || batchNum%20 == 0 || deleted < int64(deleteLimit) {
 			logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task batch done: task=%d batch=%d deleted=%d deleted_total=%d", task.ID, batchNum, deleted, deletedTotal)
 		}
-		if deleted == 0 || deleted < int64(batchSize) {
+		if deleted == 0 || deleted < int64(deleteLimit) {
 			break
 		}
 	}
@@ -243,11 +317,15 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 	defer cancel()
 	if err := s.repo.MarkTaskSucceeded(updateCtx, task.ID, deletedTotal); err != nil {
 		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] update task succeeded failed: task=%d err=%v", task.ID, err)
+		task.DeletedRows = deletedTotal
+		s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusFailed, err)
 	} else {
 		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task succeeded: task=%d deleted_rows=%d duration=%s", task.ID, deletedTotal, time.Since(start))
+		task.DeletedRows = deletedTotal
+		s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusSucceeded, nil)
 	}
 
-	if s.dashboard != nil {
+	if s.dashboard != nil && task.Filters.EndTime.After(task.Filters.StartTime) {
 		if err := s.dashboard.TriggerRecomputeRange(task.Filters.StartTime, task.Filters.EndTime); err != nil {
 			logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] trigger dashboard recompute failed: task=%d err=%v", task.ID, err)
 		} else {
@@ -289,6 +367,9 @@ func (s *UsageCleanupService) isTaskCanceled(ctx context.Context, taskID int64) 
 }
 
 func (s *UsageCleanupService) validateFilters(filters UsageCleanupFilters) error {
+	if filters.All {
+		return nil
+	}
 	if filters.StartTime.IsZero() || filters.EndTime.IsZero() {
 		return infraerrors.BadRequest("USAGE_CLEANUP_MISSING_RANGE", "start_date and end_date are required")
 	}
@@ -315,16 +396,18 @@ func (s *UsageCleanupService) CancelTask(ctx context.Context, taskID int64, canc
 	if canceledBy <= 0 {
 		return infraerrors.BadRequest("USAGE_CLEANUP_INVALID_CANCELLER", "invalid canceller")
 	}
-	status, err := s.repo.GetTaskStatus(ctx, taskID)
+	task, err := s.repo.GetTask(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return infraerrors.New(http.StatusNotFound, "USAGE_CLEANUP_TASK_NOT_FOUND", "cleanup task not found")
 		}
 		return err
 	}
+	status := task.Status
 	logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] cancel_task requested: task=%d operator=%d status=%s", taskID, canceledBy, status)
 	if status == UsageCleanupStatusCanceled {
 		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] cancel_task idempotent hit: task=%d operator=%d", taskID, canceledBy)
+		s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusCanceled, nil)
 		return nil
 	}
 	if status != UsageCleanupStatusPending && status != UsageCleanupStatusRunning {
@@ -339,11 +422,15 @@ func (s *UsageCleanupService) CancelTask(ctx context.Context, taskID int64, canc
 		currentStatus, getErr := s.repo.GetTaskStatus(ctx, taskID)
 		if getErr == nil && currentStatus == UsageCleanupStatusCanceled {
 			logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] cancel_task idempotent race hit: task=%d operator=%d", taskID, canceledBy)
+			task.Status = UsageCleanupStatusCanceled
+			s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusCanceled, nil)
 			return nil
 		}
 		return infraerrors.New(http.StatusConflict, "USAGE_CLEANUP_CANCEL_CONFLICT", "cleanup task cannot be canceled in current status")
 	}
 	logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] cancel_task done: task=%d operator=%d", taskID, canceledBy)
+	task.Status = UsageCleanupStatusCanceled
+	s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusCanceled, nil)
 	return nil
 }
 

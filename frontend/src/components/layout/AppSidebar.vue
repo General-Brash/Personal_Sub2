@@ -690,6 +690,10 @@ const flagUserSubscriptions = makeSidebarFlag(FeatureFlags.userSubscriptions)
 const flagAdminSubscriptions = makeSidebarFlag(FeatureFlags.adminSubscriptions)
 const flagAdminPromoCodes = makeSidebarFlag(FeatureFlags.adminPromoCodes)
 const flagAdminChannelManagement = makeSidebarFlag(FeatureFlags.adminChannelManagement)
+const flagAdminFinance = makeSidebarFlag(FeatureFlags.adminFinance)
+const flagAdminBankTransactions = makeSidebarFlag(FeatureFlags.adminBankTransactions)
+const flagAdminAuditLogs = makeSidebarFlag(FeatureFlags.adminAuditLogs)
+const flagAdminOps = makeSidebarFlag(FeatureFlags.adminOps)
 const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
@@ -770,7 +774,7 @@ const customMenuItemsForAdmin = computed(() => {
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
-    { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
+    { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: () => flagOpsMonitoring() && flagAdminOps() },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
     {
@@ -832,10 +836,10 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/orders/mall-transactions', label: t('finance.transactions.mallTitle'), icon: OrderListIcon },
       ],
     },
-    { path: '/admin/bank/transactions', label: t('finance.transactions.bankTitle'), icon: CreditCardIcon, hideInSimpleMode: true },
-    { path: '/admin/finance', label: t('finance.allSiteTitle'), icon: ChartIcon },
+    { path: '/admin/bank/transactions', label: t('finance.transactions.bankTitle'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagAdminBankTransactions },
+    { path: '/admin/finance', label: t('finance.allSiteTitle'), icon: ChartIcon, featureFlag: flagAdminFinance },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
-    { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
+    { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true, featureFlag: flagAdminAuditLogs }
   ]
 
   const visible = applyFeatureFlags(baseItems)

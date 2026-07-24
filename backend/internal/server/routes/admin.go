@@ -215,6 +215,16 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.GET("/advanced-settings", h.Admin.Ops.GetAdvancedSettings)
 		ops.PUT("/advanced-settings", h.Admin.Ops.UpdateAdvancedSettings)
 
+		// Destructive cleanup center. All routes remain under admin auth + audit middleware.
+		if h.Admin.DataCleanup != nil {
+			dataCleanup := ops.Group("/data-cleanup")
+			dataCleanup.GET("/config", h.Admin.DataCleanup.GetConfig)
+			dataCleanup.PUT("/config", h.Admin.DataCleanup.UpdateConfig)
+			dataCleanup.POST("/preview", h.Admin.DataCleanup.Preview)
+			dataCleanup.POST("/execute", h.Admin.DataCleanup.Execute)
+			dataCleanup.GET("/audits", h.Admin.DataCleanup.ListAudits)
+		}
+
 		// Settings group (DB-backed)
 		settings := ops.Group("/settings")
 		{

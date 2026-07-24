@@ -134,6 +134,26 @@ export const FeatureFlags = {
     mode: 'opt-out',
     label: 'Admin Channel Management',
   }),
+  adminFinance: defineFlag({
+    key: 'admin_finance_enabled',
+    mode: 'opt-out',
+    label: 'Admin Finance',
+  }),
+  adminBankTransactions: defineFlag({
+    key: 'admin_bank_transactions_enabled',
+    mode: 'opt-out',
+    label: 'Admin Bank Transactions',
+  }),
+  adminAuditLogs: defineFlag({
+    key: 'admin_audit_logs_enabled',
+    mode: 'opt-out',
+    label: 'Admin Audit Logs',
+  }),
+  adminOps: defineFlag({
+    key: 'admin_ops_enabled',
+    mode: 'opt-out',
+    label: 'Admin Ops',
+  }),
   payment: defineFlag({
     key: 'payment_enabled',
     mode: 'opt-out',

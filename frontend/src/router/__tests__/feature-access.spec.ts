@@ -33,6 +33,10 @@ const appStore = vi.hoisted(() => ({
     admin_subscriptions_enabled?: boolean
     admin_promo_codes_enabled?: boolean
     admin_channel_management_enabled?: boolean
+    admin_finance_enabled?: boolean
+    admin_bank_transactions_enabled?: boolean
+    admin_audit_logs_enabled?: boolean
+    admin_ops_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
@@ -158,10 +162,33 @@ describe('feature route guard', () => {
     ['/admin/channels', 'admin_channel_management_enabled'],
     ['/admin/channels/pricing', 'admin_channel_management_enabled'],
     ['/admin/channels/monitor', 'admin_channel_management_enabled'],
+    ['/admin/finance', 'admin_finance_enabled'],
+    ['/admin/bank/transactions', 'admin_bank_transactions_enabled'],
+    ['/admin/audit-logs', 'admin_audit_logs_enabled'],
+    ['/admin/ops', 'admin_ops_enabled'],
   ])('binds %s to the %s route meta flag', (path, key) => {
     const route = routerHarness.routes.find((item) => item.path === path)
 
     expect(route?.meta?.requiredFeatureFlag?.key).toBe(key)
+  })
+
+  it.each([
+    ['/admin/finance', 'admin_finance_enabled'],
+    ['/admin/bank/transactions', 'admin_bank_transactions_enabled'],
+    ['/admin/audit-logs', 'admin_audit_logs_enabled'],
+    ['/admin/ops', 'admin_ops_enabled'],
+  ])('blocks direct access to disabled administrator page %s', async (path, key) => {
+    const route = routerHarness.routes.find((item) => item.path === path)
+    authStore.isAdmin = true
+    appStore.cachedPublicSettings = { [key]: false }
+    appStore.publicSettingsLoaded = true
+
+    const { navigation, next } = runGuard(route?.meta ?? {}, path)
+    await navigation
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith('/admin/dashboard')
+    expect(appStore.showWarning).toHaveBeenCalledWith('common.pageDisabledByAdmin')
   })
 
   it.each(['/monitor', '/admin/channels/monitor'])(

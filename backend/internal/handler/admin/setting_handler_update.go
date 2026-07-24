@@ -312,6 +312,10 @@ type UpdateSettingsRequest struct {
 	AdminSubscriptionsEnabled     *bool `json:"admin_subscriptions_enabled"`
 	AdminPromoCodesEnabled        *bool `json:"admin_promo_codes_enabled"`
 	AdminChannelManagementEnabled *bool `json:"admin_channel_management_enabled"`
+	AdminFinanceEnabled           *bool `json:"admin_finance_enabled"`
+	AdminBankTransactionsEnabled  *bool `json:"admin_bank_transactions_enabled"`
+	AdminAuditLogsEnabled         *bool `json:"admin_audit_logs_enabled"`
+	AdminOpsEnabled               *bool `json:"admin_ops_enabled"`
 
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled *bool `json:"affiliate_enabled"`
@@ -1575,6 +1579,30 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.AdminChannelManagementEnabled
 		}(),
+		AdminFinanceEnabled: func() bool {
+			if req.AdminFinanceEnabled != nil {
+				return *req.AdminFinanceEnabled
+			}
+			return previousSettings.AdminFinanceEnabled
+		}(),
+		AdminBankTransactionsEnabled: func() bool {
+			if req.AdminBankTransactionsEnabled != nil {
+				return *req.AdminBankTransactionsEnabled
+			}
+			return previousSettings.AdminBankTransactionsEnabled
+		}(),
+		AdminAuditLogsEnabled: func() bool {
+			if req.AdminAuditLogsEnabled != nil {
+				return *req.AdminAuditLogsEnabled
+			}
+			return previousSettings.AdminAuditLogsEnabled
+		}(),
+		AdminOpsEnabled: func() bool {
+			if req.AdminOpsEnabled != nil {
+				return *req.AdminOpsEnabled
+			}
+			return previousSettings.AdminOpsEnabled
+		}(),
 		AffiliateEnabled: func() bool {
 			if req.AffiliateEnabled != nil {
 				return *req.AffiliateEnabled
@@ -1964,6 +1992,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AdminSubscriptionsEnabled:     updatedSettings.AdminSubscriptionsEnabled,
 		AdminPromoCodesEnabled:        updatedSettings.AdminPromoCodesEnabled,
 		AdminChannelManagementEnabled: updatedSettings.AdminChannelManagementEnabled,
+		AdminFinanceEnabled:           updatedSettings.AdminFinanceEnabled,
+		AdminBankTransactionsEnabled:  updatedSettings.AdminBankTransactionsEnabled,
+		AdminAuditLogsEnabled:         updatedSettings.AdminAuditLogsEnabled,
+		AdminOpsEnabled:               updatedSettings.AdminOpsEnabled,
 
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
 

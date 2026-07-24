@@ -6,18 +6,43 @@
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('checkin.title') }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('checkin.description') }}</p>
         </div>
-        <button
-          v-if="status?.enabled"
-          data-test="check-in-button"
-          type="button"
-          class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="!canCheckIn"
-          @click="handleCheckIn"
+        <div
+          v-if="authStore.isAdmin || status?.enabled"
+          class="flex max-w-full flex-wrap items-center gap-2 sm:justify-end"
         >
-          <Icon name="gift" size="sm" />
-          {{ checkInButtonLabel }}
-        </button>
+          <button
+            v-if="authStore.isAdmin"
+            data-test="checkin-settings-button"
+            type="button"
+            class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-700"
+            @click="showCheckinSettings = true"
+          >
+            <Icon name="cog" size="sm" />
+            {{ t('checkin.admin.settingsTitle') }}
+          </button>
+          <button
+            v-if="status?.enabled"
+            data-test="check-in-button"
+            type="button"
+            class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!canCheckIn"
+            @click="handleCheckIn"
+          >
+            <Icon name="gift" size="sm" />
+            {{ checkInButtonLabel }}
+          </button>
+        </div>
       </div>
+
+      <BaseDialog
+        :show="showCheckinSettings"
+        :title="t('checkin.admin.settingsTitle')"
+        width="extra-wide"
+        close-on-click-outside
+        @close="showCheckinSettings = false"
+      >
+        <CheckinSettingsCard v-if="showCheckinSettings" :show-header="false" />
+      </BaseDialog>
 
       <div v-if="loading" class="card flex min-h-48 items-center justify-center">
         <Icon name="refresh" size="lg" class="animate-spin text-primary-600" />
@@ -72,7 +97,93 @@
             </p>
           </div>
           <div data-test="checkin-stat-card" class="card flex min-w-0 flex-col p-4">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('checkin.nextDayReward') }}</p>
+            <div class="flex min-w-0 items-start justify-between gap-2">
+              <p class="min-w-0 text-xs font-medium text-gray-500 dark:text-gray-400">
+                {{ t('checkin.nextDayReward') }}
+              </p>
+              <div
+                ref="rewardGuideRef"
+                data-test="reward-guide"
+                class="relative flex-none"
+                @mouseenter="rewardGuideHovered = true"
+                @mouseleave="rewardGuideHovered = false"
+                @focusin="rewardGuideFocused = true"
+                @focusout="handleRewardGuideFocusOut"
+                @keydown.escape.stop="closeRewardGuide"
+              >
+                <button
+                  data-test="reward-guide-button"
+                  type="button"
+                  class="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 dark:text-gray-500 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                  :aria-label="t('checkin.admin.rewardTiers')"
+                  aria-controls="checkin-reward-guide"
+                  :aria-expanded="rewardGuideVisible"
+                  @click.stop="toggleRewardGuide"
+                >
+                  <Icon name="questionCircle" size="sm" />
+                </button>
+
+                <div
+                  id="checkin-reward-guide"
+                  v-show="rewardGuideVisible"
+                  data-test="reward-guide-popover"
+                  role="tooltip"
+                  class="absolute right-0 top-7 z-30 w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] rounded-lg bg-white p-3 shadow-xl dark:bg-dark-800"
+                  @click.stop
+                >
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white">
+                    {{ t('checkin.admin.rewardTiers') }}
+                  </p>
+                  <div class="mt-2 max-h-72 overflow-y-auto overscroll-contain">
+                    <table class="w-full table-fixed border-separate border-spacing-y-1 text-xs">
+                      <colgroup>
+                        <col class="w-[30%]" />
+                        <col class="w-[35%]" />
+                        <col class="w-[35%]" />
+                      </colgroup>
+                      <thead class="sticky top-0 bg-white text-gray-500 dark:bg-dark-800 dark:text-gray-400">
+                        <tr>
+                          <th scope="col" class="px-1.5 py-1 text-left font-medium">
+                            {{ t('checkin.admin.rewardDayColumn') }}
+                          </th>
+                          <th scope="col" class="px-1.5 py-1 text-right font-medium">
+                            {{ t('checkin.admin.temporaryCredit') }}
+                          </th>
+                          <th scope="col" class="px-1.5 py-1 text-right font-medium">
+                            {{ t('checkin.admin.permanentCredit') }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody class="text-gray-700 dark:text-gray-200">
+                        <tr
+                          v-for="tier in rewardTiers"
+                          :key="tier.day"
+                          data-test="reward-tier-row"
+                          class="odd:bg-gray-50 dark:odd:bg-dark-700/50"
+                        >
+                          <th scope="row" class="rounded-l px-1.5 py-1.5 text-left font-medium">
+                            {{ t('checkin.rewardDay', { day: tier.day }) }}
+                          </th>
+                          <td class="break-all px-1.5 py-1.5 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+                            {{ formatCredit(tier.amount) }}
+                          </td>
+                          <td class="break-all rounded-r px-1.5 py-1.5 text-right font-mono tabular-nums text-indigo-600 dark:text-indigo-400">
+                            {{ formatCredit(tier.permanent_amount) }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p
+                    v-if="rewardTierCapDay > 0"
+                    data-test="reward-tier-cap"
+                    class="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('checkin.rewardTierCapNotice', { day: rewardTierCapDay }) }}
+                  </p>
+                </div>
+              </div>
+            </div>
             <p
               data-test="next-reward"
               class="mt-2 flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 gap-y-0.5 tabular-nums"
@@ -193,9 +304,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import CheckinSettingsCard from '@/components/admin/settings/CheckinSettingsCard.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { checkIn, getCheckinStatus, type CheckinCalendarEntry, type CheckinResult, type CheckinStatus } from '@/api/checkin'
 import { useAppStore } from '@/stores/app'
@@ -221,7 +334,12 @@ const lastCheckinResult = ref<CheckinResult | null>(null)
 const loading = ref(true)
 const loadFailed = ref(false)
 const submitting = ref(false)
+const showCheckinSettings = ref(false)
 const currentMonth = ref(getBeijingDate().slice(0, 7))
+const rewardGuideRef = ref<HTMLElement | null>(null)
+const rewardGuideHovered = ref(false)
+const rewardGuideFocused = ref(false)
+const rewardGuidePinned = ref(false)
 let latestStatusRequest = 0
 
 const canCheckIn = computed(() => Boolean(status.value?.enabled && !status.value.today_checked_in && !submitting.value))
@@ -232,6 +350,11 @@ const checkInButtonLabel = computed(() => {
   return t('checkin.checkIn')
 })
 const temporaryCreditText = computed(() => status.value ? formatCredit(status.value.temporary_credit_available) : '')
+const rewardTiers = computed(() => status.value?.reward_tiers ?? [])
+const rewardTierCapDay = computed(() => rewardTiers.value[rewardTiers.value.length - 1]?.day ?? 0)
+const rewardGuideVisible = computed(
+  () => rewardGuideHovered.value || rewardGuideFocused.value || rewardGuidePinned.value,
+)
 
 const calendarEntries = computed(() => {
   const entries = new Map<string, CheckinCalendarEntry>()
@@ -279,6 +402,33 @@ function changeMonth(offset: number) {
   const target = new Date(Date.UTC(year, month - 1 + offset, 1))
   currentMonth.value = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, '0')}`
   void loadStatus(currentMonth.value)
+}
+
+function handleRewardGuideFocusOut(event: FocusEvent) {
+  const nextTarget = event.relatedTarget as Node | null
+  if (nextTarget && rewardGuideRef.value?.contains(nextTarget)) return
+  rewardGuideFocused.value = false
+}
+
+function toggleRewardGuide(event: MouseEvent) {
+  rewardGuidePinned.value = !rewardGuidePinned.value
+  if (!rewardGuidePinned.value) {
+    rewardGuideFocused.value = false
+    ;(event.currentTarget as HTMLElement | null)?.blur()
+  }
+}
+
+function closeRewardGuide() {
+  rewardGuideHovered.value = false
+  rewardGuideFocused.value = false
+  rewardGuidePinned.value = false
+}
+
+function handleDocumentPointerDown(event: PointerEvent) {
+  if (!rewardGuidePinned.value) return
+  const target = event.target as Node | null
+  if (target && rewardGuideRef.value?.contains(target)) return
+  rewardGuidePinned.value = false
 }
 
 async function handleCheckIn() {
@@ -386,6 +536,11 @@ function formatExpiry(value: string | null): string {
 }
 
 onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   void loadStatus()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
 </script>

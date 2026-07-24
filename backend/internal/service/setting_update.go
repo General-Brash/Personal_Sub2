@@ -337,6 +337,10 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAdminSubscriptionsEnabled] = strconv.FormatBool(settings.AdminSubscriptionsEnabled)
 	updates[SettingKeyAdminPromoCodesEnabled] = strconv.FormatBool(settings.AdminPromoCodesEnabled)
 	updates[SettingKeyAdminChannelManagementEnabled] = strconv.FormatBool(settings.AdminChannelManagementEnabled)
+	updates[SettingKeyAdminFinanceEnabled] = strconv.FormatBool(settings.AdminFinanceEnabled)
+	updates[SettingKeyAdminBankTransactionsEnabled] = strconv.FormatBool(settings.AdminBankTransactionsEnabled)
+	updates[SettingKeyAdminAuditLogsEnabled] = strconv.FormatBool(settings.AdminAuditLogsEnabled)
+	updates[SettingKeyAdminOpsEnabled] = strconv.FormatBool(settings.AdminOpsEnabled)
 
 	// Affiliate (邀请返利) feature switch
 	updates[SettingKeyAffiliateEnabled] = strconv.FormatBool(settings.AffiliateEnabled)

@@ -244,6 +244,10 @@ export interface PublicSettings {
   admin_subscriptions_enabled?: boolean
   admin_promo_codes_enabled?: boolean
   admin_channel_management_enabled?: boolean
+  admin_finance_enabled?: boolean
+  admin_bank_transactions_enabled?: boolean
+  admin_audit_logs_enabled?: boolean
+  admin_ops_enabled?: boolean
   service_quota_enabled: boolean
   affiliate_enabled: boolean
   allow_user_view_error_requests?: boolean

@@ -531,6 +531,18 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AdminChannelManagementEnabled != after.AdminChannelManagementEnabled {
 		changed = append(changed, "admin_channel_management_enabled")
 	}
+	if before.AdminFinanceEnabled != after.AdminFinanceEnabled {
+		changed = append(changed, "admin_finance_enabled")
+	}
+	if before.AdminBankTransactionsEnabled != after.AdminBankTransactionsEnabled {
+		changed = append(changed, "admin_bank_transactions_enabled")
+	}
+	if before.AdminAuditLogsEnabled != after.AdminAuditLogsEnabled {
+		changed = append(changed, "admin_audit_logs_enabled")
+	}
+	if before.AdminOpsEnabled != after.AdminOpsEnabled {
+		changed = append(changed, "admin_ops_enabled")
+	}
 	if before.AffiliateEnabled != after.AffiliateEnabled {
 		changed = append(changed, "affiliate_enabled")
 	}

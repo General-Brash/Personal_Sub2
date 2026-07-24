@@ -16,7 +16,7 @@ func TestOpsCleanupPlan(t *testing.T) {
 		wantCutoff   time.Time
 	}{
 		{name: "negative skips", days: -1, wantOK: false},
-		{name: "zero truncates", days: 0, wantOK: true, wantTruncate: true},
+		{name: "zero disables", days: 0, wantOK: false},
 		{name: "positive yields past cutoff", days: 7, wantOK: true, wantCutoff: now.AddDate(0, 0, -7)},
 	}
 
@@ -56,6 +56,20 @@ func TestIsMissingRelationError(t *testing.T) {
 				t.Fatalf("got %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestOpsCleanupCutoffArgumentUsesBusinessDate(t *testing.T) {
+	cutoff := time.Date(2026, 7, 24, 23, 30, 0, 0, time.UTC)
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := opsCleanupCutoffArgument(cutoff, true, loc); got != "2026-07-25" {
+		t.Fatalf("date cutoff = %v, want 2026-07-25", got)
+	}
+	if got := opsCleanupCutoffArgument(cutoff, false, loc); !got.(time.Time).Equal(cutoff) {
+		t.Fatalf("timestamp cutoff = %v, want %v", got, cutoff)
 	}
 }
 

@@ -21,6 +21,10 @@ type pageVisibilityResponse struct {
 		AdminSubscriptionsEnabled     bool `json:"admin_subscriptions_enabled"`
 		AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
 		AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
+		AdminFinanceEnabled           bool `json:"admin_finance_enabled"`
+		AdminBankTransactionsEnabled  bool `json:"admin_bank_transactions_enabled"`
+		AdminAuditLogsEnabled         bool `json:"admin_audit_logs_enabled"`
+		AdminOpsEnabled               bool `json:"admin_ops_enabled"`
 	} `json:"data"`
 }
 
@@ -32,6 +36,10 @@ func TestSettingHandler_GetSettings_ExposesPageVisibility(t *testing.T) {
 		service.SettingKeyAdminSubscriptionsEnabled:     "true",
 		service.SettingKeyAdminPromoCodesEnabled:        "false",
 		service.SettingKeyAdminChannelManagementEnabled: "true",
+		service.SettingKeyAdminFinanceEnabled:           "false",
+		service.SettingKeyAdminBankTransactionsEnabled:  "true",
+		service.SettingKeyAdminAuditLogsEnabled:         "false",
+		service.SettingKeyAdminOpsEnabled:               "true",
 	}}
 	handler := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), nil, nil, nil, nil, nil, nil)
 
@@ -50,6 +58,10 @@ func TestSettingHandler_GetSettings_ExposesPageVisibility(t *testing.T) {
 	require.True(t, resp.Data.AdminSubscriptionsEnabled)
 	require.False(t, resp.Data.AdminPromoCodesEnabled)
 	require.True(t, resp.Data.AdminChannelManagementEnabled)
+	require.False(t, resp.Data.AdminFinanceEnabled)
+	require.True(t, resp.Data.AdminBankTransactionsEnabled)
+	require.False(t, resp.Data.AdminAuditLogsEnabled)
+	require.True(t, resp.Data.AdminOpsEnabled)
 }
 
 func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testing.T) {
@@ -61,12 +73,18 @@ func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testin
 		service.SettingKeyAdminSubscriptionsEnabled:     "true",
 		service.SettingKeyAdminPromoCodesEnabled:        "true",
 		service.SettingKeyAdminChannelManagementEnabled: "true",
+		service.SettingKeyAdminFinanceEnabled:           "true",
+		service.SettingKeyAdminBankTransactionsEnabled:  "true",
+		service.SettingKeyAdminAuditLogsEnabled:         "true",
+		service.SettingKeyAdminOpsEnabled:               "true",
 	}}
 	handler := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), nil, nil, nil, nil, nil, nil)
 	body, err := json.Marshal(map[string]any{
 		"promo_code_enabled":          true,
 		"user_channel_status_enabled": false,
 		"admin_promo_codes_enabled":   false,
+		"admin_finance_enabled":       false,
+		"admin_audit_logs_enabled":    false,
 	})
 	require.NoError(t, err)
 
@@ -83,6 +101,10 @@ func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testin
 	require.Equal(t, "true", repo.values[service.SettingKeyAdminSubscriptionsEnabled])
 	require.Equal(t, "false", repo.values[service.SettingKeyAdminPromoCodesEnabled])
 	require.Equal(t, "true", repo.values[service.SettingKeyAdminChannelManagementEnabled])
+	require.Equal(t, "false", repo.values[service.SettingKeyAdminFinanceEnabled])
+	require.Equal(t, "true", repo.values[service.SettingKeyAdminBankTransactionsEnabled])
+	require.Equal(t, "false", repo.values[service.SettingKeyAdminAuditLogsEnabled])
+	require.Equal(t, "true", repo.values[service.SettingKeyAdminOpsEnabled])
 
 	var resp pageVisibilityResponse
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
@@ -92,6 +114,10 @@ func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testin
 	require.True(t, resp.Data.AdminSubscriptionsEnabled)
 	require.False(t, resp.Data.AdminPromoCodesEnabled)
 	require.True(t, resp.Data.AdminChannelManagementEnabled)
+	require.False(t, resp.Data.AdminFinanceEnabled)
+	require.True(t, resp.Data.AdminBankTransactionsEnabled)
+	require.False(t, resp.Data.AdminAuditLogsEnabled)
+	require.True(t, resp.Data.AdminOpsEnabled)
 }
 
 func TestDiffSettings_IncludesPageVisibility(t *testing.T) {
@@ -101,6 +127,10 @@ func TestDiffSettings_IncludesPageVisibility(t *testing.T) {
 		AdminSubscriptionsEnabled:     true,
 		AdminPromoCodesEnabled:        true,
 		AdminChannelManagementEnabled: true,
+		AdminFinanceEnabled:           true,
+		AdminBankTransactionsEnabled:  true,
+		AdminAuditLogsEnabled:         true,
+		AdminOpsEnabled:               true,
 	}
 	after := &service.SystemSettings{}
 
@@ -112,5 +142,9 @@ func TestDiffSettings_IncludesPageVisibility(t *testing.T) {
 		"admin_subscriptions_enabled",
 		"admin_promo_codes_enabled",
 		"admin_channel_management_enabled",
+		"admin_finance_enabled",
+		"admin_bank_transactions_enabled",
+		"admin_audit_logs_enabled",
+		"admin_ops_enabled",
 	}, changed)
 }

@@ -462,7 +462,7 @@ func TestBuildUsageCleanupWhere(t *testing.T) {
 		BillingType: &billingType,
 	})
 
-	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND user_id = $3 AND api_key_id = $4 AND account_id = $5 AND group_id = $6 AND model = $7 AND stream = $8 AND billing_type = $9", where)
+	require.Equal(t, "created_at >= $1 AND created_at < $2 AND user_id = $3 AND api_key_id = $4 AND account_id = $5 AND group_id = $6 AND model = $7 AND stream = $8 AND billing_type = $9", where)
 	require.Equal(t, []any{start, end, userID, apiKeyID, accountID, groupID, "gpt-4", stream, billingType}, args)
 }
 
@@ -479,7 +479,7 @@ func TestBuildUsageCleanupWhereRequestTypePriority(t *testing.T) {
 		Stream:      &stream,
 	})
 
-	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND (request_type = $3 OR (request_type = 0 AND openai_ws_mode = TRUE))", where)
+	require.Equal(t, "created_at >= $1 AND created_at < $2 AND (request_type = $3 OR (request_type = 0 AND openai_ws_mode = TRUE))", where)
 	require.Equal(t, []any{start, end, requestType}, args)
 }
 
@@ -494,7 +494,7 @@ func TestBuildUsageCleanupWhereRequestTypeLegacyFallback(t *testing.T) {
 		RequestType: &requestType,
 	})
 
-	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND (request_type = $3 OR (request_type = 0 AND stream = TRUE AND openai_ws_mode = FALSE))", where)
+	require.Equal(t, "created_at >= $1 AND created_at < $2 AND (request_type = $3 OR (request_type = 0 AND stream = TRUE AND openai_ws_mode = FALSE))", where)
 	require.Equal(t, []any{start, end, requestType}, args)
 }
 
@@ -509,6 +509,23 @@ func TestBuildUsageCleanupWhereModelEmpty(t *testing.T) {
 		Model:     &model,
 	})
 
-	require.Equal(t, "created_at >= $1 AND created_at <= $2", where)
+	require.Equal(t, "created_at >= $1 AND created_at < $2", where)
 	require.Equal(t, []any{start, end}, args)
+}
+
+func TestBuildUsageCleanupWhereDataCleanupSnapshot(t *testing.T) {
+	where, args := buildUsageCleanupWhere(service.UsageCleanupFilters{
+		All:                      true,
+		DataCleanupAuditID:       9,
+		DataCleanupSnapshotMaxID: 42,
+	})
+	require.Equal(t, "TRUE AND id <= $1", where)
+	require.Equal(t, []any{int64(42)}, args)
+
+	where, args = buildUsageCleanupWhere(service.UsageCleanupFilters{
+		All:                true,
+		DataCleanupAuditID: 9,
+	})
+	require.Equal(t, "TRUE AND FALSE", where)
+	require.Empty(t, args)
 }

@@ -10,6 +10,7 @@
         </div>
         <div v-if="authStore.isAdmin" class="flex flex-wrap gap-2 self-start">
           <RouterLink
+            v-if="showAdminBankTransactions"
             to="/admin/bank/transactions"
             data-test="bank-transactions-button"
             class="btn btn-secondary inline-flex min-h-10 items-center justify-center gap-2"
@@ -724,6 +725,7 @@ import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { formatMoneyDisplay } from '@/utils/format'
 
 type SettingsAmountField =
@@ -762,6 +764,7 @@ const amountScale = 100_000_000n
 const { locale, t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const showAdminBankTransactions = computed(() => authStore.isAdmin && isFeatureFlagEnabled(FeatureFlags.adminBankTransactions))
 const status = ref<BankStatus | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)

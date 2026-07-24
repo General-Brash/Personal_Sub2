@@ -10,12 +10,14 @@ vi.mock('vue-chartjs', () => ({
 }))
 
 const {
+  appState,
   getAdminLedger,
   getLedger,
   getMallTransactions,
   getBankTransactions,
   showError,
 } = vi.hoisted(() => ({
+  appState: { cachedPublicSettings: null as null | Record<string, boolean> },
   getAdminLedger: vi.fn(),
   getLedger: vi.fn(),
   getMallTransactions: vi.fn(),
@@ -37,7 +39,12 @@ vi.mock('@/api/admin/payment', () => ({
 vi.mock('@/api/bank', () => ({ getBankTransactions }))
 
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({ showError }),
+  useAppStore: () => ({
+    showError,
+    get cachedPublicSettings() {
+      return appState.cachedPublicSettings
+    },
+  }),
 }))
 
 vi.mock('vue-i18n', async () => {
@@ -96,6 +103,7 @@ const commonStubs = {
 describe('finance tables', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    appState.cachedPublicSettings = null
     showError.mockReset()
     getAdminLedger.mockReset().mockResolvedValue({
       data: {
@@ -397,5 +405,36 @@ describe('finance tables', () => {
     expect(wrapper.get('[data-test="permanent-balance-change"]').text()).toContain('10.00 → 5.00')
     expect(wrapper.get('[data-test="temporary-balance-change"]').text()).toContain('finance.historyUnavailable → 3.00')
     expect(wrapper.get('[data-test="debt-balance-change"]').text()).toContain('4.00 → 2.00')
+  })
+
+  it.each([
+    ['mall', 2],
+    ['bank', 1],
+  ] as const)('keeps administrator finance user links for %s logs before settings load', async (kind, expectedLinks) => {
+    const wrapper = mount(AdminTransactionLogTable, {
+      props: { kind },
+      global: { stubs: commonStubs },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-test="admin-finance-user-link"]')).toHaveLength(expectedLinks)
+    expect(wrapper.find('[data-test="admin-finance-user-text"]').exists()).toBe(false)
+  })
+
+  it.each([
+    ['mall', 2],
+    ['bank', 1],
+  ] as const)('renders plain user text for %s logs when administrator finance is disabled', async (kind, expectedRows) => {
+    appState.cachedPublicSettings = { admin_finance_enabled: false }
+    const wrapper = mount(AdminTransactionLogTable, {
+      props: { kind },
+      global: { stubs: commonStubs },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="admin-finance-user-link"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-test="admin-finance-user-text"]')).toHaveLength(expectedRows)
   })
 })

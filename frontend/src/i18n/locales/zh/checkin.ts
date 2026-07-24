@@ -12,6 +12,7 @@ export default {
     nextDayReward: '次日奖励',
     permanentReward: '永久额度',
     rewardDay: '第 {day} 天',
+    rewardTierCapNotice: '连续签到超过第 {day} 天后，按第 {day} 天奖励发放。',
     reward: '奖励',
     resultTitle: '签到结果',
     temporaryReward: '临时额度奖励',

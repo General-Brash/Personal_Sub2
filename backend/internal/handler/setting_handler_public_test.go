@@ -91,6 +91,10 @@ func TestSettingHandler_GetPublicSettings_ExposesPageVisibility(t *testing.T) {
 		service.SettingKeyAdminSubscriptionsEnabled:     "true",
 		service.SettingKeyAdminPromoCodesEnabled:        "false",
 		service.SettingKeyAdminChannelManagementEnabled: "true",
+		service.SettingKeyAdminFinanceEnabled:           "false",
+		service.SettingKeyAdminBankTransactionsEnabled:  "true",
+		service.SettingKeyAdminAuditLogsEnabled:         "false",
+		service.SettingKeyAdminOpsEnabled:               "true",
 	}}
 	h := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), "test-version")
 
@@ -109,6 +113,10 @@ func TestSettingHandler_GetPublicSettings_ExposesPageVisibility(t *testing.T) {
 			AdminSubscriptionsEnabled     bool `json:"admin_subscriptions_enabled"`
 			AdminPromoCodesEnabled        bool `json:"admin_promo_codes_enabled"`
 			AdminChannelManagementEnabled bool `json:"admin_channel_management_enabled"`
+			AdminFinanceEnabled           bool `json:"admin_finance_enabled"`
+			AdminBankTransactionsEnabled  bool `json:"admin_bank_transactions_enabled"`
+			AdminAuditLogsEnabled         bool `json:"admin_audit_logs_enabled"`
+			AdminOpsEnabled               bool `json:"admin_ops_enabled"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
@@ -118,6 +126,10 @@ func TestSettingHandler_GetPublicSettings_ExposesPageVisibility(t *testing.T) {
 	require.True(t, resp.Data.AdminSubscriptionsEnabled)
 	require.False(t, resp.Data.AdminPromoCodesEnabled)
 	require.True(t, resp.Data.AdminChannelManagementEnabled)
+	require.False(t, resp.Data.AdminFinanceEnabled)
+	require.True(t, resp.Data.AdminBankTransactionsEnabled)
+	require.False(t, resp.Data.AdminAuditLogsEnabled)
+	require.True(t, resp.Data.AdminOpsEnabled)
 }
 
 func TestSettingHandler_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *testing.T) {

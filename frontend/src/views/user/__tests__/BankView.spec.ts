@@ -13,6 +13,7 @@ afterEach(() => {
 
 const {
   authState,
+  appState,
   englishBankLabels,
   exchangePermanentForTemporary,
   getBankLedger,
@@ -26,6 +27,7 @@ const {
   updateBankSettings,
 } = vi.hoisted(() => ({
   authState: { isAdmin: false, refreshUser: vi.fn() },
+  appState: { cachedPublicSettings: null as null | Record<string, boolean> },
   englishBankLabels: {
     'bank.exchange.amount': 'Permanent credit to use',
     'bank.exchange.preview': 'Estimated credit received',
@@ -53,7 +55,7 @@ vi.mock('@/api/bank', () => ({
 }))
 
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({ showError, showSuccess }),
+  useAppStore: () => ({ ...appState, showError, showSuccess }),
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -152,6 +154,7 @@ describe('BankView', () => {
     vi.setSystemTime(new Date('2026-07-19T08:00:00.000Z'))
     authState.isAdmin = false
     authState.refreshUser = refreshUser
+    appState.cachedPublicSettings = null
     localStorage.clear()
     exchangePermanentForTemporary.mockReset()
     getBankLedger.mockReset()
@@ -386,7 +389,18 @@ describe('BankView', () => {
     const wrapper = await mountView()
 
     expect(wrapper.find('[data-test="bank-settings-button"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="bank-transactions-button"]').exists()).toBe(false)
     expect(getBankSettings).not.toHaveBeenCalled()
+  })
+
+  it('hides only the administrator transaction shortcut when its page is disabled', async () => {
+    authState.isAdmin = true
+    appState.cachedPublicSettings = { admin_bank_transactions_enabled: false }
+
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="bank-transactions-button"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="bank-settings-button"]').exists()).toBe(true)
   })
 
   it('validates the configured advance range and submits a valid advance', async () => {

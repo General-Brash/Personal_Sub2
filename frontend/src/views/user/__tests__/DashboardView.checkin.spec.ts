@@ -46,6 +46,7 @@ const baseStatus = (temporaryCredit: string): CheckinStatus => ({
   temporary_credit_earliest_expires_at: null,
   monthly_reward_total: '2.00000000',
   monthly_permanent_reward_total: '0.50000000',
+  reward_tiers: [],
   calendar: [],
 })
 

@@ -29,18 +29,25 @@ type DailyCheckinCalendarEntry struct {
 	PermanentRewardAmount string `json:"permanent_reward_amount"`
 }
 
+type DailyCheckinRewardTierStatus struct {
+	Day             int    `json:"day"`
+	Amount          string `json:"amount"`
+	PermanentAmount string `json:"permanent_amount"`
+}
+
 type CheckinStatus struct {
-	Enabled                          bool                        `json:"enabled"`
-	TodayCheckedIn                   bool                        `json:"today_checked_in"`
-	CurrentStreakDay                 int                         `json:"current_streak_day"`
-	NextRewardDay                    int                         `json:"next_reward_day"`
-	NextRewardAmount                 string                      `json:"next_reward_amount"`
-	NextPermanentRewardAmount        string                      `json:"next_permanent_reward_amount"`
-	TemporaryCreditAvailable         string                      `json:"temporary_credit_available"`
-	TemporaryCreditEarliestExpiresAt *time.Time                  `json:"temporary_credit_earliest_expires_at"`
-	MonthlyRewardTotal               string                      `json:"monthly_reward_total"`
-	MonthlyPermanentRewardTotal      string                      `json:"monthly_permanent_reward_total"`
-	Calendar                         []DailyCheckinCalendarEntry `json:"calendar"`
+	Enabled                          bool                           `json:"enabled"`
+	TodayCheckedIn                   bool                           `json:"today_checked_in"`
+	CurrentStreakDay                 int                            `json:"current_streak_day"`
+	NextRewardDay                    int                            `json:"next_reward_day"`
+	NextRewardAmount                 string                         `json:"next_reward_amount"`
+	NextPermanentRewardAmount        string                         `json:"next_permanent_reward_amount"`
+	TemporaryCreditAvailable         string                         `json:"temporary_credit_available"`
+	TemporaryCreditEarliestExpiresAt *time.Time                     `json:"temporary_credit_earliest_expires_at"`
+	MonthlyRewardTotal               string                         `json:"monthly_reward_total"`
+	MonthlyPermanentRewardTotal      string                         `json:"monthly_permanent_reward_total"`
+	RewardTiers                      []DailyCheckinRewardTierStatus `json:"reward_tiers"`
+	Calendar                         []DailyCheckinCalendarEntry    `json:"calendar"`
 }
 
 type CheckinResult struct {
@@ -314,8 +321,21 @@ func (s *CheckinService) GetStatus(ctx context.Context, userID int64, requestedM
 		TemporaryCreditEarliestExpiresAt: earliestExpiry,
 		MonthlyRewardTotal:               formatLedgerAmount(monthlyRewardTotal),
 		MonthlyPermanentRewardTotal:      formatLedgerAmount(monthlyPermanentRewardTotal),
+		RewardTiers:                      dailyCheckinRewardTierStatuses(policy),
 		Calendar:                         calendar,
 	}, nil
+}
+
+func dailyCheckinRewardTierStatuses(policy *DailyCheckinPolicy) []DailyCheckinRewardTierStatus {
+	tiers := make([]DailyCheckinRewardTierStatus, len(policy.RewardTiers))
+	for index, tier := range policy.RewardTiers {
+		tiers[index] = DailyCheckinRewardTierStatus{
+			Day:             tier.Day,
+			Amount:          formatLedgerAmount(tier.Amount),
+			PermanentAmount: formatLedgerAmount(tier.PermanentAmount),
+		}
+	}
+	return tiers
 }
 
 func (s *CheckinService) validateDependencies() error {

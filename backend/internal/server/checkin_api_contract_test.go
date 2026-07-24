@@ -24,6 +24,13 @@ func TestCheckinAndTemporaryCreditHTTPContract(t *testing.T) {
 
 	expiresAt := time.Date(2026, time.July, 18, 16, 0, 0, 0, time.UTC)
 	checkinService := &successfulCheckinContractService{
+		status: &service.CheckinStatus{
+			Enabled: true,
+			RewardTiers: []service.DailyCheckinRewardTierStatus{
+				{Day: 1, Amount: "1.00000000", PermanentAmount: "0.00000000"},
+				{Day: 2, Amount: "2.00000000", PermanentAmount: "0.25000000"},
+			},
+		},
 		result: &service.CheckinResult{
 			AlreadyCheckedIn:       false,
 			CheckinDate:            "2026-07-18",
@@ -75,6 +82,21 @@ func TestCheckinAndTemporaryCreditHTTPContract(t *testing.T) {
 		require.True(t, registered[expected], expected)
 	}
 
+	statusRequest := httptest.NewRequest(http.MethodGet, "/api/v1/user/check-in?month=2026-07", nil)
+	statusRecorder := httptest.NewRecorder()
+	engine.ServeHTTP(statusRecorder, statusRequest)
+	require.Equal(t, http.StatusOK, statusRecorder.Code, statusRecorder.Body.String())
+	var statusEnvelope struct {
+		Code int                        `json:"code"`
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(statusRecorder.Body.Bytes(), &statusEnvelope))
+	require.Zero(t, statusEnvelope.Code)
+	require.JSONEq(t, `[
+		{"day":1,"amount":"1.00000000","permanent_amount":"0.00000000"},
+		{"day":2,"amount":"2.00000000","permanent_amount":"0.25000000"}
+	]`, string(statusEnvelope.Data["reward_tiers"]))
+
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/user/check-in", strings.NewReader(`{}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", "checkin-contract-key")
@@ -105,13 +127,14 @@ func TestCheckinAndTemporaryCreditHTTPContract(t *testing.T) {
 }
 
 type successfulCheckinContractService struct {
+	status    *service.CheckinStatus
 	result    *service.CheckinResult
 	userID    int64
 	persisted bool
 }
 
 func (s *successfulCheckinContractService) GetStatus(context.Context, int64, string) (*service.CheckinStatus, error) {
-	return nil, nil
+	return s.status, nil
 }
 
 func (s *successfulCheckinContractService) CheckInAtomic(ctx context.Context, userID int64, claim *service.IdempotencyAtomicClaim) (*service.CheckinResult, error) {

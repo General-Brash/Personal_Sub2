@@ -112,11 +112,19 @@ type OpsOpenAIAccountQuotaAutoPauseSettings struct {
 }
 
 type OpsDataRetentionSettings struct {
-	CleanupEnabled             bool   `json:"cleanup_enabled"`
-	CleanupSchedule            string `json:"cleanup_schedule"`
-	ErrorLogRetentionDays      int    `json:"error_log_retention_days"`
-	MinuteMetricsRetentionDays int    `json:"minute_metrics_retention_days"`
-	HourlyMetricsRetentionDays int    `json:"hourly_metrics_retention_days"`
+	CleanupEnabled  bool                          `json:"cleanup_enabled"`
+	CleanupSchedule string                        `json:"cleanup_schedule"`
+	Targets         map[string]OpsRetentionPolicy `json:"targets"`
+	// Legacy grouped values remain readable for existing installations. New
+	// clients use Targets, where every table has its own switch and duration.
+	ErrorLogRetentionDays      int `json:"error_log_retention_days"`
+	MinuteMetricsRetentionDays int `json:"minute_metrics_retention_days"`
+	HourlyMetricsRetentionDays int `json:"hourly_metrics_retention_days"`
+}
+
+type OpsRetentionPolicy struct {
+	Enabled       bool `json:"enabled"`
+	RetentionDays int  `json:"retention_days"`
 }
 
 type OpsAggregationSettings struct {

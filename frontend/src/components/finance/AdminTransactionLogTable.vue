@@ -32,11 +32,20 @@
       <template #cell-user="{ row }">
         <div class="min-w-0 max-w-52">
           <RouterLink
+            v-if="showAdminFinanceLink"
             :to="{ path: '/admin/finance', query: { user_id: row.user_id } }"
+            data-test="admin-finance-user-link"
             class="truncate text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
           >
             {{ row.username || row.email || `#${row.user_id}` }}
           </RouterLink>
+          <span
+            v-else
+            data-test="admin-finance-user-text"
+            class="block truncate text-sm font-medium text-gray-700 dark:text-gray-200"
+          >
+            {{ row.username || row.email || `#${row.user_id}` }}
+          </span>
           <p v-if="row.email" class="truncate text-xs text-gray-400">{{ row.email }}</p>
         </div>
       </template>
@@ -107,6 +116,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { bankOperationLabel as translateBankOperation } from './bankOperation'
 import { formatFinancialAmount, type FinanceTranslate } from './financialDisplay'
 import { formatMoneyDisplay } from '@/utils/format'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
 type TransactionKind = 'mall' | 'bank'
 const props = defineProps<{ kind: TransactionKind }>()
@@ -118,6 +128,7 @@ const page = ref(1)
 const total = ref(0)
 const userFilter = ref('')
 const productType = ref('')
+const showAdminFinanceLink = computed(() => isFeatureFlagEnabled(FeatureFlags.adminFinance))
 
 const productTypeOptions = computed(() => [
   { value: '', label: t('finance.transactions.allProducts') },

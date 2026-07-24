@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
 const (
@@ -32,11 +34,12 @@ type opsCleanupDeletedCounts struct {
 	systemMetrics int64
 	hourlyPreagg  int64
 	dailyPreagg   int64
+	usageLogs     int64
 }
 
 func (c opsCleanupDeletedCounts) String() string {
 	return fmt.Sprintf(
-		"error_logs=%d alert_events=%d system_logs=%d log_audits=%d system_metrics=%d hourly_preagg=%d daily_preagg=%d",
+		"error_logs=%d alert_events=%d system_logs=%d log_audits=%d system_metrics=%d hourly_preagg=%d daily_preagg=%d usage_logs=%d",
 		c.errorLogs,
 		c.alertEvents,
 		c.systemLogs,
@@ -44,19 +47,16 @@ func (c opsCleanupDeletedCounts) String() string {
 		c.systemMetrics,
 		c.hourlyPreagg,
 		c.dailyPreagg,
+		c.usageLogs,
 	)
 }
 
 // opsCleanupPlan 把"保留天数"翻译成具体的清理动作。
-//   - days < 0  → 跳过该项清理（ok=false），保留兼容老数据
-//   - days == 0 → TRUNCATE TABLE（O(1) 全清），truncate=true
+//   - days <= 0 → 跳过该项清理（ok=false）；0 明确表示禁用
 //   - days > 0  → 批量 DELETE 早于 now-N天 的行，cutoff = now - N 天
 func opsCleanupPlan(now time.Time, days int) (cutoff time.Time, truncate, ok bool) {
-	if days < 0 {
+	if days <= 0 {
 		return time.Time{}, false, false
-	}
-	if days == 0 {
-		return time.Time{}, true, true
 	}
 	return now.AddDate(0, 0, -days), false, true
 }
@@ -64,15 +64,12 @@ func opsCleanupPlan(now time.Time, days int) (cutoff time.Time, truncate, ok boo
 func opsCleanupRunOne(
 	ctx context.Context,
 	db *sql.DB,
-	truncate bool,
+	_ bool,
 	cutoff time.Time,
 	table, timeCol string,
 	castDate bool,
 	batchSize int,
 ) (int64, error) {
-	if truncate {
-		return truncateOpsTable(ctx, db, table)
-	}
 	return deleteOldRowsByID(ctx, db, table, timeCol, cutoff, batchSize, castDate)
 }
 
@@ -93,6 +90,7 @@ func deleteOldRowsByID(
 	}
 
 	where := fmt.Sprintf("%s < $1", timeColumn)
+	cutoffArg := opsCleanupCutoffArgument(cutoff, castCutoffToDate, timezone.Location())
 	if castCutoffToDate {
 		where = fmt.Sprintf("%s < $1::date", timeColumn)
 	}
@@ -110,7 +108,7 @@ WHERE id IN (SELECT id FROM batch)
 
 	var total int64
 	for {
-		res, err := db.ExecContext(ctx, q, cutoff, batchSize)
+		res, err := db.ExecContext(ctx, q, cutoffArg, batchSize)
 		if err != nil {
 			if isMissingRelationError(err) {
 				return total, nil
@@ -129,28 +127,14 @@ WHERE id IN (SELECT id FROM batch)
 	return total, nil
 }
 
-// truncateOpsTable 用 TRUNCATE TABLE 清空指定表，先 SELECT COUNT(*) 取得清空前行数用于 heartbeat。
-func truncateOpsTable(ctx context.Context, db *sql.DB, table string) (int64, error) {
-	if db == nil {
-		return 0, nil
+func opsCleanupCutoffArgument(cutoff time.Time, castToDate bool, loc *time.Location) any {
+	if !castToDate {
+		return cutoff.UTC()
 	}
-	var count int64
-	if err := db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count); err != nil {
-		if isMissingRelationError(err) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("count %s: %w", table, err)
+	if loc == nil {
+		loc = time.UTC
 	}
-	if count == 0 {
-		return 0, nil
-	}
-	if _, err := db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s", table)); err != nil {
-		if isMissingRelationError(err) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("truncate %s: %w", table, err)
-	}
-	return count, nil
+	return cutoff.In(loc).Format("2006-01-02")
 }
 
 func isMissingRelationError(err error) bool {

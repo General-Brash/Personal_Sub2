@@ -1,6 +1,9 @@
 <template>
-  <section class="card" data-testid="checkin-settings-card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+  <section :class="{ card: props.showHeader }" data-testid="checkin-settings-card">
+    <div
+      v-if="props.showHeader"
+      class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+    >
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
         {{ t('checkin.admin.settingsTitle') }}
       </h2>
@@ -25,7 +28,11 @@
       </button>
     </div>
 
-    <fieldset v-else :disabled="saving" class="space-y-5 p-6">
+    <fieldset
+      v-else
+      :disabled="saving"
+      :class="['space-y-5', props.showHeader ? 'p-6' : 'p-0']"
+    >
       <div class="flex items-center justify-between gap-4">
         <label
           for="daily-checkin-enabled"
@@ -140,6 +147,12 @@ const MAX_REWARD_DAY = 365
 
 const { t } = useI18n()
 const appStore = useAppStore()
+
+const props = withDefaults(defineProps<{
+  showHeader?: boolean
+}>(), {
+  showHeader: true,
+})
 
 type CheckinSettingsForm = Omit<CheckinSettings, 'reward_tiers'> & {
   reward_tiers: Array<{ day: number; amount: string; permanent_amount: string }>

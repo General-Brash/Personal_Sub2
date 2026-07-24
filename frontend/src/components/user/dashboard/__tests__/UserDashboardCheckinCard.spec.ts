@@ -32,6 +32,7 @@ const status: CheckinStatus = {
   temporary_credit_earliest_expires_at: '2026-07-14T16:00:00Z',
   monthly_reward_total: '12.50000000',
   monthly_permanent_reward_total: '0.75000000',
+  reward_tiers: [],
   calendar: [],
 }
 

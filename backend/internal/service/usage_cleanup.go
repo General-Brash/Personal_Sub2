@@ -26,16 +26,22 @@ const (
 // - nil 表示未设置该过滤条件
 // - 过滤条件均为精确匹配
 type UsageCleanupFilters struct {
-	StartTime   time.Time `json:"start_time"`
-	EndTime     time.Time `json:"end_time"`
-	UserID      *int64    `json:"user_id,omitempty"`
-	APIKeyID    *int64    `json:"api_key_id,omitempty"`
-	AccountID   *int64    `json:"account_id,omitempty"`
-	GroupID     *int64    `json:"group_id,omitempty"`
-	Model       *string   `json:"model,omitempty"`
-	RequestType *int16    `json:"request_type,omitempty"`
-	Stream      *bool     `json:"stream,omitempty"`
-	BillingType *int8     `json:"billing_type,omitempty"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+	// All is reserved for the explicit dangerous cleanup flow. Normal API
+	// requests must provide a bounded range and never set this field.
+	All                      bool    `json:"all,omitempty"`
+	DataCleanupAuditID       int64   `json:"data_cleanup_audit_id,omitempty"`
+	DataCleanupSnapshotMaxID int64   `json:"data_cleanup_snapshot_max_id,omitempty"`
+	DataCleanupSnapshotRows  int64   `json:"data_cleanup_snapshot_rows,omitempty"`
+	UserID                   *int64  `json:"user_id,omitempty"`
+	APIKeyID                 *int64  `json:"api_key_id,omitempty"`
+	AccountID                *int64  `json:"account_id,omitempty"`
+	GroupID                  *int64  `json:"group_id,omitempty"`
+	Model                    *string `json:"model,omitempty"`
+	RequestType              *int16  `json:"request_type,omitempty"`
+	Stream                   *bool   `json:"stream,omitempty"`
+	BillingType              *int8   `json:"billing_type,omitempty"`
 }
 
 // UsageCleanupTask 表示使用记录清理任务
@@ -59,6 +65,7 @@ type UsageCleanupTask struct {
 type UsageCleanupRepository interface {
 	CreateTask(ctx context.Context, task *UsageCleanupTask) error
 	ListTasks(ctx context.Context, params pagination.PaginationParams) ([]UsageCleanupTask, *pagination.PaginationResult, error)
+	GetTask(ctx context.Context, taskID int64) (*UsageCleanupTask, error)
 	// ClaimNextPendingTask 抢占下一条可执行任务：
 	// - 优先 pending
 	// - 若 running 超过 staleRunningAfterSeconds（可能由于进程退出/崩溃/超时），允许重新抢占继续执行

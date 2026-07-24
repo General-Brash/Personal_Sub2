@@ -56,7 +56,7 @@ const SelectStub = defineComponent({
 })
 
 describe('OpsSettingsDialog', () => {
-  it('提供独立数据清理入口，同时保留高级设置中的原入口并共享配置状态', async () => {
+  it('提供醒目的独立数据清理入口，并从高级设置移除重复表单', async () => {
     mockGetAlertRuntimeSettings.mockResolvedValue({
       evaluation_interval_seconds: 60,
       distributed_lock: { enabled: false, key: '', ttl_seconds: 60 },
@@ -91,6 +91,7 @@ describe('OpsSettingsDialog', () => {
       data_retention: {
         cleanup_enabled: true,
         cleanup_schedule: '0 2 * * *',
+        targets: {},
         error_log_retention_days: 30,
         minute_metrics_retention_days: 30,
         hourly_metrics_retention_days: 30,
@@ -125,14 +126,10 @@ describe('OpsSettingsDialog', () => {
     const cleanupSection = wrapper.get('[data-testid="ops-data-cleanup-section"]')
     const advancedSection = wrapper.get('[data-testid="ops-advanced-settings"]')
 
-    expect(cleanupSection.get('summary').text()).toBe('admin.ops.settings.dataCleanup')
+    expect(cleanupSection.text()).toContain('admin.ops.settings.dataCleanup')
     expect(advancedSection.get('summary').text()).toBe('admin.ops.settings.advancedSettings')
-    expect(cleanupSection.findAll('input')).toHaveLength(4)
-
-    const cleanupRetentionInput = cleanupSection.findAll('input[type="number"]')[0]
-    const originalRetentionInput = advancedSection.findAll('input[type="number"]')[0]
-    await cleanupRetentionInput.setValue('14')
-
-    expect((originalRetentionInput.element as HTMLInputElement).value).toBe('14')
+    expect(advancedSection.text()).not.toContain('admin.ops.settings.dataRetention')
+    await cleanupSection.trigger('click')
+    expect(wrapper.emitted('openCleanup')).toEqual([[]])
   })
 })

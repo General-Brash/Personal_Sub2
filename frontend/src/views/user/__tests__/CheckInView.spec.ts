@@ -4,7 +4,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { CheckinResult, CheckinStatus } from '@/api/checkin'
 import CheckInView from '../CheckInView.vue'
 
-const { checkIn, getCheckinStatus, refreshUser, showError, showSuccess } = vi.hoisted(() => ({
+const { authState, checkIn, getCheckinStatus, refreshUser, showError, showSuccess } = vi.hoisted(() => ({
+  authState: { isAdmin: false },
   checkIn: vi.fn(),
   getCheckinStatus: vi.fn(),
   refreshUser: vi.fn(),
@@ -22,7 +23,12 @@ vi.mock('@/stores/app', () => ({
 }))
 
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ refreshUser }),
+  useAuthStore: () => ({
+    refreshUser,
+    get isAdmin() {
+      return authState.isAdmin
+    },
+  }),
 }))
 
 vi.mock('vue-i18n', async () => {
@@ -47,6 +53,11 @@ const baseStatus = (overrides: Partial<CheckinStatus> = {}): CheckinStatus => ({
   temporary_credit_earliest_expires_at: '2026-07-14T16:00:00Z',
   monthly_reward_total: '12.50000000',
   monthly_permanent_reward_total: '0.75000000',
+  reward_tiers: Array.from({ length: 7 }, (_, index) => ({
+    day: index + 1,
+    amount: `${index + 1}.00000000`,
+    permanent_amount: (index / 4).toFixed(8),
+  })),
   calendar: [
     {
       checkin_date: '2026-07-03',
@@ -75,6 +86,12 @@ const mountView = async () => {
     global: {
       stubs: {
         AppLayout: { template: '<main><slot /></main>' },
+        BaseDialog: {
+          props: ['show'],
+          emits: ['close'],
+          template: '<section v-if="show" data-test="settings-dialog"><slot /><button data-test="settings-dialog-close" @click="$emit(\'close\')" /></section>',
+        },
+        CheckinSettingsCard: { template: '<div data-test="checkin-settings-card-stub" />' },
         Icon: { template: '<i />' },
       },
     },
@@ -101,6 +118,7 @@ describe('CheckInView', () => {
     refreshUser.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
+    authState.isAdmin = false
     getCheckinStatus.mockResolvedValue(baseStatus())
     refreshUser.mockResolvedValue(undefined)
   })
@@ -157,6 +175,59 @@ describe('CheckInView', () => {
     }
     expect(wrapper.get('[data-test="next-reward"]').text()).toContain('checkin.temporaryReward:')
     expect(wrapper.get('[data-test="next-reward"]').text()).toContain('checkin.permanentReward:')
+  })
+
+  it('shows the settings dialog only to admins and keeps its button left of check-in', async () => {
+    const userWrapper = await mountView()
+    expect(userWrapper.find('[data-test="checkin-settings-button"]').exists()).toBe(false)
+    userWrapper.unmount()
+
+    authState.isAdmin = true
+    const adminWrapper = await mountView()
+    const settingsButton = adminWrapper.get('[data-test="checkin-settings-button"]')
+    const checkInButton = adminWrapper.get('[data-test="check-in-button"]')
+    expect(
+      settingsButton.element.compareDocumentPosition(checkInButton.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0)
+
+    await settingsButton.trigger('click')
+    expect(adminWrapper.find('[data-test="settings-dialog"]').exists()).toBe(true)
+    expect(adminWrapper.find('[data-test="checkin-settings-card-stub"]').exists()).toBe(true)
+
+    await adminWrapper.get('[data-test="settings-dialog-close"]').trigger('click')
+    expect(adminWrapper.find('[data-test="settings-dialog"]').exists()).toBe(false)
+  })
+
+  it('shows the complete reward schedule on hover, focus, and mobile-style click', async () => {
+    const wrapper = await mountView()
+    const guide = wrapper.get('[data-test="reward-guide"]')
+    const button = wrapper.get('[data-test="reward-guide-button"]')
+    const popover = wrapper.get('[data-test="reward-guide-popover"]')
+
+    expect(popover.attributes('style')).toContain('display: none')
+
+    await guide.trigger('mouseenter')
+    expect(popover.attributes('style')).not.toContain('display: none')
+    expect(wrapper.findAll('[data-test="reward-tier-row"]')).toHaveLength(7)
+    expect(wrapper.findAll('[data-test="reward-tier-row"]')[0].text()).toContain('Day 1')
+    expect(wrapper.findAll('[data-test="reward-tier-row"]')[6].text()).toContain('$7.00')
+    expect(wrapper.get('[data-test="reward-tier-cap"]').text()).toContain('Day 7')
+
+    await button.trigger('keydown', { key: 'Escape' })
+    expect(popover.attributes('style')).toContain('display: none')
+
+    await guide.trigger('mouseleave')
+    expect(popover.attributes('style')).toContain('display: none')
+
+    await guide.trigger('focusin')
+    expect(popover.attributes('style')).not.toContain('display: none')
+    await guide.trigger('focusout', { relatedTarget: null })
+    expect(popover.attributes('style')).toContain('display: none')
+
+    await button.trigger('click')
+    expect(popover.attributes('style')).not.toContain('display: none')
+    await button.trigger('click')
+    expect(popover.attributes('style')).toContain('display: none')
   })
 
   it('keeps long reward amounts complete and allows them to wrap inside their cards', async () => {

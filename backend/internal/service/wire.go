@@ -461,13 +461,18 @@ func ProvideOpsCleanupService(
 	channelMonitorSvc *ChannelMonitorService,
 	settingRepo SettingRepository,
 	opsService *OpsService,
+	usageCleanup *UsageCleanupService,
 ) *OpsCleanupService {
-	svc := NewOpsCleanupService(opsRepo, db, redisClient, cfg, channelMonitorSvc, settingRepo)
+	svc := NewOpsCleanupService(opsRepo, db, redisClient, cfg, channelMonitorSvc, settingRepo, usageCleanup)
 	svc.Start()
 	if opsService != nil {
 		opsService.SetCleanupReloader(svc)
 	}
 	return svc
+}
+
+func ProvideDataCleanupService(db *sql.DB, settingService *SettingService, usageCleanup *UsageCleanupService) *DataCleanupService {
+	return NewDataCleanupService(db, settingService, usageCleanup)
 }
 
 func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
@@ -754,6 +759,7 @@ var ProviderSet = wire.NewSet(
 	ProvideOpsSystemLogSink,
 	ProvideOpsService,
 	ProvideAuditLogService,
+	ProvideDataCleanupService,
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,
 	ProvideOpsAlertEvaluatorService,

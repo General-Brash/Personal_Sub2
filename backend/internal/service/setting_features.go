@@ -210,6 +210,18 @@ func (s *SettingService) GetAuditLogRetentionDays(ctx context.Context) int {
 	return parseAuditLogRetentionDays(value)
 }
 
+// SetAuditLogRetentionDays updates the existing audit retention setting used by
+// AuditLogService. A value of 0 disables automatic deletion.
+func (s *SettingService) SetAuditLogRetentionDays(ctx context.Context, days int) error {
+	if s == nil || s.settingRepo == nil {
+		return errors.New("setting repository not initialized")
+	}
+	if days < 0 || days > 3650 {
+		return fmt.Errorf("audit_log_retention_days must be between 0 and 3650")
+	}
+	return s.settingRepo.Set(ctx, SettingKeyAuditLogRetentionDays, strconv.Itoa(days))
+}
+
 // parseAuditLogRetentionDays 解析保留天数配置，空/非法值回退默认值。
 func parseAuditLogRetentionDays(value string) int {
 	value = strings.TrimSpace(value)

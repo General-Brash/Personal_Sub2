@@ -275,6 +275,10 @@ const (
 	SettingKeyAdminSubscriptionsEnabled     = "admin_subscriptions_enabled"
 	SettingKeyAdminPromoCodesEnabled        = "admin_promo_codes_enabled"
 	SettingKeyAdminChannelManagementEnabled = "admin_channel_management_enabled"
+	SettingKeyAdminFinanceEnabled           = "admin_finance_enabled"
+	SettingKeyAdminBankTransactionsEnabled  = "admin_bank_transactions_enabled"
+	SettingKeyAdminAuditLogsEnabled         = "admin_audit_logs_enabled"
+	SettingKeyAdminOpsEnabled               = "admin_ops_enabled"
 
 	// 默认配置
 	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量

@@ -10,6 +10,12 @@ export interface CheckinCalendarEntry {
   permanent_reward_amount?: string
 }
 
+export interface CheckinRewardTier {
+  day: number
+  amount: string
+  permanent_amount: string
+}
+
 export interface CheckinStatus {
   enabled: boolean
   today_checked_in: boolean
@@ -21,6 +27,7 @@ export interface CheckinStatus {
   temporary_credit_earliest_expires_at: UTCDateTimeString | null
   monthly_reward_total: string
   monthly_permanent_reward_total?: string
+  reward_tiers: CheckinRewardTier[]
   calendar: CheckinCalendarEntry[]
 }
 

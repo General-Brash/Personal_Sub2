@@ -99,4 +99,15 @@ describe('AppSidebar page visibility navigation', () => {
     expect(componentSource).toContain("{ path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true, featureFlag: flagAdminPromoCodes }")
     expect(componentSource).toContain("{ path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagAdminSubscriptions }")
   })
+
+  it('binds administrator finance, bank, audit, and ops entries to page flags', () => {
+    expect(componentSource).toContain("const flagAdminFinance = makeSidebarFlag(FeatureFlags.adminFinance)")
+    expect(componentSource).toContain("const flagAdminBankTransactions = makeSidebarFlag(FeatureFlags.adminBankTransactions)")
+    expect(componentSource).toContain("const flagAdminAuditLogs = makeSidebarFlag(FeatureFlags.adminAuditLogs)")
+    expect(componentSource).toContain("const flagAdminOps = makeSidebarFlag(FeatureFlags.adminOps)")
+    expect(componentSource).toContain("path: '/admin/finance', label: t('finance.allSiteTitle'), icon: ChartIcon, featureFlag: flagAdminFinance")
+    expect(componentSource).toContain("path: '/admin/bank/transactions', label: t('finance.transactions.bankTitle'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagAdminBankTransactions")
+    expect(componentSource).toContain("path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true, featureFlag: flagAdminAuditLogs")
+    expect(componentSource).toContain("path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: () => flagOpsMonitoring() && flagAdminOps()")
+  })
 })

@@ -116,6 +116,63 @@ func (r *usageCleanupRepository) ListTasks(ctx context.Context, params paginatio
 	return tasks, paginationResultFromTotal(total, params), nil
 }
 
+func (r *usageCleanupRepository) GetTask(ctx context.Context, taskID int64) (*service.UsageCleanupTask, error) {
+	if r.client != nil {
+		row, err := clientFromContext(ctx, r.client).UsageCleanupTask.Query().
+			Where(dbusagecleanuptask.IDEQ(taskID)).
+			Only(ctx)
+		if err != nil {
+			if dbent.IsNotFound(err) {
+				return nil, sql.ErrNoRows
+			}
+			return nil, err
+		}
+		task, err := usageCleanupTaskFromEnt(row)
+		if err != nil {
+			return nil, err
+		}
+		return &task, nil
+	}
+
+	var task service.UsageCleanupTask
+	var filtersJSON []byte
+	var errMsg sql.NullString
+	var canceledBy sql.NullInt64
+	var canceledAt, startedAt, finishedAt sql.NullTime
+	err := scanSingleRow(ctx, r.sql, `
+		SELECT id, status, filters, created_by, deleted_rows, error_message,
+			canceled_by, canceled_at, started_at, finished_at, created_at, updated_at
+		FROM usage_cleanup_tasks
+		WHERE id = $1
+	`, []any{taskID},
+		&task.ID, &task.Status, &filtersJSON, &task.CreatedBy, &task.DeletedRows, &errMsg,
+		&canceledBy, &canceledAt, &startedAt, &finishedAt, &task.CreatedAt, &task.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(filtersJSON, &task.Filters); err != nil {
+		return nil, fmt.Errorf("parse cleanup filters: %w", err)
+	}
+	if errMsg.Valid {
+		task.ErrorMsg = &errMsg.String
+	}
+	if canceledBy.Valid {
+		value := canceledBy.Int64
+		task.CanceledBy = &value
+	}
+	if canceledAt.Valid {
+		task.CanceledAt = &canceledAt.Time
+	}
+	if startedAt.Valid {
+		task.StartedAt = &startedAt.Time
+	}
+	if finishedAt.Valid {
+		task.FinishedAt = &finishedAt.Time
+	}
+	return &task, nil
+}
+
 func (r *usageCleanupRepository) ClaimNextPendingTask(ctx context.Context, staleRunningAfterSeconds int64) (*service.UsageCleanupTask, error) {
 	if staleRunningAfterSeconds <= 0 {
 		staleRunningAfterSeconds = 1800
@@ -283,7 +340,7 @@ func (r *usageCleanupRepository) MarkTaskFailed(ctx context.Context, taskID int6
 }
 
 func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, filters service.UsageCleanupFilters, limit int) (int64, error) {
-	if filters.StartTime.IsZero() || filters.EndTime.IsZero() {
+	if !filters.All && (filters.StartTime.IsZero() || filters.EndTime.IsZero()) {
 		return 0, fmt.Errorf("cleanup filters missing time range")
 	}
 	whereClause, args := buildUsageCleanupWhere(filters)
@@ -324,15 +381,30 @@ func buildUsageCleanupWhere(filters service.UsageCleanupFilters) (string, []any)
 	conditions := make([]string, 0, 8)
 	args := make([]any, 0, 8)
 	idx := 1
-	if !filters.StartTime.IsZero() {
+	if filters.All {
+		conditions = append(conditions, "TRUE")
+	} else if !filters.StartTime.IsZero() {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", idx))
 		args = append(args, filters.StartTime)
 		idx++
-	}
-	if !filters.EndTime.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("created_at <= $%d", idx))
+		if !filters.EndTime.IsZero() {
+			conditions = append(conditions, fmt.Sprintf("created_at < $%d", idx))
+			args = append(args, filters.EndTime)
+			idx++
+		}
+	} else if !filters.EndTime.IsZero() {
+		conditions = append(conditions, fmt.Sprintf("created_at < $%d", idx))
 		args = append(args, filters.EndTime)
 		idx++
+	}
+	if filters.DataCleanupAuditID > 0 {
+		if filters.DataCleanupSnapshotMaxID <= 0 {
+			conditions = append(conditions, "FALSE")
+		} else {
+			conditions = append(conditions, fmt.Sprintf("id <= $%d", idx))
+			args = append(args, filters.DataCleanupSnapshotMaxID)
+			idx++
+		}
 	}
 	if filters.UserID != nil {
 		conditions = append(conditions, fmt.Sprintf("user_id = $%d", idx))
