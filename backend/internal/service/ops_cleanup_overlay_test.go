@@ -250,7 +250,7 @@ func TestRefreshEffectiveBeforeRun_UpdatesSnapshot(t *testing.T) {
 	})
 
 	svc.refreshEffectiveBeforeRun(context.Background())
-	snap := svc.snapshotEffective()
+	snap := svc.effective
 	if snap.ErrorLogRetentionDays != 7 {
 		t.Fatalf("after refresh, retention should be 7, got %d", snap.ErrorLogRetentionDays)
 	}

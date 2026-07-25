@@ -243,32 +243,30 @@ func (s *OpsCleanupService) computeEffectiveLocked(ctx context.Context) {
 			"[OpsCleanup] parse advanced settings failed, using cfg: %v", err)
 		return
 	}
+	// 缓存原始（可能为负）retention 值：normalizeOpsAdvancedSettings 会把负数 clamp 成默认值，
+	// 覆盖判断需用原始值才能保留“<0 沿用 cfg”的语义。
+	rawErr := adv.DataRetention.ErrorLogRetentionDays
+	rawMin := adv.DataRetention.MinuteMetricsRetentionDays
+	rawHour := adv.DataRetention.HourlyMetricsRetentionDays
 	normalizeOpsAdvancedSettings(&adv)
 	dr := adv.DataRetention
 	base.Enabled = dr.CleanupEnabled
 	if sched := strings.TrimSpace(dr.CleanupSchedule); sched != "" {
 		base.Schedule = sched
 	}
-	if dr.ErrorLogRetentionDays >= 0 {
-		base.ErrorLogRetentionDays = dr.ErrorLogRetentionDays
+	if rawErr >= 0 {
+		base.ErrorLogRetentionDays = rawErr
 	}
-	if dr.MinuteMetricsRetentionDays >= 0 {
-		base.MinuteMetricsRetentionDays = dr.MinuteMetricsRetentionDays
+	if rawMin >= 0 {
+		base.MinuteMetricsRetentionDays = rawMin
 	}
-	if dr.HourlyMetricsRetentionDays >= 0 {
-		base.HourlyMetricsRetentionDays = dr.HourlyMetricsRetentionDays
+	if rawHour >= 0 {
+		base.HourlyMetricsRetentionDays = rawHour
 	}
 	targets = make(map[string]OpsRetentionPolicy, len(dr.Targets))
 	for key, policy := range dr.Targets {
 		targets[key] = policy
 	}
-}
-
-// snapshotEffective 取一份 effective 副本（runCleanupOnce 等读路径使用）。
-func (s *OpsCleanupService) snapshotEffective() config.OpsCleanupConfig {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.effective
 }
 
 func (s *OpsCleanupService) snapshotEffectiveTargets() map[string]OpsRetentionPolicy {

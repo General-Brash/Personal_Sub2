@@ -68,7 +68,9 @@ func TestOpsCleanupCutoffArgumentUsesBusinessDate(t *testing.T) {
 	if got := opsCleanupCutoffArgument(cutoff, true, loc); got != "2026-07-25" {
 		t.Fatalf("date cutoff = %v, want 2026-07-25", got)
 	}
-	if got := opsCleanupCutoffArgument(cutoff, false, loc); !got.(time.Time).Equal(cutoff) {
+	got := opsCleanupCutoffArgument(cutoff, false, loc)
+	ts, ok := got.(time.Time)
+	if !ok || !ts.Equal(cutoff) {
 		t.Fatalf("timestamp cutoff = %v, want %v", got, cutoff)
 	}
 }
