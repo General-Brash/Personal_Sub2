@@ -330,6 +330,7 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 
 	targets := []opsCleanupTarget{
 		{policies["ops_error_logs"].RetentionDays, "ops_error_logs", "created_at", false, &out.errorLogs},
+		{policies["ops_ingress_reject_aggregates"].RetentionDays, "ops_ingress_reject_aggregates", "bucket_start", false, &out.ingressRejects},
 		{policies["ops_alert_events"].RetentionDays, "ops_alert_events", "created_at", false, &out.alertEvents},
 		{policies["ops_system_logs"].RetentionDays, "ops_system_logs", "created_at", false, &out.systemLogs},
 		{policies["ops_system_log_cleanup_audits"].RetentionDays, "ops_system_log_cleanup_audits", "created_at", false, &out.logAudits},

@@ -66,8 +66,8 @@ func TestCheckinAndTemporaryCreditHTTPContract(t *testing.T) {
 	})
 	auditLog := middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() })
 	stepUp := middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() })
-	routes.RegisterUserRoutes(v1, handlers, allowUser, auditLog, nil)
-	routes.RegisterAdminRoutes(v1, handlers, denyAdmin, auditLog, stepUp, nil)
+	routes.RegisterUserRoutes(v1, handlers, allowUser, auditLog, nil, nil)
+	routes.RegisterAdminRoutes(v1, handlers, denyAdmin, auditLog, stepUp, nil, nil)
 
 	registered := make(map[string]bool)
 	for _, route := range engine.Routes() {

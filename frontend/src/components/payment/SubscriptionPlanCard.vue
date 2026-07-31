@@ -24,7 +24,21 @@
             {{ plan.description }}
           </p>
         </div>
-        <PurchaseLimitBadge :limits="plan" />
+        <div class="shrink-0 text-right">
+          <div class="flex items-baseline gap-1">
+            <span class="text-xs text-gray-400 dark:text-dark-500">{{ planCurrencySymbol }}</span>
+            <span :class="['text-2xl font-extrabold tracking-tight', textClass]">{{ plan.price }}</span>
+            <span v-if="plan.currency" class="text-xs font-medium text-gray-400 dark:text-dark-500">{{ plan.currency }}</span>
+          </div>
+          <span class="text-[11px] text-gray-400 dark:text-dark-500">/ {{ validitySuffix }}</span>
+          <div v-if="plan.original_price" class="mt-0.5 flex items-center justify-end gap-1.5">
+            <span class="text-xs text-gray-400 line-through dark:text-dark-500">{{ planCurrencySymbol }}{{ plan.original_price }}<template v-if="plan.currency"> {{ plan.currency }}</template></span>
+            <span :class="['rounded px-1 py-0.5 text-[10px] font-semibold', discountClass]">{{ discountText }}</span>
+          </div>
+          <div class="mt-1 flex justify-end">
+            <PurchaseLimitBadge :limits="plan" />
+          </div>
+        </div>
       </div>
 
       <div v-if="isDailyTemporaryCredit" class="mb-3 grid grid-cols-3 gap-2 rounded-lg bg-cyan-50 px-3 py-2 text-xs dark:bg-cyan-950/30">
@@ -140,9 +154,10 @@ import type { UserSubscription } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { formatMoneyDisplay, multiplyDecimalAmount } from '@/utils/format'
 import { isPurchaseLimitExhausted } from '@/utils/purchaseLimits'
-import { subscriptionValidityDays } from '@/components/payment/paymentFlow'
 import PurchaseLimitBadge from '@/components/payment/PurchaseLimitBadge.vue'
 import { hasPeakRate as groupHasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
+import { planValiditySuffix } from './validity'
+import { currencySymbol } from '@/components/payment/currency'
 import {
   platformAccentBarClass,
   platformBadgeLightClass,
@@ -196,6 +211,7 @@ const rateDisplay = computed(() => {
 })
 
 const appStore = useAppStore()
+const planCurrencySymbol = computed(() => currencySymbol(props.plan.currency || 'USD'))
 
 const hasPeakRate = computed(() => groupHasPeakRate(props.plan))
 
@@ -216,9 +232,7 @@ const modelScopeLabels = computed(() => {
   return scopes.map(s => MODEL_SCOPE_LABELS[s] || s)
 })
 
-const validitySuffix = computed(() => {
-  return `${subscriptionValidityDays(props.plan)}${t('payment.days')}`
-})
+const validitySuffix = computed(() => planValiditySuffix(props.plan, t))
 
 const expectedReceive = computed(() => isDailyTemporaryCredit.value
   ? `$${formatMoneyDisplay(dailyCreditTotal.value)} ${t('commerce.creditType.temporary')}`

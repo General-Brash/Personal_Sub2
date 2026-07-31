@@ -19,6 +19,24 @@ assert_contains() {
 
 for compose in \
     docker-compose.yml \
+    docker-compose.local.yml \
+    docker-compose.standalone.yml; do
+    path="${DEPLOY_DIR}/${compose}"
+    block=$(awk '
+        /^  sub2api:$/ { capture = 1 }
+        capture && /^  [A-Za-z0-9_-]+:$/ && $0 != "  sub2api:" { exit }
+        capture { print }
+    ' "${path}")
+
+    [[ -n "${block}" ]] || fail "${compose} has no sub2api service"
+    assert_contains "${block}" 'image: ghcr.io/general-brash/personal_sub2:latest'
+    if [[ "${block}" == *'weishaw/sub2api'* ]]; then
+        fail "${compose} uses the official sub2api image"
+    fi
+done
+
+for compose in \
+    docker-compose.yml \
     docker-compose.dev.yml \
     docker-compose.local.yml \
     docker-compose.standalone.yml; do

@@ -6,7 +6,7 @@ This document applies to any individual, organization, or authorized representat
 
 ## 1. Scope
 
-Personal_Sub2 is open-source software developed from the `1.6.0` codebase and maintained independently. Any self-hosted deployment, modification, hosted operation, external service, commercial use, user management, content processing, data processing, payment settlement, customer support, or upstream account/API usage based on Personal_Sub2 is the sole responsibility of the party that deploys, operates, or controls the relevant instance.
+Personal_Sub2 is open-source software developed from the official `v0.1.168` codebase and maintained independently. Any self-hosted deployment, modification, hosted operation, external service, commercial use, user management, content processing, data processing, payment settlement, customer support, or upstream account/API usage based on Personal_Sub2 is the sole responsibility of the party that deploys, operates, or controls the relevant instance.
 
 This document does not replace the open-source license, upstream terms of service, user agreements, privacy policies, data processing agreements, commercial contracts, regulatory filings, administrative permits, security assessments, or any other documents, procedures, or obligations required by applicable law or contract.
 

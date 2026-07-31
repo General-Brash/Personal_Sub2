@@ -2,8 +2,8 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import { createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
-import SubscriptionPlanCard from "../SubscriptionPlanCard.vue";
 import type { SubscriptionPlan } from "@/types/payment";
+import SubscriptionPlanCard from "../SubscriptionPlanCard.vue";
 
 const i18n = createI18n({
   legacy: false,
@@ -25,6 +25,9 @@ const i18n = createI18n({
       },
       payment: {
         days: "days",
+        weeks: "weeks",
+        months: "months",
+        perMonth: "month",
         models: "Models",
         planCard: {
           quota: "Quota",
@@ -146,9 +149,9 @@ describe("SubscriptionPlanCard", () => {
 
   it.each([
     ['days', 2, '2payment.days'],
-    ['weeks', 2, '14payment.days'],
-    ['months', 2, '60payment.days'],
-  ])('renders legacy %s validity using backend-equivalent days', (validityUnit, validityDays, expected) => {
+    ['weeks', 2, '2payment.weeks'],
+    ['months', 2, '2payment.months'],
+  ])('renders legacy %s validity with the configured unit', (validityUnit, validityDays, expected) => {
     const text = mountPlanCard('openai', {
       validity_days: validityDays,
       validity_unit: validityUnit,
@@ -169,5 +172,24 @@ describe("SubscriptionPlanCard", () => {
     const button = wrapper.get('[data-test="subscription-plan-select"]');
     expect(button.attributes('disabled')).toBeDefined();
     expect(button.text()).toContain('Insufficient permanent credit');
+  });
+
+  // #4607：管理端保存的单位是复数（months/weeks），此前用户侧只匹配单数
+  // 'month'，「1 个月」的套餐卡片被显示成「1天」。测试环境的 vue-i18n 为
+  // runtime-only 构建，t() 原样返回 key，故按 key 断言单位分支。
+  it("renders plural admin-form validity units instead of mislabeled days (#4607)", () => {
+    expect(mountPlanCard("openai", { validity_days: 1, validity_unit: "months" }).text()).toContain("/ payment.perMonth");
+    expect(mountPlanCard("openai", { validity_days: 3, validity_unit: "months" }).text()).toContain("/ 3payment.months");
+    expect(mountPlanCard("openai", { validity_days: 2, validity_unit: "weeks" }).text()).toContain("/ 2payment.weeks");
+    expect(mountPlanCard("openai", { validity_days: 30, validity_unit: "day" }).text()).toContain("/ 30payment.days");
+  });
+
+  it("uses the configured currency symbol while preserving USD for legacy plans", () => {
+    const cnyPlan = mountPlanCard("openai", { currency: "CNY", original_price: 20 }).text();
+
+    expect(cnyPlan).toContain("¥10CNY");
+    expect(cnyPlan).toContain("¥20CNY");
+    expect(mountPlanCard("openai", { currency: "USD" }).text()).toContain("$10USD");
+    expect(mountPlanCard("openai", { currency: "" }).text()).toContain("$10");
   });
 });

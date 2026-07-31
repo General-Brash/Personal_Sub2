@@ -91,7 +91,7 @@ func TestAPIKeyAuthSnapshotRoundTripsLegacyBillingValues(t *testing.T) {
 	service := &APIKeyService{}
 	snapshot := service.snapshotFromAPIKey(context.Background(), source)
 	require.NotNil(t, snapshot)
-	require.Equal(t, 15, snapshot.Version)
+	require.Equal(t, apiKeyAuthSnapshotVersion, snapshot.Version)
 	require.Equal(t, source.Quota, snapshot.Quota)
 	require.Equal(t, source.QuotaUsed, snapshot.QuotaUsed)
 	require.Equal(t, source.RateLimit5h, snapshot.RateLimit5h)

@@ -63,6 +63,8 @@ function createPublicSettings(overrides: Partial<PublicSettings> = {}): PublicSe
     admin_bank_transactions_enabled: true,
     admin_audit_logs_enabled: true,
     admin_ops_enabled: true,
+    model_plaza_enabled: false,
+    model_plaza_require_auth: false,
     service_quota_enabled: false,
     affiliate_enabled: false,
     ...overrides,

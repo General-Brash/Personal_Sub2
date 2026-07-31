@@ -20,21 +20,34 @@ type balanceUserRepoStub struct {
 	updated     []*User
 	auditDeltas []float64
 	applyCalls  int
+	adjustErr   error
+	// changes 记录每次原子余额变更，顺序与调用顺序一致。
+	changes []BalanceChange
 }
 
-func (s *balanceUserRepoStub) Update(ctx context.Context, user *User) error {
-	if s.updateErr != nil {
-		return s.updateErr
+func (s *balanceUserRepoStub) AdjustBalance(ctx context.Context, id int64, delta float64) (BalanceChange, error) {
+	return s.apply(func(current float64) float64 { return current + delta })
+}
+
+func (s *balanceUserRepoStub) SetBalance(ctx context.Context, id int64, value float64) (BalanceChange, error) {
+	return s.apply(func(float64) float64 { return value })
+}
+
+func (s *balanceUserRepoStub) apply(next func(current float64) float64) (BalanceChange, error) {
+	if s.adjustErr != nil {
+		return BalanceChange{}, s.adjustErr
 	}
-	if user == nil {
-		return nil
+	if s.userRepoStub == nil || s.userRepoStub.user == nil {
+		return BalanceChange{}, ErrUserNotFound
 	}
-	clone := *user
-	s.updated = append(s.updated, &clone)
-	if s.userRepoStub != nil {
-		s.userRepoStub.user = &clone
+	change := BalanceChange{Old: s.userRepoStub.user.Balance}
+	change.New = next(change.Old)
+	if change.New < 0 {
+		return change, ErrBalanceNegative
 	}
-	return nil
+	s.userRepoStub.user.Balance = change.New
+	s.changes = append(s.changes, change)
+	return change, nil
 }
 
 func (s *balanceUserRepoStub) ApplyAdminBalanceAdjustment(_ context.Context, userID int64, adjustment AdminBalanceAdjustment) (*AdminBalanceAdjustmentResult, error) {
@@ -46,18 +59,20 @@ func (s *balanceUserRepoStub) ApplyAdminBalanceAdjustment(_ context.Context, use
 	if err != nil {
 		return nil, err
 	}
-	next, delta, err := adjustment.ApplyTo(user.Balance)
+	clone := *user
+	next, delta, err := adjustment.ApplyTo(clone.Balance)
 	if err != nil {
 		return nil, err
 	}
-	user.Balance = next
-	if err := s.Update(context.Background(), user); err != nil {
-		return nil, err
+	clone.Balance = next
+	s.updated = append(s.updated, &clone)
+	if s.userRepoStub != nil {
+		s.userRepoStub.user = &clone
 	}
 	if delta != 0 {
 		s.auditDeltas = append(s.auditDeltas, delta)
 	}
-	return &AdminBalanceAdjustmentResult{User: user, BalanceDelta: delta, Response: user}, nil
+	return &AdminBalanceAdjustmentResult{User: &clone, BalanceDelta: delta, Response: &clone}, nil
 }
 
 func (s *balanceUserRepoStub) ApplyAdminBalanceAdjustmentAtomic(ctx context.Context, userID int64, adjustment AdminBalanceAdjustment, _ *IdempotencyAtomicClaim, responseFactory AdminBalanceAdjustmentResponseFactory) (*AdminBalanceAdjustmentResult, error) {
@@ -181,6 +196,69 @@ func (s *adminBalanceBillingCacheStub) SetAvailableCredit(context.Context, int64
 func (s *adminBalanceBillingCacheStub) InvalidateAvailableCredit(_ context.Context, userID int64) error {
 	s.availableInvalidations = append(s.availableInvalidations, userID)
 	return s.availableErr
+}
+
+// The adjustment repository owns the row lock, balance write, and audit record.
+func TestAdminService_UpdateUserBalance_UsesTransactionalAdjustmentRepository(t *testing.T) {
+	tests := []struct {
+		name      string
+		operation string
+		amount    float64
+		want      float64
+		wantDelta float64
+	}{
+		{name: "add", operation: "add", amount: 5, want: 15, wantDelta: 5},
+		{name: "subtract", operation: "subtract", amount: 4, want: 6, wantDelta: -4},
+		{name: "set", operation: "set", amount: 2, want: 2, wantDelta: -8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &balanceUserRepoStub{userRepoStub: &userRepoStub{user: &User{ID: 7, Balance: 10}}}
+			svc := &adminServiceImpl{
+				userRepo:       repo,
+				redeemCodeRepo: &balanceRedeemRepoStub{redeemRepoStub: &redeemRepoStub{}},
+			}
+
+			user, err := svc.UpdateUserBalance(context.Background(), 7, tt.amount, tt.operation, "")
+			require.NoError(t, err)
+			require.Equal(t, 1, repo.applyCalls)
+			require.Empty(t, repo.changes, "legacy balance primitives must not run in parallel")
+			require.Equal(t, tt.want, user.Balance)
+			require.Equal(t, []float64{tt.wantDelta}, repo.auditDeltas)
+		})
+	}
+}
+
+func TestAdminService_UpdateUserBalance_RejectsNegativeResult(t *testing.T) {
+	repo := &balanceUserRepoStub{userRepoStub: &userRepoStub{user: &User{ID: 7, Balance: 3}}}
+	svc := &adminServiceImpl{
+		userRepo:       repo,
+		redeemCodeRepo: &balanceRedeemRepoStub{redeemRepoStub: &redeemRepoStub{}},
+	}
+
+	_, err := svc.UpdateUserBalance(context.Background(), 7, 4, "subtract", "")
+	require.ErrorIs(t, err, ErrAdminBalanceInsufficient)
+	require.Equal(t, 1, repo.applyCalls)
+	require.Empty(t, repo.updated)
+	require.Empty(t, repo.auditDeltas)
+	require.Empty(t, repo.changes)
+	require.Equal(t, 3.0, repo.userRepoStub.user.Balance)
+}
+
+func TestAdminService_UpdateUserBalance_RejectsUnknownOperation(t *testing.T) {
+	repo := &balanceUserRepoStub{userRepoStub: &userRepoStub{user: &User{ID: 7, Balance: 10}}}
+	svc := &adminServiceImpl{
+		userRepo:       repo,
+		redeemCodeRepo: &balanceRedeemRepoStub{redeemRepoStub: &redeemRepoStub{}},
+	}
+
+	_, err := svc.UpdateUserBalance(context.Background(), 7, 1, "multiply", "")
+	require.ErrorIs(t, err, ErrInvalidAdminBalanceAdjustment)
+	require.Zero(t, repo.applyCalls)
+	require.Empty(t, repo.auditDeltas)
+	require.Empty(t, repo.changes)
+	require.Equal(t, 10.0, repo.userRepoStub.user.Balance)
 }
 
 func TestAdminService_UpdateUserBalance_InvalidatesAuthCache(t *testing.T) {

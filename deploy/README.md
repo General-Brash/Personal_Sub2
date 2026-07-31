@@ -30,6 +30,7 @@ This directory contains files for deploying Personal_Sub2 on Linux servers and A
 | `intent-classifier.env.example` | Bare-metal classifier environment template |
 | `INTENT_CLASSIFIER.md` | Model upload, activation, health, and rollback runbook |
 | `config.example.yaml` | Example configuration file |
+| `EDGE_SECURITY.md` | Reverse proxy, CDN/WAF, trusted proxy, and ingress hardening guide |
 
 ---
 
@@ -249,6 +250,7 @@ docker compose down -v
 | `INTENT_CLASSIFIER_ACTIVE_VERSION` | No | *(persisted state)* | Explicit startup override; leave empty to restore the active pointer |
 | `INTENT_CLASSIFIER_INFERENCE_TIMEOUT_MS` | No | `250` | Per-inference timeout; keep below the Secondary Review request timeout |
 | `TZ` | No | `Asia/Shanghai` | Timezone |
+| `UPDATE_GITHUB_TOKEN` | No | *(empty)* | Token for `api.github.com` release checks only; asset downloads remain anonymous. |
 | `GEMINI_OAUTH_CLIENT_ID` | No | *(builtin)* | Google OAuth client ID (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
 | `GEMINI_OAUTH_CLIENT_SECRET` | No | *(builtin)* | Google OAuth client secret (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
 | `GEMINI_OAUTH_SCOPES` | No | *(default)* | OAuth scopes (Gemini OAuth) |

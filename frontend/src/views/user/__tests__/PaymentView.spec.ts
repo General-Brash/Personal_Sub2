@@ -375,8 +375,8 @@ describe('PaymentView internal subscription purchases', () => {
 
   it.each([
     ['days', 2, '2payment.days'],
-    ['weeks', 2, '14payment.days'],
-    ['months', 2, '60payment.days'],
+    ['weeks', 2, '2payment.weeks'],
+    ['months', 2, '2payment.months'],
   ])('shows backend-equivalent validity for legacy %s plans', async (validityUnit, validityDays, expected) => {
     const wrapper = await mountSubscriptionConfirm({
       plan: {

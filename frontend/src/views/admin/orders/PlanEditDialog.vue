@@ -61,6 +61,12 @@
             <input v-model.number="planForm.price" data-test="plan-price" type="number" step="0.00000001" min="0.00000001" class="input pl-7 font-mono" required />
           </div>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ creditTypeLabel(planForm.payment_credit_type) }}</p>
+          <p v-if="subscriptionCnyPreview" class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400">
+            {{ t('payment.admin.subscriptionCnyPayPreview', { amount: subscriptionCnyPreview.amount }) }}
+            <span v-if="subscriptionCnyPreview.feeRate > 0">
+              {{ t('payment.admin.subscriptionCnyPayPreviewWithFee', { feeRate: subscriptionCnyPreview.feeRate, total: subscriptionCnyPreview.total }) }}
+            </span>
+          </p>
         </div>
         <div>
           <label class="input-label">{{ t('payment.admin.originalPrice') }}</label>
@@ -75,7 +81,14 @@
         <div v-if="isSub2Benefit"><label class="input-label">{{ t('payment.admin.validityUnit') }} <span class="text-red-500">*</span></label><Select v-model="planForm.validity_unit" :options="validityUnitOptions" /></div>
         <div v-else class="flex items-end pb-2 text-sm text-gray-500 dark:text-gray-400">{{ t('payment.admin.dailyTemporaryCreditHint') }}</div>
       </div>
-      <div><label class="input-label">{{ t('payment.admin.sortOrder') }}</label><input v-model.number="planForm.sort_order" type="number" min="0" class="input" /></div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="input-label">{{ t('payment.admin.sortOrder') }}</label><input v-model.number="planForm.sort_order" type="number" min="0" class="input" /></div>
+        <div>
+          <label class="input-label">{{ t('payment.admin.currency') }}</label>
+          <input v-model="planForm.currency" data-test="plan-currency" type="text" maxlength="3" class="input uppercase" :placeholder="t('payment.admin.currencyPlaceholder')" />
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.currencyHint') }}</p>
+        </div>
+      </div>
       <div>
         <label class="input-label">{{ t('payment.admin.features') }}</label>
         <textarea v-model="planFeaturesText" rows="3" class="input" :placeholder="t('payment.admin.featuresPlaceholder')"></textarea>
@@ -149,6 +162,7 @@ import { useAppStore } from '@/stores/app'
 import { adminPaymentAPI } from '@/api/admin/payment'
 import type { AdminPaymentConfig } from '@/api/admin/payment'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { formatPaymentAmount } from '@/components/payment/currency'
 import type { CreditType, SubscriptionBenefitType, SubscriptionPlan } from '@/types/payment'
 import type { AdminGroup } from '@/types'
 import { formatMoneyDisplay } from '@/utils/format'
@@ -242,6 +256,31 @@ function creditTypeLabel(type: CreditType): string {
   return t(`commerce.creditType.${type}`)
 }
 
+function roundCnyAmount(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+function ceilCnyAmount(value: number): number {
+  return Math.ceil(value * 100) / 100
+}
+
+const subscriptionCnyPreview = computed(() => {
+  const price = Number(planForm.price) || 0
+  const rate = Number(props.paymentConfig?.subscription_usd_to_cny_rate) || 0
+  if (price <= 0 || rate <= 0) return null
+
+  const amount = roundCnyAmount(price * rate)
+  const feeRate = Number(props.paymentConfig?.recharge_fee_rate) || 0
+  const fee = feeRate > 0 ? ceilCnyAmount((amount * feeRate) / 100) : 0
+  const total = feeRate > 0 ? roundCnyAmount(amount + fee) : amount
+
+  return {
+    amount: formatPaymentAmount(amount, 'CNY'),
+    feeRate,
+    total: formatPaymentAmount(total, 'CNY'),
+  }
+})
+
 watch(() => planForm.benefit_type, (benefitType) => {
   if (benefitType === 'daily_temporary_credit') {
     planForm.group_id = 0
@@ -305,7 +344,7 @@ async function handleSavePlan() {
     return
   }
   if (!planForm.validity_days || planForm.validity_days < 1) {
-    appStore.showError(t('payment.admin.validityDaysRequired'))
+    appStore.showError(t('payment.admin.validityRequired'))
     return
   }
   if (!isSub2Benefit.value && (!Number.isFinite(planForm.daily_temporary_credit_amount) || planForm.daily_temporary_credit_amount <= 0)) {

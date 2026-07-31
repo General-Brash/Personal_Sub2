@@ -248,7 +248,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminPaymentAPI } from '@/api/admin/payment'
 import type { MallAnalyticsProduct, MallAnalyticsResponse, MallAnalyticsRevenueTotal } from '@/types/finance'
-import type { CurrencyProduct, CurrencyProductInput } from '@/types/payment'
+import type { CurrencyProduct, CurrencyProductInput, DailyPaymentStats } from '@/types/payment'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -299,11 +299,12 @@ const analyticsCategoryTotals = computed(() => {
 })
 
 const analyticsDailyGroups = computed(() => {
-  const grouped = new Map<string, { key: string; currency: string; unit: string; points: Array<{ date: string; amount: number; count: number }> }>()
+  const grouped = new Map<string, { key: string; currency: string; unit: string; points: DailyPaymentStats[] }>()
   for (const point of analytics.value?.daily ?? []) {
     const key = financialAmountKey(point)
     const group = grouped.get(key) ?? { key, currency: point.currency, unit: point.unit, points: [] }
-    group.points.push({ date: point.date, amount: Number(point.revenue) || 0, count: point.sales_count })
+    const amountKey = point.currency || point.unit
+    group.points.push({ date: point.date, amount: { [amountKey]: Number(point.revenue) || 0 }, count: point.sales_count })
     grouped.set(key, group)
   }
   return [...grouped.values()]

@@ -24,7 +24,7 @@ func TestAdminUpdateBalanceUsesActorScopedAtomicReplay(t *testing.T) {
 
 	adminService := newStubAdminService()
 	adminService.adminBalanceAtomicStore = &adminAtomicSuccessStore{repo: repo}
-	handler := NewUserHandler(adminService, nil, nil, nil, nil, nil)
+	handler := NewUserHandler(adminService, nil, nil, nil, nil, nil, nil)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 99})
@@ -71,7 +71,7 @@ func TestAdminUpdateBalanceReturnsConflictWhenPermanentBalanceIsInsufficient(t *
 
 	adminService := newStubAdminService()
 	adminService.adminBalanceAtomicErr = service.ErrAdminBalanceInsufficient
-	handler := NewUserHandler(adminService, nil, nil, nil, nil, nil)
+	handler := NewUserHandler(adminService, nil, nil, nil, nil, nil, nil)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 99})
@@ -104,7 +104,7 @@ func TestAdminUpdateBalanceReturnsBadRequestForInvalidLedgerPrecision(t *testing
 
 	adminService := newStubAdminService()
 	adminService.adminBalanceAtomicErr = service.ErrInvalidAdminBalanceAdjustment
-	handler := NewUserHandler(adminService, nil, nil, nil, nil, nil)
+	handler := NewUserHandler(adminService, nil, nil, nil, nil, nil, nil)
 	router := gin.New()
 	router.POST("/api/v1/admin/users/:id/balance", handler.UpdateBalance)
 

@@ -26,6 +26,7 @@ func TestCurrencyProductAdminRoutesRequireAdminAuthentication(t *testing.T) {
 		middleware.AdminAuthMiddleware(func(c *gin.Context) { c.AbortWithStatus(http.StatusUnauthorized) }),
 		middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }),
 		nil,
+		nil,
 	)
 
 	for _, testCase := range []struct {

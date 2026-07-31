@@ -21,7 +21,7 @@
         </div>
         <div class="min-w-0 flex-1">
           <p class="truncate font-medium text-gray-900 dark:text-white">{{ user.email }}</p>
-          <p class="text-sm text-gray-500">
+          <p class="text-sm text-gray-500 dark:text-gray-400">
             {{ t('admin.users.currentBalance') }}: ${{ formatDecimalAmount(user.balance) }}
           </p>
         </div>
