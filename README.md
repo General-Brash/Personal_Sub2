@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.1.168`. This integration line is released as `v0.1.168-P1`.
+Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.1.169`. This integration line is released as `v0.1.169-P1`.
 
 English | [中文](README_CN.md) | [日本語](README_JA.md)
 
@@ -13,14 +13,14 @@ English | [中文](README_CN.md) | [日本語](README_JA.md)
 
 Production model weights are not included. Before enabling model-backed secondary review, prepare and activate a package as described in [`MODEL_PACKAGE.md`](services/intent-classifier/MODEL_PACKAGE.md).
 
-## Official v0.1.168 Integration
+## Official v0.1.169 Integration
 
-- **Passkey authentication**: Register and manage passkeys from the profile page, use passwordless sign-in, and control availability from system settings. Enrollment and revocation require account-password verification.
-- **Model Plaza**: Browse a public, group-scoped model pricing catalog whose visible scope is controlled by administrators.
-- **Kimi K3 support**: Includes billing and thinking-protocol adaptation, with correct recognition of the `1M` context suffix.
-- **Administration and deployment**: Copy model IDs from the account model allowlist selector and use `SKIP_SETUP` to explicitly skip the initial setup flow.
-- **Concurrent update safety**: User and API-key updates write only declared columns so concurrent changes do not overwrite unrelated fields.
-- **Reliability and security fixes**: Preserves security-audit configuration after decryption failures, keeps Claude OAuth system cache breakpoints, retains Codex web-search tool declarations and GPT-5.6 `max` reasoning effort, and hardens OpenAI Live settlement against storage failures.
+- **Upstream URL safety**: Validates client-controlled OpenAI Responses subpaths, Gemini model/action paths, and Grok video request IDs before forwarding, rejecting path fragments that could alter upstream URL structure.
+- **Runtime pricing and billing**: Docker and GoReleaser image builds now carry fallback pricing resources at runtime; GPT-5.6 Luna/Terra rates and GLM-5.2 fallback pricing are corrected.
+- **Container privilege hardening**: Every official Compose variant enables `no-new-privileges`, preventing application processes from acquiring additional privileges at runtime.
+- **Proxy stream-circuit resilience**: OpenAI proxy disconnect quarantine now fails open when every candidate shares a quarantined proxy, collapses burst disconnects into one event, and provides an explicit disable switch.
+- **Routing and scheduling correctness**: Composite groups expose their configured concrete model platforms while ordinary group isolation remains intact, and token refresh skips unschedulable accounts.
+- **Protocol and UI fixes**: Generates standards-compliant SMTP messages, improves Anthropic classifier/count-token compatibility and Qwen3Guard auxiliary-field handling, and corrects subscription expiry labels and long plan-title display.
 
 ## Installation and Upgrade
 

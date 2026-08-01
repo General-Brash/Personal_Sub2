@@ -660,6 +660,11 @@ download_and_extract() {
     cp "$TEMP_DIR/sub2api" "$INSTALL_DIR/sub2api"
     chmod +x "$INSTALL_DIR/sub2api"
 
+    # Copy runtime resources if they exist in the archive
+    if [ -d "$TEMP_DIR/resources" ]; then
+        cp -r "$TEMP_DIR/resources" "$INSTALL_DIR/"
+    fi
+
     # Copy deploy files if they exist in the archive
     if [ -d "$TEMP_DIR/deploy" ]; then
         cp -r "$TEMP_DIR/deploy/"* "$INSTALL_DIR/" 2>/dev/null || true

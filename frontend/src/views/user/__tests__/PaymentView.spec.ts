@@ -311,6 +311,25 @@ describe('PaymentView unified store layout', () => {
     wrapper.unmount()
   })
 
+  it.each([3, 4, 6])('keeps %i plans on the existing mobile/tablet/desktop grid', async (planCount) => {
+    const basePlan = checkoutInfoWithPlansFixture().data.plans[0]
+    const plans = Array.from({ length: planCount }, (_, index) => ({
+      ...basePlan,
+      id: index + 1,
+      name: `Plan ${index + 1}`,
+    }))
+    const wrapper = await mountStoreTabs({ plans })
+    const cards = wrapper.findAllComponents(SubscriptionPlanCard)
+
+    expect(cards).toHaveLength(planCount)
+    expect([...(cards[0].element.parentElement?.classList ?? [])]).toEqual(expect.arrayContaining([
+      'grid',
+      'grid-cols-1',
+      'sm:grid-cols-2',
+      'lg:grid-cols-3',
+    ]))
+  })
+
   it('keeps internal mall purchases available when no provider is configured', async () => {
     appState.cachedPublicSettings = { payment_enabled: false }
     const currencyWrapper = await mountStoreTabs({
