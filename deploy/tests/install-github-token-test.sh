@@ -6,6 +6,10 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
+# Load only the helper because install.sh intentionally rejects macOS Bash 3.
+GITHUB_API_CURL_SOURCE="$TEMP_DIR/github-api-curl.sh"
+sed -n '/^github_api_curl() {$/,/^}$/p' "$ROOT_DIR/deploy/install.sh" > "$GITHUB_API_CURL_SOURCE"
+
 cat > "$TEMP_DIR/curl" <<'EOF'
 #!/bin/bash
 printf '%s\n' "$@" > "$CURL_ARGS_LOG"
@@ -23,8 +27,8 @@ EOF
 run_api_curl() {
     CURL_ARGS_LOG="$1" HOME="$TEMP_DIR/home" PATH="$TEMP_DIR:$PATH" UPDATE_GITHUB_TOKEN="${2:-}" \
         GITHUB_TOKEN="github-fallback" GH_TOKEN="gh-fallback" \
-        bash -c 'source <(sed -n "/^github_api_curl() {/,/^}$/p" "$1"); github_api_curl -s "$2"' bash \
-        "$ROOT_DIR/deploy/install.sh" "https://api.github.com/repos/Wei-Shaw/sub2api/releases/latest"
+        bash -c 'source "$1"; github_api_curl -s "$2"' bash \
+        "$GITHUB_API_CURL_SOURCE" "https://api.github.com/repos/Wei-Shaw/sub2api/releases/latest"
 }
 
 run_api_curl "$TEMP_DIR/authenticated" "update-secret"
@@ -70,8 +74,8 @@ assert_unsafe_invocation_rejected() {
     shift
     rm -f "$TEMP_DIR/$name" "$TEMP_DIR/$name.stdin"
     if CURL_ARGS_LOG="$TEMP_DIR/$name" PATH="$TEMP_DIR:$PATH" UPDATE_GITHUB_TOKEN="update-secret" \
-        bash -c 'source <(sed -n "/^github_api_curl() {/,/^}$/p" "$1"); shift; github_api_curl "$@"' bash \
-        "$ROOT_DIR/deploy/install.sh" "$@" 2>/dev/null; then
+        bash -c 'source "$1"; shift; github_api_curl "$@"' bash \
+        "$GITHUB_API_CURL_SOURCE" "$@" 2>/dev/null; then
         echo "installer accepted unsafe curl invocation: $name" >&2
         exit 1
     fi
