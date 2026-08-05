@@ -38,6 +38,9 @@ func TestCurrencyProductCRUDSortSaleAndDelete(t *testing.T) {
 	require.InDelta(t, 10.12345678, first.CreditedAmount, 0.000000001)
 	require.Equal(t, 2, first.DailyPurchaseLimit)
 	require.Equal(t, 5, first.TotalPurchaseLimit)
+	require.Equal(t, purchaseLimitUnitDay, first.PurchaseLimitUnit)
+	require.Equal(t, purchaseLimitModeCalendar, first.PurchaseLimitMode)
+	require.Equal(t, 1, first.PurchaseLimitWindowSize)
 
 	updated, err := service.UpdateCurrencyProduct(ctx, first.ID, UpdateCurrencyProductRequest{
 		ForSale: currencyProductBool(false), SortOrder: currencyProductInt(1),
@@ -47,6 +50,12 @@ func TestCurrencyProductCRUDSortSaleAndDelete(t *testing.T) {
 	require.False(t, updated.ForSale)
 	require.Equal(t, 3, updated.DailyPurchaseLimit)
 	require.Equal(t, 7, updated.TotalPurchaseLimit)
+	week, rolling, size := purchaseLimitUnitWeek, purchaseLimitModeRolling, 2
+	updated, err = service.UpdateCurrencyProduct(ctx, first.ID, UpdateCurrencyProductRequest{PurchaseLimitUnit: &week, PurchaseLimitMode: &rolling, PurchaseLimitWindowSize: &size})
+	require.NoError(t, err)
+	require.Equal(t, week, updated.PurchaseLimitUnit)
+	require.Equal(t, rolling, updated.PurchaseLimitMode)
+	require.Equal(t, size, updated.PurchaseLimitWindowSize)
 	forSale, err = service.ListCurrencyProductsForSale(ctx)
 	require.NoError(t, err)
 	require.Empty(t, forSale)

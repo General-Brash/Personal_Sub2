@@ -42,6 +42,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchaselimitevent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
@@ -105,6 +106,7 @@ const (
 	TypePaymentOrder                   = "PaymentOrder"
 	TypePaymentProviderInstance        = "PaymentProviderInstance"
 	TypePaymentPurchaseCounter         = "PaymentPurchaseCounter"
+	TypePaymentPurchaseLimitEvent      = "PaymentPurchaseLimitEvent"
 	TypePaymentPurchaseReservation     = "PaymentPurchaseReservation"
 	TypePendingAuthSession             = "PendingAuthSession"
 	TypePromoCode                      = "PromoCode"
@@ -24725,33 +24727,37 @@ func (m *CompositeModelRouteMutation) ResetEdge(name string) error {
 // CurrencyProductMutation represents an operation that mutates the CurrencyProduct nodes in the graph.
 type CurrencyProductMutation struct {
 	config
-	op                           Op
-	typ                          string
-	id                           *int64
-	name                         *string
-	description                  *string
-	payment_price                *float64
-	addpayment_price             *float64
-	payment_credit_type          *string
-	credited_type                *string
-	credited_amount              *float64
-	addcredited_amount           *float64
-	credited_permanent_amount    *float64
-	addcredited_permanent_amount *float64
-	sort_order                   *int
-	addsort_order                *int
-	is_active                    *bool
-	for_sale                     *bool
-	daily_purchase_limit         *int
-	adddaily_purchase_limit      *int
-	total_purchase_limit         *int
-	addtotal_purchase_limit      *int
-	created_at                   *time.Time
-	updated_at                   *time.Time
-	clearedFields                map[string]struct{}
-	done                         bool
-	oldValue                     func(context.Context) (*CurrencyProduct, error)
-	predicates                   []predicate.CurrencyProduct
+	op                            Op
+	typ                           string
+	id                            *int64
+	name                          *string
+	description                   *string
+	payment_price                 *float64
+	addpayment_price              *float64
+	payment_credit_type           *string
+	credited_type                 *string
+	credited_amount               *float64
+	addcredited_amount            *float64
+	credited_permanent_amount     *float64
+	addcredited_permanent_amount  *float64
+	sort_order                    *int
+	addsort_order                 *int
+	is_active                     *bool
+	for_sale                      *bool
+	daily_purchase_limit          *int
+	adddaily_purchase_limit       *int
+	total_purchase_limit          *int
+	addtotal_purchase_limit       *int
+	purchase_limit_unit           *string
+	purchase_limit_mode           *string
+	purchase_limit_window_size    *int
+	addpurchase_limit_window_size *int
+	created_at                    *time.Time
+	updated_at                    *time.Time
+	clearedFields                 map[string]struct{}
+	done                          bool
+	oldValue                      func(context.Context) (*CurrencyProduct, error)
+	predicates                    []predicate.CurrencyProduct
 }
 
 var _ ent.Mutation = (*CurrencyProductMutation)(nil)
@@ -25404,6 +25410,134 @@ func (m *CurrencyProductMutation) ResetTotalPurchaseLimit() {
 	m.addtotal_purchase_limit = nil
 }
 
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (m *CurrencyProductMutation) SetPurchaseLimitUnit(s string) {
+	m.purchase_limit_unit = &s
+}
+
+// PurchaseLimitUnit returns the value of the "purchase_limit_unit" field in the mutation.
+func (m *CurrencyProductMutation) PurchaseLimitUnit() (r string, exists bool) {
+	v := m.purchase_limit_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseLimitUnit returns the old "purchase_limit_unit" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldPurchaseLimitUnit(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseLimitUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseLimitUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseLimitUnit: %w", err)
+	}
+	return oldValue.PurchaseLimitUnit, nil
+}
+
+// ResetPurchaseLimitUnit resets all changes to the "purchase_limit_unit" field.
+func (m *CurrencyProductMutation) ResetPurchaseLimitUnit() {
+	m.purchase_limit_unit = nil
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (m *CurrencyProductMutation) SetPurchaseLimitMode(s string) {
+	m.purchase_limit_mode = &s
+}
+
+// PurchaseLimitMode returns the value of the "purchase_limit_mode" field in the mutation.
+func (m *CurrencyProductMutation) PurchaseLimitMode() (r string, exists bool) {
+	v := m.purchase_limit_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseLimitMode returns the old "purchase_limit_mode" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldPurchaseLimitMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseLimitMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseLimitMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseLimitMode: %w", err)
+	}
+	return oldValue.PurchaseLimitMode, nil
+}
+
+// ResetPurchaseLimitMode resets all changes to the "purchase_limit_mode" field.
+func (m *CurrencyProductMutation) ResetPurchaseLimitMode() {
+	m.purchase_limit_mode = nil
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (m *CurrencyProductMutation) SetPurchaseLimitWindowSize(i int) {
+	m.purchase_limit_window_size = &i
+	m.addpurchase_limit_window_size = nil
+}
+
+// PurchaseLimitWindowSize returns the value of the "purchase_limit_window_size" field in the mutation.
+func (m *CurrencyProductMutation) PurchaseLimitWindowSize() (r int, exists bool) {
+	v := m.purchase_limit_window_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseLimitWindowSize returns the old "purchase_limit_window_size" field's value of the CurrencyProduct entity.
+// If the CurrencyProduct object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CurrencyProductMutation) OldPurchaseLimitWindowSize(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseLimitWindowSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseLimitWindowSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseLimitWindowSize: %w", err)
+	}
+	return oldValue.PurchaseLimitWindowSize, nil
+}
+
+// AddPurchaseLimitWindowSize adds i to the "purchase_limit_window_size" field.
+func (m *CurrencyProductMutation) AddPurchaseLimitWindowSize(i int) {
+	if m.addpurchase_limit_window_size != nil {
+		*m.addpurchase_limit_window_size += i
+	} else {
+		m.addpurchase_limit_window_size = &i
+	}
+}
+
+// AddedPurchaseLimitWindowSize returns the value that was added to the "purchase_limit_window_size" field in this mutation.
+func (m *CurrencyProductMutation) AddedPurchaseLimitWindowSize() (r int, exists bool) {
+	v := m.addpurchase_limit_window_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPurchaseLimitWindowSize resets all changes to the "purchase_limit_window_size" field.
+func (m *CurrencyProductMutation) ResetPurchaseLimitWindowSize() {
+	m.purchase_limit_window_size = nil
+	m.addpurchase_limit_window_size = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *CurrencyProductMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -25510,7 +25644,7 @@ func (m *CurrencyProductMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CurrencyProductMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 17)
 	if m.name != nil {
 		fields = append(fields, currencyproduct.FieldName)
 	}
@@ -25546,6 +25680,15 @@ func (m *CurrencyProductMutation) Fields() []string {
 	}
 	if m.total_purchase_limit != nil {
 		fields = append(fields, currencyproduct.FieldTotalPurchaseLimit)
+	}
+	if m.purchase_limit_unit != nil {
+		fields = append(fields, currencyproduct.FieldPurchaseLimitUnit)
+	}
+	if m.purchase_limit_mode != nil {
+		fields = append(fields, currencyproduct.FieldPurchaseLimitMode)
+	}
+	if m.purchase_limit_window_size != nil {
+		fields = append(fields, currencyproduct.FieldPurchaseLimitWindowSize)
 	}
 	if m.created_at != nil {
 		fields = append(fields, currencyproduct.FieldCreatedAt)
@@ -25585,6 +25728,12 @@ func (m *CurrencyProductMutation) Field(name string) (ent.Value, bool) {
 		return m.DailyPurchaseLimit()
 	case currencyproduct.FieldTotalPurchaseLimit:
 		return m.TotalPurchaseLimit()
+	case currencyproduct.FieldPurchaseLimitUnit:
+		return m.PurchaseLimitUnit()
+	case currencyproduct.FieldPurchaseLimitMode:
+		return m.PurchaseLimitMode()
+	case currencyproduct.FieldPurchaseLimitWindowSize:
+		return m.PurchaseLimitWindowSize()
 	case currencyproduct.FieldCreatedAt:
 		return m.CreatedAt()
 	case currencyproduct.FieldUpdatedAt:
@@ -25622,6 +25771,12 @@ func (m *CurrencyProductMutation) OldField(ctx context.Context, name string) (en
 		return m.OldDailyPurchaseLimit(ctx)
 	case currencyproduct.FieldTotalPurchaseLimit:
 		return m.OldTotalPurchaseLimit(ctx)
+	case currencyproduct.FieldPurchaseLimitUnit:
+		return m.OldPurchaseLimitUnit(ctx)
+	case currencyproduct.FieldPurchaseLimitMode:
+		return m.OldPurchaseLimitMode(ctx)
+	case currencyproduct.FieldPurchaseLimitWindowSize:
+		return m.OldPurchaseLimitWindowSize(ctx)
 	case currencyproduct.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case currencyproduct.FieldUpdatedAt:
@@ -25719,6 +25874,27 @@ func (m *CurrencyProductMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTotalPurchaseLimit(v)
 		return nil
+	case currencyproduct.FieldPurchaseLimitUnit:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseLimitUnit(v)
+		return nil
+	case currencyproduct.FieldPurchaseLimitMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseLimitMode(v)
+		return nil
+	case currencyproduct.FieldPurchaseLimitWindowSize:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseLimitWindowSize(v)
+		return nil
 	case currencyproduct.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -25759,6 +25935,9 @@ func (m *CurrencyProductMutation) AddedFields() []string {
 	if m.addtotal_purchase_limit != nil {
 		fields = append(fields, currencyproduct.FieldTotalPurchaseLimit)
 	}
+	if m.addpurchase_limit_window_size != nil {
+		fields = append(fields, currencyproduct.FieldPurchaseLimitWindowSize)
+	}
 	return fields
 }
 
@@ -25779,6 +25958,8 @@ func (m *CurrencyProductMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedDailyPurchaseLimit()
 	case currencyproduct.FieldTotalPurchaseLimit:
 		return m.AddedTotalPurchaseLimit()
+	case currencyproduct.FieldPurchaseLimitWindowSize:
+		return m.AddedPurchaseLimitWindowSize()
 	}
 	return nil, false
 }
@@ -25829,6 +26010,13 @@ func (m *CurrencyProductMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddTotalPurchaseLimit(v)
+		return nil
+	case currencyproduct.FieldPurchaseLimitWindowSize:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPurchaseLimitWindowSize(v)
 		return nil
 	}
 	return fmt.Errorf("unknown CurrencyProduct numeric field %s", name)
@@ -25892,6 +26080,15 @@ func (m *CurrencyProductMutation) ResetField(name string) error {
 		return nil
 	case currencyproduct.FieldTotalPurchaseLimit:
 		m.ResetTotalPurchaseLimit()
+		return nil
+	case currencyproduct.FieldPurchaseLimitUnit:
+		m.ResetPurchaseLimitUnit()
+		return nil
+	case currencyproduct.FieldPurchaseLimitMode:
+		m.ResetPurchaseLimitMode()
+		return nil
+	case currencyproduct.FieldPurchaseLimitWindowSize:
+		m.ResetPurchaseLimitWindowSize()
 		return nil
 	case currencyproduct.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -37847,71 +38044,75 @@ func (m *PaymentAuditLogMutation) ResetEdge(name string) error {
 // PaymentOrderMutation represents an operation that mutates the PaymentOrder nodes in the graph.
 type PaymentOrderMutation struct {
 	config
-	op                                  Op
-	typ                                 string
-	id                                  *int64
-	user_email                          *string
-	user_name                           *string
-	user_notes                          *string
-	amount                              *float64
-	addamount                           *float64
-	pay_amount                          *float64
-	addpay_amount                       *float64
-	fee_rate                            *float64
-	addfee_rate                         *float64
-	recharge_code                       *string
-	out_trade_no                        *string
-	payment_type                        *string
-	payment_trade_no                    *string
-	pay_url                             *string
-	qr_code                             *string
-	qr_code_img                         *string
-	order_type                          *string
-	plan_id                             *int64
-	addplan_id                          *int64
-	subscription_group_id               *int64
-	addsubscription_group_id            *int64
-	subscription_days                   *int
-	addsubscription_days                *int
-	currency_product_id                 *int64
-	addcurrency_product_id              *int64
-	currency_product_name               *string
-	currency_product_payment_price      *float64
-	addcurrency_product_payment_price   *float64
-	currency_product_credited_amount    *float64
-	addcurrency_product_credited_amount *float64
-	daily_purchase_limit_snapshot       *int
-	adddaily_purchase_limit_snapshot    *int
-	total_purchase_limit_snapshot       *int
-	addtotal_purchase_limit_snapshot    *int
-	provider_instance_id                *string
-	provider_key                        *string
-	provider_snapshot                   *map[string]interface{}
-	status                              *string
-	refund_amount                       *float64
-	addrefund_amount                    *float64
-	refund_reason                       *string
-	refund_at                           *time.Time
-	force_refund                        *bool
-	refund_requested_at                 *time.Time
-	refund_request_reason               *string
-	refund_requested_by                 *string
-	expires_at                          *time.Time
-	paid_at                             *time.Time
-	completed_at                        *time.Time
-	failed_at                           *time.Time
-	failed_reason                       *string
-	client_ip                           *string
-	src_host                            *string
-	src_url                             *string
-	created_at                          *time.Time
-	updated_at                          *time.Time
-	clearedFields                       map[string]struct{}
-	user                                *int64
-	cleareduser                         bool
-	done                                bool
-	oldValue                            func(context.Context) (*PaymentOrder, error)
-	predicates                          []predicate.PaymentOrder
+	op                                     Op
+	typ                                    string
+	id                                     *int64
+	user_email                             *string
+	user_name                              *string
+	user_notes                             *string
+	amount                                 *float64
+	addamount                              *float64
+	pay_amount                             *float64
+	addpay_amount                          *float64
+	fee_rate                               *float64
+	addfee_rate                            *float64
+	recharge_code                          *string
+	out_trade_no                           *string
+	payment_type                           *string
+	payment_trade_no                       *string
+	pay_url                                *string
+	qr_code                                *string
+	qr_code_img                            *string
+	order_type                             *string
+	plan_id                                *int64
+	addplan_id                             *int64
+	subscription_group_id                  *int64
+	addsubscription_group_id               *int64
+	subscription_days                      *int
+	addsubscription_days                   *int
+	currency_product_id                    *int64
+	addcurrency_product_id                 *int64
+	currency_product_name                  *string
+	currency_product_payment_price         *float64
+	addcurrency_product_payment_price      *float64
+	currency_product_credited_amount       *float64
+	addcurrency_product_credited_amount    *float64
+	daily_purchase_limit_snapshot          *int
+	adddaily_purchase_limit_snapshot       *int
+	total_purchase_limit_snapshot          *int
+	addtotal_purchase_limit_snapshot       *int
+	purchase_limit_unit_snapshot           *string
+	purchase_limit_mode_snapshot           *string
+	purchase_limit_window_size_snapshot    *int
+	addpurchase_limit_window_size_snapshot *int
+	provider_instance_id                   *string
+	provider_key                           *string
+	provider_snapshot                      *map[string]interface{}
+	status                                 *string
+	refund_amount                          *float64
+	addrefund_amount                       *float64
+	refund_reason                          *string
+	refund_at                              *time.Time
+	force_refund                           *bool
+	refund_requested_at                    *time.Time
+	refund_request_reason                  *string
+	refund_requested_by                    *string
+	expires_at                             *time.Time
+	paid_at                                *time.Time
+	completed_at                           *time.Time
+	failed_at                              *time.Time
+	failed_reason                          *string
+	client_ip                              *string
+	src_host                               *string
+	src_url                                *string
+	created_at                             *time.Time
+	updated_at                             *time.Time
+	clearedFields                          map[string]struct{}
+	user                                   *int64
+	cleareduser                            bool
+	done                                   bool
+	oldValue                               func(context.Context) (*PaymentOrder, error)
+	predicates                             []predicate.PaymentOrder
 }
 
 var _ ent.Mutation = (*PaymentOrderMutation)(nil)
@@ -39245,6 +39446,134 @@ func (m *PaymentOrderMutation) ResetTotalPurchaseLimitSnapshot() {
 	m.addtotal_purchase_limit_snapshot = nil
 }
 
+// SetPurchaseLimitUnitSnapshot sets the "purchase_limit_unit_snapshot" field.
+func (m *PaymentOrderMutation) SetPurchaseLimitUnitSnapshot(s string) {
+	m.purchase_limit_unit_snapshot = &s
+}
+
+// PurchaseLimitUnitSnapshot returns the value of the "purchase_limit_unit_snapshot" field in the mutation.
+func (m *PaymentOrderMutation) PurchaseLimitUnitSnapshot() (r string, exists bool) {
+	v := m.purchase_limit_unit_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseLimitUnitSnapshot returns the old "purchase_limit_unit_snapshot" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldPurchaseLimitUnitSnapshot(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseLimitUnitSnapshot is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseLimitUnitSnapshot requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseLimitUnitSnapshot: %w", err)
+	}
+	return oldValue.PurchaseLimitUnitSnapshot, nil
+}
+
+// ResetPurchaseLimitUnitSnapshot resets all changes to the "purchase_limit_unit_snapshot" field.
+func (m *PaymentOrderMutation) ResetPurchaseLimitUnitSnapshot() {
+	m.purchase_limit_unit_snapshot = nil
+}
+
+// SetPurchaseLimitModeSnapshot sets the "purchase_limit_mode_snapshot" field.
+func (m *PaymentOrderMutation) SetPurchaseLimitModeSnapshot(s string) {
+	m.purchase_limit_mode_snapshot = &s
+}
+
+// PurchaseLimitModeSnapshot returns the value of the "purchase_limit_mode_snapshot" field in the mutation.
+func (m *PaymentOrderMutation) PurchaseLimitModeSnapshot() (r string, exists bool) {
+	v := m.purchase_limit_mode_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseLimitModeSnapshot returns the old "purchase_limit_mode_snapshot" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldPurchaseLimitModeSnapshot(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseLimitModeSnapshot is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseLimitModeSnapshot requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseLimitModeSnapshot: %w", err)
+	}
+	return oldValue.PurchaseLimitModeSnapshot, nil
+}
+
+// ResetPurchaseLimitModeSnapshot resets all changes to the "purchase_limit_mode_snapshot" field.
+func (m *PaymentOrderMutation) ResetPurchaseLimitModeSnapshot() {
+	m.purchase_limit_mode_snapshot = nil
+}
+
+// SetPurchaseLimitWindowSizeSnapshot sets the "purchase_limit_window_size_snapshot" field.
+func (m *PaymentOrderMutation) SetPurchaseLimitWindowSizeSnapshot(i int) {
+	m.purchase_limit_window_size_snapshot = &i
+	m.addpurchase_limit_window_size_snapshot = nil
+}
+
+// PurchaseLimitWindowSizeSnapshot returns the value of the "purchase_limit_window_size_snapshot" field in the mutation.
+func (m *PaymentOrderMutation) PurchaseLimitWindowSizeSnapshot() (r int, exists bool) {
+	v := m.purchase_limit_window_size_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseLimitWindowSizeSnapshot returns the old "purchase_limit_window_size_snapshot" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldPurchaseLimitWindowSizeSnapshot(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseLimitWindowSizeSnapshot is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseLimitWindowSizeSnapshot requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseLimitWindowSizeSnapshot: %w", err)
+	}
+	return oldValue.PurchaseLimitWindowSizeSnapshot, nil
+}
+
+// AddPurchaseLimitWindowSizeSnapshot adds i to the "purchase_limit_window_size_snapshot" field.
+func (m *PaymentOrderMutation) AddPurchaseLimitWindowSizeSnapshot(i int) {
+	if m.addpurchase_limit_window_size_snapshot != nil {
+		*m.addpurchase_limit_window_size_snapshot += i
+	} else {
+		m.addpurchase_limit_window_size_snapshot = &i
+	}
+}
+
+// AddedPurchaseLimitWindowSizeSnapshot returns the value that was added to the "purchase_limit_window_size_snapshot" field in this mutation.
+func (m *PaymentOrderMutation) AddedPurchaseLimitWindowSizeSnapshot() (r int, exists bool) {
+	v := m.addpurchase_limit_window_size_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPurchaseLimitWindowSizeSnapshot resets all changes to the "purchase_limit_window_size_snapshot" field.
+func (m *PaymentOrderMutation) ResetPurchaseLimitWindowSizeSnapshot() {
+	m.purchase_limit_window_size_snapshot = nil
+	m.addpurchase_limit_window_size_snapshot = nil
+}
+
 // SetProviderInstanceID sets the "provider_instance_id" field.
 func (m *PaymentOrderMutation) SetProviderInstanceID(s string) {
 	m.provider_instance_id = &s
@@ -40251,7 +40580,7 @@ func (m *PaymentOrderMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PaymentOrderMutation) Fields() []string {
-	fields := make([]string, 0, 45)
+	fields := make([]string, 0, 48)
 	if m.user != nil {
 		fields = append(fields, paymentorder.FieldUserID)
 	}
@@ -40323,6 +40652,15 @@ func (m *PaymentOrderMutation) Fields() []string {
 	}
 	if m.total_purchase_limit_snapshot != nil {
 		fields = append(fields, paymentorder.FieldTotalPurchaseLimitSnapshot)
+	}
+	if m.purchase_limit_unit_snapshot != nil {
+		fields = append(fields, paymentorder.FieldPurchaseLimitUnitSnapshot)
+	}
+	if m.purchase_limit_mode_snapshot != nil {
+		fields = append(fields, paymentorder.FieldPurchaseLimitModeSnapshot)
+	}
+	if m.purchase_limit_window_size_snapshot != nil {
+		fields = append(fields, paymentorder.FieldPurchaseLimitWindowSizeSnapshot)
 	}
 	if m.provider_instance_id != nil {
 		fields = append(fields, paymentorder.FieldProviderInstanceID)
@@ -40443,6 +40781,12 @@ func (m *PaymentOrderMutation) Field(name string) (ent.Value, bool) {
 		return m.DailyPurchaseLimitSnapshot()
 	case paymentorder.FieldTotalPurchaseLimitSnapshot:
 		return m.TotalPurchaseLimitSnapshot()
+	case paymentorder.FieldPurchaseLimitUnitSnapshot:
+		return m.PurchaseLimitUnitSnapshot()
+	case paymentorder.FieldPurchaseLimitModeSnapshot:
+		return m.PurchaseLimitModeSnapshot()
+	case paymentorder.FieldPurchaseLimitWindowSizeSnapshot:
+		return m.PurchaseLimitWindowSizeSnapshot()
 	case paymentorder.FieldProviderInstanceID:
 		return m.ProviderInstanceID()
 	case paymentorder.FieldProviderKey:
@@ -40542,6 +40886,12 @@ func (m *PaymentOrderMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldDailyPurchaseLimitSnapshot(ctx)
 	case paymentorder.FieldTotalPurchaseLimitSnapshot:
 		return m.OldTotalPurchaseLimitSnapshot(ctx)
+	case paymentorder.FieldPurchaseLimitUnitSnapshot:
+		return m.OldPurchaseLimitUnitSnapshot(ctx)
+	case paymentorder.FieldPurchaseLimitModeSnapshot:
+		return m.OldPurchaseLimitModeSnapshot(ctx)
+	case paymentorder.FieldPurchaseLimitWindowSizeSnapshot:
+		return m.OldPurchaseLimitWindowSizeSnapshot(ctx)
 	case paymentorder.FieldProviderInstanceID:
 		return m.OldProviderInstanceID(ctx)
 	case paymentorder.FieldProviderKey:
@@ -40761,6 +41111,27 @@ func (m *PaymentOrderMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTotalPurchaseLimitSnapshot(v)
 		return nil
+	case paymentorder.FieldPurchaseLimitUnitSnapshot:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseLimitUnitSnapshot(v)
+		return nil
+	case paymentorder.FieldPurchaseLimitModeSnapshot:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseLimitModeSnapshot(v)
+		return nil
+	case paymentorder.FieldPurchaseLimitWindowSizeSnapshot:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseLimitWindowSizeSnapshot(v)
+		return nil
 	case paymentorder.FieldProviderInstanceID:
 		v, ok := value.(string)
 		if !ok {
@@ -40949,6 +41320,9 @@ func (m *PaymentOrderMutation) AddedFields() []string {
 	if m.addtotal_purchase_limit_snapshot != nil {
 		fields = append(fields, paymentorder.FieldTotalPurchaseLimitSnapshot)
 	}
+	if m.addpurchase_limit_window_size_snapshot != nil {
+		fields = append(fields, paymentorder.FieldPurchaseLimitWindowSizeSnapshot)
+	}
 	if m.addrefund_amount != nil {
 		fields = append(fields, paymentorder.FieldRefundAmount)
 	}
@@ -40982,6 +41356,8 @@ func (m *PaymentOrderMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedDailyPurchaseLimitSnapshot()
 	case paymentorder.FieldTotalPurchaseLimitSnapshot:
 		return m.AddedTotalPurchaseLimitSnapshot()
+	case paymentorder.FieldPurchaseLimitWindowSizeSnapshot:
+		return m.AddedPurchaseLimitWindowSizeSnapshot()
 	case paymentorder.FieldRefundAmount:
 		return m.AddedRefundAmount()
 	}
@@ -41069,6 +41445,13 @@ func (m *PaymentOrderMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddTotalPurchaseLimitSnapshot(v)
+		return nil
+	case paymentorder.FieldPurchaseLimitWindowSizeSnapshot:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPurchaseLimitWindowSizeSnapshot(v)
 		return nil
 	case paymentorder.FieldRefundAmount:
 		v, ok := value.(float64)
@@ -41322,6 +41705,15 @@ func (m *PaymentOrderMutation) ResetField(name string) error {
 		return nil
 	case paymentorder.FieldTotalPurchaseLimitSnapshot:
 		m.ResetTotalPurchaseLimitSnapshot()
+		return nil
+	case paymentorder.FieldPurchaseLimitUnitSnapshot:
+		m.ResetPurchaseLimitUnitSnapshot()
+		return nil
+	case paymentorder.FieldPurchaseLimitModeSnapshot:
+		m.ResetPurchaseLimitModeSnapshot()
+		return nil
+	case paymentorder.FieldPurchaseLimitWindowSizeSnapshot:
+		m.ResetPurchaseLimitWindowSizeSnapshot()
 		return nil
 	case paymentorder.FieldProviderInstanceID:
 		m.ResetProviderInstanceID()
@@ -43313,6 +43705,996 @@ func (m *PaymentPurchaseCounterMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown PaymentPurchaseCounter edge %s", name)
 }
 
+// PaymentPurchaseLimitEventMutation represents an operation that mutates the PaymentPurchaseLimitEvent nodes in the graph.
+type PaymentPurchaseLimitEventMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	user_id       *int64
+	adduser_id    *int64
+	product_type  *string
+	product_id    *int64
+	addproduct_id *int64
+	source_type   *string
+	source_id     *int64
+	addsource_id  *int64
+	period_type   *string
+	period_start  *time.Time
+	status        *string
+	occurred_at   *time.Time
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*PaymentPurchaseLimitEvent, error)
+	predicates    []predicate.PaymentPurchaseLimitEvent
+}
+
+var _ ent.Mutation = (*PaymentPurchaseLimitEventMutation)(nil)
+
+// paymentpurchaselimiteventOption allows management of the mutation configuration using functional options.
+type paymentpurchaselimiteventOption func(*PaymentPurchaseLimitEventMutation)
+
+// newPaymentPurchaseLimitEventMutation creates new mutation for the PaymentPurchaseLimitEvent entity.
+func newPaymentPurchaseLimitEventMutation(c config, op Op, opts ...paymentpurchaselimiteventOption) *PaymentPurchaseLimitEventMutation {
+	m := &PaymentPurchaseLimitEventMutation{
+		config:        c,
+		op:            op,
+		typ:           TypePaymentPurchaseLimitEvent,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withPaymentPurchaseLimitEventID sets the ID field of the mutation.
+func withPaymentPurchaseLimitEventID(id int64) paymentpurchaselimiteventOption {
+	return func(m *PaymentPurchaseLimitEventMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *PaymentPurchaseLimitEvent
+		)
+		m.oldValue = func(ctx context.Context) (*PaymentPurchaseLimitEvent, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().PaymentPurchaseLimitEvent.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withPaymentPurchaseLimitEvent sets the old PaymentPurchaseLimitEvent of the mutation.
+func withPaymentPurchaseLimitEvent(node *PaymentPurchaseLimitEvent) paymentpurchaselimiteventOption {
+	return func(m *PaymentPurchaseLimitEventMutation) {
+		m.oldValue = func(context.Context) (*PaymentPurchaseLimitEvent, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m PaymentPurchaseLimitEventMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m PaymentPurchaseLimitEventMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *PaymentPurchaseLimitEventMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *PaymentPurchaseLimitEventMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().PaymentPurchaseLimitEvent.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUserID sets the "user_id" field.
+func (m *PaymentPurchaseLimitEventMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *PaymentPurchaseLimitEventMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetProductType sets the "product_type" field.
+func (m *PaymentPurchaseLimitEventMutation) SetProductType(s string) {
+	m.product_type = &s
+}
+
+// ProductType returns the value of the "product_type" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) ProductType() (r string, exists bool) {
+	v := m.product_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductType returns the old "product_type" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldProductType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductType: %w", err)
+	}
+	return oldValue.ProductType, nil
+}
+
+// ResetProductType resets all changes to the "product_type" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetProductType() {
+	m.product_type = nil
+}
+
+// SetProductID sets the "product_id" field.
+func (m *PaymentPurchaseLimitEventMutation) SetProductID(i int64) {
+	m.product_id = &i
+	m.addproduct_id = nil
+}
+
+// ProductID returns the value of the "product_id" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) ProductID() (r int64, exists bool) {
+	v := m.product_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductID returns the old "product_id" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldProductID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductID: %w", err)
+	}
+	return oldValue.ProductID, nil
+}
+
+// AddProductID adds i to the "product_id" field.
+func (m *PaymentPurchaseLimitEventMutation) AddProductID(i int64) {
+	if m.addproduct_id != nil {
+		*m.addproduct_id += i
+	} else {
+		m.addproduct_id = &i
+	}
+}
+
+// AddedProductID returns the value that was added to the "product_id" field in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) AddedProductID() (r int64, exists bool) {
+	v := m.addproduct_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetProductID resets all changes to the "product_id" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetProductID() {
+	m.product_id = nil
+	m.addproduct_id = nil
+}
+
+// SetSourceType sets the "source_type" field.
+func (m *PaymentPurchaseLimitEventMutation) SetSourceType(s string) {
+	m.source_type = &s
+}
+
+// SourceType returns the value of the "source_type" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) SourceType() (r string, exists bool) {
+	v := m.source_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceType returns the old "source_type" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldSourceType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceType: %w", err)
+	}
+	return oldValue.SourceType, nil
+}
+
+// ResetSourceType resets all changes to the "source_type" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetSourceType() {
+	m.source_type = nil
+}
+
+// SetSourceID sets the "source_id" field.
+func (m *PaymentPurchaseLimitEventMutation) SetSourceID(i int64) {
+	m.source_id = &i
+	m.addsource_id = nil
+}
+
+// SourceID returns the value of the "source_id" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) SourceID() (r int64, exists bool) {
+	v := m.source_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceID returns the old "source_id" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldSourceID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceID: %w", err)
+	}
+	return oldValue.SourceID, nil
+}
+
+// AddSourceID adds i to the "source_id" field.
+func (m *PaymentPurchaseLimitEventMutation) AddSourceID(i int64) {
+	if m.addsource_id != nil {
+		*m.addsource_id += i
+	} else {
+		m.addsource_id = &i
+	}
+}
+
+// AddedSourceID returns the value that was added to the "source_id" field in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) AddedSourceID() (r int64, exists bool) {
+	v := m.addsource_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSourceID resets all changes to the "source_id" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetSourceID() {
+	m.source_id = nil
+	m.addsource_id = nil
+}
+
+// SetPeriodType sets the "period_type" field.
+func (m *PaymentPurchaseLimitEventMutation) SetPeriodType(s string) {
+	m.period_type = &s
+}
+
+// PeriodType returns the value of the "period_type" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) PeriodType() (r string, exists bool) {
+	v := m.period_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodType returns the old "period_type" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldPeriodType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodType: %w", err)
+	}
+	return oldValue.PeriodType, nil
+}
+
+// ResetPeriodType resets all changes to the "period_type" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetPeriodType() {
+	m.period_type = nil
+}
+
+// SetPeriodStart sets the "period_start" field.
+func (m *PaymentPurchaseLimitEventMutation) SetPeriodStart(t time.Time) {
+	m.period_start = &t
+}
+
+// PeriodStart returns the value of the "period_start" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) PeriodStart() (r time.Time, exists bool) {
+	v := m.period_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodStart returns the old "period_start" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldPeriodStart(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodStart: %w", err)
+	}
+	return oldValue.PeriodStart, nil
+}
+
+// ClearPeriodStart clears the value of the "period_start" field.
+func (m *PaymentPurchaseLimitEventMutation) ClearPeriodStart() {
+	m.period_start = nil
+	m.clearedFields[paymentpurchaselimitevent.FieldPeriodStart] = struct{}{}
+}
+
+// PeriodStartCleared returns if the "period_start" field was cleared in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) PeriodStartCleared() bool {
+	_, ok := m.clearedFields[paymentpurchaselimitevent.FieldPeriodStart]
+	return ok
+}
+
+// ResetPeriodStart resets all changes to the "period_start" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetPeriodStart() {
+	m.period_start = nil
+	delete(m.clearedFields, paymentpurchaselimitevent.FieldPeriodStart)
+}
+
+// SetStatus sets the "status" field.
+func (m *PaymentPurchaseLimitEventMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetOccurredAt sets the "occurred_at" field.
+func (m *PaymentPurchaseLimitEventMutation) SetOccurredAt(t time.Time) {
+	m.occurred_at = &t
+}
+
+// OccurredAt returns the value of the "occurred_at" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) OccurredAt() (r time.Time, exists bool) {
+	v := m.occurred_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOccurredAt returns the old "occurred_at" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldOccurredAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOccurredAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOccurredAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOccurredAt: %w", err)
+	}
+	return oldValue.OccurredAt, nil
+}
+
+// ResetOccurredAt resets all changes to the "occurred_at" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetOccurredAt() {
+	m.occurred_at = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *PaymentPurchaseLimitEventMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *PaymentPurchaseLimitEventMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *PaymentPurchaseLimitEventMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the PaymentPurchaseLimitEvent entity.
+// If the PaymentPurchaseLimitEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseLimitEventMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *PaymentPurchaseLimitEventMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the PaymentPurchaseLimitEventMutation builder.
+func (m *PaymentPurchaseLimitEventMutation) Where(ps ...predicate.PaymentPurchaseLimitEvent) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the PaymentPurchaseLimitEventMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *PaymentPurchaseLimitEventMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.PaymentPurchaseLimitEvent, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *PaymentPurchaseLimitEventMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *PaymentPurchaseLimitEventMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (PaymentPurchaseLimitEvent).
+func (m *PaymentPurchaseLimitEventMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *PaymentPurchaseLimitEventMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.user_id != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldUserID)
+	}
+	if m.product_type != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldProductType)
+	}
+	if m.product_id != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldProductID)
+	}
+	if m.source_type != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldSourceType)
+	}
+	if m.source_id != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldSourceID)
+	}
+	if m.period_type != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldPeriodType)
+	}
+	if m.period_start != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldPeriodStart)
+	}
+	if m.status != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldStatus)
+	}
+	if m.occurred_at != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldOccurredAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *PaymentPurchaseLimitEventMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case paymentpurchaselimitevent.FieldUserID:
+		return m.UserID()
+	case paymentpurchaselimitevent.FieldProductType:
+		return m.ProductType()
+	case paymentpurchaselimitevent.FieldProductID:
+		return m.ProductID()
+	case paymentpurchaselimitevent.FieldSourceType:
+		return m.SourceType()
+	case paymentpurchaselimitevent.FieldSourceID:
+		return m.SourceID()
+	case paymentpurchaselimitevent.FieldPeriodType:
+		return m.PeriodType()
+	case paymentpurchaselimitevent.FieldPeriodStart:
+		return m.PeriodStart()
+	case paymentpurchaselimitevent.FieldStatus:
+		return m.Status()
+	case paymentpurchaselimitevent.FieldOccurredAt:
+		return m.OccurredAt()
+	case paymentpurchaselimitevent.FieldCreatedAt:
+		return m.CreatedAt()
+	case paymentpurchaselimitevent.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *PaymentPurchaseLimitEventMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case paymentpurchaselimitevent.FieldUserID:
+		return m.OldUserID(ctx)
+	case paymentpurchaselimitevent.FieldProductType:
+		return m.OldProductType(ctx)
+	case paymentpurchaselimitevent.FieldProductID:
+		return m.OldProductID(ctx)
+	case paymentpurchaselimitevent.FieldSourceType:
+		return m.OldSourceType(ctx)
+	case paymentpurchaselimitevent.FieldSourceID:
+		return m.OldSourceID(ctx)
+	case paymentpurchaselimitevent.FieldPeriodType:
+		return m.OldPeriodType(ctx)
+	case paymentpurchaselimitevent.FieldPeriodStart:
+		return m.OldPeriodStart(ctx)
+	case paymentpurchaselimitevent.FieldStatus:
+		return m.OldStatus(ctx)
+	case paymentpurchaselimitevent.FieldOccurredAt:
+		return m.OldOccurredAt(ctx)
+	case paymentpurchaselimitevent.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case paymentpurchaselimitevent.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown PaymentPurchaseLimitEvent field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentPurchaseLimitEventMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case paymentpurchaselimitevent.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case paymentpurchaselimitevent.FieldProductType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductType(v)
+		return nil
+	case paymentpurchaselimitevent.FieldProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductID(v)
+		return nil
+	case paymentpurchaselimitevent.FieldSourceType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceType(v)
+		return nil
+	case paymentpurchaselimitevent.FieldSourceID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceID(v)
+		return nil
+	case paymentpurchaselimitevent.FieldPeriodType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodType(v)
+		return nil
+	case paymentpurchaselimitevent.FieldPeriodStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodStart(v)
+		return nil
+	case paymentpurchaselimitevent.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case paymentpurchaselimitevent.FieldOccurredAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOccurredAt(v)
+		return nil
+	case paymentpurchaselimitevent.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case paymentpurchaselimitevent.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseLimitEvent field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *PaymentPurchaseLimitEventMutation) AddedFields() []string {
+	var fields []string
+	if m.adduser_id != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldUserID)
+	}
+	if m.addproduct_id != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldProductID)
+	}
+	if m.addsource_id != nil {
+		fields = append(fields, paymentpurchaselimitevent.FieldSourceID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *PaymentPurchaseLimitEventMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case paymentpurchaselimitevent.FieldUserID:
+		return m.AddedUserID()
+	case paymentpurchaselimitevent.FieldProductID:
+		return m.AddedProductID()
+	case paymentpurchaselimitevent.FieldSourceID:
+		return m.AddedSourceID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentPurchaseLimitEventMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case paymentpurchaselimitevent.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case paymentpurchaselimitevent.FieldProductID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProductID(v)
+		return nil
+	case paymentpurchaselimitevent.FieldSourceID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSourceID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseLimitEvent numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *PaymentPurchaseLimitEventMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(paymentpurchaselimitevent.FieldPeriodStart) {
+		fields = append(fields, paymentpurchaselimitevent.FieldPeriodStart)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *PaymentPurchaseLimitEventMutation) ClearField(name string) error {
+	switch name {
+	case paymentpurchaselimitevent.FieldPeriodStart:
+		m.ClearPeriodStart()
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseLimitEvent nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *PaymentPurchaseLimitEventMutation) ResetField(name string) error {
+	switch name {
+	case paymentpurchaselimitevent.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case paymentpurchaselimitevent.FieldProductType:
+		m.ResetProductType()
+		return nil
+	case paymentpurchaselimitevent.FieldProductID:
+		m.ResetProductID()
+		return nil
+	case paymentpurchaselimitevent.FieldSourceType:
+		m.ResetSourceType()
+		return nil
+	case paymentpurchaselimitevent.FieldSourceID:
+		m.ResetSourceID()
+		return nil
+	case paymentpurchaselimitevent.FieldPeriodType:
+		m.ResetPeriodType()
+		return nil
+	case paymentpurchaselimitevent.FieldPeriodStart:
+		m.ResetPeriodStart()
+		return nil
+	case paymentpurchaselimitevent.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case paymentpurchaselimitevent.FieldOccurredAt:
+		m.ResetOccurredAt()
+		return nil
+	case paymentpurchaselimitevent.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case paymentpurchaselimitevent.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentPurchaseLimitEvent field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *PaymentPurchaseLimitEventMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *PaymentPurchaseLimitEventMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown PaymentPurchaseLimitEvent unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *PaymentPurchaseLimitEventMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown PaymentPurchaseLimitEvent edge %s", name)
+}
+
 // PaymentPurchaseReservationMutation represents an operation that mutates the PaymentPurchaseReservation nodes in the graph.
 type PaymentPurchaseReservationMutation struct {
 	config
@@ -43327,6 +44709,7 @@ type PaymentPurchaseReservationMutation struct {
 	product_id         *int64
 	addproduct_id      *int64
 	daily_period_start *time.Time
+	period_type        *string
 	status             *string
 	created_at         *time.Time
 	updated_at         *time.Time
@@ -43674,6 +45057,42 @@ func (m *PaymentPurchaseReservationMutation) ResetDailyPeriodStart() {
 	m.daily_period_start = nil
 }
 
+// SetPeriodType sets the "period_type" field.
+func (m *PaymentPurchaseReservationMutation) SetPeriodType(s string) {
+	m.period_type = &s
+}
+
+// PeriodType returns the value of the "period_type" field in the mutation.
+func (m *PaymentPurchaseReservationMutation) PeriodType() (r string, exists bool) {
+	v := m.period_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodType returns the old "period_type" field's value of the PaymentPurchaseReservation entity.
+// If the PaymentPurchaseReservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentPurchaseReservationMutation) OldPeriodType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodType: %w", err)
+	}
+	return oldValue.PeriodType, nil
+}
+
+// ResetPeriodType resets all changes to the "period_type" field.
+func (m *PaymentPurchaseReservationMutation) ResetPeriodType() {
+	m.period_type = nil
+}
+
 // SetStatus sets the "status" field.
 func (m *PaymentPurchaseReservationMutation) SetStatus(s string) {
 	m.status = &s
@@ -43816,7 +45235,7 @@ func (m *PaymentPurchaseReservationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PaymentPurchaseReservationMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.order_id != nil {
 		fields = append(fields, paymentpurchasereservation.FieldOrderID)
 	}
@@ -43831,6 +45250,9 @@ func (m *PaymentPurchaseReservationMutation) Fields() []string {
 	}
 	if m.daily_period_start != nil {
 		fields = append(fields, paymentpurchasereservation.FieldDailyPeriodStart)
+	}
+	if m.period_type != nil {
+		fields = append(fields, paymentpurchasereservation.FieldPeriodType)
 	}
 	if m.status != nil {
 		fields = append(fields, paymentpurchasereservation.FieldStatus)
@@ -43859,6 +45281,8 @@ func (m *PaymentPurchaseReservationMutation) Field(name string) (ent.Value, bool
 		return m.ProductID()
 	case paymentpurchasereservation.FieldDailyPeriodStart:
 		return m.DailyPeriodStart()
+	case paymentpurchasereservation.FieldPeriodType:
+		return m.PeriodType()
 	case paymentpurchasereservation.FieldStatus:
 		return m.Status()
 	case paymentpurchasereservation.FieldCreatedAt:
@@ -43884,6 +45308,8 @@ func (m *PaymentPurchaseReservationMutation) OldField(ctx context.Context, name 
 		return m.OldProductID(ctx)
 	case paymentpurchasereservation.FieldDailyPeriodStart:
 		return m.OldDailyPeriodStart(ctx)
+	case paymentpurchasereservation.FieldPeriodType:
+		return m.OldPeriodType(ctx)
 	case paymentpurchasereservation.FieldStatus:
 		return m.OldStatus(ctx)
 	case paymentpurchasereservation.FieldCreatedAt:
@@ -43933,6 +45359,13 @@ func (m *PaymentPurchaseReservationMutation) SetField(name string, value ent.Val
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDailyPeriodStart(v)
+		return nil
+	case paymentpurchasereservation.FieldPeriodType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodType(v)
 		return nil
 	case paymentpurchasereservation.FieldStatus:
 		v, ok := value.(string)
@@ -44057,6 +45490,9 @@ func (m *PaymentPurchaseReservationMutation) ResetField(name string) error {
 		return nil
 	case paymentpurchasereservation.FieldDailyPeriodStart:
 		m.ResetDailyPeriodStart()
+		return nil
+	case paymentpurchasereservation.FieldPeriodType:
+		m.ResetPeriodType()
 		return nil
 	case paymentpurchasereservation.FieldStatus:
 		m.ResetStatus()
@@ -50809,6 +52245,10 @@ type SubscriptionPlanMutation struct {
 	adddaily_purchase_limit          *int
 	total_purchase_limit             *int
 	addtotal_purchase_limit          *int
+	purchase_limit_unit              *string
+	purchase_limit_mode              *string
+	purchase_limit_window_size       *int
+	addpurchase_limit_window_size    *int
 	created_at                       *time.Time
 	updated_at                       *time.Time
 	clearedFields                    map[string]struct{}
@@ -51701,6 +53141,134 @@ func (m *SubscriptionPlanMutation) ResetTotalPurchaseLimit() {
 	m.addtotal_purchase_limit = nil
 }
 
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (m *SubscriptionPlanMutation) SetPurchaseLimitUnit(s string) {
+	m.purchase_limit_unit = &s
+}
+
+// PurchaseLimitUnit returns the value of the "purchase_limit_unit" field in the mutation.
+func (m *SubscriptionPlanMutation) PurchaseLimitUnit() (r string, exists bool) {
+	v := m.purchase_limit_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseLimitUnit returns the old "purchase_limit_unit" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldPurchaseLimitUnit(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseLimitUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseLimitUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseLimitUnit: %w", err)
+	}
+	return oldValue.PurchaseLimitUnit, nil
+}
+
+// ResetPurchaseLimitUnit resets all changes to the "purchase_limit_unit" field.
+func (m *SubscriptionPlanMutation) ResetPurchaseLimitUnit() {
+	m.purchase_limit_unit = nil
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (m *SubscriptionPlanMutation) SetPurchaseLimitMode(s string) {
+	m.purchase_limit_mode = &s
+}
+
+// PurchaseLimitMode returns the value of the "purchase_limit_mode" field in the mutation.
+func (m *SubscriptionPlanMutation) PurchaseLimitMode() (r string, exists bool) {
+	v := m.purchase_limit_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseLimitMode returns the old "purchase_limit_mode" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldPurchaseLimitMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseLimitMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseLimitMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseLimitMode: %w", err)
+	}
+	return oldValue.PurchaseLimitMode, nil
+}
+
+// ResetPurchaseLimitMode resets all changes to the "purchase_limit_mode" field.
+func (m *SubscriptionPlanMutation) ResetPurchaseLimitMode() {
+	m.purchase_limit_mode = nil
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (m *SubscriptionPlanMutation) SetPurchaseLimitWindowSize(i int) {
+	m.purchase_limit_window_size = &i
+	m.addpurchase_limit_window_size = nil
+}
+
+// PurchaseLimitWindowSize returns the value of the "purchase_limit_window_size" field in the mutation.
+func (m *SubscriptionPlanMutation) PurchaseLimitWindowSize() (r int, exists bool) {
+	v := m.purchase_limit_window_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseLimitWindowSize returns the old "purchase_limit_window_size" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldPurchaseLimitWindowSize(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseLimitWindowSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseLimitWindowSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseLimitWindowSize: %w", err)
+	}
+	return oldValue.PurchaseLimitWindowSize, nil
+}
+
+// AddPurchaseLimitWindowSize adds i to the "purchase_limit_window_size" field.
+func (m *SubscriptionPlanMutation) AddPurchaseLimitWindowSize(i int) {
+	if m.addpurchase_limit_window_size != nil {
+		*m.addpurchase_limit_window_size += i
+	} else {
+		m.addpurchase_limit_window_size = &i
+	}
+}
+
+// AddedPurchaseLimitWindowSize returns the value that was added to the "purchase_limit_window_size" field in this mutation.
+func (m *SubscriptionPlanMutation) AddedPurchaseLimitWindowSize() (r int, exists bool) {
+	v := m.addpurchase_limit_window_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPurchaseLimitWindowSize resets all changes to the "purchase_limit_window_size" field.
+func (m *SubscriptionPlanMutation) ResetPurchaseLimitWindowSize() {
+	m.purchase_limit_window_size = nil
+	m.addpurchase_limit_window_size = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *SubscriptionPlanMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -51807,7 +53375,7 @@ func (m *SubscriptionPlanMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionPlanMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 22)
 	if m.group_id != nil {
 		fields = append(fields, subscriptionplan.FieldGroupID)
 	}
@@ -51859,6 +53427,15 @@ func (m *SubscriptionPlanMutation) Fields() []string {
 	if m.total_purchase_limit != nil {
 		fields = append(fields, subscriptionplan.FieldTotalPurchaseLimit)
 	}
+	if m.purchase_limit_unit != nil {
+		fields = append(fields, subscriptionplan.FieldPurchaseLimitUnit)
+	}
+	if m.purchase_limit_mode != nil {
+		fields = append(fields, subscriptionplan.FieldPurchaseLimitMode)
+	}
+	if m.purchase_limit_window_size != nil {
+		fields = append(fields, subscriptionplan.FieldPurchaseLimitWindowSize)
+	}
 	if m.created_at != nil {
 		fields = append(fields, subscriptionplan.FieldCreatedAt)
 	}
@@ -51907,6 +53484,12 @@ func (m *SubscriptionPlanMutation) Field(name string) (ent.Value, bool) {
 		return m.DailyPurchaseLimit()
 	case subscriptionplan.FieldTotalPurchaseLimit:
 		return m.TotalPurchaseLimit()
+	case subscriptionplan.FieldPurchaseLimitUnit:
+		return m.PurchaseLimitUnit()
+	case subscriptionplan.FieldPurchaseLimitMode:
+		return m.PurchaseLimitMode()
+	case subscriptionplan.FieldPurchaseLimitWindowSize:
+		return m.PurchaseLimitWindowSize()
 	case subscriptionplan.FieldCreatedAt:
 		return m.CreatedAt()
 	case subscriptionplan.FieldUpdatedAt:
@@ -51954,6 +53537,12 @@ func (m *SubscriptionPlanMutation) OldField(ctx context.Context, name string) (e
 		return m.OldDailyPurchaseLimit(ctx)
 	case subscriptionplan.FieldTotalPurchaseLimit:
 		return m.OldTotalPurchaseLimit(ctx)
+	case subscriptionplan.FieldPurchaseLimitUnit:
+		return m.OldPurchaseLimitUnit(ctx)
+	case subscriptionplan.FieldPurchaseLimitMode:
+		return m.OldPurchaseLimitMode(ctx)
+	case subscriptionplan.FieldPurchaseLimitWindowSize:
+		return m.OldPurchaseLimitWindowSize(ctx)
 	case subscriptionplan.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case subscriptionplan.FieldUpdatedAt:
@@ -52086,6 +53675,27 @@ func (m *SubscriptionPlanMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetTotalPurchaseLimit(v)
 		return nil
+	case subscriptionplan.FieldPurchaseLimitUnit:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseLimitUnit(v)
+		return nil
+	case subscriptionplan.FieldPurchaseLimitMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseLimitMode(v)
+		return nil
+	case subscriptionplan.FieldPurchaseLimitWindowSize:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseLimitWindowSize(v)
+		return nil
 	case subscriptionplan.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -52132,6 +53742,9 @@ func (m *SubscriptionPlanMutation) AddedFields() []string {
 	if m.addtotal_purchase_limit != nil {
 		fields = append(fields, subscriptionplan.FieldTotalPurchaseLimit)
 	}
+	if m.addpurchase_limit_window_size != nil {
+		fields = append(fields, subscriptionplan.FieldPurchaseLimitWindowSize)
+	}
 	return fields
 }
 
@@ -52156,6 +53769,8 @@ func (m *SubscriptionPlanMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedDailyPurchaseLimit()
 	case subscriptionplan.FieldTotalPurchaseLimit:
 		return m.AddedTotalPurchaseLimit()
+	case subscriptionplan.FieldPurchaseLimitWindowSize:
+		return m.AddedPurchaseLimitWindowSize()
 	}
 	return nil, false
 }
@@ -52220,6 +53835,13 @@ func (m *SubscriptionPlanMutation) AddField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddTotalPurchaseLimit(v)
+		return nil
+	case subscriptionplan.FieldPurchaseLimitWindowSize:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPurchaseLimitWindowSize(v)
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionPlan numeric field %s", name)
@@ -52307,6 +53929,15 @@ func (m *SubscriptionPlanMutation) ResetField(name string) error {
 		return nil
 	case subscriptionplan.FieldTotalPurchaseLimit:
 		m.ResetTotalPurchaseLimit()
+		return nil
+	case subscriptionplan.FieldPurchaseLimitUnit:
+		m.ResetPurchaseLimitUnit()
+		return nil
+	case subscriptionplan.FieldPurchaseLimitMode:
+		m.ResetPurchaseLimitMode()
+		return nil
+	case subscriptionplan.FieldPurchaseLimitWindowSize:
+		m.ResetPurchaseLimitWindowSize()
 		return nil
 	case subscriptionplan.FieldCreatedAt:
 		m.ResetCreatedAt()

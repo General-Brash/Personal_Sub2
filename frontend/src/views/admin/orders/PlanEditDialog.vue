@@ -100,7 +100,7 @@
         </summary>
         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label for="plan-daily-purchase-limit" class="input-label">{{ t('payment.admin.dailyPurchaseLimit') }}</label>
+            <label for="plan-daily-purchase-limit" class="input-label">{{ t('payment.admin.periodicPurchaseLimit') }}</label>
             <input
               id="plan-daily-purchase-limit"
               v-model.number="planForm.daily_purchase_limit"
@@ -111,7 +111,7 @@
               class="input"
               :placeholder="t('payment.admin.purchaseLimitPlaceholder')"
             />
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.dailyPurchaseLimitHint') }}</p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.periodicPurchaseLimitHint') }}</p>
           </div>
           <div>
             <label for="plan-total-purchase-limit" class="input-label">{{ t('payment.admin.totalPurchaseLimit') }}</label>
@@ -126,6 +126,33 @@
               :placeholder="t('payment.admin.purchaseLimitPlaceholder')"
             />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.totalPurchaseLimitHint') }}</p>
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label class="input-label">{{ t('payment.admin.purchaseLimitUnit') }}</label>
+            <Select v-model="planForm.purchase_limit_unit" :options="purchaseLimitUnitOptions" data-test="plan-purchase-limit-unit" />
+          </div>
+          <div>
+            <label class="input-label">{{ t('payment.admin.purchaseLimitMode') }}</label>
+            <Select v-model="planForm.purchase_limit_mode" :options="purchaseLimitModeOptions" data-test="plan-purchase-limit-mode" />
+          </div>
+          <div v-if="planForm.purchase_limit_mode === 'rolling'">
+            <label for="plan-purchase-limit-window-size" class="input-label">{{ t('payment.admin.purchaseLimitWindowSize') }}</label>
+            <input
+              id="plan-purchase-limit-window-size"
+              v-model.number="planForm.purchase_limit_window_size"
+              data-test="plan-purchase-limit-window-size"
+              type="number"
+              min="1"
+              step="1"
+              class="input"
+              required
+            />
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.purchaseLimitWindowSizeHint') }}</p>
+          </div>
+          <div v-else class="flex items-end pb-2 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('payment.admin.purchaseLimitCalendarHint') }}
           </div>
         </div>
       </details>
@@ -163,7 +190,7 @@ import { adminPaymentAPI } from '@/api/admin/payment'
 import type { AdminPaymentConfig } from '@/api/admin/payment'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { formatPaymentAmount } from '@/components/payment/currency'
-import type { CreditType, SubscriptionBenefitType, SubscriptionPlan } from '@/types/payment'
+import type { CreditType, PurchaseLimitMode, PurchaseLimitUnit, SubscriptionBenefitType, SubscriptionPlan } from '@/types/payment'
 import type { AdminGroup } from '@/types'
 import { formatMoneyDisplay } from '@/utils/format'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -171,6 +198,7 @@ import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import { platformTextClass } from '@/utils/platformColors'
+import { getPurchaseLimitPolicy } from '@/utils/purchaseLimits'
 
 const props = defineProps<{
   show: boolean
@@ -204,6 +232,9 @@ const planForm = reactive({
   for_sale: true,
   daily_purchase_limit: 0,
   total_purchase_limit: 0,
+  purchase_limit_unit: 'day' as PurchaseLimitUnit,
+  purchase_limit_mode: 'calendar' as PurchaseLimitMode,
+  purchase_limit_window_size: 1,
 })
 const planFeaturesText = ref('')
 const isSub2Benefit = computed(() => planForm.benefit_type === 'sub2')
@@ -222,6 +253,17 @@ const validityUnitOptions = computed(() => [
   { value: 'days', label: t('payment.admin.days') },
   { value: 'weeks', label: t('payment.admin.weeks') },
   { value: 'months', label: t('payment.admin.months') },
+])
+
+const purchaseLimitUnitOptions = computed(() => [
+  { value: 'day', label: t('payment.admin.purchaseLimitUnitDay') },
+  { value: 'week', label: t('payment.admin.purchaseLimitUnitWeek') },
+  { value: 'month', label: t('payment.admin.purchaseLimitUnitMonth') },
+])
+
+const purchaseLimitModeOptions = computed(() => [
+  { value: 'calendar', label: t('payment.admin.purchaseLimitModeCalendar') },
+  { value: 'rolling', label: t('payment.admin.purchaseLimitModeRolling') },
 ])
 
 function normalizeSub2ValidityUnit(unit?: string): string {
@@ -295,10 +337,11 @@ watch(() => props.show, (visible) => {
   if (!visible) return
   if (props.plan) {
     const benefitType = props.plan.benefit_type ?? 'sub2'
-    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, benefit_type: benefitType, payment_credit_type: props.plan.payment_credit_type ?? 'permanent', daily_temporary_credit_amount: props.plan.daily_temporary_credit_amount ?? 0, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, currency: props.plan.currency || '', validity_days: props.plan.validity_days, validity_unit: benefitType === 'sub2' ? normalizeSub2ValidityUnit(props.plan.validity_unit) : 'day', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale, daily_purchase_limit: props.plan.daily_purchase_limit ?? 0, total_purchase_limit: props.plan.total_purchase_limit ?? 0 })
+    const purchaseLimitPolicy = getPurchaseLimitPolicy(props.plan)
+    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, benefit_type: benefitType, payment_credit_type: props.plan.payment_credit_type ?? 'permanent', daily_temporary_credit_amount: props.plan.daily_temporary_credit_amount ?? 0, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, currency: props.plan.currency || '', validity_days: props.plan.validity_days, validity_unit: benefitType === 'sub2' ? normalizeSub2ValidityUnit(props.plan.validity_unit) : 'day', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale, daily_purchase_limit: props.plan.daily_purchase_limit ?? 0, total_purchase_limit: props.plan.total_purchase_limit ?? 0, purchase_limit_unit: purchaseLimitPolicy.unit, purchase_limit_mode: purchaseLimitPolicy.mode, purchase_limit_window_size: purchaseLimitPolicy.windowSize })
     planFeaturesText.value = (props.plan.features || []).join('\n')
   } else {
-    Object.assign(planForm, { name: '', group_id: null, benefit_type: 'sub2', payment_credit_type: 'permanent', daily_temporary_credit_amount: 0, description: '', price: 0, original_price: 0, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true, daily_purchase_limit: 0, total_purchase_limit: 0 })
+    Object.assign(planForm, { name: '', group_id: null, benefit_type: 'sub2', payment_credit_type: 'permanent', daily_temporary_credit_amount: 0, description: '', price: 0, original_price: 0, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true, daily_purchase_limit: 0, total_purchase_limit: 0, purchase_limit_unit: 'day', purchase_limit_mode: 'calendar', purchase_limit_window_size: 1 })
     planFeaturesText.value = ''
   }
 })
@@ -322,6 +365,9 @@ function buildPlanPayload() {
     for_sale: planForm.for_sale,
     daily_purchase_limit: normalizedPurchaseLimit(planForm.daily_purchase_limit),
     total_purchase_limit: normalizedPurchaseLimit(planForm.total_purchase_limit),
+    purchase_limit_unit: planForm.purchase_limit_unit,
+    purchase_limit_mode: planForm.purchase_limit_mode,
+    purchase_limit_window_size: planForm.purchase_limit_mode === 'rolling' ? planForm.purchase_limit_window_size : 1,
     features,
   }
 }
@@ -332,6 +378,10 @@ function validPurchaseLimit(value: unknown): boolean {
 
 function normalizedPurchaseLimit(value: unknown): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 0
+}
+
+function validPurchaseLimitWindowSize(value: unknown): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
 async function handleSavePlan() {
@@ -353,6 +403,10 @@ async function handleSavePlan() {
   }
   if (!validPurchaseLimit(planForm.daily_purchase_limit) || !validPurchaseLimit(planForm.total_purchase_limit)) {
     appStore.showError(t('payment.admin.purchaseLimitInvalid'))
+    return
+  }
+  if (planForm.purchase_limit_mode === 'rolling' && !validPurchaseLimitWindowSize(planForm.purchase_limit_window_size)) {
+    appStore.showError(t('payment.admin.purchaseLimitWindowSizeInvalid'))
     return
   }
   saving.value = true

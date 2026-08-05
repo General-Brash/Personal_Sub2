@@ -26,6 +26,9 @@ type CreateCurrencyProductRequest struct {
 	ForSale                 bool    `json:"for_sale"`
 	DailyPurchaseLimit      int     `json:"daily_purchase_limit"`
 	TotalPurchaseLimit      int     `json:"total_purchase_limit"`
+	PurchaseLimitUnit       string  `json:"purchase_limit_unit"`
+	PurchaseLimitMode       string  `json:"purchase_limit_mode"`
+	PurchaseLimitWindowSize int     `json:"purchase_limit_window_size"`
 }
 
 type UpdateCurrencyProductRequest struct {
@@ -41,6 +44,9 @@ type UpdateCurrencyProductRequest struct {
 	ForSale                 *bool    `json:"for_sale"`
 	DailyPurchaseLimit      *int     `json:"daily_purchase_limit"`
 	TotalPurchaseLimit      *int     `json:"total_purchase_limit"`
+	PurchaseLimitUnit       *string  `json:"purchase_limit_unit"`
+	PurchaseLimitMode       *string  `json:"purchase_limit_mode"`
+	PurchaseLimitWindowSize *int     `json:"purchase_limit_window_size"`
 }
 
 func validateCurrencyProductName(name string) error {
@@ -107,6 +113,9 @@ func validateCurrencyProductCreateInternal(req CreateCurrencyProductRequest) (st
 	if err := validatePurchaseLimits(req.DailyPurchaseLimit, req.TotalPurchaseLimit); err != nil {
 		return "", 0, 0, "", "", err
 	}
+	if _, _, _, err := normalizeConfiguredPurchaseLimitPolicy(req.PurchaseLimitUnit, req.PurchaseLimitMode, req.PurchaseLimitWindowSize); err != nil {
+		return "", 0, 0, "", "", err
+	}
 	return strings.TrimSpace(req.Name), price, credited, paymentType, creditedType, nil
 }
 
@@ -143,6 +152,15 @@ func validateCurrencyProductPatch(req UpdateCurrencyProductRequest) error {
 	}
 	if err := validatePurchaseLimitPatch(req.DailyPurchaseLimit, req.TotalPurchaseLimit); err != nil {
 		return err
+	}
+	if req.PurchaseLimitUnit != nil && (*req.PurchaseLimitUnit != purchaseLimitUnitDay && *req.PurchaseLimitUnit != purchaseLimitUnitWeek && *req.PurchaseLimitUnit != purchaseLimitUnitMonth) {
+		return invalidPurchaseLimitPolicyError("purchase_limit_unit")
+	}
+	if req.PurchaseLimitMode != nil && (*req.PurchaseLimitMode != purchaseLimitModeCalendar && *req.PurchaseLimitMode != purchaseLimitModeRolling) {
+		return invalidPurchaseLimitPolicyError("purchase_limit_mode")
+	}
+	if req.PurchaseLimitWindowSize != nil && *req.PurchaseLimitWindowSize <= 0 {
+		return invalidPurchaseLimitPolicyError("purchase_limit_window_size")
 	}
 	return nil
 }
@@ -195,6 +213,10 @@ func (s *PaymentConfigService) CreateCurrencyProduct(ctx context.Context, req Cr
 	if err != nil {
 		return nil, err
 	}
+	unit, mode, windowSize, err := normalizeConfiguredPurchaseLimitPolicy(req.PurchaseLimitUnit, req.PurchaseLimitMode, req.PurchaseLimitWindowSize)
+	if err != nil {
+		return nil, err
+	}
 	return s.entClient.CurrencyProduct.Create().
 		SetName(name).
 		SetDescription(req.Description).
@@ -208,6 +230,9 @@ func (s *PaymentConfigService) CreateCurrencyProduct(ctx context.Context, req Cr
 		SetForSale(req.ForSale).
 		SetDailyPurchaseLimit(req.DailyPurchaseLimit).
 		SetTotalPurchaseLimit(req.TotalPurchaseLimit).
+		SetPurchaseLimitUnit(unit).
+		SetPurchaseLimitMode(mode).
+		SetPurchaseLimitWindowSize(windowSize).
 		Save(ctx)
 }
 
@@ -256,6 +281,17 @@ func (s *PaymentConfigService) UpdateCurrencyProduct(ctx context.Context, id int
 	}
 	if req.TotalPurchaseLimit != nil {
 		u.SetTotalPurchaseLimit(*req.TotalPurchaseLimit)
+	}
+	if req.PurchaseLimitUnit != nil || req.PurchaseLimitMode != nil || req.PurchaseLimitWindowSize != nil {
+		current, err := s.GetCurrencyProduct(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		unit, mode, windowSize, err := resolvePurchaseLimitPolicy(current.PurchaseLimitUnit, current.PurchaseLimitMode, current.PurchaseLimitWindowSize, req.PurchaseLimitUnit, req.PurchaseLimitMode, req.PurchaseLimitWindowSize)
+		if err != nil {
+			return nil, err
+		}
+		u.SetPurchaseLimitUnit(unit).SetPurchaseLimitMode(mode).SetPurchaseLimitWindowSize(windowSize)
 	}
 	product, err := u.Save(ctx)
 	if err != nil {

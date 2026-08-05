@@ -30,7 +30,12 @@ vi.mock('vue-i18n', async (importOriginal) => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key,
+      t: (key: string, params?: Record<string, unknown>) => {
+        if (key === 'payment.purchaseLimit.rollingWeek') return `Rolling ${params?.count} week`
+        if (key === 'payment.purchaseLimit.calendarDay') return 'Natural day'
+        if (key === 'payment.admin.purchaseLimitSummary') return `${params?.scope}: ${params?.limit}`
+        return key
+      },
     }),
   }
 })
@@ -41,6 +46,7 @@ const DataTableStub = {
     <div>
       <div v-for="row in data" :key="row.id">
         <slot name="cell-price" :value="row.price" :row="row" />
+        <slot name="cell-purchase_limit" :row="row" />
       </div>
     </div>
   `,
@@ -64,6 +70,10 @@ describe('AdminPaymentPlansView', () => {
           sort_order: 0,
           for_sale: true,
           features: [],
+          daily_purchase_limit: 3,
+          purchase_limit_unit: 'week',
+          purchase_limit_mode: 'rolling',
+          purchase_limit_window_size: 2,
         },
         {
           id: 2,
@@ -77,9 +87,31 @@ describe('AdminPaymentPlansView', () => {
           sort_order: 0,
           for_sale: true,
           features: [],
+          daily_purchase_limit: 2,
         },
       ],
     })
+  })
+
+  it('summarizes rolling policies and defaults legacy limits to a natural day', async () => {
+    const wrapper = mount(AdminPaymentPlansView, {
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          DataTable: DataTableStub,
+          ConfirmDialog: true,
+          GroupBadge: true,
+          Icon: true,
+          PlanEditDialog: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Rolling 2 week: 3')
+    expect(wrapper.text()).toContain('Natural day: 2')
   })
 
   it('uses the configured currency symbol and keeps legacy prices in USD', async () => {

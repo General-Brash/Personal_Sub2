@@ -52,6 +52,20 @@ func (_c *PaymentPurchaseReservationCreate) SetDailyPeriodStart(v time.Time) *Pa
 	return _c
 }
 
+// SetPeriodType sets the "period_type" field.
+func (_c *PaymentPurchaseReservationCreate) SetPeriodType(v string) *PaymentPurchaseReservationCreate {
+	_c.mutation.SetPeriodType(v)
+	return _c
+}
+
+// SetNillablePeriodType sets the "period_type" field if the given value is not nil.
+func (_c *PaymentPurchaseReservationCreate) SetNillablePeriodType(v *string) *PaymentPurchaseReservationCreate {
+	if v != nil {
+		_c.SetPeriodType(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *PaymentPurchaseReservationCreate) SetStatus(v string) *PaymentPurchaseReservationCreate {
 	_c.mutation.SetStatus(v)
@@ -129,6 +143,10 @@ func (_c *PaymentPurchaseReservationCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *PaymentPurchaseReservationCreate) defaults() {
+	if _, ok := _c.mutation.PeriodType(); !ok {
+		v := paymentpurchasereservation.DefaultPeriodType
+		_c.mutation.SetPeriodType(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := paymentpurchasereservation.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -179,6 +197,14 @@ func (_c *PaymentPurchaseReservationCreate) check() error {
 	}
 	if _, ok := _c.mutation.DailyPeriodStart(); !ok {
 		return &ValidationError{Name: "daily_period_start", err: errors.New(`ent: missing required field "PaymentPurchaseReservation.daily_period_start"`)}
+	}
+	if _, ok := _c.mutation.PeriodType(); !ok {
+		return &ValidationError{Name: "period_type", err: errors.New(`ent: missing required field "PaymentPurchaseReservation.period_type"`)}
+	}
+	if v, ok := _c.mutation.PeriodType(); ok {
+		if err := paymentpurchasereservation.PeriodTypeValidator(v); err != nil {
+			return &ValidationError{Name: "period_type", err: fmt.Errorf(`ent: validator failed for field "PaymentPurchaseReservation.period_type": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "PaymentPurchaseReservation.status"`)}
@@ -240,6 +266,10 @@ func (_c *PaymentPurchaseReservationCreate) createSpec() (*PaymentPurchaseReserv
 	if value, ok := _c.mutation.DailyPeriodStart(); ok {
 		_spec.SetField(paymentpurchasereservation.FieldDailyPeriodStart, field.TypeTime, value)
 		_node.DailyPeriodStart = value
+	}
+	if value, ok := _c.mutation.PeriodType(); ok {
+		_spec.SetField(paymentpurchasereservation.FieldPeriodType, field.TypeString, value)
+		_node.PeriodType = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(paymentpurchasereservation.FieldStatus, field.TypeString, value)
@@ -380,6 +410,18 @@ func (u *PaymentPurchaseReservationUpsert) SetDailyPeriodStart(v time.Time) *Pay
 // UpdateDailyPeriodStart sets the "daily_period_start" field to the value that was provided on create.
 func (u *PaymentPurchaseReservationUpsert) UpdateDailyPeriodStart() *PaymentPurchaseReservationUpsert {
 	u.SetExcluded(paymentpurchasereservation.FieldDailyPeriodStart)
+	return u
+}
+
+// SetPeriodType sets the "period_type" field.
+func (u *PaymentPurchaseReservationUpsert) SetPeriodType(v string) *PaymentPurchaseReservationUpsert {
+	u.Set(paymentpurchasereservation.FieldPeriodType, v)
+	return u
+}
+
+// UpdatePeriodType sets the "period_type" field to the value that was provided on create.
+func (u *PaymentPurchaseReservationUpsert) UpdatePeriodType() *PaymentPurchaseReservationUpsert {
+	u.SetExcluded(paymentpurchasereservation.FieldPeriodType)
 	return u
 }
 
@@ -540,6 +582,20 @@ func (u *PaymentPurchaseReservationUpsertOne) SetDailyPeriodStart(v time.Time) *
 func (u *PaymentPurchaseReservationUpsertOne) UpdateDailyPeriodStart() *PaymentPurchaseReservationUpsertOne {
 	return u.Update(func(s *PaymentPurchaseReservationUpsert) {
 		s.UpdateDailyPeriodStart()
+	})
+}
+
+// SetPeriodType sets the "period_type" field.
+func (u *PaymentPurchaseReservationUpsertOne) SetPeriodType(v string) *PaymentPurchaseReservationUpsertOne {
+	return u.Update(func(s *PaymentPurchaseReservationUpsert) {
+		s.SetPeriodType(v)
+	})
+}
+
+// UpdatePeriodType sets the "period_type" field to the value that was provided on create.
+func (u *PaymentPurchaseReservationUpsertOne) UpdatePeriodType() *PaymentPurchaseReservationUpsertOne {
+	return u.Update(func(s *PaymentPurchaseReservationUpsert) {
+		s.UpdatePeriodType()
 	})
 }
 
@@ -870,6 +926,20 @@ func (u *PaymentPurchaseReservationUpsertBulk) SetDailyPeriodStart(v time.Time) 
 func (u *PaymentPurchaseReservationUpsertBulk) UpdateDailyPeriodStart() *PaymentPurchaseReservationUpsertBulk {
 	return u.Update(func(s *PaymentPurchaseReservationUpsert) {
 		s.UpdateDailyPeriodStart()
+	})
+}
+
+// SetPeriodType sets the "period_type" field.
+func (u *PaymentPurchaseReservationUpsertBulk) SetPeriodType(v string) *PaymentPurchaseReservationUpsertBulk {
+	return u.Update(func(s *PaymentPurchaseReservationUpsert) {
+		s.SetPeriodType(v)
+	})
+}
+
+// UpdatePeriodType sets the "period_type" field to the value that was provided on create.
+func (u *PaymentPurchaseReservationUpsertBulk) UpdatePeriodType() *PaymentPurchaseReservationUpsertBulk {
+	return u.Update(func(s *PaymentPurchaseReservationUpsert) {
+		s.UpdatePeriodType()
 	})
 }
 

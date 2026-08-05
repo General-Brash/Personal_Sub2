@@ -27,6 +27,7 @@ func (PaymentPurchaseReservation) Fields() []ent.Field {
 		field.String("product_type").MaxLen(20),
 		field.Int64("product_id").Positive(),
 		field.Time("daily_period_start").SchemaType(map[string]string{dialect.Postgres: "date"}),
+		field.String("period_type").MaxLen(10).Default("daily"),
 		field.String("status").MaxLen(20).Default("reserved"),
 		field.Time("created_at").Immutable().Default(time.Now).SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now).SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
@@ -36,5 +37,6 @@ func (PaymentPurchaseReservation) Fields() []ent.Field {
 func (PaymentPurchaseReservation) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("user_id", "product_type", "product_id", "status"),
+		index.Fields("user_id", "product_type", "product_id", "period_type", "status"),
 	}
 }

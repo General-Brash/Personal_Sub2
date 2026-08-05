@@ -45,6 +45,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchaselimitevent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
@@ -134,6 +135,8 @@ type Client struct {
 	PaymentProviderInstance *PaymentProviderInstanceClient
 	// PaymentPurchaseCounter is the client for interacting with the PaymentPurchaseCounter builders.
 	PaymentPurchaseCounter *PaymentPurchaseCounterClient
+	// PaymentPurchaseLimitEvent is the client for interacting with the PaymentPurchaseLimitEvent builders.
+	PaymentPurchaseLimitEvent *PaymentPurchaseLimitEventClient
 	// PaymentPurchaseReservation is the client for interacting with the PaymentPurchaseReservation builders.
 	PaymentPurchaseReservation *PaymentPurchaseReservationClient
 	// PendingAuthSession is the client for interacting with the PendingAuthSession builders.
@@ -215,6 +218,7 @@ func (c *Client) init() {
 	c.PaymentOrder = NewPaymentOrderClient(c.config)
 	c.PaymentProviderInstance = NewPaymentProviderInstanceClient(c.config)
 	c.PaymentPurchaseCounter = NewPaymentPurchaseCounterClient(c.config)
+	c.PaymentPurchaseLimitEvent = NewPaymentPurchaseLimitEventClient(c.config)
 	c.PaymentPurchaseReservation = NewPaymentPurchaseReservationClient(c.config)
 	c.PendingAuthSession = NewPendingAuthSessionClient(c.config)
 	c.PromoCode = NewPromoCodeClient(c.config)
@@ -357,6 +361,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PaymentOrder:                   NewPaymentOrderClient(cfg),
 		PaymentProviderInstance:        NewPaymentProviderInstanceClient(cfg),
 		PaymentPurchaseCounter:         NewPaymentPurchaseCounterClient(cfg),
+		PaymentPurchaseLimitEvent:      NewPaymentPurchaseLimitEventClient(cfg),
 		PaymentPurchaseReservation:     NewPaymentPurchaseReservationClient(cfg),
 		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
 		PromoCode:                      NewPromoCodeClient(cfg),
@@ -426,6 +431,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PaymentOrder:                   NewPaymentOrderClient(cfg),
 		PaymentProviderInstance:        NewPaymentProviderInstanceClient(cfg),
 		PaymentPurchaseCounter:         NewPaymentPurchaseCounterClient(cfg),
+		PaymentPurchaseLimitEvent:      NewPaymentPurchaseLimitEventClient(cfg),
 		PaymentPurchaseReservation:     NewPaymentPurchaseReservationClient(cfg),
 		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
 		PromoCode:                      NewPromoCodeClient(cfg),
@@ -484,12 +490,13 @@ func (c *Client) Use(hooks ...Hook) {
 		c.DailyCheckin, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.MallDailyCreditSubscription, c.MallPurchase,
 		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
-		c.PaymentPurchaseCounter, c.PaymentPurchaseReservation, c.PendingAuthSession,
-		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
-		c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
-		c.TemporaryCreditConsumption, c.TemporaryCreditGrant, c.UsageCleanupTask,
-		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
-		c.UserAttributeValue, c.UserPlatformQuota, c.UserSubscription,
+		c.PaymentPurchaseCounter, c.PaymentPurchaseLimitEvent,
+		c.PaymentPurchaseReservation, c.PendingAuthSession, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.TemporaryCreditConsumption,
+		c.TemporaryCreditGrant, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -508,12 +515,13 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.DailyCheckin, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.MallDailyCreditSubscription, c.MallPurchase,
 		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
-		c.PaymentPurchaseCounter, c.PaymentPurchaseReservation, c.PendingAuthSession,
-		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
-		c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
-		c.TemporaryCreditConsumption, c.TemporaryCreditGrant, c.UsageCleanupTask,
-		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
-		c.UserAttributeValue, c.UserPlatformQuota, c.UserSubscription,
+		c.PaymentPurchaseCounter, c.PaymentPurchaseLimitEvent,
+		c.PaymentPurchaseReservation, c.PendingAuthSession, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.TemporaryCreditConsumption,
+		c.TemporaryCreditGrant, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -582,6 +590,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PaymentProviderInstance.mutate(ctx, m)
 	case *PaymentPurchaseCounterMutation:
 		return c.PaymentPurchaseCounter.mutate(ctx, m)
+	case *PaymentPurchaseLimitEventMutation:
+		return c.PaymentPurchaseLimitEvent.mutate(ctx, m)
 	case *PaymentPurchaseReservationMutation:
 		return c.PaymentPurchaseReservation.mutate(ctx, m)
 	case *PendingAuthSessionMutation:
@@ -5312,6 +5322,139 @@ func (c *PaymentPurchaseCounterClient) mutate(ctx context.Context, m *PaymentPur
 	}
 }
 
+// PaymentPurchaseLimitEventClient is a client for the PaymentPurchaseLimitEvent schema.
+type PaymentPurchaseLimitEventClient struct {
+	config
+}
+
+// NewPaymentPurchaseLimitEventClient returns a client for the PaymentPurchaseLimitEvent from the given config.
+func NewPaymentPurchaseLimitEventClient(c config) *PaymentPurchaseLimitEventClient {
+	return &PaymentPurchaseLimitEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `paymentpurchaselimitevent.Hooks(f(g(h())))`.
+func (c *PaymentPurchaseLimitEventClient) Use(hooks ...Hook) {
+	c.hooks.PaymentPurchaseLimitEvent = append(c.hooks.PaymentPurchaseLimitEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `paymentpurchaselimitevent.Intercept(f(g(h())))`.
+func (c *PaymentPurchaseLimitEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PaymentPurchaseLimitEvent = append(c.inters.PaymentPurchaseLimitEvent, interceptors...)
+}
+
+// Create returns a builder for creating a PaymentPurchaseLimitEvent entity.
+func (c *PaymentPurchaseLimitEventClient) Create() *PaymentPurchaseLimitEventCreate {
+	mutation := newPaymentPurchaseLimitEventMutation(c.config, OpCreate)
+	return &PaymentPurchaseLimitEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PaymentPurchaseLimitEvent entities.
+func (c *PaymentPurchaseLimitEventClient) CreateBulk(builders ...*PaymentPurchaseLimitEventCreate) *PaymentPurchaseLimitEventCreateBulk {
+	return &PaymentPurchaseLimitEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PaymentPurchaseLimitEventClient) MapCreateBulk(slice any, setFunc func(*PaymentPurchaseLimitEventCreate, int)) *PaymentPurchaseLimitEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PaymentPurchaseLimitEventCreateBulk{err: fmt.Errorf("calling to PaymentPurchaseLimitEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PaymentPurchaseLimitEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PaymentPurchaseLimitEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PaymentPurchaseLimitEvent.
+func (c *PaymentPurchaseLimitEventClient) Update() *PaymentPurchaseLimitEventUpdate {
+	mutation := newPaymentPurchaseLimitEventMutation(c.config, OpUpdate)
+	return &PaymentPurchaseLimitEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PaymentPurchaseLimitEventClient) UpdateOne(_m *PaymentPurchaseLimitEvent) *PaymentPurchaseLimitEventUpdateOne {
+	mutation := newPaymentPurchaseLimitEventMutation(c.config, OpUpdateOne, withPaymentPurchaseLimitEvent(_m))
+	return &PaymentPurchaseLimitEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PaymentPurchaseLimitEventClient) UpdateOneID(id int64) *PaymentPurchaseLimitEventUpdateOne {
+	mutation := newPaymentPurchaseLimitEventMutation(c.config, OpUpdateOne, withPaymentPurchaseLimitEventID(id))
+	return &PaymentPurchaseLimitEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PaymentPurchaseLimitEvent.
+func (c *PaymentPurchaseLimitEventClient) Delete() *PaymentPurchaseLimitEventDelete {
+	mutation := newPaymentPurchaseLimitEventMutation(c.config, OpDelete)
+	return &PaymentPurchaseLimitEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PaymentPurchaseLimitEventClient) DeleteOne(_m *PaymentPurchaseLimitEvent) *PaymentPurchaseLimitEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PaymentPurchaseLimitEventClient) DeleteOneID(id int64) *PaymentPurchaseLimitEventDeleteOne {
+	builder := c.Delete().Where(paymentpurchaselimitevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PaymentPurchaseLimitEventDeleteOne{builder}
+}
+
+// Query returns a query builder for PaymentPurchaseLimitEvent.
+func (c *PaymentPurchaseLimitEventClient) Query() *PaymentPurchaseLimitEventQuery {
+	return &PaymentPurchaseLimitEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePaymentPurchaseLimitEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PaymentPurchaseLimitEvent entity by its id.
+func (c *PaymentPurchaseLimitEventClient) Get(ctx context.Context, id int64) (*PaymentPurchaseLimitEvent, error) {
+	return c.Query().Where(paymentpurchaselimitevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PaymentPurchaseLimitEventClient) GetX(ctx context.Context, id int64) *PaymentPurchaseLimitEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PaymentPurchaseLimitEventClient) Hooks() []Hook {
+	return c.hooks.PaymentPurchaseLimitEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *PaymentPurchaseLimitEventClient) Interceptors() []Interceptor {
+	return c.inters.PaymentPurchaseLimitEvent
+}
+
+func (c *PaymentPurchaseLimitEventClient) mutate(ctx context.Context, m *PaymentPurchaseLimitEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PaymentPurchaseLimitEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PaymentPurchaseLimitEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PaymentPurchaseLimitEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PaymentPurchaseLimitEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PaymentPurchaseLimitEvent mutation op: %q", m.Op())
+	}
+}
+
 // PaymentPurchaseReservationClient is a client for the PaymentPurchaseReservation schema.
 type PaymentPurchaseReservationClient struct {
 	config
@@ -8744,11 +8887,12 @@ type (
 		DailyCheckin, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, MallDailyCreditSubscription, MallPurchase,
 		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PaymentPurchaseCounter,
-		PaymentPurchaseReservation, PendingAuthSession, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, TemporaryCreditConsumption, TemporaryCreditGrant,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Hook
+		PaymentPurchaseLimitEvent, PaymentPurchaseReservation, PendingAuthSession,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		SubscriptionPlan, TLSFingerprintProfile, TemporaryCreditConsumption,
+		TemporaryCreditGrant, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, AffiliateRebateJob, Announcement,
@@ -8759,11 +8903,12 @@ type (
 		DailyCheckin, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, MallDailyCreditSubscription, MallPurchase,
 		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PaymentPurchaseCounter,
-		PaymentPurchaseReservation, PendingAuthSession, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, TemporaryCreditConsumption, TemporaryCreditGrant,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Interceptor
+		PaymentPurchaseLimitEvent, PaymentPurchaseReservation, PendingAuthSession,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		SubscriptionPlan, TLSFingerprintProfile, TemporaryCreditConsumption,
+		TemporaryCreditGrant, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
+		UserSubscription []ent.Interceptor
 	}
 )
 

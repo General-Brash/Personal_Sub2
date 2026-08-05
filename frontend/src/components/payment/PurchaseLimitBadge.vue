@@ -15,7 +15,7 @@
       :title="limitTitle(item)"
       :data-test="`purchase-limit-${item.scope}`"
     >
-      <template v-if="items.length > 1">{{ t(`payment.purchaseLimit.${item.scope}`) }} </template>{{ item.used }}/{{ item.limit }}
+      <template v-if="items.length > 1">{{ limitLabel(item) }} </template>{{ item.used }}/{{ item.limit }}
     </span>
   </div>
 </template>
@@ -24,15 +24,22 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PurchaseLimitFields } from '@/types/payment'
-import { getPurchaseLimitItems, type PurchaseLimitItem } from '@/utils/purchaseLimits'
+import { getPurchaseLimitItems, getPurchaseLimitLabelKey, type PurchaseLimitItem } from '@/utils/purchaseLimits'
 
 const props = defineProps<{ limits: PurchaseLimitFields }>()
 const { t } = useI18n()
 const items = computed(() => getPurchaseLimitItems(props.limits))
 
+function limitLabel(item: PurchaseLimitItem): string {
+  const key = getPurchaseLimitLabelKey(item)
+  return key.startsWith('rolling')
+    ? t(`payment.purchaseLimit.${key}`, { count: item.windowSize })
+    : t(`payment.purchaseLimit.${key}`)
+}
+
 function limitTitle(item: PurchaseLimitItem): string {
   return t('payment.purchaseLimit.detail', {
-    scope: t(`payment.purchaseLimit.${item.scope}`),
+    scope: limitLabel(item),
     used: item.used,
     limit: item.limit,
     remaining: item.remaining,

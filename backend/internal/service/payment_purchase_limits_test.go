@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchaselimitevent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -27,6 +28,103 @@ func TestPurchaseDailyPeriodStartUsesBeijingNaturalDay(t *testing.T) {
 
 	require.Equal(t, "2026-07-21", purchaseDailyPeriodStart(beforeMidnightUTC).Format("2006-01-02"))
 	require.Equal(t, "2026-07-22", purchaseDailyPeriodStart(afterMidnightUTC).Format("2006-01-02"))
+}
+
+func TestPurchaseCalendarPeriodStartUsesBeijingWeekAndMonth(t *testing.T) {
+	sundayLateUTC := time.Date(2026, 7, 26, 15, 59, 59, 0, time.UTC)
+	mondayUTC := sundayLateUTC.Add(2 * time.Second)
+	require.Equal(t, "2026-07-20", purchaseCalendarPeriodStart(sundayLateUTC, purchaseLimitUnitWeek).Format("2006-01-02"))
+	require.Equal(t, "2026-07-27", purchaseCalendarPeriodStart(mondayUTC, purchaseLimitUnitWeek).Format("2006-01-02"))
+
+	monthEndUTC := time.Date(2026, 7, 31, 15, 59, 59, 0, time.UTC)
+	augustUTC := monthEndUTC.Add(2 * time.Second)
+	require.Equal(t, "2026-07-01", purchaseCalendarPeriodStart(monthEndUTC, purchaseLimitUnitMonth).Format("2006-01-02"))
+	require.Equal(t, "2026-08-01", purchaseCalendarPeriodStart(augustUTC, purchaseLimitUnitMonth).Format("2006-01-02"))
+}
+
+func TestRollingPurchaseWindowUsesSelectedUnitAndSize(t *testing.T) {
+	now := time.Date(2026, 8, 5, 12, 0, 0, 0, beijingLocation)
+	require.Equal(t, now.AddDate(0, 0, -3), rollingPurchaseWindowStart(now, purchaseLimitUnitDay, 3))
+	require.Equal(t, now.AddDate(0, 0, -14), rollingPurchaseWindowStart(now, purchaseLimitUnitWeek, 2))
+	require.Equal(t, now.AddDate(0, -4, 0), rollingPurchaseWindowStart(now, purchaseLimitUnitMonth, 4))
+}
+
+func TestImmediateRollingMallPurchaseConsumesLimitEvent(t *testing.T) {
+	ctx := context.Background()
+	client := newPurchaseLimitTestClient(t)
+	userID := createPurchaseLimitTestUser(t, ctx, client)
+	sourceID := int64(9001)
+	now := time.Date(2026, 8, 5, 12, 0, 0, 0, beijingLocation)
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	require.NoError(t, consumeImmediatePurchaseCounters(ctx, tx, userID, &purchaseLimitSpec{
+		productType: purchaseProductSubscription, productID: 79, dailyLimit: 1,
+		unit: purchaseLimitUnitWeek, mode: purchaseLimitModeRolling, windowSize: 2,
+		sourceType: purchaseEventSourceMall, sourceID: sourceID,
+	}, now))
+	require.NoError(t, tx.Commit())
+	event, err := client.PaymentPurchaseLimitEvent.Query().Where(paymentpurchaselimitevent.SourceID(sourceID)).Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, purchaseEventSourceMall, event.SourceType)
+	require.Equal(t, purchaseReservationConsumed, event.Status)
+}
+
+func TestRollingPurchaseReservationLifecycleUsesEventAndReleasedDoesNotCount(t *testing.T) {
+	ctx := context.Background()
+	client := newPurchaseLimitTestClient(t)
+	userID := createPurchaseLimitTestUser(t, ctx, client)
+	order := createPurchaseLimitTestOrder(t, ctx, client, userID, "ROLLING-LIFECYCLE")
+	svc := &PaymentService{entClient: client}
+	now := time.Date(2026, 8, 5, 12, 0, 0, 0, beijingLocation)
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	require.NoError(t, svc.reservePurchaseTx(ctx, tx, order.ID, userID, &purchaseLimitSpec{
+		productType: purchaseProductCurrency, productID: 78, dailyLimit: 1,
+		unit: purchaseLimitUnitDay, mode: purchaseLimitModeRolling, windowSize: 1,
+	}, now))
+	require.NoError(t, tx.Commit())
+
+	event, err := client.PaymentPurchaseLimitEvent.Query().Where(paymentpurchaselimitevent.SourceID(order.ID)).Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, purchaseReservationReserved, event.Status)
+
+	tx, err = client.Tx(ctx)
+	require.NoError(t, err)
+	require.NoError(t, consumePurchaseReservationTx(ctx, tx, order.ID))
+	require.NoError(t, tx.Commit())
+	event, err = client.PaymentPurchaseLimitEvent.Query().Where(paymentpurchaselimitevent.SourceID(order.ID)).Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, purchaseReservationConsumed, event.Status)
+
+	tx, err = client.Tx(ctx)
+	require.NoError(t, err)
+	require.NoError(t, releaseConsumedPurchaseTx(ctx, tx, order.ID))
+	require.NoError(t, tx.Commit())
+	event, err = client.PaymentPurchaseLimitEvent.Query().Where(paymentpurchaselimitevent.SourceID(order.ID)).Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, purchaseReservationReleased, event.Status)
+}
+
+func TestRollingPurchaseUsageExcludesReleasedEvents(t *testing.T) {
+	ctx := context.Background()
+	client := newPurchaseLimitTestClient(t)
+	userID := createPurchaseLimitTestUser(t, ctx, client)
+	now := time.Now()
+	_, err := client.PaymentPurchaseLimitEvent.Create().
+		SetUserID(userID).SetProductType(purchaseProductCurrency).SetProductID(77).
+		SetSourceType(purchaseEventSourceMall).SetSourceID(1).SetPeriodType(purchasePeriodRolling).
+		SetStatus(purchaseReservationConsumed).SetOccurredAt(now.Add(-time.Hour)).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.PaymentPurchaseLimitEvent.Create().
+		SetUserID(userID).SetProductType(purchaseProductCurrency).SetProductID(77).
+		SetSourceType(purchaseEventSourceMall).SetSourceID(2).SetPeriodType(purchasePeriodRolling).
+		SetStatus(purchaseReservationReleased).SetOccurredAt(now.Add(-30 * time.Minute)).Save(ctx)
+	require.NoError(t, err)
+
+	usage, err := (&PaymentService{entClient: client}).GetPurchaseLimitUsage(ctx, userID)
+	require.NoError(t, err)
+	status := CurrencyProductPurchaseLimitStatusWithPolicy(usage, 77, 3, 0, purchaseLimitUnitDay, purchaseLimitModeRolling, 1)
+	require.Equal(t, 2, status.DailyRemaining)
 }
 
 func TestPurchaseReservationRejectsDailyAndTotalLastSlot(t *testing.T) {
@@ -102,7 +200,10 @@ func TestPurchaseReservationTransitionsAndCheckoutRemaining(t *testing.T) {
 	usage, err := svc.GetPurchaseLimitUsage(ctx, userID)
 	require.NoError(t, err)
 	status := CurrencyProductPurchaseLimitStatus(usage, 33, 2, 3)
-	require.Equal(t, ProductPurchaseLimitStatus{DailyLimit: 2, DailyRemaining: 1, TotalLimit: 3, TotalRemaining: 2}, status)
+	require.Equal(t, ProductPurchaseLimitStatus{
+		DailyLimit: 2, DailyRemaining: 1, TotalLimit: 3, TotalRemaining: 2,
+		PurchaseLimitUnit: purchaseLimitUnitDay, PurchaseLimitMode: purchaseLimitModeCalendar, PurchaseLimitWindowSize: 1,
+	}, status)
 
 	tx, err = client.Tx(ctx)
 	require.NoError(t, err)
@@ -131,6 +232,14 @@ func TestPurchaseReservationTransitionsAndCheckoutRemaining(t *testing.T) {
 	}
 }
 
+func TestMallPolicyFieldsAreReadIntoPurchaseSpec(t *testing.T) {
+	product := &dbent.CurrencyProduct{ID: 91, DailyPurchaseLimit: 2, TotalPurchaseLimit: 5, PurchaseLimitUnit: purchaseLimitUnitWeek, PurchaseLimitMode: purchaseLimitModeRolling, PurchaseLimitWindowSize: 3}
+	spec := purchaseLimitSpecFor(nil, product)
+	require.Equal(t, purchaseLimitUnitWeek, spec.unit)
+	require.Equal(t, purchaseLimitModeRolling, spec.mode)
+	require.Equal(t, 3, spec.windowSize)
+}
+
 func TestProductPolicySnapshotDoesNotChangeWithShelfEdit(t *testing.T) {
 	ctx := context.Background()
 	client := newPurchaseLimitTestClient(t)
@@ -142,6 +251,9 @@ func TestProductPolicySnapshotDoesNotChangeWithShelfEdit(t *testing.T) {
 		SetCreditedAmount(12).
 		SetCreditedPermanentAmount(12).
 		SetDailyPurchaseLimit(1).
+		SetPurchaseLimitUnit(purchaseLimitUnitMonth).
+		SetPurchaseLimitMode(purchaseLimitModeRolling).
+		SetPurchaseLimitWindowSize(4).
 		SetTotalPurchaseLimit(4).
 		Save(ctx)
 	require.NoError(t, err)
@@ -154,6 +266,9 @@ func TestProductPolicySnapshotDoesNotChangeWithShelfEdit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, order.DailyPurchaseLimitSnapshot)
 	require.Equal(t, 4, order.TotalPurchaseLimitSnapshot)
+	require.Equal(t, purchaseLimitUnitMonth, order.PurchaseLimitUnitSnapshot)
+	require.Equal(t, purchaseLimitModeRolling, order.PurchaseLimitModeSnapshot)
+	require.Equal(t, 4, order.PurchaseLimitWindowSizeSnapshot)
 
 	_, err = client.CurrencyProduct.UpdateOneID(product.ID).
 		SetDailyPurchaseLimit(9).
@@ -164,6 +279,9 @@ func TestProductPolicySnapshotDoesNotChangeWithShelfEdit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, reloaded.DailyPurchaseLimitSnapshot)
 	require.Equal(t, 4, reloaded.TotalPurchaseLimitSnapshot)
+	require.Equal(t, purchaseLimitUnitMonth, reloaded.PurchaseLimitUnitSnapshot)
+	require.Equal(t, purchaseLimitModeRolling, reloaded.PurchaseLimitModeSnapshot)
+	require.Equal(t, 4, reloaded.PurchaseLimitWindowSizeSnapshot)
 }
 
 func TestSubscriptionPlanPurchaseLimitCRUDAndValidation(t *testing.T) {
@@ -177,6 +295,9 @@ func TestSubscriptionPlanPurchaseLimitCRUDAndValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, plan.DailyPurchaseLimit)
 	require.Equal(t, 6, plan.TotalPurchaseLimit)
+	require.Equal(t, purchaseLimitUnitDay, plan.PurchaseLimitUnit)
+	require.Equal(t, purchaseLimitModeCalendar, plan.PurchaseLimitMode)
+	require.Equal(t, 1, plan.PurchaseLimitWindowSize)
 
 	negative := -1
 	_, err = configService.UpdatePlan(ctx, plan.ID, UpdatePlanRequest{TotalPurchaseLimit: &negative})
@@ -193,6 +314,15 @@ func TestSubscriptionPlanPurchaseLimitCRUDAndValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, daily, plan.DailyPurchaseLimit)
 	require.Equal(t, total, plan.TotalPurchaseLimit)
+	require.Equal(t, purchaseLimitUnitDay, plan.PurchaseLimitUnit)
+	require.Equal(t, purchaseLimitModeCalendar, plan.PurchaseLimitMode)
+	require.Equal(t, 1, plan.PurchaseLimitWindowSize)
+	unit, mode, windowSize := purchaseLimitUnitMonth, purchaseLimitModeRolling, 4
+	plan, err = configService.UpdatePlan(ctx, plan.ID, UpdatePlanRequest{PurchaseLimitUnit: &unit, PurchaseLimitMode: &mode, PurchaseLimitWindowSize: &windowSize})
+	require.NoError(t, err)
+	require.Equal(t, unit, plan.PurchaseLimitUnit)
+	require.Equal(t, mode, plan.PurchaseLimitMode)
+	require.Equal(t, windowSize, plan.PurchaseLimitWindowSize)
 }
 
 func TestCancelAndRefundReleaseOnlyEligiblePurchaseReservations(t *testing.T) {

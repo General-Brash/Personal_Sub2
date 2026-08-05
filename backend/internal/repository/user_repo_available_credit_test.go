@@ -12,7 +12,7 @@ import (
 func TestUserRepositoryGetAvailableCreditSnapshotUsesClockTimestampFilteredTemporaryCredit(t *testing.T) {
 	repo, mock := newRedeemAdjustmentRepoMock(t)
 	earliestExpiry := time.Now().UTC().Add(90 * time.Second)
-	mock.ExpectQuery(`(?s)SELECT u\.balance.*g\.remaining_amount > 0.*g\.expires_at > clock_timestamp\(\).*WHERE u\.id = \$1.*u\.deleted_at IS NULL.*GROUP BY u\.id, u\.balance`).
+	mock.ExpectQuery(`(?s)SELECT u\.balance.*g\.remaining_amount > 0.*g\.available_at <= clock_timestamp\(\).*g\.expires_at > clock_timestamp\(\).*WHERE u\.id = \$1.*u\.deleted_at IS NULL.*GROUP BY u\.id, u\.balance`).
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"balance", "temporary_credit", "earliest_expiry"}).
 			AddRow("2.50000000", "1.25000000", earliestExpiry))

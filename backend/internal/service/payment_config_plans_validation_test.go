@@ -5,6 +5,7 @@ package service
 import (
 	"testing"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -236,4 +237,43 @@ func TestNormalizePlanCurrency_NonLetter(t *testing.T) {
 	_, err := normalizePlanCurrency("N2D")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "currency")
+}
+
+func TestPurchaseLimitPolicyValidationAndDefaults(t *testing.T) {
+	unit, mode, size, err := normalizeConfiguredPurchaseLimitPolicy("", "", 0)
+	require.NoError(t, err)
+	require.Equal(t, purchaseLimitUnitDay, unit)
+	require.Equal(t, purchaseLimitModeCalendar, mode)
+	require.Equal(t, 1, size)
+	unit, mode, size, err = normalizeConfiguredPurchaseLimitPolicy(purchaseLimitUnitWeek, "", 9)
+	require.NoError(t, err)
+	require.Equal(t, purchaseLimitUnitWeek, unit)
+	require.Equal(t, purchaseLimitModeCalendar, mode)
+	require.Equal(t, 1, size)
+
+	unit, mode, size, err = normalizeConfiguredPurchaseLimitPolicy(purchaseLimitUnitWeek, purchaseLimitModeCalendar, 9)
+	require.NoError(t, err)
+	require.Equal(t, purchaseLimitUnitWeek, unit)
+	require.Equal(t, purchaseLimitModeCalendar, mode)
+	require.Equal(t, 1, size)
+
+	_, _, _, err = normalizeConfiguredPurchaseLimitPolicy(purchaseLimitUnitMonth, purchaseLimitModeRolling, 0)
+	require.Equal(t, "INVALID_PURCHASE_LIMIT_POLICY", infraerrors.Reason(err))
+
+	unit, mode, size, err = normalizeConfiguredPurchaseLimitPolicy(purchaseLimitUnitMonth, purchaseLimitModeRolling, 4)
+	require.NoError(t, err)
+	require.Equal(t, purchaseLimitUnitMonth, unit)
+	require.Equal(t, purchaseLimitModeRolling, mode)
+	require.Equal(t, 4, size)
+}
+
+func TestPlanPatchPurchaseLimitPolicyValidation(t *testing.T) {
+	badUnit := "year"
+	require.Equal(t, "INVALID_PURCHASE_LIMIT_POLICY", infraerrors.Reason(validatePlanPatch(UpdatePlanRequest{PurchaseLimitUnit: &badUnit})))
+
+	badMode := "fixed"
+	require.Equal(t, "INVALID_PURCHASE_LIMIT_POLICY", infraerrors.Reason(validatePlanPatch(UpdatePlanRequest{PurchaseLimitMode: &badMode})))
+
+	zero := 0
+	require.Equal(t, "INVALID_PURCHASE_LIMIT_POLICY", infraerrors.Reason(validatePlanPatch(UpdatePlanRequest{PurchaseLimitWindowSize: &zero})))
 }

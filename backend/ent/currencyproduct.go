@@ -41,6 +41,12 @@ type CurrencyProduct struct {
 	DailyPurchaseLimit int `json:"daily_purchase_limit,omitempty"`
 	// TotalPurchaseLimit holds the value of the "total_purchase_limit" field.
 	TotalPurchaseLimit int `json:"total_purchase_limit,omitempty"`
+	// PurchaseLimitUnit holds the value of the "purchase_limit_unit" field.
+	PurchaseLimitUnit string `json:"purchase_limit_unit,omitempty"`
+	// PurchaseLimitMode holds the value of the "purchase_limit_mode" field.
+	PurchaseLimitMode string `json:"purchase_limit_mode,omitempty"`
+	// PurchaseLimitWindowSize holds the value of the "purchase_limit_window_size" field.
+	PurchaseLimitWindowSize int `json:"purchase_limit_window_size,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -57,9 +63,9 @@ func (*CurrencyProduct) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case currencyproduct.FieldPaymentPrice, currencyproduct.FieldCreditedAmount, currencyproduct.FieldCreditedPermanentAmount:
 			values[i] = new(sql.NullFloat64)
-		case currencyproduct.FieldID, currencyproduct.FieldSortOrder, currencyproduct.FieldDailyPurchaseLimit, currencyproduct.FieldTotalPurchaseLimit:
+		case currencyproduct.FieldID, currencyproduct.FieldSortOrder, currencyproduct.FieldDailyPurchaseLimit, currencyproduct.FieldTotalPurchaseLimit, currencyproduct.FieldPurchaseLimitWindowSize:
 			values[i] = new(sql.NullInt64)
-		case currencyproduct.FieldName, currencyproduct.FieldDescription, currencyproduct.FieldPaymentCreditType, currencyproduct.FieldCreditedType:
+		case currencyproduct.FieldName, currencyproduct.FieldDescription, currencyproduct.FieldPaymentCreditType, currencyproduct.FieldCreditedType, currencyproduct.FieldPurchaseLimitUnit, currencyproduct.FieldPurchaseLimitMode:
 			values[i] = new(sql.NullString)
 		case currencyproduct.FieldCreatedAt, currencyproduct.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -156,6 +162,24 @@ func (_m *CurrencyProduct) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TotalPurchaseLimit = int(value.Int64)
 			}
+		case currencyproduct.FieldPurchaseLimitUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field purchase_limit_unit", values[i])
+			} else if value.Valid {
+				_m.PurchaseLimitUnit = value.String
+			}
+		case currencyproduct.FieldPurchaseLimitMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field purchase_limit_mode", values[i])
+			} else if value.Valid {
+				_m.PurchaseLimitMode = value.String
+			}
+		case currencyproduct.FieldPurchaseLimitWindowSize:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field purchase_limit_window_size", values[i])
+			} else if value.Valid {
+				_m.PurchaseLimitWindowSize = int(value.Int64)
+			}
 		case currencyproduct.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -239,6 +263,15 @@ func (_m *CurrencyProduct) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("total_purchase_limit=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TotalPurchaseLimit))
+	builder.WriteString(", ")
+	builder.WriteString("purchase_limit_unit=")
+	builder.WriteString(_m.PurchaseLimitUnit)
+	builder.WriteString(", ")
+	builder.WriteString("purchase_limit_mode=")
+	builder.WriteString(_m.PurchaseLimitMode)
+	builder.WriteString(", ")
+	builder.WriteString("purchase_limit_window_size=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PurchaseLimitWindowSize))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

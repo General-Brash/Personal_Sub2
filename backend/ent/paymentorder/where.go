@@ -175,6 +175,21 @@ func TotalPurchaseLimitSnapshot(v int) predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldEQ(FieldTotalPurchaseLimitSnapshot, v))
 }
 
+// PurchaseLimitUnitSnapshot applies equality check predicate on the "purchase_limit_unit_snapshot" field. It's identical to PurchaseLimitUnitSnapshotEQ.
+func PurchaseLimitUnitSnapshot(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshot applies equality check predicate on the "purchase_limit_mode_snapshot" field. It's identical to PurchaseLimitModeSnapshotEQ.
+func PurchaseLimitModeSnapshot(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitWindowSizeSnapshot applies equality check predicate on the "purchase_limit_window_size_snapshot" field. It's identical to PurchaseLimitWindowSizeSnapshotEQ.
+func PurchaseLimitWindowSizeSnapshot(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldPurchaseLimitWindowSizeSnapshot, v))
+}
+
 // ProviderInstanceID applies equality check predicate on the "provider_instance_id" field. It's identical to ProviderInstanceIDEQ.
 func ProviderInstanceID(v string) predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldEQ(FieldProviderInstanceID, v))
@@ -1623,6 +1638,176 @@ func TotalPurchaseLimitSnapshotLT(v int) predicate.PaymentOrder {
 // TotalPurchaseLimitSnapshotLTE applies the LTE predicate on the "total_purchase_limit_snapshot" field.
 func TotalPurchaseLimitSnapshotLTE(v int) predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldLTE(FieldTotalPurchaseLimitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotEQ applies the EQ predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotEQ(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotNEQ applies the NEQ predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotNEQ(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotIn applies the In predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotIn(vs ...string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldPurchaseLimitUnitSnapshot, vs...))
+}
+
+// PurchaseLimitUnitSnapshotNotIn applies the NotIn predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotNotIn(vs ...string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldPurchaseLimitUnitSnapshot, vs...))
+}
+
+// PurchaseLimitUnitSnapshotGT applies the GT predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotGT(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotGTE applies the GTE predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotGTE(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotLT applies the LT predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotLT(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotLTE applies the LTE predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotLTE(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotContains applies the Contains predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotContains(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldContains(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotHasPrefix applies the HasPrefix predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotHasPrefix(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldHasPrefix(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotHasSuffix applies the HasSuffix predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotHasSuffix(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldHasSuffix(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotEqualFold applies the EqualFold predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotEqualFold(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEqualFold(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitUnitSnapshotContainsFold applies the ContainsFold predicate on the "purchase_limit_unit_snapshot" field.
+func PurchaseLimitUnitSnapshotContainsFold(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldContainsFold(FieldPurchaseLimitUnitSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotEQ applies the EQ predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotEQ(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotNEQ applies the NEQ predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotNEQ(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotIn applies the In predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotIn(vs ...string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldPurchaseLimitModeSnapshot, vs...))
+}
+
+// PurchaseLimitModeSnapshotNotIn applies the NotIn predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotNotIn(vs ...string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldPurchaseLimitModeSnapshot, vs...))
+}
+
+// PurchaseLimitModeSnapshotGT applies the GT predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotGT(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotGTE applies the GTE predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotGTE(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotLT applies the LT predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotLT(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotLTE applies the LTE predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotLTE(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotContains applies the Contains predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotContains(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldContains(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotHasPrefix applies the HasPrefix predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotHasPrefix(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldHasPrefix(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotHasSuffix applies the HasSuffix predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotHasSuffix(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldHasSuffix(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotEqualFold applies the EqualFold predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotEqualFold(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEqualFold(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitModeSnapshotContainsFold applies the ContainsFold predicate on the "purchase_limit_mode_snapshot" field.
+func PurchaseLimitModeSnapshotContainsFold(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldContainsFold(FieldPurchaseLimitModeSnapshot, v))
+}
+
+// PurchaseLimitWindowSizeSnapshotEQ applies the EQ predicate on the "purchase_limit_window_size_snapshot" field.
+func PurchaseLimitWindowSizeSnapshotEQ(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldPurchaseLimitWindowSizeSnapshot, v))
+}
+
+// PurchaseLimitWindowSizeSnapshotNEQ applies the NEQ predicate on the "purchase_limit_window_size_snapshot" field.
+func PurchaseLimitWindowSizeSnapshotNEQ(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldPurchaseLimitWindowSizeSnapshot, v))
+}
+
+// PurchaseLimitWindowSizeSnapshotIn applies the In predicate on the "purchase_limit_window_size_snapshot" field.
+func PurchaseLimitWindowSizeSnapshotIn(vs ...int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldPurchaseLimitWindowSizeSnapshot, vs...))
+}
+
+// PurchaseLimitWindowSizeSnapshotNotIn applies the NotIn predicate on the "purchase_limit_window_size_snapshot" field.
+func PurchaseLimitWindowSizeSnapshotNotIn(vs ...int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldPurchaseLimitWindowSizeSnapshot, vs...))
+}
+
+// PurchaseLimitWindowSizeSnapshotGT applies the GT predicate on the "purchase_limit_window_size_snapshot" field.
+func PurchaseLimitWindowSizeSnapshotGT(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldPurchaseLimitWindowSizeSnapshot, v))
+}
+
+// PurchaseLimitWindowSizeSnapshotGTE applies the GTE predicate on the "purchase_limit_window_size_snapshot" field.
+func PurchaseLimitWindowSizeSnapshotGTE(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldPurchaseLimitWindowSizeSnapshot, v))
+}
+
+// PurchaseLimitWindowSizeSnapshotLT applies the LT predicate on the "purchase_limit_window_size_snapshot" field.
+func PurchaseLimitWindowSizeSnapshotLT(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldPurchaseLimitWindowSizeSnapshot, v))
+}
+
+// PurchaseLimitWindowSizeSnapshotLTE applies the LTE predicate on the "purchase_limit_window_size_snapshot" field.
+func PurchaseLimitWindowSizeSnapshotLTE(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldPurchaseLimitWindowSizeSnapshot, v))
 }
 
 // ProviderInstanceIDEQ applies the EQ predicate on the "provider_instance_id" field.

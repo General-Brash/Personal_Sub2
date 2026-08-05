@@ -1051,6 +1051,21 @@ func (s *UserService) GetByID(ctx context.Context, id int64) (*User, error) {
 	return user, nil
 }
 
+// GetTemporaryCreditAvailable returns the user's currently usable temporary
+// credit without changing the permanent balance returned by GetByID.
+func (s *UserService) GetTemporaryCreditAvailable(ctx context.Context, userID int64) (float64, error) {
+	reader, ok := s.userRepo.(AvailableCreditSnapshotReader)
+	if !ok {
+		return 0, fmt.Errorf("user repository does not support available credit snapshots")
+	}
+
+	snapshot, err := reader.GetAvailableCreditSnapshot(ctx, userID)
+	if err != nil {
+		return 0, fmt.Errorf("get available credit snapshot: %w", err)
+	}
+	return snapshot.TemporaryCredit, nil
+}
+
 func normalizeLoadedUserTokenVersion(user *User) {
 	if user == nil || user.TokenVersionResolved {
 		return

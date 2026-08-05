@@ -47,6 +47,9 @@
         <template #cell-validity_days="{ value, row }">
           <span class="text-sm">{{ value }} {{ t('payment.admin.' + (row.validity_unit || 'days')) }}</span>
         </template>
+        <template #cell-purchase_limit="{ row }">
+          <span class="text-xs text-gray-600 dark:text-gray-300">{{ purchaseLimitSummary(row) }}</span>
+        </template>
         <template #cell-sales_count="{ row }">
           <span class="font-mono text-sm text-gray-700 dark:text-gray-300">{{ row.sales_count ?? 0 }}</span>
         </template>
@@ -107,6 +110,7 @@ import PlanEditDialog from './PlanEditDialog.vue'
 import ShelfSectionTabs from '@/components/admin/payment/ShelfSectionTabs.vue'
 import { currencySymbol } from '@/components/payment/currency'
 import { platformTextClass } from '@/utils/platformColors'
+import { getPurchaseLimitPolicy } from '@/utils/purchaseLimits'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -156,6 +160,20 @@ function benefitTypeLabel(plan: SubscriptionPlan): string {
     : t('payment.admin.benefitSub2')
 }
 
+function purchaseLimitScopeLabel(plan: SubscriptionPlan): string {
+  const policy = getPurchaseLimitPolicy(plan)
+  if (policy.mode === 'rolling') {
+    return t(`payment.purchaseLimit.rolling${policy.unit.charAt(0).toUpperCase()}${policy.unit.slice(1)}`, { count: policy.windowSize })
+  }
+  return t(`payment.purchaseLimit.calendar${policy.unit.charAt(0).toUpperCase()}${policy.unit.slice(1)}`)
+}
+
+function purchaseLimitSummary(plan: SubscriptionPlan): string {
+  const limit = Number(plan.daily_purchase_limit) || 0
+  if (limit <= 0) return t('payment.purchaseLimit.unlimited')
+  return t('payment.admin.purchaseLimitSummary', { scope: purchaseLimitScopeLabel(plan), limit })
+}
+
 
 // ==================== Plans ====================
 
@@ -173,6 +191,7 @@ const planColumns = computed((): Column[] => [
   { key: 'group_id', label: t('payment.admin.group') },
   { key: 'price', label: t('payment.admin.price') },
   { key: 'validity_days', label: t('payment.admin.validity') },
+  { key: 'purchase_limit', label: t('payment.admin.purchaseLimit') },
   { key: 'sales_count', label: t('finance.analytics.sales') },
   { key: 'for_sale', label: t('payment.admin.forSale') },
   { key: 'sort_order', label: t('payment.admin.sortOrder') },

@@ -73,12 +73,22 @@ func (h *PaymentHandler) GetPaymentConfig(c *gin.Context) {
 // GetPlans returns subscription plans available for sale.
 // GET /api/v1/payment/plans
 func (h *PaymentHandler) GetPlans(c *gin.Context) {
-	plans, err := h.configService.ListPlansForSale(c.Request.Context())
+	subject, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	ctx := c.Request.Context()
+	plans, err := h.configService.ListPlansForSale(ctx)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-	salesCounts := h.loadMallSalesCountsBestEffort(c.Request.Context())
+	salesCounts := h.loadMallSalesCountsBestEffort(ctx)
+	usage, err := h.paymentService.GetPurchaseLimitUsage(ctx, subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	// Enrich plans with group platform for frontend color coding
 	type planWithPlatform struct {
 		ID                         int64    `json:"id"`
@@ -104,12 +114,20 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		BenefitType                string   `json:"benefit_type"`
 		PaymentCreditType          string   `json:"payment_credit_type"`
 		DailyTemporaryCreditAmount float64  `json:"daily_temporary_credit_amount"`
+		DailyPurchaseLimit         int      `json:"daily_purchase_limit"`
+		DailyPurchaseRemaining     int      `json:"daily_purchase_remaining"`
+		TotalPurchaseLimit         int      `json:"total_purchase_limit"`
+		TotalPurchaseRemaining     int      `json:"total_purchase_remaining"`
+		PurchaseLimitUnit          string   `json:"purchase_limit_unit"`
+		PurchaseLimitMode          string   `json:"purchase_limit_mode"`
+		PurchaseLimitWindowSize    int      `json:"purchase_limit_window_size"`
 		SalesCount                 int64    `json:"sales_count"`
 	}
 	groupInfo := h.configService.GetGroupInfoMap(c.Request.Context(), plans)
 	result := make([]planWithPlatform, 0, len(plans))
 	for _, p := range plans {
 		gi := groupInfo[p.GroupID]
+		purchaseLimit := service.SubscriptionPlanPurchaseLimitStatusWithPolicy(usage, p.ID, p.DailyPurchaseLimit, p.TotalPurchaseLimit, p.PurchaseLimitUnit, p.PurchaseLimitMode, p.PurchaseLimitWindowSize)
 		result = append(result, planWithPlatform{
 			ID: int64(p.ID), GroupID: p.GroupID,
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
@@ -121,7 +139,11 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 			ProductName: p.ProductName, ForSale: p.ForSale, SortOrder: p.SortOrder,
 			BenefitType: p.BenefitType, PaymentCreditType: p.PaymentCreditType,
 			DailyTemporaryCreditAmount: p.DailyTemporaryCreditAmount,
-			SalesCount:                 mallSalesCount(salesCounts, service.MallProductTypeSubscription, p.ID),
+			DailyPurchaseLimit:         purchaseLimit.DailyLimit, DailyPurchaseRemaining: purchaseLimit.DailyRemaining,
+			TotalPurchaseLimit: purchaseLimit.TotalLimit, TotalPurchaseRemaining: purchaseLimit.TotalRemaining,
+			PurchaseLimitUnit: purchaseLimit.PurchaseLimitUnit, PurchaseLimitMode: purchaseLimit.PurchaseLimitMode,
+			PurchaseLimitWindowSize: purchaseLimit.PurchaseLimitWindowSize,
+			SalesCount:              mallSalesCount(salesCounts, service.MallProductTypeSubscription, p.ID),
 		})
 	}
 	response.Success(c, result)
@@ -229,7 +251,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	planList := make([]checkoutPlan, 0, len(plans))
 	for _, p := range plans {
 		gi := groupInfo[p.GroupID]
-		purchaseLimit := service.SubscriptionPlanPurchaseLimitStatus(usage, p.ID, p.DailyPurchaseLimit, p.TotalPurchaseLimit)
+		purchaseLimit := service.SubscriptionPlanPurchaseLimitStatusWithPolicy(usage, p.ID, p.DailyPurchaseLimit, p.TotalPurchaseLimit, p.PurchaseLimitUnit, p.PurchaseLimitMode, p.PurchaseLimitWindowSize)
 		planList = append(planList, checkoutPlan{
 			ID: int64(p.ID), GroupID: p.GroupID,
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
@@ -249,6 +271,8 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 			SalesCount:                 mallSalesCount(salesCounts, service.MallProductTypeSubscription, p.ID),
 			DailyPurchaseLimit:         purchaseLimit.DailyLimit, DailyPurchaseRemaining: purchaseLimit.DailyRemaining,
 			TotalPurchaseLimit: purchaseLimit.TotalLimit, TotalPurchaseRemaining: purchaseLimit.TotalRemaining,
+			PurchaseLimitUnit: purchaseLimit.PurchaseLimitUnit, PurchaseLimitMode: purchaseLimit.PurchaseLimitMode,
+			PurchaseLimitWindowSize: purchaseLimit.PurchaseLimitWindowSize,
 		})
 	}
 	currencyProducts, err := h.configService.ListCurrencyProductsForSale(ctx)
@@ -258,7 +282,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	}
 	currencyProductList := make([]checkoutCurrencyProduct, 0, len(currencyProducts))
 	for _, product := range currencyProducts {
-		purchaseLimit := service.CurrencyProductPurchaseLimitStatus(usage, product.ID, product.DailyPurchaseLimit, product.TotalPurchaseLimit)
+		purchaseLimit := service.CurrencyProductPurchaseLimitStatusWithPolicy(usage, product.ID, product.DailyPurchaseLimit, product.TotalPurchaseLimit, product.PurchaseLimitUnit, product.PurchaseLimitMode, product.PurchaseLimitWindowSize)
 		currencyProductList = append(currencyProductList, checkoutCurrencyProduct{
 			ID: product.ID, Name: product.Name, Description: product.Description,
 			PaymentPrice: product.PaymentPrice, CreditedPermanentAmount: product.CreditedPermanentAmount,
@@ -267,7 +291,9 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 			SalesCount:         mallSalesCount(salesCounts, service.MallProductTypeCurrency, product.ID),
 			DailyPurchaseLimit: purchaseLimit.DailyLimit, DailyPurchaseRemaining: purchaseLimit.DailyRemaining,
 			TotalPurchaseLimit: purchaseLimit.TotalLimit, TotalPurchaseRemaining: purchaseLimit.TotalRemaining,
-			CreatedAt: product.CreatedAt, UpdatedAt: product.UpdatedAt,
+			PurchaseLimitUnit: purchaseLimit.PurchaseLimitUnit, PurchaseLimitMode: purchaseLimit.PurchaseLimitMode,
+			PurchaseLimitWindowSize: purchaseLimit.PurchaseLimitWindowSize,
+			CreatedAt:               product.CreatedAt, UpdatedAt: product.UpdatedAt,
 		})
 	}
 
@@ -347,6 +373,9 @@ type checkoutPlan struct {
 	BenefitType                string   `json:"benefit_type"`
 	PaymentCreditType          string   `json:"payment_credit_type"`
 	DailyTemporaryCreditAmount float64  `json:"daily_temporary_credit_amount"`
+	PurchaseLimitUnit          string   `json:"purchase_limit_unit"`
+	PurchaseLimitMode          string   `json:"purchase_limit_mode"`
+	PurchaseLimitWindowSize    int      `json:"purchase_limit_window_size"`
 	SalesCount                 int64    `json:"sales_count"`
 }
 
@@ -367,6 +396,9 @@ type checkoutCurrencyProduct struct {
 	DailyPurchaseRemaining  int       `json:"daily_purchase_remaining"`
 	TotalPurchaseLimit      int       `json:"total_purchase_limit"`
 	TotalPurchaseRemaining  int       `json:"total_purchase_remaining"`
+	PurchaseLimitUnit       string    `json:"purchase_limit_unit"`
+	PurchaseLimitMode       string    `json:"purchase_limit_mode"`
+	PurchaseLimitWindowSize int       `json:"purchase_limit_window_size"`
 	CreatedAt               time.Time `json:"created_at"`
 	UpdatedAt               time.Time `json:"updated_at"`
 }

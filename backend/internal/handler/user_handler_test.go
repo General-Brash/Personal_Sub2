@@ -20,9 +20,11 @@ import (
 )
 
 type userHandlerRepoStub struct {
-	user       *service.User
-	identities []service.UserAuthIdentityRecord
-	unbound    []string
+	user                    *service.User
+	identities              []service.UserAuthIdentityRecord
+	availableCreditSnapshot service.AvailableCreditSnapshot
+	availableCreditErr      error
+	unbound                 []string
 }
 
 func (s *userHandlerRepoStub) Create(context.Context, *service.User) error { return nil }
@@ -32,6 +34,9 @@ func (s *userHandlerRepoStub) CreateWithEmailAliasGuard(context.Context, *servic
 func (s *userHandlerRepoStub) GetByID(context.Context, int64) (*service.User, error) {
 	cloned := *s.user
 	return &cloned, nil
+}
+func (s *userHandlerRepoStub) GetAvailableCreditSnapshot(context.Context, int64) (service.AvailableCreditSnapshot, error) {
+	return s.availableCreditSnapshot, s.availableCreditErr
 }
 func (s *userHandlerRepoStub) GetByEmail(context.Context, string) (*service.User, error) {
 	cloned := *s.user

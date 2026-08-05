@@ -139,6 +139,21 @@ func TotalPurchaseLimit(v int) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldTotalPurchaseLimit, v))
 }
 
+// PurchaseLimitUnit applies equality check predicate on the "purchase_limit_unit" field. It's identical to PurchaseLimitUnitEQ.
+func PurchaseLimitUnit(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitMode applies equality check predicate on the "purchase_limit_mode" field. It's identical to PurchaseLimitModeEQ.
+func PurchaseLimitMode(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitWindowSize applies equality check predicate on the "purchase_limit_window_size" field. It's identical to PurchaseLimitWindowSizeEQ.
+func PurchaseLimitWindowSize(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPurchaseLimitWindowSize, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldCreatedAt, v))
@@ -1007,6 +1022,176 @@ func TotalPurchaseLimitLT(v int) predicate.SubscriptionPlan {
 // TotalPurchaseLimitLTE applies the LTE predicate on the "total_purchase_limit" field.
 func TotalPurchaseLimitLTE(v int) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldLTE(FieldTotalPurchaseLimit, v))
+}
+
+// PurchaseLimitUnitEQ applies the EQ predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitNEQ applies the NEQ predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitNEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitIn applies the In predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldPurchaseLimitUnit, vs...))
+}
+
+// PurchaseLimitUnitNotIn applies the NotIn predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitNotIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldPurchaseLimitUnit, vs...))
+}
+
+// PurchaseLimitUnitGT applies the GT predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitGT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitGTE applies the GTE predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitGTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitLT applies the LT predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitLT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitLTE applies the LTE predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitLTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitContains applies the Contains predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitContains(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContains(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitHasPrefix applies the HasPrefix predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitHasPrefix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasPrefix(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitHasSuffix applies the HasSuffix predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitHasSuffix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasSuffix(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitEqualFold applies the EqualFold predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitEqualFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEqualFold(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitUnitContainsFold applies the ContainsFold predicate on the "purchase_limit_unit" field.
+func PurchaseLimitUnitContainsFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContainsFold(FieldPurchaseLimitUnit, v))
+}
+
+// PurchaseLimitModeEQ applies the EQ predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeNEQ applies the NEQ predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeNEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeIn applies the In predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldPurchaseLimitMode, vs...))
+}
+
+// PurchaseLimitModeNotIn applies the NotIn predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeNotIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldPurchaseLimitMode, vs...))
+}
+
+// PurchaseLimitModeGT applies the GT predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeGT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeGTE applies the GTE predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeGTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeLT applies the LT predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeLT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeLTE applies the LTE predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeLTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeContains applies the Contains predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeContains(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContains(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeHasPrefix applies the HasPrefix predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeHasPrefix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasPrefix(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeHasSuffix applies the HasSuffix predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeHasSuffix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasSuffix(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeEqualFold applies the EqualFold predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeEqualFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEqualFold(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitModeContainsFold applies the ContainsFold predicate on the "purchase_limit_mode" field.
+func PurchaseLimitModeContainsFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContainsFold(FieldPurchaseLimitMode, v))
+}
+
+// PurchaseLimitWindowSizeEQ applies the EQ predicate on the "purchase_limit_window_size" field.
+func PurchaseLimitWindowSizeEQ(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPurchaseLimitWindowSize, v))
+}
+
+// PurchaseLimitWindowSizeNEQ applies the NEQ predicate on the "purchase_limit_window_size" field.
+func PurchaseLimitWindowSizeNEQ(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldPurchaseLimitWindowSize, v))
+}
+
+// PurchaseLimitWindowSizeIn applies the In predicate on the "purchase_limit_window_size" field.
+func PurchaseLimitWindowSizeIn(vs ...int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldPurchaseLimitWindowSize, vs...))
+}
+
+// PurchaseLimitWindowSizeNotIn applies the NotIn predicate on the "purchase_limit_window_size" field.
+func PurchaseLimitWindowSizeNotIn(vs ...int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldPurchaseLimitWindowSize, vs...))
+}
+
+// PurchaseLimitWindowSizeGT applies the GT predicate on the "purchase_limit_window_size" field.
+func PurchaseLimitWindowSizeGT(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldPurchaseLimitWindowSize, v))
+}
+
+// PurchaseLimitWindowSizeGTE applies the GTE predicate on the "purchase_limit_window_size" field.
+func PurchaseLimitWindowSizeGTE(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldPurchaseLimitWindowSize, v))
+}
+
+// PurchaseLimitWindowSizeLT applies the LT predicate on the "purchase_limit_window_size" field.
+func PurchaseLimitWindowSizeLT(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldPurchaseLimitWindowSize, v))
+}
+
+// PurchaseLimitWindowSizeLTE applies the LTE predicate on the "purchase_limit_window_size" field.
+func PurchaseLimitWindowSizeLTE(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldPurchaseLimitWindowSize, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

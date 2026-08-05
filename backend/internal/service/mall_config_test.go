@@ -33,6 +33,9 @@ func TestCreateDailyTemporaryCreditPlanAndLegacyDefaults(t *testing.T) {
 	require.Equal(t, "sub2", legacy.BenefitType)
 	require.Equal(t, "permanent", legacy.PaymentCreditType)
 	require.Zero(t, legacy.DailyTemporaryCreditAmount)
+	require.Equal(t, purchaseLimitUnitDay, legacy.PurchaseLimitUnit)
+	require.Equal(t, purchaseLimitModeCalendar, legacy.PurchaseLimitMode)
+	require.Equal(t, 1, legacy.PurchaseLimitWindowSize)
 }
 
 func TestDailyTemporaryCreditPlanRejectsGroupAndMissingDailyAmount(t *testing.T) {

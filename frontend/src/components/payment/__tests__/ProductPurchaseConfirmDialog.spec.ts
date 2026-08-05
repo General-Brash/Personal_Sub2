@@ -54,12 +54,24 @@ describe('ProductPurchaseConfirmDialog', () => {
     expect(wrapper.text()).toContain('WeChat Pay')
     expect(wrapper.get('[data-test="purchase-confirm-spend"]').text()).toBe('¥19.90')
     expect(wrapper.get('[data-test="purchase-confirm-receive"]').text()).toBe('$25.00')
-    expect(wrapper.get('[data-test="purchase-confirm-remaining-daily"]').text()).toBe('1')
+    expect(wrapper.get('[data-test="purchase-confirm-remaining-periodic"]').text()).toBe('1')
     expect(wrapper.get('[data-test="purchase-confirm-remaining-total"]').text()).toBe('3')
     expect(wrapper.emitted('confirm')).toBeUndefined()
 
     await wrapper.get('[data-test="purchase-confirm-submit"]').trigger('click')
     expect(wrapper.emitted('confirm')).toHaveLength(1)
+  })
+
+  it('uses the configured natural-month or rolling-window label instead of a daily label', () => {
+    const naturalMonth = mountDialog({
+      limits: { daily_purchase_limit: 2, daily_purchase_remaining: 1, purchase_limit_unit: 'month', purchase_limit_mode: 'calendar' },
+    })
+    expect(naturalMonth.text()).toContain('payment.purchaseLimit.calendarMonth')
+
+    const rollingWeeks = mountDialog({
+      limits: { daily_purchase_limit: 2, daily_purchase_remaining: 1, purchase_limit_unit: 'week', purchase_limit_mode: 'rolling', purchase_limit_window_size: 2 },
+    })
+    expect(rollingWeeks.text()).toContain('payment.purchaseLimit.rollingWeek')
   })
 
   it('disables confirmation when a finite limit is exhausted', () => {

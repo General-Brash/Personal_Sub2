@@ -508,6 +508,55 @@ func (_u *PaymentOrderUpdate) AddTotalPurchaseLimitSnapshot(v int) *PaymentOrder
 	return _u
 }
 
+// SetPurchaseLimitUnitSnapshot sets the "purchase_limit_unit_snapshot" field.
+func (_u *PaymentOrderUpdate) SetPurchaseLimitUnitSnapshot(v string) *PaymentOrderUpdate {
+	_u.mutation.SetPurchaseLimitUnitSnapshot(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitUnitSnapshot sets the "purchase_limit_unit_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillablePurchaseLimitUnitSnapshot(v *string) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetPurchaseLimitUnitSnapshot(*v)
+	}
+	return _u
+}
+
+// SetPurchaseLimitModeSnapshot sets the "purchase_limit_mode_snapshot" field.
+func (_u *PaymentOrderUpdate) SetPurchaseLimitModeSnapshot(v string) *PaymentOrderUpdate {
+	_u.mutation.SetPurchaseLimitModeSnapshot(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitModeSnapshot sets the "purchase_limit_mode_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillablePurchaseLimitModeSnapshot(v *string) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetPurchaseLimitModeSnapshot(*v)
+	}
+	return _u
+}
+
+// SetPurchaseLimitWindowSizeSnapshot sets the "purchase_limit_window_size_snapshot" field.
+func (_u *PaymentOrderUpdate) SetPurchaseLimitWindowSizeSnapshot(v int) *PaymentOrderUpdate {
+	_u.mutation.ResetPurchaseLimitWindowSizeSnapshot()
+	_u.mutation.SetPurchaseLimitWindowSizeSnapshot(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitWindowSizeSnapshot sets the "purchase_limit_window_size_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillablePurchaseLimitWindowSizeSnapshot(v *int) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetPurchaseLimitWindowSizeSnapshot(*v)
+	}
+	return _u
+}
+
+// AddPurchaseLimitWindowSizeSnapshot adds value to the "purchase_limit_window_size_snapshot" field.
+func (_u *PaymentOrderUpdate) AddPurchaseLimitWindowSizeSnapshot(v int) *PaymentOrderUpdate {
+	_u.mutation.AddPurchaseLimitWindowSizeSnapshot(v)
+	return _u
+}
+
 // SetProviderInstanceID sets the "provider_instance_id" field.
 func (_u *PaymentOrderUpdate) SetProviderInstanceID(v string) *PaymentOrderUpdate {
 	_u.mutation.SetProviderInstanceID(v)
@@ -961,6 +1010,21 @@ func (_u *PaymentOrderUpdate) check() error {
 			return &ValidationError{Name: "total_purchase_limit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.total_purchase_limit_snapshot": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PurchaseLimitUnitSnapshot(); ok {
+		if err := paymentorder.PurchaseLimitUnitSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_unit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.purchase_limit_unit_snapshot": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PurchaseLimitModeSnapshot(); ok {
+		if err := paymentorder.PurchaseLimitModeSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_mode_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.purchase_limit_mode_snapshot": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PurchaseLimitWindowSizeSnapshot(); ok {
+		if err := paymentorder.PurchaseLimitWindowSizeSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_window_size_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.purchase_limit_window_size_snapshot": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ProviderInstanceID(); ok {
 		if err := paymentorder.ProviderInstanceIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_instance_id", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_instance_id": %w`, err)}
@@ -1143,6 +1207,18 @@ func (_u *PaymentOrderUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.AddedTotalPurchaseLimitSnapshot(); ok {
 		_spec.AddField(paymentorder.FieldTotalPurchaseLimitSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitUnitSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldPurchaseLimitUnitSnapshot, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitModeSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldPurchaseLimitModeSnapshot, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitWindowSizeSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldPurchaseLimitWindowSizeSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPurchaseLimitWindowSizeSnapshot(); ok {
+		_spec.AddField(paymentorder.FieldPurchaseLimitWindowSizeSnapshot, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.ProviderInstanceID(); ok {
 		_spec.SetField(paymentorder.FieldProviderInstanceID, field.TypeString, value)
@@ -1774,6 +1850,55 @@ func (_u *PaymentOrderUpdateOne) AddTotalPurchaseLimitSnapshot(v int) *PaymentOr
 	return _u
 }
 
+// SetPurchaseLimitUnitSnapshot sets the "purchase_limit_unit_snapshot" field.
+func (_u *PaymentOrderUpdateOne) SetPurchaseLimitUnitSnapshot(v string) *PaymentOrderUpdateOne {
+	_u.mutation.SetPurchaseLimitUnitSnapshot(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitUnitSnapshot sets the "purchase_limit_unit_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillablePurchaseLimitUnitSnapshot(v *string) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetPurchaseLimitUnitSnapshot(*v)
+	}
+	return _u
+}
+
+// SetPurchaseLimitModeSnapshot sets the "purchase_limit_mode_snapshot" field.
+func (_u *PaymentOrderUpdateOne) SetPurchaseLimitModeSnapshot(v string) *PaymentOrderUpdateOne {
+	_u.mutation.SetPurchaseLimitModeSnapshot(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitModeSnapshot sets the "purchase_limit_mode_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillablePurchaseLimitModeSnapshot(v *string) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetPurchaseLimitModeSnapshot(*v)
+	}
+	return _u
+}
+
+// SetPurchaseLimitWindowSizeSnapshot sets the "purchase_limit_window_size_snapshot" field.
+func (_u *PaymentOrderUpdateOne) SetPurchaseLimitWindowSizeSnapshot(v int) *PaymentOrderUpdateOne {
+	_u.mutation.ResetPurchaseLimitWindowSizeSnapshot()
+	_u.mutation.SetPurchaseLimitWindowSizeSnapshot(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitWindowSizeSnapshot sets the "purchase_limit_window_size_snapshot" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillablePurchaseLimitWindowSizeSnapshot(v *int) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetPurchaseLimitWindowSizeSnapshot(*v)
+	}
+	return _u
+}
+
+// AddPurchaseLimitWindowSizeSnapshot adds value to the "purchase_limit_window_size_snapshot" field.
+func (_u *PaymentOrderUpdateOne) AddPurchaseLimitWindowSizeSnapshot(v int) *PaymentOrderUpdateOne {
+	_u.mutation.AddPurchaseLimitWindowSizeSnapshot(v)
+	return _u
+}
+
 // SetProviderInstanceID sets the "provider_instance_id" field.
 func (_u *PaymentOrderUpdateOne) SetProviderInstanceID(v string) *PaymentOrderUpdateOne {
 	_u.mutation.SetProviderInstanceID(v)
@@ -2240,6 +2365,21 @@ func (_u *PaymentOrderUpdateOne) check() error {
 			return &ValidationError{Name: "total_purchase_limit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.total_purchase_limit_snapshot": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PurchaseLimitUnitSnapshot(); ok {
+		if err := paymentorder.PurchaseLimitUnitSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_unit_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.purchase_limit_unit_snapshot": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PurchaseLimitModeSnapshot(); ok {
+		if err := paymentorder.PurchaseLimitModeSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_mode_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.purchase_limit_mode_snapshot": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PurchaseLimitWindowSizeSnapshot(); ok {
+		if err := paymentorder.PurchaseLimitWindowSizeSnapshotValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_window_size_snapshot", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.purchase_limit_window_size_snapshot": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ProviderInstanceID(); ok {
 		if err := paymentorder.ProviderInstanceIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_instance_id", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_instance_id": %w`, err)}
@@ -2439,6 +2579,18 @@ func (_u *PaymentOrderUpdateOne) sqlSave(ctx context.Context) (_node *PaymentOrd
 	}
 	if value, ok := _u.mutation.AddedTotalPurchaseLimitSnapshot(); ok {
 		_spec.AddField(paymentorder.FieldTotalPurchaseLimitSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitUnitSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldPurchaseLimitUnitSnapshot, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitModeSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldPurchaseLimitModeSnapshot, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitWindowSizeSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldPurchaseLimitWindowSizeSnapshot, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPurchaseLimitWindowSizeSnapshot(); ok {
+		_spec.AddField(paymentorder.FieldPurchaseLimitWindowSizeSnapshot, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.ProviderInstanceID(); ok {
 		_spec.SetField(paymentorder.FieldProviderInstanceID, field.TypeString, value)

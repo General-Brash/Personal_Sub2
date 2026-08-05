@@ -67,6 +67,12 @@ type PaymentOrder struct {
 	DailyPurchaseLimitSnapshot int `json:"daily_purchase_limit_snapshot,omitempty"`
 	// TotalPurchaseLimitSnapshot holds the value of the "total_purchase_limit_snapshot" field.
 	TotalPurchaseLimitSnapshot int `json:"total_purchase_limit_snapshot,omitempty"`
+	// PurchaseLimitUnitSnapshot holds the value of the "purchase_limit_unit_snapshot" field.
+	PurchaseLimitUnitSnapshot string `json:"purchase_limit_unit_snapshot,omitempty"`
+	// PurchaseLimitModeSnapshot holds the value of the "purchase_limit_mode_snapshot" field.
+	PurchaseLimitModeSnapshot string `json:"purchase_limit_mode_snapshot,omitempty"`
+	// PurchaseLimitWindowSizeSnapshot holds the value of the "purchase_limit_window_size_snapshot" field.
+	PurchaseLimitWindowSizeSnapshot int `json:"purchase_limit_window_size_snapshot,omitempty"`
 	// ProviderInstanceID holds the value of the "provider_instance_id" field.
 	ProviderInstanceID *string `json:"provider_instance_id,omitempty"`
 	// ProviderKey holds the value of the "provider_key" field.
@@ -146,9 +152,9 @@ func (*PaymentOrder) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case paymentorder.FieldAmount, paymentorder.FieldPayAmount, paymentorder.FieldFeeRate, paymentorder.FieldCurrencyProductPaymentPrice, paymentorder.FieldCurrencyProductCreditedAmount, paymentorder.FieldRefundAmount:
 			values[i] = new(sql.NullFloat64)
-		case paymentorder.FieldID, paymentorder.FieldUserID, paymentorder.FieldPlanID, paymentorder.FieldSubscriptionGroupID, paymentorder.FieldSubscriptionDays, paymentorder.FieldCurrencyProductID, paymentorder.FieldDailyPurchaseLimitSnapshot, paymentorder.FieldTotalPurchaseLimitSnapshot:
+		case paymentorder.FieldID, paymentorder.FieldUserID, paymentorder.FieldPlanID, paymentorder.FieldSubscriptionGroupID, paymentorder.FieldSubscriptionDays, paymentorder.FieldCurrencyProductID, paymentorder.FieldDailyPurchaseLimitSnapshot, paymentorder.FieldTotalPurchaseLimitSnapshot, paymentorder.FieldPurchaseLimitWindowSizeSnapshot:
 			values[i] = new(sql.NullInt64)
-		case paymentorder.FieldUserEmail, paymentorder.FieldUserName, paymentorder.FieldUserNotes, paymentorder.FieldRechargeCode, paymentorder.FieldOutTradeNo, paymentorder.FieldPaymentType, paymentorder.FieldPaymentTradeNo, paymentorder.FieldPayURL, paymentorder.FieldQrCode, paymentorder.FieldQrCodeImg, paymentorder.FieldOrderType, paymentorder.FieldCurrencyProductName, paymentorder.FieldProviderInstanceID, paymentorder.FieldProviderKey, paymentorder.FieldStatus, paymentorder.FieldRefundReason, paymentorder.FieldRefundRequestReason, paymentorder.FieldRefundRequestedBy, paymentorder.FieldFailedReason, paymentorder.FieldClientIP, paymentorder.FieldSrcHost, paymentorder.FieldSrcURL:
+		case paymentorder.FieldUserEmail, paymentorder.FieldUserName, paymentorder.FieldUserNotes, paymentorder.FieldRechargeCode, paymentorder.FieldOutTradeNo, paymentorder.FieldPaymentType, paymentorder.FieldPaymentTradeNo, paymentorder.FieldPayURL, paymentorder.FieldQrCode, paymentorder.FieldQrCodeImg, paymentorder.FieldOrderType, paymentorder.FieldCurrencyProductName, paymentorder.FieldPurchaseLimitUnitSnapshot, paymentorder.FieldPurchaseLimitModeSnapshot, paymentorder.FieldProviderInstanceID, paymentorder.FieldProviderKey, paymentorder.FieldStatus, paymentorder.FieldRefundReason, paymentorder.FieldRefundRequestReason, paymentorder.FieldRefundRequestedBy, paymentorder.FieldFailedReason, paymentorder.FieldClientIP, paymentorder.FieldSrcHost, paymentorder.FieldSrcURL:
 			values[i] = new(sql.NullString)
 		case paymentorder.FieldRefundAt, paymentorder.FieldRefundRequestedAt, paymentorder.FieldExpiresAt, paymentorder.FieldPaidAt, paymentorder.FieldCompletedAt, paymentorder.FieldFailedAt, paymentorder.FieldCreatedAt, paymentorder.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -327,6 +333,24 @@ func (_m *PaymentOrder) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field total_purchase_limit_snapshot", values[i])
 			} else if value.Valid {
 				_m.TotalPurchaseLimitSnapshot = int(value.Int64)
+			}
+		case paymentorder.FieldPurchaseLimitUnitSnapshot:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field purchase_limit_unit_snapshot", values[i])
+			} else if value.Valid {
+				_m.PurchaseLimitUnitSnapshot = value.String
+			}
+		case paymentorder.FieldPurchaseLimitModeSnapshot:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field purchase_limit_mode_snapshot", values[i])
+			} else if value.Valid {
+				_m.PurchaseLimitModeSnapshot = value.String
+			}
+		case paymentorder.FieldPurchaseLimitWindowSizeSnapshot:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field purchase_limit_window_size_snapshot", values[i])
+			} else if value.Valid {
+				_m.PurchaseLimitWindowSizeSnapshot = int(value.Int64)
 			}
 		case paymentorder.FieldProviderInstanceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -602,6 +626,15 @@ func (_m *PaymentOrder) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("total_purchase_limit_snapshot=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TotalPurchaseLimitSnapshot))
+	builder.WriteString(", ")
+	builder.WriteString("purchase_limit_unit_snapshot=")
+	builder.WriteString(_m.PurchaseLimitUnitSnapshot)
+	builder.WriteString(", ")
+	builder.WriteString("purchase_limit_mode_snapshot=")
+	builder.WriteString(_m.PurchaseLimitModeSnapshot)
+	builder.WriteString(", ")
+	builder.WriteString("purchase_limit_window_size_snapshot=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PurchaseLimitWindowSizeSnapshot))
 	builder.WriteString(", ")
 	if v := _m.ProviderInstanceID; v != nil {
 		builder.WriteString("provider_instance_id=")

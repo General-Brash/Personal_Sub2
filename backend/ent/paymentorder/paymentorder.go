@@ -62,6 +62,12 @@ const (
 	FieldDailyPurchaseLimitSnapshot = "daily_purchase_limit_snapshot"
 	// FieldTotalPurchaseLimitSnapshot holds the string denoting the total_purchase_limit_snapshot field in the database.
 	FieldTotalPurchaseLimitSnapshot = "total_purchase_limit_snapshot"
+	// FieldPurchaseLimitUnitSnapshot holds the string denoting the purchase_limit_unit_snapshot field in the database.
+	FieldPurchaseLimitUnitSnapshot = "purchase_limit_unit_snapshot"
+	// FieldPurchaseLimitModeSnapshot holds the string denoting the purchase_limit_mode_snapshot field in the database.
+	FieldPurchaseLimitModeSnapshot = "purchase_limit_mode_snapshot"
+	// FieldPurchaseLimitWindowSizeSnapshot holds the string denoting the purchase_limit_window_size_snapshot field in the database.
+	FieldPurchaseLimitWindowSizeSnapshot = "purchase_limit_window_size_snapshot"
 	// FieldProviderInstanceID holds the string denoting the provider_instance_id field in the database.
 	FieldProviderInstanceID = "provider_instance_id"
 	// FieldProviderKey holds the string denoting the provider_key field in the database.
@@ -144,6 +150,9 @@ var Columns = []string{
 	FieldCurrencyProductCreditedAmount,
 	FieldDailyPurchaseLimitSnapshot,
 	FieldTotalPurchaseLimitSnapshot,
+	FieldPurchaseLimitUnitSnapshot,
+	FieldPurchaseLimitModeSnapshot,
+	FieldPurchaseLimitWindowSizeSnapshot,
 	FieldProviderInstanceID,
 	FieldProviderKey,
 	FieldProviderSnapshot,
@@ -208,6 +217,18 @@ var (
 	DefaultTotalPurchaseLimitSnapshot int
 	// TotalPurchaseLimitSnapshotValidator is a validator for the "total_purchase_limit_snapshot" field. It is called by the builders before save.
 	TotalPurchaseLimitSnapshotValidator func(int) error
+	// DefaultPurchaseLimitUnitSnapshot holds the default value on creation for the "purchase_limit_unit_snapshot" field.
+	DefaultPurchaseLimitUnitSnapshot string
+	// PurchaseLimitUnitSnapshotValidator is a validator for the "purchase_limit_unit_snapshot" field. It is called by the builders before save.
+	PurchaseLimitUnitSnapshotValidator func(string) error
+	// DefaultPurchaseLimitModeSnapshot holds the default value on creation for the "purchase_limit_mode_snapshot" field.
+	DefaultPurchaseLimitModeSnapshot string
+	// PurchaseLimitModeSnapshotValidator is a validator for the "purchase_limit_mode_snapshot" field. It is called by the builders before save.
+	PurchaseLimitModeSnapshotValidator func(string) error
+	// DefaultPurchaseLimitWindowSizeSnapshot holds the default value on creation for the "purchase_limit_window_size_snapshot" field.
+	DefaultPurchaseLimitWindowSizeSnapshot int
+	// PurchaseLimitWindowSizeSnapshotValidator is a validator for the "purchase_limit_window_size_snapshot" field. It is called by the builders before save.
+	PurchaseLimitWindowSizeSnapshotValidator func(int) error
 	// ProviderInstanceIDValidator is a validator for the "provider_instance_id" field. It is called by the builders before save.
 	ProviderInstanceIDValidator func(string) error
 	// ProviderKeyValidator is a validator for the "provider_key" field. It is called by the builders before save.
@@ -360,6 +381,21 @@ func ByDailyPurchaseLimitSnapshot(opts ...sql.OrderTermOption) OrderOption {
 // ByTotalPurchaseLimitSnapshot orders the results by the total_purchase_limit_snapshot field.
 func ByTotalPurchaseLimitSnapshot(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotalPurchaseLimitSnapshot, opts...).ToFunc()
+}
+
+// ByPurchaseLimitUnitSnapshot orders the results by the purchase_limit_unit_snapshot field.
+func ByPurchaseLimitUnitSnapshot(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPurchaseLimitUnitSnapshot, opts...).ToFunc()
+}
+
+// ByPurchaseLimitModeSnapshot orders the results by the purchase_limit_mode_snapshot field.
+func ByPurchaseLimitModeSnapshot(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPurchaseLimitModeSnapshot, opts...).ToFunc()
+}
+
+// ByPurchaseLimitWindowSizeSnapshot orders the results by the purchase_limit_window_size_snapshot field.
+func ByPurchaseLimitWindowSizeSnapshot(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPurchaseLimitWindowSizeSnapshot, opts...).ToFunc()
 }
 
 // ByProviderInstanceID orders the results by the provider_instance_id field.

@@ -129,6 +129,15 @@ func validatePlanPatch(req UpdatePlanRequest) error {
 	if err := validatePurchaseLimitPatch(req.DailyPurchaseLimit, req.TotalPurchaseLimit); err != nil {
 		return err
 	}
+	if req.PurchaseLimitUnit != nil && (*req.PurchaseLimitUnit != purchaseLimitUnitDay && *req.PurchaseLimitUnit != purchaseLimitUnitWeek && *req.PurchaseLimitUnit != purchaseLimitUnitMonth) {
+		return invalidPurchaseLimitPolicyError("purchase_limit_unit")
+	}
+	if req.PurchaseLimitMode != nil && (*req.PurchaseLimitMode != purchaseLimitModeCalendar && *req.PurchaseLimitMode != purchaseLimitModeRolling) {
+		return invalidPurchaseLimitPolicyError("purchase_limit_mode")
+	}
+	if req.PurchaseLimitWindowSize != nil && *req.PurchaseLimitWindowSize <= 0 {
+		return invalidPurchaseLimitPolicyError("purchase_limit_window_size")
+	}
 	return nil
 }
 
@@ -205,13 +214,18 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 	if err := validatePurchaseLimits(req.DailyPurchaseLimit, req.TotalPurchaseLimit); err != nil {
 		return nil, err
 	}
+	unit, mode, windowSize, err := normalizeConfiguredPurchaseLimitPolicy(req.PurchaseLimitUnit, req.PurchaseLimitMode, req.PurchaseLimitWindowSize)
+	if err != nil {
+		return nil, err
+	}
 	b := s.entClient.SubscriptionPlan.Create().
 		SetGroupID(req.GroupID).SetName(req.Name).SetDescription(req.Description).
 		SetPrice(price).SetCurrency(currency).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
 		SetBenefitType(string(benefit)).SetPaymentCreditType(string(paymentType)).SetDailyTemporaryCreditAmount(dailyAmount).
 		SetFeatures(req.Features).SetProductName(req.ProductName).
 		SetForSale(req.ForSale).SetSortOrder(req.SortOrder).
-		SetDailyPurchaseLimit(req.DailyPurchaseLimit).SetTotalPurchaseLimit(req.TotalPurchaseLimit)
+		SetDailyPurchaseLimit(req.DailyPurchaseLimit).SetTotalPurchaseLimit(req.TotalPurchaseLimit).
+		SetPurchaseLimitUnit(unit).SetPurchaseLimitMode(mode).SetPurchaseLimitWindowSize(windowSize)
 	if req.OriginalPrice != nil {
 		b.SetOriginalPrice(*req.OriginalPrice)
 	}
@@ -264,6 +278,10 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	if err != nil {
 		return nil, err
 	}
+	unit, mode, windowSize, err := resolvePurchaseLimitPolicy(current.PurchaseLimitUnit, current.PurchaseLimitMode, current.PurchaseLimitWindowSize, req.PurchaseLimitUnit, req.PurchaseLimitMode, req.PurchaseLimitWindowSize)
+	if err != nil {
+		return nil, err
+	}
 	u := s.entClient.SubscriptionPlan.UpdateOneID(id)
 	if req.GroupID != nil {
 		u.SetGroupID(*req.GroupID)
@@ -310,6 +328,9 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	}
 	if req.TotalPurchaseLimit != nil {
 		u.SetTotalPurchaseLimit(*req.TotalPurchaseLimit)
+	}
+	if req.PurchaseLimitUnit != nil || req.PurchaseLimitMode != nil || req.PurchaseLimitWindowSize != nil {
+		u.SetPurchaseLimitUnit(unit).SetPurchaseLimitMode(mode).SetPurchaseLimitWindowSize(windowSize)
 	}
 	if req.BenefitType != nil {
 		u.SetBenefitType(string(benefit))

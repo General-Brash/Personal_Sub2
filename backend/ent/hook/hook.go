@@ -369,6 +369,18 @@ func (f PaymentPurchaseCounterFunc) Mutate(ctx context.Context, m ent.Mutation) 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PaymentPurchaseCounterMutation", m)
 }
 
+// The PaymentPurchaseLimitEventFunc type is an adapter to allow the use of ordinary
+// function as PaymentPurchaseLimitEvent mutator.
+type PaymentPurchaseLimitEventFunc func(context.Context, *ent.PaymentPurchaseLimitEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PaymentPurchaseLimitEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PaymentPurchaseLimitEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PaymentPurchaseLimitEventMutation", m)
+}
+
 // The PaymentPurchaseReservationFunc type is an adapter to allow the use of ordinary
 // function as PaymentPurchaseReservation mutator.
 type PaymentPurchaseReservationFunc func(context.Context, *ent.PaymentPurchaseReservationMutation) (ent.Value, error)

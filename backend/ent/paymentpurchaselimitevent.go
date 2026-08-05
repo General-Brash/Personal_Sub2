@@ -9,28 +9,32 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
+	"github.com/Wei-Shaw/sub2api/ent/paymentpurchaselimitevent"
 )
 
-// PaymentPurchaseReservation is the model entity for the PaymentPurchaseReservation schema.
-type PaymentPurchaseReservation struct {
+// PaymentPurchaseLimitEvent is the model entity for the PaymentPurchaseLimitEvent schema.
+type PaymentPurchaseLimitEvent struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
-	// OrderID holds the value of the "order_id" field.
-	OrderID int64 `json:"order_id,omitempty"`
 	// UserID holds the value of the "user_id" field.
 	UserID int64 `json:"user_id,omitempty"`
 	// ProductType holds the value of the "product_type" field.
 	ProductType string `json:"product_type,omitempty"`
 	// ProductID holds the value of the "product_id" field.
 	ProductID int64 `json:"product_id,omitempty"`
-	// DailyPeriodStart holds the value of the "daily_period_start" field.
-	DailyPeriodStart time.Time `json:"daily_period_start,omitempty"`
+	// SourceType holds the value of the "source_type" field.
+	SourceType string `json:"source_type,omitempty"`
+	// SourceID holds the value of the "source_id" field.
+	SourceID int64 `json:"source_id,omitempty"`
 	// PeriodType holds the value of the "period_type" field.
 	PeriodType string `json:"period_type,omitempty"`
+	// PeriodStart holds the value of the "period_start" field.
+	PeriodStart *time.Time `json:"period_start,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// OccurredAt holds the value of the "occurred_at" field.
+	OccurredAt time.Time `json:"occurred_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -39,15 +43,15 @@ type PaymentPurchaseReservation struct {
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
-func (*PaymentPurchaseReservation) scanValues(columns []string) ([]any, error) {
+func (*PaymentPurchaseLimitEvent) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case paymentpurchasereservation.FieldID, paymentpurchasereservation.FieldOrderID, paymentpurchasereservation.FieldUserID, paymentpurchasereservation.FieldProductID:
+		case paymentpurchaselimitevent.FieldID, paymentpurchaselimitevent.FieldUserID, paymentpurchaselimitevent.FieldProductID, paymentpurchaselimitevent.FieldSourceID:
 			values[i] = new(sql.NullInt64)
-		case paymentpurchasereservation.FieldProductType, paymentpurchasereservation.FieldPeriodType, paymentpurchasereservation.FieldStatus:
+		case paymentpurchaselimitevent.FieldProductType, paymentpurchaselimitevent.FieldSourceType, paymentpurchaselimitevent.FieldPeriodType, paymentpurchaselimitevent.FieldStatus:
 			values[i] = new(sql.NullString)
-		case paymentpurchasereservation.FieldDailyPeriodStart, paymentpurchasereservation.FieldCreatedAt, paymentpurchasereservation.FieldUpdatedAt:
+		case paymentpurchaselimitevent.FieldPeriodStart, paymentpurchaselimitevent.FieldOccurredAt, paymentpurchaselimitevent.FieldCreatedAt, paymentpurchaselimitevent.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -57,68 +61,81 @@ func (*PaymentPurchaseReservation) scanValues(columns []string) ([]any, error) {
 }
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
-// to the PaymentPurchaseReservation fields.
-func (_m *PaymentPurchaseReservation) assignValues(columns []string, values []any) error {
+// to the PaymentPurchaseLimitEvent fields.
+func (_m *PaymentPurchaseLimitEvent) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
 	for i := range columns {
 		switch columns[i] {
-		case paymentpurchasereservation.FieldID:
+		case paymentpurchaselimitevent.FieldID:
 			value, ok := values[i].(*sql.NullInt64)
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int64(value.Int64)
-		case paymentpurchasereservation.FieldOrderID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field order_id", values[i])
-			} else if value.Valid {
-				_m.OrderID = value.Int64
-			}
-		case paymentpurchasereservation.FieldUserID:
+		case paymentpurchaselimitevent.FieldUserID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field user_id", values[i])
 			} else if value.Valid {
 				_m.UserID = value.Int64
 			}
-		case paymentpurchasereservation.FieldProductType:
+		case paymentpurchaselimitevent.FieldProductType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field product_type", values[i])
 			} else if value.Valid {
 				_m.ProductType = value.String
 			}
-		case paymentpurchasereservation.FieldProductID:
+		case paymentpurchaselimitevent.FieldProductID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field product_id", values[i])
 			} else if value.Valid {
 				_m.ProductID = value.Int64
 			}
-		case paymentpurchasereservation.FieldDailyPeriodStart:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field daily_period_start", values[i])
+		case paymentpurchaselimitevent.FieldSourceType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source_type", values[i])
 			} else if value.Valid {
-				_m.DailyPeriodStart = value.Time
+				_m.SourceType = value.String
 			}
-		case paymentpurchasereservation.FieldPeriodType:
+		case paymentpurchaselimitevent.FieldSourceID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field source_id", values[i])
+			} else if value.Valid {
+				_m.SourceID = value.Int64
+			}
+		case paymentpurchaselimitevent.FieldPeriodType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field period_type", values[i])
 			} else if value.Valid {
 				_m.PeriodType = value.String
 			}
-		case paymentpurchasereservation.FieldStatus:
+		case paymentpurchaselimitevent.FieldPeriodStart:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field period_start", values[i])
+			} else if value.Valid {
+				_m.PeriodStart = new(time.Time)
+				*_m.PeriodStart = value.Time
+			}
+		case paymentpurchaselimitevent.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
 			}
-		case paymentpurchasereservation.FieldCreatedAt:
+		case paymentpurchaselimitevent.FieldOccurredAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field occurred_at", values[i])
+			} else if value.Valid {
+				_m.OccurredAt = value.Time
+			}
+		case paymentpurchaselimitevent.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
 			}
-		case paymentpurchasereservation.FieldUpdatedAt:
+		case paymentpurchaselimitevent.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
@@ -131,38 +148,35 @@ func (_m *PaymentPurchaseReservation) assignValues(columns []string, values []an
 	return nil
 }
 
-// Value returns the ent.Value that was dynamically selected and assigned to the PaymentPurchaseReservation.
+// Value returns the ent.Value that was dynamically selected and assigned to the PaymentPurchaseLimitEvent.
 // This includes values selected through modifiers, order, etc.
-func (_m *PaymentPurchaseReservation) Value(name string) (ent.Value, error) {
+func (_m *PaymentPurchaseLimitEvent) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// Update returns a builder for updating this PaymentPurchaseReservation.
-// Note that you need to call PaymentPurchaseReservation.Unwrap() before calling this method if this PaymentPurchaseReservation
+// Update returns a builder for updating this PaymentPurchaseLimitEvent.
+// Note that you need to call PaymentPurchaseLimitEvent.Unwrap() before calling this method if this PaymentPurchaseLimitEvent
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *PaymentPurchaseReservation) Update() *PaymentPurchaseReservationUpdateOne {
-	return NewPaymentPurchaseReservationClient(_m.config).UpdateOne(_m)
+func (_m *PaymentPurchaseLimitEvent) Update() *PaymentPurchaseLimitEventUpdateOne {
+	return NewPaymentPurchaseLimitEventClient(_m.config).UpdateOne(_m)
 }
 
-// Unwrap unwraps the PaymentPurchaseReservation entity that was returned from a transaction after it was closed,
+// Unwrap unwraps the PaymentPurchaseLimitEvent entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *PaymentPurchaseReservation) Unwrap() *PaymentPurchaseReservation {
+func (_m *PaymentPurchaseLimitEvent) Unwrap() *PaymentPurchaseLimitEvent {
 	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
-		panic("ent: PaymentPurchaseReservation is not a transactional entity")
+		panic("ent: PaymentPurchaseLimitEvent is not a transactional entity")
 	}
 	_m.config.driver = _tx.drv
 	return _m
 }
 
 // String implements the fmt.Stringer.
-func (_m *PaymentPurchaseReservation) String() string {
+func (_m *PaymentPurchaseLimitEvent) String() string {
 	var builder strings.Builder
-	builder.WriteString("PaymentPurchaseReservation(")
+	builder.WriteString("PaymentPurchaseLimitEvent(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("order_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.OrderID))
-	builder.WriteString(", ")
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))
 	builder.WriteString(", ")
@@ -172,14 +186,25 @@ func (_m *PaymentPurchaseReservation) String() string {
 	builder.WriteString("product_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ProductID))
 	builder.WriteString(", ")
-	builder.WriteString("daily_period_start=")
-	builder.WriteString(_m.DailyPeriodStart.Format(time.ANSIC))
+	builder.WriteString("source_type=")
+	builder.WriteString(_m.SourceType)
+	builder.WriteString(", ")
+	builder.WriteString("source_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SourceID))
 	builder.WriteString(", ")
 	builder.WriteString("period_type=")
 	builder.WriteString(_m.PeriodType)
 	builder.WriteString(", ")
+	if v := _m.PeriodStart; v != nil {
+		builder.WriteString("period_start=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	builder.WriteString("occurred_at=")
+	builder.WriteString(_m.OccurredAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
@@ -190,5 +215,5 @@ func (_m *PaymentPurchaseReservation) String() string {
 	return builder.String()
 }
 
-// PaymentPurchaseReservations is a parsable slice of PaymentPurchaseReservation.
-type PaymentPurchaseReservations []*PaymentPurchaseReservation
+// PaymentPurchaseLimitEvents is a parsable slice of PaymentPurchaseLimitEvent.
+type PaymentPurchaseLimitEvents []*PaymentPurchaseLimitEvent

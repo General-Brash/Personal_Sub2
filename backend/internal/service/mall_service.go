@@ -48,16 +48,22 @@ type mallCurrencyProduct struct {
 	name                       string
 	price, creditedAmount      float64
 	paymentType, creditedType  MallCreditType
+	purchaseLimitUnit          string
+	purchaseLimitMode          string
+	purchaseLimitWindowSize    int
 }
 
 type mallSubscriptionPlan struct {
-	id, groupID            int64
-	name                   string
-	price, dailyAmount     float64
-	validityDays           int
-	dailyLimit, totalLimit int
-	paymentType            MallCreditType
-	benefitType            SubscriptionBenefitType
+	id, groupID             int64
+	name                    string
+	price, dailyAmount      float64
+	validityDays            int
+	dailyLimit, totalLimit  int
+	paymentType             MallCreditType
+	benefitType             SubscriptionBenefitType
+	purchaseLimitUnit       string
+	purchaseLimitMode       string
+	purchaseLimitWindowSize int
 }
 
 // MallService owns immediate internal-credit purchases. It intentionally uses
@@ -130,14 +136,17 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 		if err != nil {
 			return nil, err
 		}
+		purchaseID, err := insertMallCurrencyPurchase(ctx, tx, userID, claim.recordID, product, balanceBefore)
+		if err != nil {
+			return nil, err
+		}
 		if err := consumeImmediatePurchaseCounters(ctx, tx, userID, &purchaseLimitSpec{
 			productType: purchaseProductCurrency, productID: product.id,
 			dailyLimit: int(product.dailyLimit), totalLimit: int(product.totalLimit),
+			unit: product.purchaseLimitUnit, mode: product.purchaseLimitMode,
+			windowSize: product.purchaseLimitWindowSize, sourceType: purchaseEventSourceMall,
+			sourceID: purchaseID,
 		}, now); err != nil {
-			return nil, err
-		}
-		purchaseID, err := insertMallCurrencyPurchase(ctx, tx, userID, claim.recordID, product, balanceBefore)
-		if err != nil {
 			return nil, err
 		}
 		if err := s.debitMallCredit(ctx, tx, userID, product.paymentType, product.price, claim.recordID); err != nil {
@@ -175,14 +184,17 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 		if err != nil {
 			return nil, err
 		}
+		purchaseID, err := insertMallSubscriptionPurchase(ctx, tx, userID, claim.recordID, plan, balanceBefore)
+		if err != nil {
+			return nil, err
+		}
 		if err := consumeImmediatePurchaseCounters(ctx, tx, userID, &purchaseLimitSpec{
 			productType: purchaseProductSubscription, productID: plan.id,
 			dailyLimit: plan.dailyLimit, totalLimit: plan.totalLimit,
+			unit: plan.purchaseLimitUnit, mode: plan.purchaseLimitMode,
+			windowSize: plan.purchaseLimitWindowSize, sourceType: purchaseEventSourceMall,
+			sourceID: purchaseID,
 		}, now); err != nil {
-			return nil, err
-		}
-		purchaseID, err := insertMallSubscriptionPurchase(ctx, tx, userID, claim.recordID, plan, balanceBefore)
-		if err != nil {
 			return nil, err
 		}
 		if err := s.debitMallCredit(ctx, tx, userID, plan.paymentType, plan.price, claim.recordID); err != nil {
@@ -263,10 +275,10 @@ func loadMallCurrencyProduct(ctx context.Context, tx *sql.Tx, productID int64) (
 	var priceRaw, creditedRaw, paymentTypeRaw, creditedTypeRaw string
 	if err := tx.QueryRowContext(ctx, `
 	SELECT id, name, payment_price::text, payment_credit_type, credited_type, credited_amount::text,
-       daily_purchase_limit, total_purchase_limit
+       daily_purchase_limit, total_purchase_limit, purchase_limit_unit, purchase_limit_mode, purchase_limit_window_size
 FROM currency_products
 WHERE id = $1 AND is_active = TRUE AND for_sale = TRUE
-	FOR SHARE`, productID).Scan(&product.id, &product.name, &priceRaw, &paymentTypeRaw, &creditedTypeRaw, &creditedRaw, &product.dailyLimit, &product.totalLimit); err != nil {
+	FOR SHARE`, productID).Scan(&product.id, &product.name, &priceRaw, &paymentTypeRaw, &creditedTypeRaw, &creditedRaw, &product.dailyLimit, &product.totalLimit, &product.purchaseLimitUnit, &product.purchaseLimitMode, &product.purchaseLimitWindowSize); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrMallProductNotAvailable
 		}
@@ -294,11 +306,11 @@ func loadMallSubscriptionPlan(ctx context.Context, tx *sql.Tx, planID int64) (*m
 	if err := tx.QueryRowContext(ctx, `
 	SELECT id, name, group_id, price::text, payment_credit_type, benefit_type,
        daily_temporary_credit_amount::text, validity_days, validity_unit,
-       daily_purchase_limit, total_purchase_limit
+       daily_purchase_limit, total_purchase_limit, purchase_limit_unit, purchase_limit_mode, purchase_limit_window_size
 FROM subscription_plans
 WHERE id = $1 AND for_sale = TRUE
 	FOR SHARE`, planID).Scan(&plan.id, &plan.name, &plan.groupID, &priceRaw, &paymentTypeRaw, &benefitTypeRaw, &dailyRaw,
-		&plan.validityDays, &validityUnit, &plan.dailyLimit, &plan.totalLimit); err != nil {
+		&plan.validityDays, &validityUnit, &plan.dailyLimit, &plan.totalLimit, &plan.purchaseLimitUnit, &plan.purchaseLimitMode, &plan.purchaseLimitWindowSize); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrMallProductNotAvailable
 		}

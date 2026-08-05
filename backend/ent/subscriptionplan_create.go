@@ -236,6 +236,48 @@ func (_c *SubscriptionPlanCreate) SetNillableTotalPurchaseLimit(v *int) *Subscri
 	return _c
 }
 
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (_c *SubscriptionPlanCreate) SetPurchaseLimitUnit(v string) *SubscriptionPlanCreate {
+	_c.mutation.SetPurchaseLimitUnit(v)
+	return _c
+}
+
+// SetNillablePurchaseLimitUnit sets the "purchase_limit_unit" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillablePurchaseLimitUnit(v *string) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetPurchaseLimitUnit(*v)
+	}
+	return _c
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (_c *SubscriptionPlanCreate) SetPurchaseLimitMode(v string) *SubscriptionPlanCreate {
+	_c.mutation.SetPurchaseLimitMode(v)
+	return _c
+}
+
+// SetNillablePurchaseLimitMode sets the "purchase_limit_mode" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillablePurchaseLimitMode(v *string) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetPurchaseLimitMode(*v)
+	}
+	return _c
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (_c *SubscriptionPlanCreate) SetPurchaseLimitWindowSize(v int) *SubscriptionPlanCreate {
+	_c.mutation.SetPurchaseLimitWindowSize(v)
+	return _c
+}
+
+// SetNillablePurchaseLimitWindowSize sets the "purchase_limit_window_size" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillablePurchaseLimitWindowSize(v *int) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetPurchaseLimitWindowSize(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *SubscriptionPlanCreate) SetCreatedAt(v time.Time) *SubscriptionPlanCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -351,6 +393,18 @@ func (_c *SubscriptionPlanCreate) defaults() {
 		v := subscriptionplan.DefaultTotalPurchaseLimit
 		_c.mutation.SetTotalPurchaseLimit(v)
 	}
+	if _, ok := _c.mutation.PurchaseLimitUnit(); !ok {
+		v := subscriptionplan.DefaultPurchaseLimitUnit
+		_c.mutation.SetPurchaseLimitUnit(v)
+	}
+	if _, ok := _c.mutation.PurchaseLimitMode(); !ok {
+		v := subscriptionplan.DefaultPurchaseLimitMode
+		_c.mutation.SetPurchaseLimitMode(v)
+	}
+	if _, ok := _c.mutation.PurchaseLimitWindowSize(); !ok {
+		v := subscriptionplan.DefaultPurchaseLimitWindowSize
+		_c.mutation.SetPurchaseLimitWindowSize(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := subscriptionplan.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -449,6 +503,30 @@ func (_c *SubscriptionPlanCreate) check() error {
 	if v, ok := _c.mutation.TotalPurchaseLimit(); ok {
 		if err := subscriptionplan.TotalPurchaseLimitValidator(v); err != nil {
 			return &ValidationError{Name: "total_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.total_purchase_limit": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PurchaseLimitUnit(); !ok {
+		return &ValidationError{Name: "purchase_limit_unit", err: errors.New(`ent: missing required field "SubscriptionPlan.purchase_limit_unit"`)}
+	}
+	if v, ok := _c.mutation.PurchaseLimitUnit(); ok {
+		if err := subscriptionplan.PurchaseLimitUnitValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_unit", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.purchase_limit_unit": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PurchaseLimitMode(); !ok {
+		return &ValidationError{Name: "purchase_limit_mode", err: errors.New(`ent: missing required field "SubscriptionPlan.purchase_limit_mode"`)}
+	}
+	if v, ok := _c.mutation.PurchaseLimitMode(); ok {
+		if err := subscriptionplan.PurchaseLimitModeValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_mode", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.purchase_limit_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PurchaseLimitWindowSize(); !ok {
+		return &ValidationError{Name: "purchase_limit_window_size", err: errors.New(`ent: missing required field "SubscriptionPlan.purchase_limit_window_size"`)}
+	}
+	if v, ok := _c.mutation.PurchaseLimitWindowSize(); ok {
+		if err := subscriptionplan.PurchaseLimitWindowSizeValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_window_size", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.purchase_limit_window_size": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
@@ -551,6 +629,18 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 	if value, ok := _c.mutation.TotalPurchaseLimit(); ok {
 		_spec.SetField(subscriptionplan.FieldTotalPurchaseLimit, field.TypeInt, value)
 		_node.TotalPurchaseLimit = value
+	}
+	if value, ok := _c.mutation.PurchaseLimitUnit(); ok {
+		_spec.SetField(subscriptionplan.FieldPurchaseLimitUnit, field.TypeString, value)
+		_node.PurchaseLimitUnit = value
+	}
+	if value, ok := _c.mutation.PurchaseLimitMode(); ok {
+		_spec.SetField(subscriptionplan.FieldPurchaseLimitMode, field.TypeString, value)
+		_node.PurchaseLimitMode = value
+	}
+	if value, ok := _c.mutation.PurchaseLimitWindowSize(); ok {
+		_spec.SetField(subscriptionplan.FieldPurchaseLimitWindowSize, field.TypeInt, value)
+		_node.PurchaseLimitWindowSize = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldCreatedAt, field.TypeTime, value)
@@ -867,6 +957,48 @@ func (u *SubscriptionPlanUpsert) UpdateTotalPurchaseLimit() *SubscriptionPlanUps
 // AddTotalPurchaseLimit adds v to the "total_purchase_limit" field.
 func (u *SubscriptionPlanUpsert) AddTotalPurchaseLimit(v int) *SubscriptionPlanUpsert {
 	u.Add(subscriptionplan.FieldTotalPurchaseLimit, v)
+	return u
+}
+
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (u *SubscriptionPlanUpsert) SetPurchaseLimitUnit(v string) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldPurchaseLimitUnit, v)
+	return u
+}
+
+// UpdatePurchaseLimitUnit sets the "purchase_limit_unit" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdatePurchaseLimitUnit() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldPurchaseLimitUnit)
+	return u
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (u *SubscriptionPlanUpsert) SetPurchaseLimitMode(v string) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldPurchaseLimitMode, v)
+	return u
+}
+
+// UpdatePurchaseLimitMode sets the "purchase_limit_mode" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdatePurchaseLimitMode() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldPurchaseLimitMode)
+	return u
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (u *SubscriptionPlanUpsert) SetPurchaseLimitWindowSize(v int) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldPurchaseLimitWindowSize, v)
+	return u
+}
+
+// UpdatePurchaseLimitWindowSize sets the "purchase_limit_window_size" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdatePurchaseLimitWindowSize() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldPurchaseLimitWindowSize)
+	return u
+}
+
+// AddPurchaseLimitWindowSize adds v to the "purchase_limit_window_size" field.
+func (u *SubscriptionPlanUpsert) AddPurchaseLimitWindowSize(v int) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldPurchaseLimitWindowSize, v)
 	return u
 }
 
@@ -1225,6 +1357,55 @@ func (u *SubscriptionPlanUpsertOne) AddTotalPurchaseLimit(v int) *SubscriptionPl
 func (u *SubscriptionPlanUpsertOne) UpdateTotalPurchaseLimit() *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateTotalPurchaseLimit()
+	})
+}
+
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (u *SubscriptionPlanUpsertOne) SetPurchaseLimitUnit(v string) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseLimitUnit(v)
+	})
+}
+
+// UpdatePurchaseLimitUnit sets the "purchase_limit_unit" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdatePurchaseLimitUnit() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseLimitUnit()
+	})
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (u *SubscriptionPlanUpsertOne) SetPurchaseLimitMode(v string) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseLimitMode(v)
+	})
+}
+
+// UpdatePurchaseLimitMode sets the "purchase_limit_mode" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdatePurchaseLimitMode() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseLimitMode()
+	})
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (u *SubscriptionPlanUpsertOne) SetPurchaseLimitWindowSize(v int) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseLimitWindowSize(v)
+	})
+}
+
+// AddPurchaseLimitWindowSize adds v to the "purchase_limit_window_size" field.
+func (u *SubscriptionPlanUpsertOne) AddPurchaseLimitWindowSize(v int) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddPurchaseLimitWindowSize(v)
+	})
+}
+
+// UpdatePurchaseLimitWindowSize sets the "purchase_limit_window_size" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdatePurchaseLimitWindowSize() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseLimitWindowSize()
 	})
 }
 
@@ -1751,6 +1932,55 @@ func (u *SubscriptionPlanUpsertBulk) AddTotalPurchaseLimit(v int) *SubscriptionP
 func (u *SubscriptionPlanUpsertBulk) UpdateTotalPurchaseLimit() *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateTotalPurchaseLimit()
+	})
+}
+
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (u *SubscriptionPlanUpsertBulk) SetPurchaseLimitUnit(v string) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseLimitUnit(v)
+	})
+}
+
+// UpdatePurchaseLimitUnit sets the "purchase_limit_unit" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdatePurchaseLimitUnit() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseLimitUnit()
+	})
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (u *SubscriptionPlanUpsertBulk) SetPurchaseLimitMode(v string) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseLimitMode(v)
+	})
+}
+
+// UpdatePurchaseLimitMode sets the "purchase_limit_mode" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdatePurchaseLimitMode() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseLimitMode()
+	})
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (u *SubscriptionPlanUpsertBulk) SetPurchaseLimitWindowSize(v int) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseLimitWindowSize(v)
+	})
+}
+
+// AddPurchaseLimitWindowSize adds v to the "purchase_limit_window_size" field.
+func (u *SubscriptionPlanUpsertBulk) AddPurchaseLimitWindowSize(v int) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddPurchaseLimitWindowSize(v)
+	})
+}
+
+// UpdatePurchaseLimitWindowSize sets the "purchase_limit_window_size" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdatePurchaseLimitWindowSize() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseLimitWindowSize()
 	})
 }
 

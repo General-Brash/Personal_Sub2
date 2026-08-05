@@ -108,6 +108,15 @@ func (PaymentOrder) Fields() []ent.Field {
 		field.Int("total_purchase_limit_snapshot").
 			NonNegative().
 			Default(0),
+		field.String("purchase_limit_unit_snapshot").
+			MaxLen(10).
+			Default("day"),
+		field.String("purchase_limit_mode_snapshot").
+			MaxLen(10).
+			Default("calendar"),
+		field.Int("purchase_limit_window_size_snapshot").
+			Positive().
+			Default(1),
 		field.String("provider_instance_id").
 			Optional().
 			Nillable().

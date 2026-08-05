@@ -96,6 +96,9 @@ type PaymentProviderInstance func(*sql.Selector)
 // PaymentPurchaseCounter is the predicate function for paymentpurchasecounter builders.
 type PaymentPurchaseCounter func(*sql.Selector)
 
+// PaymentPurchaseLimitEvent is the predicate function for paymentpurchaselimitevent builders.
+type PaymentPurchaseLimitEvent func(*sql.Selector)
+
 // PaymentPurchaseReservation is the predicate function for paymentpurchasereservation builders.
 type PaymentPurchaseReservation func(*sql.Selector)
 

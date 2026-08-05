@@ -177,9 +177,44 @@ type CreatePlanRequest struct {
 	SortOrder                  int      `json:"sort_order"`
 	DailyPurchaseLimit         int      `json:"daily_purchase_limit"`
 	TotalPurchaseLimit         int      `json:"total_purchase_limit"`
+	PurchaseLimitUnit          string   `json:"purchase_limit_unit"`
+	PurchaseLimitMode          string   `json:"purchase_limit_mode"`
+	PurchaseLimitWindowSize    int      `json:"purchase_limit_window_size"`
 	BenefitType                string   `json:"benefit_type"`
 	PaymentCreditType          string   `json:"payment_credit_type"`
 	DailyTemporaryCreditAmount float64  `json:"daily_temporary_credit_amount"`
+}
+
+// normalizeConfiguredPurchaseLimitPolicy applies the compatibility defaults used by
+// create requests and normalizes calendar policies to a one-period window.
+func normalizeConfiguredPurchaseLimitPolicy(unit, mode string, windowSize int) (string, string, int, error) {
+	if unit == "" {
+		unit = purchaseLimitUnitDay
+	}
+	if mode == "" {
+		mode = purchaseLimitModeCalendar
+	}
+	if mode == purchaseLimitModeRolling && windowSize <= 0 {
+		return "", "", 0, invalidPurchaseLimitPolicyError("purchase_limit_window_size")
+	}
+	if mode == purchaseLimitModeCalendar {
+		windowSize = 1
+	}
+	return normalizePurchaseLimitPolicy(unit, mode, windowSize)
+}
+
+func resolvePurchaseLimitPolicy(currentUnit, currentMode string, currentWindowSize int, unit, mode *string, windowSize *int) (string, string, int, error) {
+	resolvedUnit, resolvedMode, resolvedWindowSize := currentUnit, currentMode, currentWindowSize
+	if unit != nil {
+		resolvedUnit = *unit
+	}
+	if mode != nil {
+		resolvedMode = *mode
+	}
+	if windowSize != nil {
+		resolvedWindowSize = *windowSize
+	}
+	return normalizeConfiguredPurchaseLimitPolicy(resolvedUnit, resolvedMode, resolvedWindowSize)
 }
 
 type UpdatePlanRequest struct {
@@ -197,6 +232,9 @@ type UpdatePlanRequest struct {
 	SortOrder                  *int     `json:"sort_order"`
 	DailyPurchaseLimit         *int     `json:"daily_purchase_limit"`
 	TotalPurchaseLimit         *int     `json:"total_purchase_limit"`
+	PurchaseLimitUnit          *string  `json:"purchase_limit_unit"`
+	PurchaseLimitMode          *string  `json:"purchase_limit_mode"`
+	PurchaseLimitWindowSize    *int     `json:"purchase_limit_window_size"`
 	BenefitType                *string  `json:"benefit_type"`
 	PaymentCreditType          *string  `json:"payment_credit_type"`
 	DailyTemporaryCreditAmount *float64 `json:"daily_temporary_credit_amount"`

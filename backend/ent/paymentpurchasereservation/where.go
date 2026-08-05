@@ -79,6 +79,11 @@ func DailyPeriodStart(v time.Time) predicate.PaymentPurchaseReservation {
 	return predicate.PaymentPurchaseReservation(sql.FieldEQ(FieldDailyPeriodStart, v))
 }
 
+// PeriodType applies equality check predicate on the "period_type" field. It's identical to PeriodTypeEQ.
+func PeriodType(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldEQ(FieldPeriodType, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.PaymentPurchaseReservation {
 	return predicate.PaymentPurchaseReservation(sql.FieldEQ(FieldStatus, v))
@@ -317,6 +322,71 @@ func DailyPeriodStartLT(v time.Time) predicate.PaymentPurchaseReservation {
 // DailyPeriodStartLTE applies the LTE predicate on the "daily_period_start" field.
 func DailyPeriodStartLTE(v time.Time) predicate.PaymentPurchaseReservation {
 	return predicate.PaymentPurchaseReservation(sql.FieldLTE(FieldDailyPeriodStart, v))
+}
+
+// PeriodTypeEQ applies the EQ predicate on the "period_type" field.
+func PeriodTypeEQ(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldEQ(FieldPeriodType, v))
+}
+
+// PeriodTypeNEQ applies the NEQ predicate on the "period_type" field.
+func PeriodTypeNEQ(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldNEQ(FieldPeriodType, v))
+}
+
+// PeriodTypeIn applies the In predicate on the "period_type" field.
+func PeriodTypeIn(vs ...string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldIn(FieldPeriodType, vs...))
+}
+
+// PeriodTypeNotIn applies the NotIn predicate on the "period_type" field.
+func PeriodTypeNotIn(vs ...string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldNotIn(FieldPeriodType, vs...))
+}
+
+// PeriodTypeGT applies the GT predicate on the "period_type" field.
+func PeriodTypeGT(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldGT(FieldPeriodType, v))
+}
+
+// PeriodTypeGTE applies the GTE predicate on the "period_type" field.
+func PeriodTypeGTE(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldGTE(FieldPeriodType, v))
+}
+
+// PeriodTypeLT applies the LT predicate on the "period_type" field.
+func PeriodTypeLT(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldLT(FieldPeriodType, v))
+}
+
+// PeriodTypeLTE applies the LTE predicate on the "period_type" field.
+func PeriodTypeLTE(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldLTE(FieldPeriodType, v))
+}
+
+// PeriodTypeContains applies the Contains predicate on the "period_type" field.
+func PeriodTypeContains(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldContains(FieldPeriodType, v))
+}
+
+// PeriodTypeHasPrefix applies the HasPrefix predicate on the "period_type" field.
+func PeriodTypeHasPrefix(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldHasPrefix(FieldPeriodType, v))
+}
+
+// PeriodTypeHasSuffix applies the HasSuffix predicate on the "period_type" field.
+func PeriodTypeHasSuffix(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldHasSuffix(FieldPeriodType, v))
+}
+
+// PeriodTypeEqualFold applies the EqualFold predicate on the "period_type" field.
+func PeriodTypeEqualFold(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldEqualFold(FieldPeriodType, v))
+}
+
+// PeriodTypeContainsFold applies the ContainsFold predicate on the "period_type" field.
+func PeriodTypeContainsFold(v string) predicate.PaymentPurchaseReservation {
+	return predicate.PaymentPurchaseReservation(sql.FieldContainsFold(FieldPeriodType, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

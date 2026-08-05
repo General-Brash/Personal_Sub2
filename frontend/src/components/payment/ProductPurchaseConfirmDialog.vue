@@ -36,13 +36,13 @@
         <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('payment.purchaseConfirm.remainingTitle') }}</p>
         <div v-if="limitItems.length" class="mt-2 grid gap-2 sm:grid-cols-2">
           <div v-for="item in limitItems" :key="item.scope" class="flex items-center justify-between gap-3 text-sm">
-            <span class="text-gray-500 dark:text-gray-400">{{ t(`payment.purchaseLimit.${item.scope}`) }}</span>
+            <span class="text-gray-500 dark:text-gray-400">{{ limitLabel(item) }}</span>
             <span class="font-mono font-semibold text-gray-900 dark:text-white" :data-test="`purchase-confirm-remaining-${item.scope}`">{{ item.remaining }}</span>
           </div>
         </div>
         <p v-else class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ t('payment.purchaseLimit.unlimited') }}</p>
-        <p v-if="limitItems.some(item => item.scope === 'daily')" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          {{ t('payment.purchaseLimit.dailyResetHint') }}
+        <p v-if="periodicLimit" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {{ t('payment.purchaseLimit.windowHint', { scope: limitLabel(periodicLimit) }) }}
         </p>
       </div>
     </div>
@@ -72,7 +72,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import PurchaseLimitBadge from '@/components/payment/PurchaseLimitBadge.vue'
 import type { PurchaseLimitFields } from '@/types/payment'
-import { getPurchaseLimitItems } from '@/utils/purchaseLimits'
+import { getPurchaseLimitItems, getPurchaseLimitLabelKey, type PurchaseLimitItem } from '@/utils/purchaseLimits'
 
 const props = defineProps<{
   show: boolean
@@ -92,7 +92,15 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const limitItems = computed(() => getPurchaseLimitItems(props.limits))
+const periodicLimit = computed(() => limitItems.value.find((item) => item.scope === 'periodic'))
 const exhausted = computed(() => limitItems.value.some((item) => item.exhausted))
+
+function limitLabel(item: PurchaseLimitItem): string {
+  const key = getPurchaseLimitLabelKey(item)
+  return key.startsWith('rolling')
+    ? t(`payment.purchaseLimit.${key}`, { count: item.windowSize })
+    : t(`payment.purchaseLimit.${key}`)
+}
 
 function requestClose(): void {
   if (!props.submitting) emit('close')

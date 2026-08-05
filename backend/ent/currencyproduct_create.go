@@ -158,6 +158,48 @@ func (_c *CurrencyProductCreate) SetNillableTotalPurchaseLimit(v *int) *Currency
 	return _c
 }
 
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (_c *CurrencyProductCreate) SetPurchaseLimitUnit(v string) *CurrencyProductCreate {
+	_c.mutation.SetPurchaseLimitUnit(v)
+	return _c
+}
+
+// SetNillablePurchaseLimitUnit sets the "purchase_limit_unit" field if the given value is not nil.
+func (_c *CurrencyProductCreate) SetNillablePurchaseLimitUnit(v *string) *CurrencyProductCreate {
+	if v != nil {
+		_c.SetPurchaseLimitUnit(*v)
+	}
+	return _c
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (_c *CurrencyProductCreate) SetPurchaseLimitMode(v string) *CurrencyProductCreate {
+	_c.mutation.SetPurchaseLimitMode(v)
+	return _c
+}
+
+// SetNillablePurchaseLimitMode sets the "purchase_limit_mode" field if the given value is not nil.
+func (_c *CurrencyProductCreate) SetNillablePurchaseLimitMode(v *string) *CurrencyProductCreate {
+	if v != nil {
+		_c.SetPurchaseLimitMode(*v)
+	}
+	return _c
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (_c *CurrencyProductCreate) SetPurchaseLimitWindowSize(v int) *CurrencyProductCreate {
+	_c.mutation.SetPurchaseLimitWindowSize(v)
+	return _c
+}
+
+// SetNillablePurchaseLimitWindowSize sets the "purchase_limit_window_size" field if the given value is not nil.
+func (_c *CurrencyProductCreate) SetNillablePurchaseLimitWindowSize(v *int) *CurrencyProductCreate {
+	if v != nil {
+		_c.SetPurchaseLimitWindowSize(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *CurrencyProductCreate) SetCreatedAt(v time.Time) *CurrencyProductCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -253,6 +295,18 @@ func (_c *CurrencyProductCreate) defaults() {
 		v := currencyproduct.DefaultTotalPurchaseLimit
 		_c.mutation.SetTotalPurchaseLimit(v)
 	}
+	if _, ok := _c.mutation.PurchaseLimitUnit(); !ok {
+		v := currencyproduct.DefaultPurchaseLimitUnit
+		_c.mutation.SetPurchaseLimitUnit(v)
+	}
+	if _, ok := _c.mutation.PurchaseLimitMode(); !ok {
+		v := currencyproduct.DefaultPurchaseLimitMode
+		_c.mutation.SetPurchaseLimitMode(v)
+	}
+	if _, ok := _c.mutation.PurchaseLimitWindowSize(); !ok {
+		v := currencyproduct.DefaultPurchaseLimitWindowSize
+		_c.mutation.SetPurchaseLimitWindowSize(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := currencyproduct.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -324,6 +378,30 @@ func (_c *CurrencyProductCreate) check() error {
 	if v, ok := _c.mutation.TotalPurchaseLimit(); ok {
 		if err := currencyproduct.TotalPurchaseLimitValidator(v); err != nil {
 			return &ValidationError{Name: "total_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.total_purchase_limit": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PurchaseLimitUnit(); !ok {
+		return &ValidationError{Name: "purchase_limit_unit", err: errors.New(`ent: missing required field "CurrencyProduct.purchase_limit_unit"`)}
+	}
+	if v, ok := _c.mutation.PurchaseLimitUnit(); ok {
+		if err := currencyproduct.PurchaseLimitUnitValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_unit", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.purchase_limit_unit": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PurchaseLimitMode(); !ok {
+		return &ValidationError{Name: "purchase_limit_mode", err: errors.New(`ent: missing required field "CurrencyProduct.purchase_limit_mode"`)}
+	}
+	if v, ok := _c.mutation.PurchaseLimitMode(); ok {
+		if err := currencyproduct.PurchaseLimitModeValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_mode", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.purchase_limit_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PurchaseLimitWindowSize(); !ok {
+		return &ValidationError{Name: "purchase_limit_window_size", err: errors.New(`ent: missing required field "CurrencyProduct.purchase_limit_window_size"`)}
+	}
+	if v, ok := _c.mutation.PurchaseLimitWindowSize(); ok {
+		if err := currencyproduct.PurchaseLimitWindowSizeValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_window_size", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.purchase_limit_window_size": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
@@ -406,6 +484,18 @@ func (_c *CurrencyProductCreate) createSpec() (*CurrencyProduct, *sqlgraph.Creat
 	if value, ok := _c.mutation.TotalPurchaseLimit(); ok {
 		_spec.SetField(currencyproduct.FieldTotalPurchaseLimit, field.TypeInt, value)
 		_node.TotalPurchaseLimit = value
+	}
+	if value, ok := _c.mutation.PurchaseLimitUnit(); ok {
+		_spec.SetField(currencyproduct.FieldPurchaseLimitUnit, field.TypeString, value)
+		_node.PurchaseLimitUnit = value
+	}
+	if value, ok := _c.mutation.PurchaseLimitMode(); ok {
+		_spec.SetField(currencyproduct.FieldPurchaseLimitMode, field.TypeString, value)
+		_node.PurchaseLimitMode = value
+	}
+	if value, ok := _c.mutation.PurchaseLimitWindowSize(); ok {
+		_spec.SetField(currencyproduct.FieldPurchaseLimitWindowSize, field.TypeInt, value)
+		_node.PurchaseLimitWindowSize = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(currencyproduct.FieldCreatedAt, field.TypeTime, value)
@@ -644,6 +734,48 @@ func (u *CurrencyProductUpsert) UpdateTotalPurchaseLimit() *CurrencyProductUpser
 // AddTotalPurchaseLimit adds v to the "total_purchase_limit" field.
 func (u *CurrencyProductUpsert) AddTotalPurchaseLimit(v int) *CurrencyProductUpsert {
 	u.Add(currencyproduct.FieldTotalPurchaseLimit, v)
+	return u
+}
+
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (u *CurrencyProductUpsert) SetPurchaseLimitUnit(v string) *CurrencyProductUpsert {
+	u.Set(currencyproduct.FieldPurchaseLimitUnit, v)
+	return u
+}
+
+// UpdatePurchaseLimitUnit sets the "purchase_limit_unit" field to the value that was provided on create.
+func (u *CurrencyProductUpsert) UpdatePurchaseLimitUnit() *CurrencyProductUpsert {
+	u.SetExcluded(currencyproduct.FieldPurchaseLimitUnit)
+	return u
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (u *CurrencyProductUpsert) SetPurchaseLimitMode(v string) *CurrencyProductUpsert {
+	u.Set(currencyproduct.FieldPurchaseLimitMode, v)
+	return u
+}
+
+// UpdatePurchaseLimitMode sets the "purchase_limit_mode" field to the value that was provided on create.
+func (u *CurrencyProductUpsert) UpdatePurchaseLimitMode() *CurrencyProductUpsert {
+	u.SetExcluded(currencyproduct.FieldPurchaseLimitMode)
+	return u
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (u *CurrencyProductUpsert) SetPurchaseLimitWindowSize(v int) *CurrencyProductUpsert {
+	u.Set(currencyproduct.FieldPurchaseLimitWindowSize, v)
+	return u
+}
+
+// UpdatePurchaseLimitWindowSize sets the "purchase_limit_window_size" field to the value that was provided on create.
+func (u *CurrencyProductUpsert) UpdatePurchaseLimitWindowSize() *CurrencyProductUpsert {
+	u.SetExcluded(currencyproduct.FieldPurchaseLimitWindowSize)
+	return u
+}
+
+// AddPurchaseLimitWindowSize adds v to the "purchase_limit_window_size" field.
+func (u *CurrencyProductUpsert) AddPurchaseLimitWindowSize(v int) *CurrencyProductUpsert {
+	u.Add(currencyproduct.FieldPurchaseLimitWindowSize, v)
 	return u
 }
 
@@ -911,6 +1043,55 @@ func (u *CurrencyProductUpsertOne) AddTotalPurchaseLimit(v int) *CurrencyProduct
 func (u *CurrencyProductUpsertOne) UpdateTotalPurchaseLimit() *CurrencyProductUpsertOne {
 	return u.Update(func(s *CurrencyProductUpsert) {
 		s.UpdateTotalPurchaseLimit()
+	})
+}
+
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (u *CurrencyProductUpsertOne) SetPurchaseLimitUnit(v string) *CurrencyProductUpsertOne {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.SetPurchaseLimitUnit(v)
+	})
+}
+
+// UpdatePurchaseLimitUnit sets the "purchase_limit_unit" field to the value that was provided on create.
+func (u *CurrencyProductUpsertOne) UpdatePurchaseLimitUnit() *CurrencyProductUpsertOne {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.UpdatePurchaseLimitUnit()
+	})
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (u *CurrencyProductUpsertOne) SetPurchaseLimitMode(v string) *CurrencyProductUpsertOne {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.SetPurchaseLimitMode(v)
+	})
+}
+
+// UpdatePurchaseLimitMode sets the "purchase_limit_mode" field to the value that was provided on create.
+func (u *CurrencyProductUpsertOne) UpdatePurchaseLimitMode() *CurrencyProductUpsertOne {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.UpdatePurchaseLimitMode()
+	})
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (u *CurrencyProductUpsertOne) SetPurchaseLimitWindowSize(v int) *CurrencyProductUpsertOne {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.SetPurchaseLimitWindowSize(v)
+	})
+}
+
+// AddPurchaseLimitWindowSize adds v to the "purchase_limit_window_size" field.
+func (u *CurrencyProductUpsertOne) AddPurchaseLimitWindowSize(v int) *CurrencyProductUpsertOne {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.AddPurchaseLimitWindowSize(v)
+	})
+}
+
+// UpdatePurchaseLimitWindowSize sets the "purchase_limit_window_size" field to the value that was provided on create.
+func (u *CurrencyProductUpsertOne) UpdatePurchaseLimitWindowSize() *CurrencyProductUpsertOne {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.UpdatePurchaseLimitWindowSize()
 	})
 }
 
@@ -1346,6 +1527,55 @@ func (u *CurrencyProductUpsertBulk) AddTotalPurchaseLimit(v int) *CurrencyProduc
 func (u *CurrencyProductUpsertBulk) UpdateTotalPurchaseLimit() *CurrencyProductUpsertBulk {
 	return u.Update(func(s *CurrencyProductUpsert) {
 		s.UpdateTotalPurchaseLimit()
+	})
+}
+
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (u *CurrencyProductUpsertBulk) SetPurchaseLimitUnit(v string) *CurrencyProductUpsertBulk {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.SetPurchaseLimitUnit(v)
+	})
+}
+
+// UpdatePurchaseLimitUnit sets the "purchase_limit_unit" field to the value that was provided on create.
+func (u *CurrencyProductUpsertBulk) UpdatePurchaseLimitUnit() *CurrencyProductUpsertBulk {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.UpdatePurchaseLimitUnit()
+	})
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (u *CurrencyProductUpsertBulk) SetPurchaseLimitMode(v string) *CurrencyProductUpsertBulk {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.SetPurchaseLimitMode(v)
+	})
+}
+
+// UpdatePurchaseLimitMode sets the "purchase_limit_mode" field to the value that was provided on create.
+func (u *CurrencyProductUpsertBulk) UpdatePurchaseLimitMode() *CurrencyProductUpsertBulk {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.UpdatePurchaseLimitMode()
+	})
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (u *CurrencyProductUpsertBulk) SetPurchaseLimitWindowSize(v int) *CurrencyProductUpsertBulk {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.SetPurchaseLimitWindowSize(v)
+	})
+}
+
+// AddPurchaseLimitWindowSize adds v to the "purchase_limit_window_size" field.
+func (u *CurrencyProductUpsertBulk) AddPurchaseLimitWindowSize(v int) *CurrencyProductUpsertBulk {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.AddPurchaseLimitWindowSize(v)
+	})
+}
+
+// UpdatePurchaseLimitWindowSize sets the "purchase_limit_window_size" field to the value that was provided on create.
+func (u *CurrencyProductUpsertBulk) UpdatePurchaseLimitWindowSize() *CurrencyProductUpsertBulk {
+	return u.Update(func(s *CurrencyProductUpsert) {
+		s.UpdatePurchaseLimitWindowSize()
 	})
 }
 

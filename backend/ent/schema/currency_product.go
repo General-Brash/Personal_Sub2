@@ -47,6 +47,9 @@ func (CurrencyProduct) Fields() []ent.Field {
 		field.Bool("for_sale").Default(true),
 		field.Int("daily_purchase_limit").NonNegative().Default(0),
 		field.Int("total_purchase_limit").NonNegative().Default(0),
+		field.String("purchase_limit_unit").MaxLen(10).Default("day"),
+		field.String("purchase_limit_mode").MaxLen(10).Default("calendar"),
+		field.Int("purchase_limit_window_size").Positive().Default(1),
 		field.Time("created_at").
 			Immutable().
 			Default(time.Now).

@@ -65,7 +65,8 @@ const SelectStub = defineComponent({
   setup(_props, { emit }) {
     const onChange = (event: Event) => {
       const value = (event.target as HTMLSelectElement).value
-      emit('update:modelValue', value === '' ? null : Number(value))
+      const numericValue = Number(value)
+      emit('update:modelValue', value === '' ? null : (Number.isNaN(numericValue) ? value : numericValue))
     }
     return { onChange }
   },
@@ -330,8 +331,86 @@ describe('PlanEditDialog purchase limits', () => {
       payment_credit_type: 'permanent',
       daily_purchase_limit: 1,
       total_purchase_limit: 3,
+      purchase_limit_unit: 'day',
+      purchase_limit_mode: 'calendar',
+      purchase_limit_window_size: 1,
     }))
   })
+
+  it('submits a rolling window using the selected unit and positive length', async () => {
+    createPlan.mockReset().mockResolvedValue({ data: {} })
+    const group = groupFixture({ id: 12, subscription_type: 'subscription' })
+    const wrapper = mountDialog({ groups: [group] })
+
+    wrapper.findAllComponents({ name: 'SelectStub' })[2].vm.$emit('update:modelValue', group.id)
+    await wrapper.get('[data-test="plan-name"]').setValue('Rolling plan')
+    await wrapper.get('[data-test="plan-description"]').setValue('Plan description')
+    await wrapper.get('[data-test="plan-price"]').setValue('12.50')
+    await wrapper.get('[data-test="plan-daily-purchase-limit"]').setValue('2')
+    await wrapper.get('[data-test="plan-purchase-limit-unit"]').setValue('week')
+    await wrapper.get('[data-test="plan-purchase-limit-mode"]').setValue('rolling')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-test="plan-purchase-limit-window-size"]').setValue('2')
+    await wrapper.get('#plan-form').trigger('submit')
+    await flushPromises()
+
+    expect(createPlan).toHaveBeenCalledWith(expect.objectContaining({
+      purchase_limit_unit: 'week',
+      purchase_limit_mode: 'rolling',
+      purchase_limit_window_size: 2,
+    }))
+  })
+
+  it('blocks a rolling window with an invalid length', async () => {
+    createPlan.mockReset()
+    showError.mockReset()
+    const group = groupFixture({ id: 13, subscription_type: 'subscription' })
+    const wrapper = mountDialog({ groups: [group] })
+
+    wrapper.findAllComponents({ name: 'SelectStub' })[2].vm.$emit('update:modelValue', group.id)
+    await wrapper.get('[data-test="plan-name"]').setValue('Invalid rolling plan')
+    await wrapper.get('[data-test="plan-description"]').setValue('Plan description')
+    await wrapper.get('[data-test="plan-price"]').setValue('12.50')
+    await wrapper.get('[data-test="plan-purchase-limit-mode"]').setValue('rolling')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-test="plan-purchase-limit-window-size"]').setValue('0')
+    await wrapper.get('#plan-form').trigger('submit')
+    await flushPromises()
+
+    expect(showError).toHaveBeenCalledWith('payment.admin.purchaseLimitWindowSizeInvalid')
+    expect(createPlan).not.toHaveBeenCalled()
+  })
+
+  it('defaults a legacy plan without policy fields to a natural day', async () => {
+    updatePlan.mockReset().mockResolvedValue({ data: {} })
+    const plan = {
+      id: 61,
+      group_id: 7,
+      name: 'Legacy limited plan',
+      description: 'Legacy plan',
+      price: 2.5,
+      original_price: 0,
+      validity_days: 2,
+      validity_unit: 'days',
+      features: [],
+      for_sale: true,
+      benefit_type: 'sub2',
+      payment_credit_type: 'permanent',
+      daily_purchase_limit: 1,
+    } as SubscriptionPlan
+    const wrapper = mountDialog({ plan, groups: [groupFixture({ id: 7 })] })
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true })
+    await wrapper.get('#plan-form').trigger('submit')
+    await flushPromises()
+
+    expect(updatePlan).toHaveBeenCalledWith(61, expect.objectContaining({
+      purchase_limit_unit: 'day',
+      purchase_limit_mode: 'calendar',
+      purchase_limit_window_size: 1,
+    }))
+  })
+
 })
 
 describe('PlanEditDialog group options', () => {

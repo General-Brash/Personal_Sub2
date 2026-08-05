@@ -1051,6 +1051,9 @@ var (
 		{Name: "for_sale", Type: field.TypeBool, Default: true},
 		{Name: "daily_purchase_limit", Type: field.TypeInt, Default: 0},
 		{Name: "total_purchase_limit", Type: field.TypeInt, Default: 0},
+		{Name: "purchase_limit_unit", Type: field.TypeString, Size: 10, Default: "day"},
+		{Name: "purchase_limit_mode", Type: field.TypeString, Size: 10, Default: "calendar"},
+		{Name: "purchase_limit_window_size", Type: field.TypeInt, Default: 1},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 	}
@@ -1454,6 +1457,9 @@ var (
 		{Name: "currency_product_credited_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "daily_purchase_limit_snapshot", Type: field.TypeInt, Default: 0},
 		{Name: "total_purchase_limit_snapshot", Type: field.TypeInt, Default: 0},
+		{Name: "purchase_limit_unit_snapshot", Type: field.TypeString, Size: 10, Default: "day"},
+		{Name: "purchase_limit_mode_snapshot", Type: field.TypeString, Size: 10, Default: "calendar"},
+		{Name: "purchase_limit_window_size_snapshot", Type: field.TypeInt, Default: 1},
 		{Name: "provider_instance_id", Type: field.TypeString, Nullable: true, Size: 64},
 		{Name: "provider_key", Type: field.TypeString, Nullable: true, Size: 30},
 		{Name: "provider_snapshot", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -1485,7 +1491,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "payment_orders_users_payment_orders",
-				Columns:    []*schema.Column{PaymentOrdersColumns[45]},
+				Columns:    []*schema.Column{PaymentOrdersColumns[48]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1502,32 +1508,32 @@ var (
 			{
 				Name:    "paymentorder_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[45]},
+				Columns: []*schema.Column{PaymentOrdersColumns[48]},
 			},
 			{
 				Name:    "paymentorder_status",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[27]},
+				Columns: []*schema.Column{PaymentOrdersColumns[30]},
 			},
 			{
 				Name:    "paymentorder_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[35]},
+				Columns: []*schema.Column{PaymentOrdersColumns[38]},
 			},
 			{
 				Name:    "paymentorder_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[43]},
+				Columns: []*schema.Column{PaymentOrdersColumns[46]},
 			},
 			{
 				Name:    "paymentorder_paid_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[36]},
+				Columns: []*schema.Column{PaymentOrdersColumns[39]},
 			},
 			{
 				Name:    "paymentorder_payment_type_paid_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[9], PaymentOrdersColumns[36]},
+				Columns: []*schema.Column{PaymentOrdersColumns[9], PaymentOrdersColumns[39]},
 			},
 			{
 				Name:    "paymentorder_order_type",
@@ -1601,6 +1607,39 @@ var (
 			},
 		},
 	}
+	// PaymentPurchaseLimitEventsColumns holds the columns for the "payment_purchase_limit_events" table.
+	PaymentPurchaseLimitEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "product_type", Type: field.TypeString, Size: 20},
+		{Name: "product_id", Type: field.TypeInt64},
+		{Name: "source_type", Type: field.TypeString, Size: 20},
+		{Name: "source_id", Type: field.TypeInt64},
+		{Name: "period_type", Type: field.TypeString, Size: 10, Default: "daily"},
+		{Name: "period_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "reserved"},
+		{Name: "occurred_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// PaymentPurchaseLimitEventsTable holds the schema information for the "payment_purchase_limit_events" table.
+	PaymentPurchaseLimitEventsTable = &schema.Table{
+		Name:       "payment_purchase_limit_events",
+		Columns:    PaymentPurchaseLimitEventsColumns,
+		PrimaryKey: []*schema.Column{PaymentPurchaseLimitEventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "paymentpurchaselimitevent_source_type_source_id",
+				Unique:  true,
+				Columns: []*schema.Column{PaymentPurchaseLimitEventsColumns[4], PaymentPurchaseLimitEventsColumns[5]},
+			},
+			{
+				Name:    "paymentpurchaselimitevent_user_id_product_type_product_id_status_occurred_at",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentPurchaseLimitEventsColumns[1], PaymentPurchaseLimitEventsColumns[2], PaymentPurchaseLimitEventsColumns[3], PaymentPurchaseLimitEventsColumns[8], PaymentPurchaseLimitEventsColumns[9]},
+			},
+		},
+	}
 	// PaymentPurchaseReservationsColumns holds the columns for the "payment_purchase_reservations" table.
 	PaymentPurchaseReservationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1609,6 +1648,7 @@ var (
 		{Name: "product_type", Type: field.TypeString, Size: 20},
 		{Name: "product_id", Type: field.TypeInt64},
 		{Name: "daily_period_start", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "period_type", Type: field.TypeString, Size: 10, Default: "daily"},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "reserved"},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
@@ -1622,7 +1662,12 @@ var (
 			{
 				Name:    "paymentpurchasereservation_user_id_product_type_product_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentPurchaseReservationsColumns[2], PaymentPurchaseReservationsColumns[3], PaymentPurchaseReservationsColumns[4], PaymentPurchaseReservationsColumns[6]},
+				Columns: []*schema.Column{PaymentPurchaseReservationsColumns[2], PaymentPurchaseReservationsColumns[3], PaymentPurchaseReservationsColumns[4], PaymentPurchaseReservationsColumns[7]},
+			},
+			{
+				Name:    "paymentpurchasereservation_user_id_product_type_product_id_period_type_status",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentPurchaseReservationsColumns[2], PaymentPurchaseReservationsColumns[3], PaymentPurchaseReservationsColumns[4], PaymentPurchaseReservationsColumns[6], PaymentPurchaseReservationsColumns[7]},
 			},
 		},
 	}
@@ -1926,6 +1971,9 @@ var (
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 		{Name: "daily_purchase_limit", Type: field.TypeInt, Default: 0},
 		{Name: "total_purchase_limit", Type: field.TypeInt, Default: 0},
+		{Name: "purchase_limit_unit", Type: field.TypeString, Size: 10, Default: "day"},
+		{Name: "purchase_limit_mode", Type: field.TypeString, Size: 10, Default: "calendar"},
+		{Name: "purchase_limit_window_size", Type: field.TypeInt, Default: 1},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 	}
@@ -2605,6 +2653,7 @@ var (
 		PaymentOrdersTable,
 		PaymentProviderInstancesTable,
 		PaymentPurchaseCountersTable,
+		PaymentPurchaseLimitEventsTable,
 		PaymentPurchaseReservationsTable,
 		PendingAuthSessionsTable,
 		PromoCodesTable,
@@ -2761,6 +2810,9 @@ func init() {
 	}
 	PaymentPurchaseCountersTable.Annotation = &entsql.Annotation{
 		Table: "payment_purchase_counters",
+	}
+	PaymentPurchaseLimitEventsTable.Annotation = &entsql.Annotation{
+		Table: "payment_purchase_limit_events",
 	}
 	PaymentPurchaseReservationsTable.Annotation = &entsql.Annotation{
 		Table: "payment_purchase_reservations",

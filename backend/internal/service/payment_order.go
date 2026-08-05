@@ -216,6 +216,14 @@ func (s *PaymentService) createOrderInTxWithProduct(ctx context.Context, req Cre
 		selectedInstanceID = strings.TrimSpace(sel.InstanceID)
 		selectedProviderKey = strings.TrimSpace(sel.ProviderKey)
 	}
+	purchaseSpec := purchaseLimitSpecFor(plan, product)
+	if err := normalizePurchaseLimitSpec(purchaseSpec); err != nil {
+		return nil, err
+	}
+	purchaseUnit, purchaseMode, purchaseWindowSize := purchaseLimitUnitDay, purchaseLimitModeCalendar, 1
+	if purchaseSpec != nil {
+		purchaseUnit, purchaseMode, purchaseWindowSize = purchaseSpec.unit, purchaseSpec.mode, purchaseSpec.windowSize
+	}
 	b := tx.PaymentOrder.Create().
 		SetUserID(req.UserID).
 		SetUserEmail(user.Email).
@@ -232,6 +240,9 @@ func (s *PaymentService) createOrderInTxWithProduct(ctx context.Context, req Cre
 		SetStatus(OrderStatusPending).
 		SetDailyPurchaseLimitSnapshot(0).
 		SetTotalPurchaseLimitSnapshot(0).
+		SetPurchaseLimitUnitSnapshot(purchaseUnit).
+		SetPurchaseLimitModeSnapshot(purchaseMode).
+		SetPurchaseLimitWindowSizeSnapshot(purchaseWindowSize).
 		SetExpiresAt(exp).
 		SetClientIP(req.ClientIP).
 		SetSrcHost(req.SrcHost)
@@ -266,7 +277,7 @@ func (s *PaymentService) createOrderInTxWithProduct(ctx context.Context, req Cre
 	if err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
 	}
-	if err := s.reservePurchaseTx(ctx, tx, order.ID, req.UserID, purchaseLimitSpecFor(plan, product), createdAt); err != nil {
+	if err := s.reservePurchaseTx(ctx, tx, order.ID, req.UserID, purchaseSpec, createdAt); err != nil {
 		return nil, err
 	}
 	code := fmt.Sprintf("PAY-%d-%d", order.ID, time.Now().UnixNano()%100000)

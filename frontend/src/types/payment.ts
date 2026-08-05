@@ -112,6 +112,8 @@ export interface PaymentOrder {
 
 export type CreditType = 'permanent' | 'temporary'
 export type SubscriptionBenefitType = 'sub2' | 'daily_temporary_credit'
+export type PurchaseLimitUnit = 'day' | 'week' | 'month'
+export type PurchaseLimitMode = 'calendar' | 'rolling'
 
 export interface MallBalanceSummary {
   permanent_balance: string
@@ -151,6 +153,9 @@ export interface SubscriptionPlan {
   daily_purchase_remaining?: number
   total_purchase_limit?: number
   total_purchase_remaining?: number
+  purchase_limit_unit?: PurchaseLimitUnit
+  purchase_limit_mode?: PurchaseLimitMode
+  purchase_limit_window_size?: number
   sales_count?: number
 }
 
@@ -159,6 +164,10 @@ export interface PurchaseLimitFields {
   daily_purchase_remaining?: number
   total_purchase_limit?: number
   total_purchase_remaining?: number
+  /** Missing legacy fields mean one natural day. */
+  purchase_limit_unit?: PurchaseLimitUnit
+  purchase_limit_mode?: PurchaseLimitMode
+  purchase_limit_window_size?: number
 }
 
 export interface CurrencyProduct extends PurchaseLimitFields {

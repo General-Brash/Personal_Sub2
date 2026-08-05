@@ -119,6 +119,20 @@ func (_u *PaymentPurchaseReservationUpdate) SetNillableDailyPeriodStart(v *time.
 	return _u
 }
 
+// SetPeriodType sets the "period_type" field.
+func (_u *PaymentPurchaseReservationUpdate) SetPeriodType(v string) *PaymentPurchaseReservationUpdate {
+	_u.mutation.SetPeriodType(v)
+	return _u
+}
+
+// SetNillablePeriodType sets the "period_type" field if the given value is not nil.
+func (_u *PaymentPurchaseReservationUpdate) SetNillablePeriodType(v *string) *PaymentPurchaseReservationUpdate {
+	if v != nil {
+		_u.SetPeriodType(*v)
+	}
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *PaymentPurchaseReservationUpdate) SetStatus(v string) *PaymentPurchaseReservationUpdate {
 	_u.mutation.SetStatus(v)
@@ -202,6 +216,11 @@ func (_u *PaymentPurchaseReservationUpdate) check() error {
 			return &ValidationError{Name: "product_id", err: fmt.Errorf(`ent: validator failed for field "PaymentPurchaseReservation.product_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PeriodType(); ok {
+		if err := paymentpurchasereservation.PeriodTypeValidator(v); err != nil {
+			return &ValidationError{Name: "period_type", err: fmt.Errorf(`ent: validator failed for field "PaymentPurchaseReservation.period_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := paymentpurchasereservation.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "PaymentPurchaseReservation.status": %w`, err)}
@@ -245,6 +264,9 @@ func (_u *PaymentPurchaseReservationUpdate) sqlSave(ctx context.Context) (_node 
 	}
 	if value, ok := _u.mutation.DailyPeriodStart(); ok {
 		_spec.SetField(paymentpurchasereservation.FieldDailyPeriodStart, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.PeriodType(); ok {
+		_spec.SetField(paymentpurchasereservation.FieldPeriodType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(paymentpurchasereservation.FieldStatus, field.TypeString, value)
@@ -363,6 +385,20 @@ func (_u *PaymentPurchaseReservationUpdateOne) SetNillableDailyPeriodStart(v *ti
 	return _u
 }
 
+// SetPeriodType sets the "period_type" field.
+func (_u *PaymentPurchaseReservationUpdateOne) SetPeriodType(v string) *PaymentPurchaseReservationUpdateOne {
+	_u.mutation.SetPeriodType(v)
+	return _u
+}
+
+// SetNillablePeriodType sets the "period_type" field if the given value is not nil.
+func (_u *PaymentPurchaseReservationUpdateOne) SetNillablePeriodType(v *string) *PaymentPurchaseReservationUpdateOne {
+	if v != nil {
+		_u.SetPeriodType(*v)
+	}
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *PaymentPurchaseReservationUpdateOne) SetStatus(v string) *PaymentPurchaseReservationUpdateOne {
 	_u.mutation.SetStatus(v)
@@ -459,6 +495,11 @@ func (_u *PaymentPurchaseReservationUpdateOne) check() error {
 			return &ValidationError{Name: "product_id", err: fmt.Errorf(`ent: validator failed for field "PaymentPurchaseReservation.product_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PeriodType(); ok {
+		if err := paymentpurchasereservation.PeriodTypeValidator(v); err != nil {
+			return &ValidationError{Name: "period_type", err: fmt.Errorf(`ent: validator failed for field "PaymentPurchaseReservation.period_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := paymentpurchasereservation.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "PaymentPurchaseReservation.status": %w`, err)}
@@ -519,6 +560,9 @@ func (_u *PaymentPurchaseReservationUpdateOne) sqlSave(ctx context.Context) (_no
 	}
 	if value, ok := _u.mutation.DailyPeriodStart(); ok {
 		_spec.SetField(paymentpurchasereservation.FieldDailyPeriodStart, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.PeriodType(); ok {
+		_spec.SetField(paymentpurchasereservation.FieldPeriodType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(paymentpurchasereservation.FieldStatus, field.TypeString, value)

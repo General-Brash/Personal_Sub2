@@ -11,7 +11,7 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// PaymentPurchaseCounter stores per-user product counts for one daily or total period.
+// PaymentPurchaseCounter stores per-user product counts for one calendar period or total period.
 type PaymentPurchaseCounter struct {
 	ent.Schema
 }

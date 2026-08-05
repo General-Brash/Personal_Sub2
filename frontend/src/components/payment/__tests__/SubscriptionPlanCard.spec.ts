@@ -40,7 +40,12 @@ const i18n = createI18n({
         },
         purchaseLimit: {
           ariaLabel: "Purchase limits",
-          daily: "Today",
+          calendarDay: "Natural day",
+          calendarWeek: "Natural week",
+          calendarMonth: "Natural month",
+          rollingDay: "Rolling {count} day(s)",
+          rollingWeek: "Rolling {count} week(s)",
+          rollingMonth: "Rolling {count} month(s)",
           total: "Total",
           exhausted: "Purchase limit reached",
           detail: "{scope} {used}/{limit}, {remaining} remaining",
@@ -106,16 +111,33 @@ describe("SubscriptionPlanCard", () => {
     expect(text).toContain("$101.00");
   });
 
-  it("shows separate daily and total purchase progress badges", () => {
+  it("shows natural-week and total purchase progress badges", () => {
     const wrapper = mountPlanCard("openai", {
       daily_purchase_limit: 2,
       daily_purchase_remaining: 1,
       total_purchase_limit: 5,
       total_purchase_remaining: 3,
+      purchase_limit_unit: 'week',
+      purchase_limit_mode: 'calendar',
     });
 
-    expect(wrapper.get('[data-test="purchase-limit-daily"]').text()).toContain('1/2');
-    expect(wrapper.get('[data-test="purchase-limit-total"]').text()).toContain('2/5');
+    expect(wrapper.get('[data-test="purchase-limit-periodic"]').text()).toContain('payment.purchaseLimit.calendarWeek');
+    expect(wrapper.get('[data-test="purchase-limit-total"]').text()).toContain('payment.purchaseLimit.total');
+  });
+
+  it("shows rolling-window purchase progress", () => {
+    const wrapper = mountPlanCard("openai", {
+      daily_purchase_limit: 4,
+      daily_purchase_remaining: 2,
+      purchase_limit_unit: 'month',
+      purchase_limit_mode: 'rolling',
+      purchase_limit_window_size: 4,
+      total_purchase_limit: 10,
+      total_purchase_remaining: 10,
+    });
+
+    expect(wrapper.get('[data-test="purchase-limit-periodic"]').text()).toContain('payment.purchaseLimit.rollingMonth');
+    expect(wrapper.get('[data-test="purchase-limit-periodic"]').text()).toContain('2/4');
   });
 
   it("disables purchase when either finite limit is exhausted", () => {

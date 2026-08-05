@@ -238,6 +238,55 @@ func (_u *CurrencyProductUpdate) AddTotalPurchaseLimit(v int) *CurrencyProductUp
 	return _u
 }
 
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (_u *CurrencyProductUpdate) SetPurchaseLimitUnit(v string) *CurrencyProductUpdate {
+	_u.mutation.SetPurchaseLimitUnit(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitUnit sets the "purchase_limit_unit" field if the given value is not nil.
+func (_u *CurrencyProductUpdate) SetNillablePurchaseLimitUnit(v *string) *CurrencyProductUpdate {
+	if v != nil {
+		_u.SetPurchaseLimitUnit(*v)
+	}
+	return _u
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (_u *CurrencyProductUpdate) SetPurchaseLimitMode(v string) *CurrencyProductUpdate {
+	_u.mutation.SetPurchaseLimitMode(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitMode sets the "purchase_limit_mode" field if the given value is not nil.
+func (_u *CurrencyProductUpdate) SetNillablePurchaseLimitMode(v *string) *CurrencyProductUpdate {
+	if v != nil {
+		_u.SetPurchaseLimitMode(*v)
+	}
+	return _u
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (_u *CurrencyProductUpdate) SetPurchaseLimitWindowSize(v int) *CurrencyProductUpdate {
+	_u.mutation.ResetPurchaseLimitWindowSize()
+	_u.mutation.SetPurchaseLimitWindowSize(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitWindowSize sets the "purchase_limit_window_size" field if the given value is not nil.
+func (_u *CurrencyProductUpdate) SetNillablePurchaseLimitWindowSize(v *int) *CurrencyProductUpdate {
+	if v != nil {
+		_u.SetPurchaseLimitWindowSize(*v)
+	}
+	return _u
+}
+
+// AddPurchaseLimitWindowSize adds value to the "purchase_limit_window_size" field.
+func (_u *CurrencyProductUpdate) AddPurchaseLimitWindowSize(v int) *CurrencyProductUpdate {
+	_u.mutation.AddPurchaseLimitWindowSize(v)
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CurrencyProductUpdate) SetUpdatedAt(v time.Time) *CurrencyProductUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -312,6 +361,21 @@ func (_u *CurrencyProductUpdate) check() error {
 			return &ValidationError{Name: "total_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.total_purchase_limit": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PurchaseLimitUnit(); ok {
+		if err := currencyproduct.PurchaseLimitUnitValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_unit", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.purchase_limit_unit": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PurchaseLimitMode(); ok {
+		if err := currencyproduct.PurchaseLimitModeValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_mode", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.purchase_limit_mode": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PurchaseLimitWindowSize(); ok {
+		if err := currencyproduct.PurchaseLimitWindowSizeValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_window_size", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.purchase_limit_window_size": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -380,6 +444,18 @@ func (_u *CurrencyProductUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.AddedTotalPurchaseLimit(); ok {
 		_spec.AddField(currencyproduct.FieldTotalPurchaseLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitUnit(); ok {
+		_spec.SetField(currencyproduct.FieldPurchaseLimitUnit, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitMode(); ok {
+		_spec.SetField(currencyproduct.FieldPurchaseLimitMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitWindowSize(); ok {
+		_spec.SetField(currencyproduct.FieldPurchaseLimitWindowSize, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPurchaseLimitWindowSize(); ok {
+		_spec.AddField(currencyproduct.FieldPurchaseLimitWindowSize, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(currencyproduct.FieldUpdatedAt, field.TypeTime, value)
@@ -614,6 +690,55 @@ func (_u *CurrencyProductUpdateOne) AddTotalPurchaseLimit(v int) *CurrencyProduc
 	return _u
 }
 
+// SetPurchaseLimitUnit sets the "purchase_limit_unit" field.
+func (_u *CurrencyProductUpdateOne) SetPurchaseLimitUnit(v string) *CurrencyProductUpdateOne {
+	_u.mutation.SetPurchaseLimitUnit(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitUnit sets the "purchase_limit_unit" field if the given value is not nil.
+func (_u *CurrencyProductUpdateOne) SetNillablePurchaseLimitUnit(v *string) *CurrencyProductUpdateOne {
+	if v != nil {
+		_u.SetPurchaseLimitUnit(*v)
+	}
+	return _u
+}
+
+// SetPurchaseLimitMode sets the "purchase_limit_mode" field.
+func (_u *CurrencyProductUpdateOne) SetPurchaseLimitMode(v string) *CurrencyProductUpdateOne {
+	_u.mutation.SetPurchaseLimitMode(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitMode sets the "purchase_limit_mode" field if the given value is not nil.
+func (_u *CurrencyProductUpdateOne) SetNillablePurchaseLimitMode(v *string) *CurrencyProductUpdateOne {
+	if v != nil {
+		_u.SetPurchaseLimitMode(*v)
+	}
+	return _u
+}
+
+// SetPurchaseLimitWindowSize sets the "purchase_limit_window_size" field.
+func (_u *CurrencyProductUpdateOne) SetPurchaseLimitWindowSize(v int) *CurrencyProductUpdateOne {
+	_u.mutation.ResetPurchaseLimitWindowSize()
+	_u.mutation.SetPurchaseLimitWindowSize(v)
+	return _u
+}
+
+// SetNillablePurchaseLimitWindowSize sets the "purchase_limit_window_size" field if the given value is not nil.
+func (_u *CurrencyProductUpdateOne) SetNillablePurchaseLimitWindowSize(v *int) *CurrencyProductUpdateOne {
+	if v != nil {
+		_u.SetPurchaseLimitWindowSize(*v)
+	}
+	return _u
+}
+
+// AddPurchaseLimitWindowSize adds value to the "purchase_limit_window_size" field.
+func (_u *CurrencyProductUpdateOne) AddPurchaseLimitWindowSize(v int) *CurrencyProductUpdateOne {
+	_u.mutation.AddPurchaseLimitWindowSize(v)
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CurrencyProductUpdateOne) SetUpdatedAt(v time.Time) *CurrencyProductUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -701,6 +826,21 @@ func (_u *CurrencyProductUpdateOne) check() error {
 			return &ValidationError{Name: "total_purchase_limit", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.total_purchase_limit": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PurchaseLimitUnit(); ok {
+		if err := currencyproduct.PurchaseLimitUnitValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_unit", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.purchase_limit_unit": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PurchaseLimitMode(); ok {
+		if err := currencyproduct.PurchaseLimitModeValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_mode", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.purchase_limit_mode": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PurchaseLimitWindowSize(); ok {
+		if err := currencyproduct.PurchaseLimitWindowSizeValidator(v); err != nil {
+			return &ValidationError{Name: "purchase_limit_window_size", err: fmt.Errorf(`ent: validator failed for field "CurrencyProduct.purchase_limit_window_size": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -786,6 +926,18 @@ func (_u *CurrencyProductUpdateOne) sqlSave(ctx context.Context) (_node *Currenc
 	}
 	if value, ok := _u.mutation.AddedTotalPurchaseLimit(); ok {
 		_spec.AddField(currencyproduct.FieldTotalPurchaseLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitUnit(); ok {
+		_spec.SetField(currencyproduct.FieldPurchaseLimitUnit, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitMode(); ok {
+		_spec.SetField(currencyproduct.FieldPurchaseLimitMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PurchaseLimitWindowSize(); ok {
+		_spec.SetField(currencyproduct.FieldPurchaseLimitWindowSize, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPurchaseLimitWindowSize(); ok {
+		_spec.AddField(currencyproduct.FieldPurchaseLimitWindowSize, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(currencyproduct.FieldUpdatedAt, field.TypeTime, value)

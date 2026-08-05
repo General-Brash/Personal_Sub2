@@ -47,6 +47,12 @@ const (
 	FieldDailyPurchaseLimit = "daily_purchase_limit"
 	// FieldTotalPurchaseLimit holds the string denoting the total_purchase_limit field in the database.
 	FieldTotalPurchaseLimit = "total_purchase_limit"
+	// FieldPurchaseLimitUnit holds the string denoting the purchase_limit_unit field in the database.
+	FieldPurchaseLimitUnit = "purchase_limit_unit"
+	// FieldPurchaseLimitMode holds the string denoting the purchase_limit_mode field in the database.
+	FieldPurchaseLimitMode = "purchase_limit_mode"
+	// FieldPurchaseLimitWindowSize holds the string denoting the purchase_limit_window_size field in the database.
+	FieldPurchaseLimitWindowSize = "purchase_limit_window_size"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -75,6 +81,9 @@ var Columns = []string{
 	FieldSortOrder,
 	FieldDailyPurchaseLimit,
 	FieldTotalPurchaseLimit,
+	FieldPurchaseLimitUnit,
+	FieldPurchaseLimitMode,
+	FieldPurchaseLimitWindowSize,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -132,6 +141,18 @@ var (
 	DefaultTotalPurchaseLimit int
 	// TotalPurchaseLimitValidator is a validator for the "total_purchase_limit" field. It is called by the builders before save.
 	TotalPurchaseLimitValidator func(int) error
+	// DefaultPurchaseLimitUnit holds the default value on creation for the "purchase_limit_unit" field.
+	DefaultPurchaseLimitUnit string
+	// PurchaseLimitUnitValidator is a validator for the "purchase_limit_unit" field. It is called by the builders before save.
+	PurchaseLimitUnitValidator func(string) error
+	// DefaultPurchaseLimitMode holds the default value on creation for the "purchase_limit_mode" field.
+	DefaultPurchaseLimitMode string
+	// PurchaseLimitModeValidator is a validator for the "purchase_limit_mode" field. It is called by the builders before save.
+	PurchaseLimitModeValidator func(string) error
+	// DefaultPurchaseLimitWindowSize holds the default value on creation for the "purchase_limit_window_size" field.
+	DefaultPurchaseLimitWindowSize int
+	// PurchaseLimitWindowSizeValidator is a validator for the "purchase_limit_window_size" field. It is called by the builders before save.
+	PurchaseLimitWindowSizeValidator func(int) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -231,6 +252,21 @@ func ByDailyPurchaseLimit(opts ...sql.OrderTermOption) OrderOption {
 // ByTotalPurchaseLimit orders the results by the total_purchase_limit field.
 func ByTotalPurchaseLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotalPurchaseLimit, opts...).ToFunc()
+}
+
+// ByPurchaseLimitUnit orders the results by the purchase_limit_unit field.
+func ByPurchaseLimitUnit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPurchaseLimitUnit, opts...).ToFunc()
+}
+
+// ByPurchaseLimitMode orders the results by the purchase_limit_mode field.
+func ByPurchaseLimitMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPurchaseLimitMode, opts...).ToFunc()
+}
+
+// ByPurchaseLimitWindowSize orders the results by the purchase_limit_window_size field.
+func ByPurchaseLimitWindowSize(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPurchaseLimitWindowSize, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.
