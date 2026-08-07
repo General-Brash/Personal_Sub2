@@ -57,7 +57,15 @@ func TestDataCleanupPreviewTokenBindsNormalizedFilterAndSnapshot(t *testing.T) {
 	changedEnd := end.Add(time.Hour).UTC()
 	changed.EndTime = &changedEnd
 	require.False(t, sameDataCleanupFilter(changed, payload.Filter))
-	_, err = svc.verifyPreviewToken(token[:len(token)-1] + "x")
+	tokenParts := strings.SplitN(token, ".", 2)
+	require.Len(t, tokenParts, 2)
+	require.NotEmpty(t, tokenParts[1])
+
+	tamperedSignature := "A" + tokenParts[1][1:]
+	if tokenParts[1][0] == 'A' {
+		tamperedSignature = "B" + tokenParts[1][1:]
+	}
+	_, err = svc.verifyPreviewToken(tokenParts[0] + "." + tamperedSignature)
 	require.Error(t, err)
 }
 
