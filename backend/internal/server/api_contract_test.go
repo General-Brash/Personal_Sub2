@@ -54,6 +54,7 @@ func TestAPIContracts(t *testing.T) {
 					"username": "alice",
 						"role": "user",
 						"balance": 12.5,
+						"temporary_credit_available": 0,
 						"frozen_balance": 0,
 						"concurrency": 5,
 					"rpm_limit": 0,
@@ -1540,6 +1541,10 @@ func (r *stubUserRepo) GetByID(ctx context.Context, id int64) (*service.User, er
 	}
 	clone := *user
 	return &clone, nil
+}
+
+func (r *stubUserRepo) GetAvailableCreditSnapshot(ctx context.Context, userID int64) (service.AvailableCreditSnapshot, error) {
+	return service.AvailableCreditSnapshot{PermanentBalance: 12.5}, nil
 }
 
 func (r *stubUserRepo) GetByEmail(ctx context.Context, email string) (*service.User, error) {

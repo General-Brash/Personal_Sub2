@@ -68,12 +68,6 @@ type purchaseReservationRecord struct {
 	periodType       string
 }
 
-type purchaseCounterKey struct {
-	productType string
-	productID   int64
-	periodType  string
-}
-
 // ProductPurchaseLimitStatus is returned beside checkout products for one user.
 type ProductPurchaseLimitStatus struct {
 	DailyLimit              int    `json:"daily_purchase_limit"`
@@ -131,11 +125,6 @@ func normalizePurchaseLimitPolicy(unit, mode string, windowSize int) (string, st
 		return "", "", 0, invalidPurchaseLimitPolicyError("purchase_limit_window_size")
 	}
 	return unit, mode, windowSize, nil
-}
-
-func validatePurchaseLimitPolicy(unit, mode string, windowSize int) error {
-	_, _, _, err := normalizePurchaseLimitPolicy(unit, mode, windowSize)
-	return err
 }
 
 func validatePurchaseLimits(daily, total int) error {
@@ -368,10 +357,6 @@ RETURNING id`, userID, productType, productID, totalPurchasePeriodStart)
 	return nil
 }
 
-func purchaseLimitExceededError(productType string, productID int64, limit int) error {
-	return purchaseLimitExceededErrorForPeriod(productType, productID, limit, purchasePeriodDaily)
-}
-
 func purchaseLimitExceededErrorForPeriod(productType string, productID int64, limit int, periodType string) error {
 	reason := "PERIODIC_PURCHASE_LIMIT_EXCEEDED"
 	if periodType == purchasePeriodDaily {
@@ -550,7 +535,7 @@ RETURNING order_id, user_id, product_type, product_id, daily_period_start, perio
 	if err != nil {
 		return nil, fmt.Errorf("transition purchase reservation: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
 			return nil, fmt.Errorf("transition purchase reservation: %w", err)
@@ -732,9 +717,6 @@ func reacquireAndConsumePurchaseTx(ctx context.Context, tx *dbent.Tx, order *dbe
 		sourceType: purchaseEventSourceOrder,
 		sourceID:   order.ID,
 	}
-	if spec.productID <= 0 {
-		return false, nil
-	}
 	if err := normalizePurchaseLimitSpec(spec); err != nil {
 		return false, err
 	}
@@ -743,6 +725,16 @@ func reacquireAndConsumePurchaseTx(ctx context.Context, tx *dbent.Tx, order *dbe
 	record, err := mutatePurchaseReservation(ctx, tx, order.ID, purchaseReservationReleased, purchaseReservationReserved, &periodStart, &periodType)
 	if err != nil || record == nil {
 		return false, err
+	}
+	// Older payment orders may not retain product_id fields even though their
+	// reservation row does. Use the reservation as the source of truth so
+	// late retries still enforce the original snapshot limit.
+	if spec.productID <= 0 {
+		spec.productType = record.productType
+		spec.productID = record.productID
+	}
+	if spec.productID <= 0 {
+		return false, nil
 	}
 	if periodType == purchasePeriodRolling {
 		if err := lockRollingPurchaseScope(ctx, tx, record.userID, record.productType, record.productID); err != nil {
@@ -923,7 +915,7 @@ WHERE user_id = $1
 	if err != nil {
 		return nil, fmt.Errorf("query purchase limit usage: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make(map[string]ProductPurchaseLimitUsage)
 	for rows.Next() {
 		var productType, periodType string
@@ -956,7 +948,7 @@ WHERE user_id = $1 AND status IN ('reserved', 'consumed')`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query rolling purchase usage: %w", err)
 	}
-	defer eventRows.Close()
+	defer func() { _ = eventRows.Close() }()
 	for eventRows.Next() {
 		var productType string
 		var productID int64
