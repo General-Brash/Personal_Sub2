@@ -33,7 +33,7 @@ func TestContentModerationSecondaryReviewStatusRoute(t *testing.T) {
 	settings := &secondaryReviewRouteSettingRepo{values: map[string]string{
 		service.SettingKeyContentModerationConfig: `{"secondary_review":{"mode":"off","endpoint":"` + classifier.URL + `","token":"` + classifierToken + `"}}`,
 	}}
-	moderationService := service.NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+	moderationService := service.NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{
 		ContentModeration: adminhandler.NewContentModerationHandler(moderationService),
 	}}
@@ -74,7 +74,7 @@ func TestContentModerationSecondaryReviewStatusRouteReportsModelVersionMismatch(
 	settings := &secondaryReviewRouteSettingRepo{values: map[string]string{
 		service.SettingKeyContentModerationConfig: `{"secondary_review":{"mode":"off","endpoint":"` + classifier.URL + `","expected_model_version":"intent-v1"}}`,
 	}}
-	moderationService := service.NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+	moderationService := service.NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{
 		ContentModeration: adminhandler.NewContentModerationHandler(moderationService),
 	}}

@@ -19,7 +19,8 @@ func TestOpenAIGatewayUsageTokenCostUsesLegacyFloatMultiplier(t *testing.T) {
 	want, err := svc.billingService.CalculateCostWithServiceTier("gpt-5.1", tokens, multiplier, "")
 	require.NoError(t, err)
 
-	got, err := svc.calculateOpenAIRecordUsageTokenCost(context.Background(), &APIKey{}, "gpt-5.1", multiplier, tokens, "", false)
+	longContextEnabled := false
+	got, err := svc.calculateOpenAIRecordUsageTokenCost(context.Background(), &APIKey{}, "gpt-5.1", multiplier, tokens, "", &longContextEnabled)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }

@@ -15,6 +15,7 @@ func requireLegacyAccountStatsCostResolver(func(
 	UsageTokens,
 	int,
 	float64,
+	string,
 ) *float64) {
 }
 
@@ -50,7 +51,7 @@ func TestLegacyAccountStatsFloatModelPricingCalculation(t *testing.T) {
 	got := tryModelFilePricing(billingService, "claude-sonnet-4", UsageTokens{
 		InputTokens:  2,
 		OutputTokens: 3,
-	})
+	}, "")
 	if got == nil {
 		t.Fatal("expected float model pricing to produce an account stats cost")
 	}

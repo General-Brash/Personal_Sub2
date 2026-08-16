@@ -827,7 +827,7 @@ func TestContentModerationSecondaryReview_ConfigMasksAndPreservesToken(t *testin
 	raw, err := json.Marshal(cfg)
 	require.NoError(t, err)
 	settings := &contentModerationTestSettingRepo{values: map[string]string{SettingKeyContentModerationConfig: string(raw)}}
-	svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+	svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 
 	view, err := svc.GetSecondaryReviewConfig(context.Background())
 	require.NoError(t, err)
@@ -857,7 +857,7 @@ func TestContentModerationSecondaryReview_EnforceRequiresCompatibleModerationMod
 	raw, err := json.Marshal(cfg)
 	require.NoError(t, err)
 	settings := &contentModerationTestSettingRepo{values: map[string]string{SettingKeyContentModerationConfig: string(raw)}}
-	svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+	svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 	mode := ContentModerationSecondaryReviewModeEnforce
 	endpoint := "http://127.0.0.1:8080"
 
@@ -886,7 +886,7 @@ func TestContentModerationSecondaryReview_ShadowRequiresRuntimePrerequisites(t *
 			raw, err := json.Marshal(cfg)
 			require.NoError(t, err)
 			settings := &contentModerationTestSettingRepo{values: map[string]string{SettingKeyContentModerationConfig: string(raw)}}
-			svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+			svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 			mode := ContentModerationSecondaryReviewModeShadow
 
 			_, err = svc.UpdateSecondaryReviewConfig(context.Background(), UpdateContentModerationSecondaryReviewConfigInput{Mode: &mode})
@@ -906,7 +906,7 @@ func TestContentModerationSecondaryReview_OffAllowsPreconfigurationAndShadowAllo
 		raw, err := json.Marshal(cfg)
 		require.NoError(t, err)
 		settings := &contentModerationTestSettingRepo{values: map[string]string{SettingKeyContentModerationConfig: string(raw)}}
-		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 		endpoint := "http://127.0.0.1:8080"
 		token := "classifier-token"
 		version := "future-intent-v1"
@@ -925,7 +925,7 @@ func TestContentModerationSecondaryReview_OffAllowsPreconfigurationAndShadowAllo
 		raw, err := json.Marshal(cfg)
 		require.NoError(t, err)
 		settings := &contentModerationTestSettingRepo{values: map[string]string{SettingKeyContentModerationConfig: string(raw)}}
-		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 		shadow := ContentModerationSecondaryReviewModeShadow
 
 		view, err := svc.UpdateSecondaryReviewConfig(context.Background(), UpdateContentModerationSecondaryReviewConfigInput{Mode: &shadow})
@@ -941,7 +941,7 @@ func TestContentModerationSecondaryReview_RejectsEqualThresholdsAndEmptyKeywords
 		raw, err := json.Marshal(cfg)
 		require.NoError(t, err)
 		settings := &contentModerationTestSettingRepo{values: map[string]string{SettingKeyContentModerationConfig: string(raw)}}
-		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 		reviewThreshold := 0.9
 		blockThreshold := 0.9
 
@@ -959,7 +959,7 @@ func TestContentModerationSecondaryReview_RejectsEqualThresholdsAndEmptyKeywords
 		raw, err := json.Marshal(cfg)
 		require.NoError(t, err)
 		settings := &contentModerationTestSettingRepo{values: map[string]string{SettingKeyContentModerationConfig: string(raw)}}
-		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 		mode := ContentModerationSecondaryReviewModeEnforce
 
 		_, err = svc.UpdateSecondaryReviewConfig(context.Background(), UpdateContentModerationSecondaryReviewConfigInput{Mode: &mode})
@@ -973,7 +973,7 @@ func TestContentModerationSecondaryReview_RejectsEqualThresholdsAndEmptyKeywords
 		raw, err := json.Marshal(cfg)
 		require.NoError(t, err)
 		settings := &contentModerationTestSettingRepo{values: map[string]string{SettingKeyContentModerationConfig: string(raw)}}
-		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 		mode := ContentModerationSecondaryReviewModeEnforce
 
 		_, err = svc.UpdateSecondaryReviewConfig(context.Background(), UpdateContentModerationSecondaryReviewConfigInput{Mode: &mode})
@@ -986,7 +986,7 @@ func TestContentModerationSecondaryReview_RejectsEqualThresholdsAndEmptyKeywords
 		raw, err := json.Marshal(cfg)
 		require.NoError(t, err)
 		settings := &contentModerationTestSettingRepo{values: map[string]string{SettingKeyContentModerationConfig: string(raw)}}
-		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil)
+		svc := NewContentModerationService(settings, nil, nil, nil, nil, nil, nil, nil)
 
 		for _, invalid := range []int{0, maxSecondaryReviewTimeoutMS + 1} {
 			_, err = svc.UpdateSecondaryReviewConfig(context.Background(), UpdateContentModerationSecondaryReviewConfigInput{TimeoutMS: &invalid})
@@ -1051,6 +1051,7 @@ func newSecondaryReviewTestService(t *testing.T, cfg *ContentModerationConfig) (
 		}},
 		repo,
 		&contentModerationTestHashCache{},
+		nil,
 		nil,
 		nil,
 		nil,

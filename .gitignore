@@ -147,3 +147,5 @@ output/
 # Intent classifier runtime data
 deploy/intent-models/
 deploy/intent-classifier-state/
+# Vitest / Vite cache at repo root
+.vite/

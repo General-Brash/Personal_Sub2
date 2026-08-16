@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
+
+	"github.com/shopspring/decimal"
 )
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
@@ -65,6 +68,9 @@ func (c *UsageBillingCommand) Normalize() error {
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildUsageBillingFingerprint(c)
 	}
+	// ??????????????????????????????????
+	// ?????? request_id ????????????? fingerprint conflict?
+	c.quantizeMonetaryFields()
 	return nil
 }
 
@@ -84,6 +90,28 @@ func usageBillingLedgerAmountFromFloat64(amount float64) float64 {
 		return amount
 	}
 	return normalized
+}
+
+// UsageBillingMonetaryScale ???????????????
+// ?? users.balance / api_keys.quota_used ? NUMERIC(20,8)?
+const UsageBillingMonetaryScale = 8
+
+func (c *UsageBillingCommand) quantizeMonetaryFields() {
+	c.BalanceCost = QuantizeUsageBillingAmount(c.BalanceCost)
+	c.SubscriptionCost = QuantizeUsageBillingAmount(c.SubscriptionCost)
+	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
+	c.APIKeyRateLimitCost = QuantizeUsageBillingAmount(c.APIKeyRateLimitCost)
+	c.AccountQuotaCost = QuantizeUsageBillingAmount(c.AccountQuotaCost)
+}
+
+// QuantizeUsageBillingAmount ??? PostgreSQL NUMERIC ??? half-away-from-zero ???
+// ?????????? SQL ?????? 8 ????
+func QuantizeUsageBillingAmount(v float64) float64 {
+	if v == 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+		return v
+	}
+	quantized, _ := decimal.NewFromFloat(v).Round(UsageBillingMonetaryScale).Float64()
+	return quantized
 }
 
 func buildUsageBillingFingerprint(c *UsageBillingCommand) string {

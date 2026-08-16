@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 是基于官方 Sub2API `v0.1.169` 开发并独立维护的个人版本，本次融合版本为 `v0.1.169-P1`。
+Personal_Sub2 是基于官方 Sub2API `v0.1.177` 开发并独立维护的个人版本，本次融合版本为 `v0.1.177-P1`。
 
 [English](README.md) | 中文 | [日本語](README_JA.md)
 
@@ -13,7 +13,7 @@ Personal_Sub2 是基于官方 Sub2API `v0.1.169` 开发并独立维护的个人�
 
 仓库不包含正式模型权重。启用模型二次判定前，请按 [`MODEL_PACKAGE.md`](services/intent-classifier/MODEL_PACKAGE.md) 准备并激活模型包。
 
-## 官方 v0.1.169 融合内容
+## 官方 v0.1.177 融合内容
 
 - **上游 URL 安全**：转发前校验客户端可控的 OpenAI Responses 子路径、Gemini 模型/操作路径和 Grok 视频请求 ID，拒绝可能改变上游 URL 结构的路径片段。
 - **运行时定价与计费**：Docker 和 GoReleaser 镜像构建现会携带运行时回退定价资源，并修正 GPT-5.6 Luna/Terra 费率与 GLM-5.2 回退定价。
