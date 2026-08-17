@@ -44,6 +44,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchaselimitevent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
+	"github.com/Wei-Shaw/sub2api/ent/paymentrefundattempt"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -155,6 +156,7 @@ func checkColumn(t, c string) error {
 			paymentpurchasecounter.Table:         paymentpurchasecounter.ValidColumn,
 			paymentpurchaselimitevent.Table:      paymentpurchaselimitevent.ValidColumn,
 			paymentpurchasereservation.Table:     paymentpurchasereservation.ValidColumn,
+			paymentrefundattempt.Table:           paymentrefundattempt.ValidColumn,
 			pendingauthsession.Table:             pendingauthsession.ValidColumn,
 			promocode.Table:                      promocode.ValidColumn,
 			promocodeusage.Table:                 promocodeusage.ValidColumn,

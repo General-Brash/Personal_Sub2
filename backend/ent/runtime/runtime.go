@@ -37,6 +37,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchaselimitevent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
+	"github.com/Wei-Shaw/sub2api/ent/paymentrefundattempt"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -1888,6 +1889,86 @@ func init() {
 	paymentpurchasereservation.DefaultUpdatedAt = paymentpurchasereservationDescUpdatedAt.Default.(func() time.Time)
 	// paymentpurchasereservation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	paymentpurchasereservation.UpdateDefaultUpdatedAt = paymentpurchasereservationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	paymentrefundattemptFields := schema.PaymentRefundAttempt{}.Fields()
+	_ = paymentrefundattemptFields
+	// paymentrefundattemptDescAttemptID is the schema descriptor for attempt_id field.
+	paymentrefundattemptDescAttemptID := paymentrefundattemptFields[0].Descriptor()
+	// paymentrefundattempt.AttemptIDValidator is a validator for the "attempt_id" field. It is called by the builders before save.
+	paymentrefundattempt.AttemptIDValidator = paymentrefundattemptDescAttemptID.Validators[0].(func(string) error)
+	// paymentrefundattemptDescOrderID is the schema descriptor for order_id field.
+	paymentrefundattemptDescOrderID := paymentrefundattemptFields[1].Descriptor()
+	// paymentrefundattempt.OrderIDValidator is a validator for the "order_id" field. It is called by the builders before save.
+	paymentrefundattempt.OrderIDValidator = paymentrefundattemptDescOrderID.Validators[0].(func(int64) error)
+	// paymentrefundattemptDescReason is the schema descriptor for reason field.
+	paymentrefundattemptDescReason := paymentrefundattemptFields[4].Descriptor()
+	// paymentrefundattempt.DefaultReason holds the default value on creation for the reason field.
+	paymentrefundattempt.DefaultReason = paymentrefundattemptDescReason.Default.(string)
+	// paymentrefundattemptDescOriginalOrderStatus is the schema descriptor for original_order_status field.
+	paymentrefundattemptDescOriginalOrderStatus := paymentrefundattemptFields[5].Descriptor()
+	// paymentrefundattempt.OriginalOrderStatusValidator is a validator for the "original_order_status" field. It is called by the builders before save.
+	paymentrefundattempt.OriginalOrderStatusValidator = paymentrefundattemptDescOriginalOrderStatus.Validators[0].(func(string) error)
+	// paymentrefundattemptDescSource is the schema descriptor for source field.
+	paymentrefundattemptDescSource := paymentrefundattemptFields[6].Descriptor()
+	// paymentrefundattempt.DefaultSource holds the default value on creation for the source field.
+	paymentrefundattempt.DefaultSource = paymentrefundattemptDescSource.Default.(string)
+	// paymentrefundattempt.SourceValidator is a validator for the "source" field. It is called by the builders before save.
+	paymentrefundattempt.SourceValidator = paymentrefundattemptDescSource.Validators[0].(func(string) error)
+	// paymentrefundattemptDescDeductionType is the schema descriptor for deduction_type field.
+	paymentrefundattemptDescDeductionType := paymentrefundattemptFields[9].Descriptor()
+	// paymentrefundattempt.DefaultDeductionType holds the default value on creation for the deduction_type field.
+	paymentrefundattempt.DefaultDeductionType = paymentrefundattemptDescDeductionType.Default.(string)
+	// paymentrefundattempt.DeductionTypeValidator is a validator for the "deduction_type" field. It is called by the builders before save.
+	paymentrefundattempt.DeductionTypeValidator = paymentrefundattemptDescDeductionType.Validators[0].(func(string) error)
+	// paymentrefundattemptDescHeldBalanceAmount is the schema descriptor for held_balance_amount field.
+	paymentrefundattemptDescHeldBalanceAmount := paymentrefundattemptFields[10].Descriptor()
+	// paymentrefundattempt.DefaultHeldBalanceAmount holds the default value on creation for the held_balance_amount field.
+	paymentrefundattempt.DefaultHeldBalanceAmount = paymentrefundattemptDescHeldBalanceAmount.Default.(float64)
+	// paymentrefundattemptDescSubscriptionDays is the schema descriptor for subscription_days field.
+	paymentrefundattemptDescSubscriptionDays := paymentrefundattemptFields[12].Descriptor()
+	// paymentrefundattempt.DefaultSubscriptionDays holds the default value on creation for the subscription_days field.
+	paymentrefundattempt.DefaultSubscriptionDays = paymentrefundattemptDescSubscriptionDays.Default.(int)
+	// paymentrefundattemptDescSubscriptionOriginalStatus is the schema descriptor for subscription_original_status field.
+	paymentrefundattemptDescSubscriptionOriginalStatus := paymentrefundattemptFields[14].Descriptor()
+	// paymentrefundattempt.SubscriptionOriginalStatusValidator is a validator for the "subscription_original_status" field. It is called by the builders before save.
+	paymentrefundattempt.SubscriptionOriginalStatusValidator = paymentrefundattemptDescSubscriptionOriginalStatus.Validators[0].(func(string) error)
+	// paymentrefundattemptDescSubscriptionRevoked is the schema descriptor for subscription_revoked field.
+	paymentrefundattemptDescSubscriptionRevoked := paymentrefundattemptFields[15].Descriptor()
+	// paymentrefundattempt.DefaultSubscriptionRevoked holds the default value on creation for the subscription_revoked field.
+	paymentrefundattempt.DefaultSubscriptionRevoked = paymentrefundattemptDescSubscriptionRevoked.Default.(bool)
+	// paymentrefundattemptDescDeductionState is the schema descriptor for deduction_state field.
+	paymentrefundattemptDescDeductionState := paymentrefundattemptFields[16].Descriptor()
+	// paymentrefundattempt.DefaultDeductionState holds the default value on creation for the deduction_state field.
+	paymentrefundattempt.DefaultDeductionState = paymentrefundattemptDescDeductionState.Default.(string)
+	// paymentrefundattempt.DeductionStateValidator is a validator for the "deduction_state" field. It is called by the builders before save.
+	paymentrefundattempt.DeductionStateValidator = paymentrefundattemptDescDeductionState.Validators[0].(func(string) error)
+	// paymentrefundattemptDescProviderRefundID is the schema descriptor for provider_refund_id field.
+	paymentrefundattemptDescProviderRefundID := paymentrefundattemptFields[17].Descriptor()
+	// paymentrefundattempt.ProviderRefundIDValidator is a validator for the "provider_refund_id" field. It is called by the builders before save.
+	paymentrefundattempt.ProviderRefundIDValidator = paymentrefundattemptDescProviderRefundID.Validators[0].(func(string) error)
+	// paymentrefundattemptDescProviderState is the schema descriptor for provider_state field.
+	paymentrefundattemptDescProviderState := paymentrefundattemptFields[18].Descriptor()
+	// paymentrefundattempt.DefaultProviderState holds the default value on creation for the provider_state field.
+	paymentrefundattempt.DefaultProviderState = paymentrefundattemptDescProviderState.Default.(string)
+	// paymentrefundattempt.ProviderStateValidator is a validator for the "provider_state" field. It is called by the builders before save.
+	paymentrefundattempt.ProviderStateValidator = paymentrefundattemptDescProviderState.Validators[0].(func(string) error)
+	// paymentrefundattemptDescProviderResult is the schema descriptor for provider_result field.
+	paymentrefundattemptDescProviderResult := paymentrefundattemptFields[19].Descriptor()
+	// paymentrefundattempt.DefaultProviderResult holds the default value on creation for the provider_result field.
+	paymentrefundattempt.DefaultProviderResult = paymentrefundattemptDescProviderResult.Default.(string)
+	// paymentrefundattemptDescManualReview is the schema descriptor for manual_review field.
+	paymentrefundattemptDescManualReview := paymentrefundattemptFields[20].Descriptor()
+	// paymentrefundattempt.DefaultManualReview holds the default value on creation for the manual_review field.
+	paymentrefundattempt.DefaultManualReview = paymentrefundattemptDescManualReview.Default.(bool)
+	// paymentrefundattemptDescCreatedAt is the schema descriptor for created_at field.
+	paymentrefundattemptDescCreatedAt := paymentrefundattemptFields[21].Descriptor()
+	// paymentrefundattempt.DefaultCreatedAt holds the default value on creation for the created_at field.
+	paymentrefundattempt.DefaultCreatedAt = paymentrefundattemptDescCreatedAt.Default.(func() time.Time)
+	// paymentrefundattemptDescUpdatedAt is the schema descriptor for updated_at field.
+	paymentrefundattemptDescUpdatedAt := paymentrefundattemptFields[22].Descriptor()
+	// paymentrefundattempt.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	paymentrefundattempt.DefaultUpdatedAt = paymentrefundattemptDescUpdatedAt.Default.(func() time.Time)
+	// paymentrefundattempt.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	paymentrefundattempt.UpdateDefaultUpdatedAt = paymentrefundattemptDescUpdatedAt.UpdateDefault.(func() time.Time)
 	pendingauthsessionMixin := schema.PendingAuthSession{}.Mixin()
 	pendingauthsessionMixinFields0 := pendingauthsessionMixin[0].Fields()
 	_ = pendingauthsessionMixinFields0

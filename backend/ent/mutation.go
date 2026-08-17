@@ -44,6 +44,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchaselimitevent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
+	"github.com/Wei-Shaw/sub2api/ent/paymentrefundattempt"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
@@ -108,6 +109,7 @@ const (
 	TypePaymentPurchaseCounter         = "PaymentPurchaseCounter"
 	TypePaymentPurchaseLimitEvent      = "PaymentPurchaseLimitEvent"
 	TypePaymentPurchaseReservation     = "PaymentPurchaseReservation"
+	TypePaymentRefundAttempt           = "PaymentRefundAttempt"
 	TypePendingAuthSession             = "PendingAuthSession"
 	TypePromoCode                      = "PromoCode"
 	TypePromoCodeUsage                 = "PromoCodeUsage"
@@ -46426,6 +46428,1801 @@ func (m *PaymentPurchaseReservationMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *PaymentPurchaseReservationMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown PaymentPurchaseReservation edge %s", name)
+}
+
+// PaymentRefundAttemptMutation represents an operation that mutates the PaymentRefundAttempt nodes in the graph.
+type PaymentRefundAttemptMutation struct {
+	config
+	op                               Op
+	typ                              string
+	id                               *int64
+	attempt_id                       *string
+	order_id                         *int64
+	addorder_id                      *int64
+	refund_amount                    *float64
+	addrefund_amount                 *float64
+	gateway_amount                   *float64
+	addgateway_amount                *float64
+	reason                           *string
+	original_order_status            *string
+	source                           *string
+	deduct_balance                   *bool
+	force                            *bool
+	deduction_type                   *string
+	held_balance_amount              *float64
+	addheld_balance_amount           *float64
+	subscription_id                  *int64
+	addsubscription_id               *int64
+	subscription_days                *int
+	addsubscription_days             *int
+	subscription_original_expires_at *time.Time
+	subscription_original_status     *string
+	subscription_revoked             *bool
+	deduction_state                  *string
+	provider_refund_id               *string
+	provider_state                   *string
+	provider_result                  *string
+	manual_review                    *bool
+	created_at                       *time.Time
+	updated_at                       *time.Time
+	clearedFields                    map[string]struct{}
+	done                             bool
+	oldValue                         func(context.Context) (*PaymentRefundAttempt, error)
+	predicates                       []predicate.PaymentRefundAttempt
+}
+
+var _ ent.Mutation = (*PaymentRefundAttemptMutation)(nil)
+
+// paymentrefundattemptOption allows management of the mutation configuration using functional options.
+type paymentrefundattemptOption func(*PaymentRefundAttemptMutation)
+
+// newPaymentRefundAttemptMutation creates new mutation for the PaymentRefundAttempt entity.
+func newPaymentRefundAttemptMutation(c config, op Op, opts ...paymentrefundattemptOption) *PaymentRefundAttemptMutation {
+	m := &PaymentRefundAttemptMutation{
+		config:        c,
+		op:            op,
+		typ:           TypePaymentRefundAttempt,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withPaymentRefundAttemptID sets the ID field of the mutation.
+func withPaymentRefundAttemptID(id int64) paymentrefundattemptOption {
+	return func(m *PaymentRefundAttemptMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *PaymentRefundAttempt
+		)
+		m.oldValue = func(ctx context.Context) (*PaymentRefundAttempt, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().PaymentRefundAttempt.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withPaymentRefundAttempt sets the old PaymentRefundAttempt of the mutation.
+func withPaymentRefundAttempt(node *PaymentRefundAttempt) paymentrefundattemptOption {
+	return func(m *PaymentRefundAttemptMutation) {
+		m.oldValue = func(context.Context) (*PaymentRefundAttempt, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m PaymentRefundAttemptMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m PaymentRefundAttemptMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *PaymentRefundAttemptMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *PaymentRefundAttemptMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().PaymentRefundAttempt.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetAttemptID sets the "attempt_id" field.
+func (m *PaymentRefundAttemptMutation) SetAttemptID(s string) {
+	m.attempt_id = &s
+}
+
+// AttemptID returns the value of the "attempt_id" field in the mutation.
+func (m *PaymentRefundAttemptMutation) AttemptID() (r string, exists bool) {
+	v := m.attempt_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttemptID returns the old "attempt_id" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldAttemptID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttemptID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttemptID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttemptID: %w", err)
+	}
+	return oldValue.AttemptID, nil
+}
+
+// ResetAttemptID resets all changes to the "attempt_id" field.
+func (m *PaymentRefundAttemptMutation) ResetAttemptID() {
+	m.attempt_id = nil
+}
+
+// SetOrderID sets the "order_id" field.
+func (m *PaymentRefundAttemptMutation) SetOrderID(i int64) {
+	m.order_id = &i
+	m.addorder_id = nil
+}
+
+// OrderID returns the value of the "order_id" field in the mutation.
+func (m *PaymentRefundAttemptMutation) OrderID() (r int64, exists bool) {
+	v := m.order_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOrderID returns the old "order_id" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldOrderID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOrderID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOrderID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOrderID: %w", err)
+	}
+	return oldValue.OrderID, nil
+}
+
+// AddOrderID adds i to the "order_id" field.
+func (m *PaymentRefundAttemptMutation) AddOrderID(i int64) {
+	if m.addorder_id != nil {
+		*m.addorder_id += i
+	} else {
+		m.addorder_id = &i
+	}
+}
+
+// AddedOrderID returns the value that was added to the "order_id" field in this mutation.
+func (m *PaymentRefundAttemptMutation) AddedOrderID() (r int64, exists bool) {
+	v := m.addorder_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOrderID resets all changes to the "order_id" field.
+func (m *PaymentRefundAttemptMutation) ResetOrderID() {
+	m.order_id = nil
+	m.addorder_id = nil
+}
+
+// SetRefundAmount sets the "refund_amount" field.
+func (m *PaymentRefundAttemptMutation) SetRefundAmount(f float64) {
+	m.refund_amount = &f
+	m.addrefund_amount = nil
+}
+
+// RefundAmount returns the value of the "refund_amount" field in the mutation.
+func (m *PaymentRefundAttemptMutation) RefundAmount() (r float64, exists bool) {
+	v := m.refund_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRefundAmount returns the old "refund_amount" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldRefundAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRefundAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRefundAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRefundAmount: %w", err)
+	}
+	return oldValue.RefundAmount, nil
+}
+
+// AddRefundAmount adds f to the "refund_amount" field.
+func (m *PaymentRefundAttemptMutation) AddRefundAmount(f float64) {
+	if m.addrefund_amount != nil {
+		*m.addrefund_amount += f
+	} else {
+		m.addrefund_amount = &f
+	}
+}
+
+// AddedRefundAmount returns the value that was added to the "refund_amount" field in this mutation.
+func (m *PaymentRefundAttemptMutation) AddedRefundAmount() (r float64, exists bool) {
+	v := m.addrefund_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRefundAmount resets all changes to the "refund_amount" field.
+func (m *PaymentRefundAttemptMutation) ResetRefundAmount() {
+	m.refund_amount = nil
+	m.addrefund_amount = nil
+}
+
+// SetGatewayAmount sets the "gateway_amount" field.
+func (m *PaymentRefundAttemptMutation) SetGatewayAmount(f float64) {
+	m.gateway_amount = &f
+	m.addgateway_amount = nil
+}
+
+// GatewayAmount returns the value of the "gateway_amount" field in the mutation.
+func (m *PaymentRefundAttemptMutation) GatewayAmount() (r float64, exists bool) {
+	v := m.gateway_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGatewayAmount returns the old "gateway_amount" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldGatewayAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGatewayAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGatewayAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGatewayAmount: %w", err)
+	}
+	return oldValue.GatewayAmount, nil
+}
+
+// AddGatewayAmount adds f to the "gateway_amount" field.
+func (m *PaymentRefundAttemptMutation) AddGatewayAmount(f float64) {
+	if m.addgateway_amount != nil {
+		*m.addgateway_amount += f
+	} else {
+		m.addgateway_amount = &f
+	}
+}
+
+// AddedGatewayAmount returns the value that was added to the "gateway_amount" field in this mutation.
+func (m *PaymentRefundAttemptMutation) AddedGatewayAmount() (r float64, exists bool) {
+	v := m.addgateway_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetGatewayAmount resets all changes to the "gateway_amount" field.
+func (m *PaymentRefundAttemptMutation) ResetGatewayAmount() {
+	m.gateway_amount = nil
+	m.addgateway_amount = nil
+}
+
+// SetReason sets the "reason" field.
+func (m *PaymentRefundAttemptMutation) SetReason(s string) {
+	m.reason = &s
+}
+
+// Reason returns the value of the "reason" field in the mutation.
+func (m *PaymentRefundAttemptMutation) Reason() (r string, exists bool) {
+	v := m.reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReason returns the old "reason" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReason: %w", err)
+	}
+	return oldValue.Reason, nil
+}
+
+// ResetReason resets all changes to the "reason" field.
+func (m *PaymentRefundAttemptMutation) ResetReason() {
+	m.reason = nil
+}
+
+// SetOriginalOrderStatus sets the "original_order_status" field.
+func (m *PaymentRefundAttemptMutation) SetOriginalOrderStatus(s string) {
+	m.original_order_status = &s
+}
+
+// OriginalOrderStatus returns the value of the "original_order_status" field in the mutation.
+func (m *PaymentRefundAttemptMutation) OriginalOrderStatus() (r string, exists bool) {
+	v := m.original_order_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOriginalOrderStatus returns the old "original_order_status" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldOriginalOrderStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOriginalOrderStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOriginalOrderStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOriginalOrderStatus: %w", err)
+	}
+	return oldValue.OriginalOrderStatus, nil
+}
+
+// ResetOriginalOrderStatus resets all changes to the "original_order_status" field.
+func (m *PaymentRefundAttemptMutation) ResetOriginalOrderStatus() {
+	m.original_order_status = nil
+}
+
+// SetSource sets the "source" field.
+func (m *PaymentRefundAttemptMutation) SetSource(s string) {
+	m.source = &s
+}
+
+// Source returns the value of the "source" field in the mutation.
+func (m *PaymentRefundAttemptMutation) Source() (r string, exists bool) {
+	v := m.source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSource returns the old "source" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSource: %w", err)
+	}
+	return oldValue.Source, nil
+}
+
+// ResetSource resets all changes to the "source" field.
+func (m *PaymentRefundAttemptMutation) ResetSource() {
+	m.source = nil
+}
+
+// SetDeductBalance sets the "deduct_balance" field.
+func (m *PaymentRefundAttemptMutation) SetDeductBalance(b bool) {
+	m.deduct_balance = &b
+}
+
+// DeductBalance returns the value of the "deduct_balance" field in the mutation.
+func (m *PaymentRefundAttemptMutation) DeductBalance() (r bool, exists bool) {
+	v := m.deduct_balance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeductBalance returns the old "deduct_balance" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldDeductBalance(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeductBalance is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeductBalance requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeductBalance: %w", err)
+	}
+	return oldValue.DeductBalance, nil
+}
+
+// ResetDeductBalance resets all changes to the "deduct_balance" field.
+func (m *PaymentRefundAttemptMutation) ResetDeductBalance() {
+	m.deduct_balance = nil
+}
+
+// SetForce sets the "force" field.
+func (m *PaymentRefundAttemptMutation) SetForce(b bool) {
+	m.force = &b
+}
+
+// Force returns the value of the "force" field in the mutation.
+func (m *PaymentRefundAttemptMutation) Force() (r bool, exists bool) {
+	v := m.force
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldForce returns the old "force" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldForce(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldForce is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldForce requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldForce: %w", err)
+	}
+	return oldValue.Force, nil
+}
+
+// ResetForce resets all changes to the "force" field.
+func (m *PaymentRefundAttemptMutation) ResetForce() {
+	m.force = nil
+}
+
+// SetDeductionType sets the "deduction_type" field.
+func (m *PaymentRefundAttemptMutation) SetDeductionType(s string) {
+	m.deduction_type = &s
+}
+
+// DeductionType returns the value of the "deduction_type" field in the mutation.
+func (m *PaymentRefundAttemptMutation) DeductionType() (r string, exists bool) {
+	v := m.deduction_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeductionType returns the old "deduction_type" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldDeductionType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeductionType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeductionType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeductionType: %w", err)
+	}
+	return oldValue.DeductionType, nil
+}
+
+// ResetDeductionType resets all changes to the "deduction_type" field.
+func (m *PaymentRefundAttemptMutation) ResetDeductionType() {
+	m.deduction_type = nil
+}
+
+// SetHeldBalanceAmount sets the "held_balance_amount" field.
+func (m *PaymentRefundAttemptMutation) SetHeldBalanceAmount(f float64) {
+	m.held_balance_amount = &f
+	m.addheld_balance_amount = nil
+}
+
+// HeldBalanceAmount returns the value of the "held_balance_amount" field in the mutation.
+func (m *PaymentRefundAttemptMutation) HeldBalanceAmount() (r float64, exists bool) {
+	v := m.held_balance_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeldBalanceAmount returns the old "held_balance_amount" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldHeldBalanceAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeldBalanceAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeldBalanceAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeldBalanceAmount: %w", err)
+	}
+	return oldValue.HeldBalanceAmount, nil
+}
+
+// AddHeldBalanceAmount adds f to the "held_balance_amount" field.
+func (m *PaymentRefundAttemptMutation) AddHeldBalanceAmount(f float64) {
+	if m.addheld_balance_amount != nil {
+		*m.addheld_balance_amount += f
+	} else {
+		m.addheld_balance_amount = &f
+	}
+}
+
+// AddedHeldBalanceAmount returns the value that was added to the "held_balance_amount" field in this mutation.
+func (m *PaymentRefundAttemptMutation) AddedHeldBalanceAmount() (r float64, exists bool) {
+	v := m.addheld_balance_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetHeldBalanceAmount resets all changes to the "held_balance_amount" field.
+func (m *PaymentRefundAttemptMutation) ResetHeldBalanceAmount() {
+	m.held_balance_amount = nil
+	m.addheld_balance_amount = nil
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (m *PaymentRefundAttemptMutation) SetSubscriptionID(i int64) {
+	m.subscription_id = &i
+	m.addsubscription_id = nil
+}
+
+// SubscriptionID returns the value of the "subscription_id" field in the mutation.
+func (m *PaymentRefundAttemptMutation) SubscriptionID() (r int64, exists bool) {
+	v := m.subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionID returns the old "subscription_id" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldSubscriptionID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionID: %w", err)
+	}
+	return oldValue.SubscriptionID, nil
+}
+
+// AddSubscriptionID adds i to the "subscription_id" field.
+func (m *PaymentRefundAttemptMutation) AddSubscriptionID(i int64) {
+	if m.addsubscription_id != nil {
+		*m.addsubscription_id += i
+	} else {
+		m.addsubscription_id = &i
+	}
+}
+
+// AddedSubscriptionID returns the value that was added to the "subscription_id" field in this mutation.
+func (m *PaymentRefundAttemptMutation) AddedSubscriptionID() (r int64, exists bool) {
+	v := m.addsubscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (m *PaymentRefundAttemptMutation) ClearSubscriptionID() {
+	m.subscription_id = nil
+	m.addsubscription_id = nil
+	m.clearedFields[paymentrefundattempt.FieldSubscriptionID] = struct{}{}
+}
+
+// SubscriptionIDCleared returns if the "subscription_id" field was cleared in this mutation.
+func (m *PaymentRefundAttemptMutation) SubscriptionIDCleared() bool {
+	_, ok := m.clearedFields[paymentrefundattempt.FieldSubscriptionID]
+	return ok
+}
+
+// ResetSubscriptionID resets all changes to the "subscription_id" field.
+func (m *PaymentRefundAttemptMutation) ResetSubscriptionID() {
+	m.subscription_id = nil
+	m.addsubscription_id = nil
+	delete(m.clearedFields, paymentrefundattempt.FieldSubscriptionID)
+}
+
+// SetSubscriptionDays sets the "subscription_days" field.
+func (m *PaymentRefundAttemptMutation) SetSubscriptionDays(i int) {
+	m.subscription_days = &i
+	m.addsubscription_days = nil
+}
+
+// SubscriptionDays returns the value of the "subscription_days" field in the mutation.
+func (m *PaymentRefundAttemptMutation) SubscriptionDays() (r int, exists bool) {
+	v := m.subscription_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionDays returns the old "subscription_days" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldSubscriptionDays(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionDays is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionDays requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionDays: %w", err)
+	}
+	return oldValue.SubscriptionDays, nil
+}
+
+// AddSubscriptionDays adds i to the "subscription_days" field.
+func (m *PaymentRefundAttemptMutation) AddSubscriptionDays(i int) {
+	if m.addsubscription_days != nil {
+		*m.addsubscription_days += i
+	} else {
+		m.addsubscription_days = &i
+	}
+}
+
+// AddedSubscriptionDays returns the value that was added to the "subscription_days" field in this mutation.
+func (m *PaymentRefundAttemptMutation) AddedSubscriptionDays() (r int, exists bool) {
+	v := m.addsubscription_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSubscriptionDays resets all changes to the "subscription_days" field.
+func (m *PaymentRefundAttemptMutation) ResetSubscriptionDays() {
+	m.subscription_days = nil
+	m.addsubscription_days = nil
+}
+
+// SetSubscriptionOriginalExpiresAt sets the "subscription_original_expires_at" field.
+func (m *PaymentRefundAttemptMutation) SetSubscriptionOriginalExpiresAt(t time.Time) {
+	m.subscription_original_expires_at = &t
+}
+
+// SubscriptionOriginalExpiresAt returns the value of the "subscription_original_expires_at" field in the mutation.
+func (m *PaymentRefundAttemptMutation) SubscriptionOriginalExpiresAt() (r time.Time, exists bool) {
+	v := m.subscription_original_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionOriginalExpiresAt returns the old "subscription_original_expires_at" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldSubscriptionOriginalExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionOriginalExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionOriginalExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionOriginalExpiresAt: %w", err)
+	}
+	return oldValue.SubscriptionOriginalExpiresAt, nil
+}
+
+// ClearSubscriptionOriginalExpiresAt clears the value of the "subscription_original_expires_at" field.
+func (m *PaymentRefundAttemptMutation) ClearSubscriptionOriginalExpiresAt() {
+	m.subscription_original_expires_at = nil
+	m.clearedFields[paymentrefundattempt.FieldSubscriptionOriginalExpiresAt] = struct{}{}
+}
+
+// SubscriptionOriginalExpiresAtCleared returns if the "subscription_original_expires_at" field was cleared in this mutation.
+func (m *PaymentRefundAttemptMutation) SubscriptionOriginalExpiresAtCleared() bool {
+	_, ok := m.clearedFields[paymentrefundattempt.FieldSubscriptionOriginalExpiresAt]
+	return ok
+}
+
+// ResetSubscriptionOriginalExpiresAt resets all changes to the "subscription_original_expires_at" field.
+func (m *PaymentRefundAttemptMutation) ResetSubscriptionOriginalExpiresAt() {
+	m.subscription_original_expires_at = nil
+	delete(m.clearedFields, paymentrefundattempt.FieldSubscriptionOriginalExpiresAt)
+}
+
+// SetSubscriptionOriginalStatus sets the "subscription_original_status" field.
+func (m *PaymentRefundAttemptMutation) SetSubscriptionOriginalStatus(s string) {
+	m.subscription_original_status = &s
+}
+
+// SubscriptionOriginalStatus returns the value of the "subscription_original_status" field in the mutation.
+func (m *PaymentRefundAttemptMutation) SubscriptionOriginalStatus() (r string, exists bool) {
+	v := m.subscription_original_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionOriginalStatus returns the old "subscription_original_status" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldSubscriptionOriginalStatus(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionOriginalStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionOriginalStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionOriginalStatus: %w", err)
+	}
+	return oldValue.SubscriptionOriginalStatus, nil
+}
+
+// ClearSubscriptionOriginalStatus clears the value of the "subscription_original_status" field.
+func (m *PaymentRefundAttemptMutation) ClearSubscriptionOriginalStatus() {
+	m.subscription_original_status = nil
+	m.clearedFields[paymentrefundattempt.FieldSubscriptionOriginalStatus] = struct{}{}
+}
+
+// SubscriptionOriginalStatusCleared returns if the "subscription_original_status" field was cleared in this mutation.
+func (m *PaymentRefundAttemptMutation) SubscriptionOriginalStatusCleared() bool {
+	_, ok := m.clearedFields[paymentrefundattempt.FieldSubscriptionOriginalStatus]
+	return ok
+}
+
+// ResetSubscriptionOriginalStatus resets all changes to the "subscription_original_status" field.
+func (m *PaymentRefundAttemptMutation) ResetSubscriptionOriginalStatus() {
+	m.subscription_original_status = nil
+	delete(m.clearedFields, paymentrefundattempt.FieldSubscriptionOriginalStatus)
+}
+
+// SetSubscriptionRevoked sets the "subscription_revoked" field.
+func (m *PaymentRefundAttemptMutation) SetSubscriptionRevoked(b bool) {
+	m.subscription_revoked = &b
+}
+
+// SubscriptionRevoked returns the value of the "subscription_revoked" field in the mutation.
+func (m *PaymentRefundAttemptMutation) SubscriptionRevoked() (r bool, exists bool) {
+	v := m.subscription_revoked
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionRevoked returns the old "subscription_revoked" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldSubscriptionRevoked(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionRevoked is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionRevoked requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionRevoked: %w", err)
+	}
+	return oldValue.SubscriptionRevoked, nil
+}
+
+// ResetSubscriptionRevoked resets all changes to the "subscription_revoked" field.
+func (m *PaymentRefundAttemptMutation) ResetSubscriptionRevoked() {
+	m.subscription_revoked = nil
+}
+
+// SetDeductionState sets the "deduction_state" field.
+func (m *PaymentRefundAttemptMutation) SetDeductionState(s string) {
+	m.deduction_state = &s
+}
+
+// DeductionState returns the value of the "deduction_state" field in the mutation.
+func (m *PaymentRefundAttemptMutation) DeductionState() (r string, exists bool) {
+	v := m.deduction_state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeductionState returns the old "deduction_state" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldDeductionState(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeductionState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeductionState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeductionState: %w", err)
+	}
+	return oldValue.DeductionState, nil
+}
+
+// ResetDeductionState resets all changes to the "deduction_state" field.
+func (m *PaymentRefundAttemptMutation) ResetDeductionState() {
+	m.deduction_state = nil
+}
+
+// SetProviderRefundID sets the "provider_refund_id" field.
+func (m *PaymentRefundAttemptMutation) SetProviderRefundID(s string) {
+	m.provider_refund_id = &s
+}
+
+// ProviderRefundID returns the value of the "provider_refund_id" field in the mutation.
+func (m *PaymentRefundAttemptMutation) ProviderRefundID() (r string, exists bool) {
+	v := m.provider_refund_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderRefundID returns the old "provider_refund_id" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldProviderRefundID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderRefundID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderRefundID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderRefundID: %w", err)
+	}
+	return oldValue.ProviderRefundID, nil
+}
+
+// ClearProviderRefundID clears the value of the "provider_refund_id" field.
+func (m *PaymentRefundAttemptMutation) ClearProviderRefundID() {
+	m.provider_refund_id = nil
+	m.clearedFields[paymentrefundattempt.FieldProviderRefundID] = struct{}{}
+}
+
+// ProviderRefundIDCleared returns if the "provider_refund_id" field was cleared in this mutation.
+func (m *PaymentRefundAttemptMutation) ProviderRefundIDCleared() bool {
+	_, ok := m.clearedFields[paymentrefundattempt.FieldProviderRefundID]
+	return ok
+}
+
+// ResetProviderRefundID resets all changes to the "provider_refund_id" field.
+func (m *PaymentRefundAttemptMutation) ResetProviderRefundID() {
+	m.provider_refund_id = nil
+	delete(m.clearedFields, paymentrefundattempt.FieldProviderRefundID)
+}
+
+// SetProviderState sets the "provider_state" field.
+func (m *PaymentRefundAttemptMutation) SetProviderState(s string) {
+	m.provider_state = &s
+}
+
+// ProviderState returns the value of the "provider_state" field in the mutation.
+func (m *PaymentRefundAttemptMutation) ProviderState() (r string, exists bool) {
+	v := m.provider_state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderState returns the old "provider_state" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldProviderState(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderState: %w", err)
+	}
+	return oldValue.ProviderState, nil
+}
+
+// ResetProviderState resets all changes to the "provider_state" field.
+func (m *PaymentRefundAttemptMutation) ResetProviderState() {
+	m.provider_state = nil
+}
+
+// SetProviderResult sets the "provider_result" field.
+func (m *PaymentRefundAttemptMutation) SetProviderResult(s string) {
+	m.provider_result = &s
+}
+
+// ProviderResult returns the value of the "provider_result" field in the mutation.
+func (m *PaymentRefundAttemptMutation) ProviderResult() (r string, exists bool) {
+	v := m.provider_result
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderResult returns the old "provider_result" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldProviderResult(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderResult is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderResult requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderResult: %w", err)
+	}
+	return oldValue.ProviderResult, nil
+}
+
+// ResetProviderResult resets all changes to the "provider_result" field.
+func (m *PaymentRefundAttemptMutation) ResetProviderResult() {
+	m.provider_result = nil
+}
+
+// SetManualReview sets the "manual_review" field.
+func (m *PaymentRefundAttemptMutation) SetManualReview(b bool) {
+	m.manual_review = &b
+}
+
+// ManualReview returns the value of the "manual_review" field in the mutation.
+func (m *PaymentRefundAttemptMutation) ManualReview() (r bool, exists bool) {
+	v := m.manual_review
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldManualReview returns the old "manual_review" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldManualReview(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldManualReview is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldManualReview requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldManualReview: %w", err)
+	}
+	return oldValue.ManualReview, nil
+}
+
+// ResetManualReview resets all changes to the "manual_review" field.
+func (m *PaymentRefundAttemptMutation) ResetManualReview() {
+	m.manual_review = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *PaymentRefundAttemptMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *PaymentRefundAttemptMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *PaymentRefundAttemptMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *PaymentRefundAttemptMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *PaymentRefundAttemptMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the PaymentRefundAttempt entity.
+// If the PaymentRefundAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentRefundAttemptMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *PaymentRefundAttemptMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the PaymentRefundAttemptMutation builder.
+func (m *PaymentRefundAttemptMutation) Where(ps ...predicate.PaymentRefundAttempt) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the PaymentRefundAttemptMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *PaymentRefundAttemptMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.PaymentRefundAttempt, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *PaymentRefundAttemptMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *PaymentRefundAttemptMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (PaymentRefundAttempt).
+func (m *PaymentRefundAttemptMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *PaymentRefundAttemptMutation) Fields() []string {
+	fields := make([]string, 0, 23)
+	if m.attempt_id != nil {
+		fields = append(fields, paymentrefundattempt.FieldAttemptID)
+	}
+	if m.order_id != nil {
+		fields = append(fields, paymentrefundattempt.FieldOrderID)
+	}
+	if m.refund_amount != nil {
+		fields = append(fields, paymentrefundattempt.FieldRefundAmount)
+	}
+	if m.gateway_amount != nil {
+		fields = append(fields, paymentrefundattempt.FieldGatewayAmount)
+	}
+	if m.reason != nil {
+		fields = append(fields, paymentrefundattempt.FieldReason)
+	}
+	if m.original_order_status != nil {
+		fields = append(fields, paymentrefundattempt.FieldOriginalOrderStatus)
+	}
+	if m.source != nil {
+		fields = append(fields, paymentrefundattempt.FieldSource)
+	}
+	if m.deduct_balance != nil {
+		fields = append(fields, paymentrefundattempt.FieldDeductBalance)
+	}
+	if m.force != nil {
+		fields = append(fields, paymentrefundattempt.FieldForce)
+	}
+	if m.deduction_type != nil {
+		fields = append(fields, paymentrefundattempt.FieldDeductionType)
+	}
+	if m.held_balance_amount != nil {
+		fields = append(fields, paymentrefundattempt.FieldHeldBalanceAmount)
+	}
+	if m.subscription_id != nil {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionID)
+	}
+	if m.subscription_days != nil {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionDays)
+	}
+	if m.subscription_original_expires_at != nil {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionOriginalExpiresAt)
+	}
+	if m.subscription_original_status != nil {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionOriginalStatus)
+	}
+	if m.subscription_revoked != nil {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionRevoked)
+	}
+	if m.deduction_state != nil {
+		fields = append(fields, paymentrefundattempt.FieldDeductionState)
+	}
+	if m.provider_refund_id != nil {
+		fields = append(fields, paymentrefundattempt.FieldProviderRefundID)
+	}
+	if m.provider_state != nil {
+		fields = append(fields, paymentrefundattempt.FieldProviderState)
+	}
+	if m.provider_result != nil {
+		fields = append(fields, paymentrefundattempt.FieldProviderResult)
+	}
+	if m.manual_review != nil {
+		fields = append(fields, paymentrefundattempt.FieldManualReview)
+	}
+	if m.created_at != nil {
+		fields = append(fields, paymentrefundattempt.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, paymentrefundattempt.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *PaymentRefundAttemptMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case paymentrefundattempt.FieldAttemptID:
+		return m.AttemptID()
+	case paymentrefundattempt.FieldOrderID:
+		return m.OrderID()
+	case paymentrefundattempt.FieldRefundAmount:
+		return m.RefundAmount()
+	case paymentrefundattempt.FieldGatewayAmount:
+		return m.GatewayAmount()
+	case paymentrefundattempt.FieldReason:
+		return m.Reason()
+	case paymentrefundattempt.FieldOriginalOrderStatus:
+		return m.OriginalOrderStatus()
+	case paymentrefundattempt.FieldSource:
+		return m.Source()
+	case paymentrefundattempt.FieldDeductBalance:
+		return m.DeductBalance()
+	case paymentrefundattempt.FieldForce:
+		return m.Force()
+	case paymentrefundattempt.FieldDeductionType:
+		return m.DeductionType()
+	case paymentrefundattempt.FieldHeldBalanceAmount:
+		return m.HeldBalanceAmount()
+	case paymentrefundattempt.FieldSubscriptionID:
+		return m.SubscriptionID()
+	case paymentrefundattempt.FieldSubscriptionDays:
+		return m.SubscriptionDays()
+	case paymentrefundattempt.FieldSubscriptionOriginalExpiresAt:
+		return m.SubscriptionOriginalExpiresAt()
+	case paymentrefundattempt.FieldSubscriptionOriginalStatus:
+		return m.SubscriptionOriginalStatus()
+	case paymentrefundattempt.FieldSubscriptionRevoked:
+		return m.SubscriptionRevoked()
+	case paymentrefundattempt.FieldDeductionState:
+		return m.DeductionState()
+	case paymentrefundattempt.FieldProviderRefundID:
+		return m.ProviderRefundID()
+	case paymentrefundattempt.FieldProviderState:
+		return m.ProviderState()
+	case paymentrefundattempt.FieldProviderResult:
+		return m.ProviderResult()
+	case paymentrefundattempt.FieldManualReview:
+		return m.ManualReview()
+	case paymentrefundattempt.FieldCreatedAt:
+		return m.CreatedAt()
+	case paymentrefundattempt.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *PaymentRefundAttemptMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case paymentrefundattempt.FieldAttemptID:
+		return m.OldAttemptID(ctx)
+	case paymentrefundattempt.FieldOrderID:
+		return m.OldOrderID(ctx)
+	case paymentrefundattempt.FieldRefundAmount:
+		return m.OldRefundAmount(ctx)
+	case paymentrefundattempt.FieldGatewayAmount:
+		return m.OldGatewayAmount(ctx)
+	case paymentrefundattempt.FieldReason:
+		return m.OldReason(ctx)
+	case paymentrefundattempt.FieldOriginalOrderStatus:
+		return m.OldOriginalOrderStatus(ctx)
+	case paymentrefundattempt.FieldSource:
+		return m.OldSource(ctx)
+	case paymentrefundattempt.FieldDeductBalance:
+		return m.OldDeductBalance(ctx)
+	case paymentrefundattempt.FieldForce:
+		return m.OldForce(ctx)
+	case paymentrefundattempt.FieldDeductionType:
+		return m.OldDeductionType(ctx)
+	case paymentrefundattempt.FieldHeldBalanceAmount:
+		return m.OldHeldBalanceAmount(ctx)
+	case paymentrefundattempt.FieldSubscriptionID:
+		return m.OldSubscriptionID(ctx)
+	case paymentrefundattempt.FieldSubscriptionDays:
+		return m.OldSubscriptionDays(ctx)
+	case paymentrefundattempt.FieldSubscriptionOriginalExpiresAt:
+		return m.OldSubscriptionOriginalExpiresAt(ctx)
+	case paymentrefundattempt.FieldSubscriptionOriginalStatus:
+		return m.OldSubscriptionOriginalStatus(ctx)
+	case paymentrefundattempt.FieldSubscriptionRevoked:
+		return m.OldSubscriptionRevoked(ctx)
+	case paymentrefundattempt.FieldDeductionState:
+		return m.OldDeductionState(ctx)
+	case paymentrefundattempt.FieldProviderRefundID:
+		return m.OldProviderRefundID(ctx)
+	case paymentrefundattempt.FieldProviderState:
+		return m.OldProviderState(ctx)
+	case paymentrefundattempt.FieldProviderResult:
+		return m.OldProviderResult(ctx)
+	case paymentrefundattempt.FieldManualReview:
+		return m.OldManualReview(ctx)
+	case paymentrefundattempt.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case paymentrefundattempt.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown PaymentRefundAttempt field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentRefundAttemptMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case paymentrefundattempt.FieldAttemptID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttemptID(v)
+		return nil
+	case paymentrefundattempt.FieldOrderID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOrderID(v)
+		return nil
+	case paymentrefundattempt.FieldRefundAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRefundAmount(v)
+		return nil
+	case paymentrefundattempt.FieldGatewayAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGatewayAmount(v)
+		return nil
+	case paymentrefundattempt.FieldReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReason(v)
+		return nil
+	case paymentrefundattempt.FieldOriginalOrderStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOriginalOrderStatus(v)
+		return nil
+	case paymentrefundattempt.FieldSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSource(v)
+		return nil
+	case paymentrefundattempt.FieldDeductBalance:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeductBalance(v)
+		return nil
+	case paymentrefundattempt.FieldForce:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetForce(v)
+		return nil
+	case paymentrefundattempt.FieldDeductionType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeductionType(v)
+		return nil
+	case paymentrefundattempt.FieldHeldBalanceAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeldBalanceAmount(v)
+		return nil
+	case paymentrefundattempt.FieldSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionID(v)
+		return nil
+	case paymentrefundattempt.FieldSubscriptionDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionDays(v)
+		return nil
+	case paymentrefundattempt.FieldSubscriptionOriginalExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionOriginalExpiresAt(v)
+		return nil
+	case paymentrefundattempt.FieldSubscriptionOriginalStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionOriginalStatus(v)
+		return nil
+	case paymentrefundattempt.FieldSubscriptionRevoked:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionRevoked(v)
+		return nil
+	case paymentrefundattempt.FieldDeductionState:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeductionState(v)
+		return nil
+	case paymentrefundattempt.FieldProviderRefundID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderRefundID(v)
+		return nil
+	case paymentrefundattempt.FieldProviderState:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderState(v)
+		return nil
+	case paymentrefundattempt.FieldProviderResult:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderResult(v)
+		return nil
+	case paymentrefundattempt.FieldManualReview:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetManualReview(v)
+		return nil
+	case paymentrefundattempt.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case paymentrefundattempt.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentRefundAttempt field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *PaymentRefundAttemptMutation) AddedFields() []string {
+	var fields []string
+	if m.addorder_id != nil {
+		fields = append(fields, paymentrefundattempt.FieldOrderID)
+	}
+	if m.addrefund_amount != nil {
+		fields = append(fields, paymentrefundattempt.FieldRefundAmount)
+	}
+	if m.addgateway_amount != nil {
+		fields = append(fields, paymentrefundattempt.FieldGatewayAmount)
+	}
+	if m.addheld_balance_amount != nil {
+		fields = append(fields, paymentrefundattempt.FieldHeldBalanceAmount)
+	}
+	if m.addsubscription_id != nil {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionID)
+	}
+	if m.addsubscription_days != nil {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionDays)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *PaymentRefundAttemptMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case paymentrefundattempt.FieldOrderID:
+		return m.AddedOrderID()
+	case paymentrefundattempt.FieldRefundAmount:
+		return m.AddedRefundAmount()
+	case paymentrefundattempt.FieldGatewayAmount:
+		return m.AddedGatewayAmount()
+	case paymentrefundattempt.FieldHeldBalanceAmount:
+		return m.AddedHeldBalanceAmount()
+	case paymentrefundattempt.FieldSubscriptionID:
+		return m.AddedSubscriptionID()
+	case paymentrefundattempt.FieldSubscriptionDays:
+		return m.AddedSubscriptionDays()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentRefundAttemptMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case paymentrefundattempt.FieldOrderID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOrderID(v)
+		return nil
+	case paymentrefundattempt.FieldRefundAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRefundAmount(v)
+		return nil
+	case paymentrefundattempt.FieldGatewayAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGatewayAmount(v)
+		return nil
+	case paymentrefundattempt.FieldHeldBalanceAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddHeldBalanceAmount(v)
+		return nil
+	case paymentrefundattempt.FieldSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionID(v)
+		return nil
+	case paymentrefundattempt.FieldSubscriptionDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionDays(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentRefundAttempt numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *PaymentRefundAttemptMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(paymentrefundattempt.FieldSubscriptionID) {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionID)
+	}
+	if m.FieldCleared(paymentrefundattempt.FieldSubscriptionOriginalExpiresAt) {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionOriginalExpiresAt)
+	}
+	if m.FieldCleared(paymentrefundattempt.FieldSubscriptionOriginalStatus) {
+		fields = append(fields, paymentrefundattempt.FieldSubscriptionOriginalStatus)
+	}
+	if m.FieldCleared(paymentrefundattempt.FieldProviderRefundID) {
+		fields = append(fields, paymentrefundattempt.FieldProviderRefundID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *PaymentRefundAttemptMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *PaymentRefundAttemptMutation) ClearField(name string) error {
+	switch name {
+	case paymentrefundattempt.FieldSubscriptionID:
+		m.ClearSubscriptionID()
+		return nil
+	case paymentrefundattempt.FieldSubscriptionOriginalExpiresAt:
+		m.ClearSubscriptionOriginalExpiresAt()
+		return nil
+	case paymentrefundattempt.FieldSubscriptionOriginalStatus:
+		m.ClearSubscriptionOriginalStatus()
+		return nil
+	case paymentrefundattempt.FieldProviderRefundID:
+		m.ClearProviderRefundID()
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentRefundAttempt nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *PaymentRefundAttemptMutation) ResetField(name string) error {
+	switch name {
+	case paymentrefundattempt.FieldAttemptID:
+		m.ResetAttemptID()
+		return nil
+	case paymentrefundattempt.FieldOrderID:
+		m.ResetOrderID()
+		return nil
+	case paymentrefundattempt.FieldRefundAmount:
+		m.ResetRefundAmount()
+		return nil
+	case paymentrefundattempt.FieldGatewayAmount:
+		m.ResetGatewayAmount()
+		return nil
+	case paymentrefundattempt.FieldReason:
+		m.ResetReason()
+		return nil
+	case paymentrefundattempt.FieldOriginalOrderStatus:
+		m.ResetOriginalOrderStatus()
+		return nil
+	case paymentrefundattempt.FieldSource:
+		m.ResetSource()
+		return nil
+	case paymentrefundattempt.FieldDeductBalance:
+		m.ResetDeductBalance()
+		return nil
+	case paymentrefundattempt.FieldForce:
+		m.ResetForce()
+		return nil
+	case paymentrefundattempt.FieldDeductionType:
+		m.ResetDeductionType()
+		return nil
+	case paymentrefundattempt.FieldHeldBalanceAmount:
+		m.ResetHeldBalanceAmount()
+		return nil
+	case paymentrefundattempt.FieldSubscriptionID:
+		m.ResetSubscriptionID()
+		return nil
+	case paymentrefundattempt.FieldSubscriptionDays:
+		m.ResetSubscriptionDays()
+		return nil
+	case paymentrefundattempt.FieldSubscriptionOriginalExpiresAt:
+		m.ResetSubscriptionOriginalExpiresAt()
+		return nil
+	case paymentrefundattempt.FieldSubscriptionOriginalStatus:
+		m.ResetSubscriptionOriginalStatus()
+		return nil
+	case paymentrefundattempt.FieldSubscriptionRevoked:
+		m.ResetSubscriptionRevoked()
+		return nil
+	case paymentrefundattempt.FieldDeductionState:
+		m.ResetDeductionState()
+		return nil
+	case paymentrefundattempt.FieldProviderRefundID:
+		m.ResetProviderRefundID()
+		return nil
+	case paymentrefundattempt.FieldProviderState:
+		m.ResetProviderState()
+		return nil
+	case paymentrefundattempt.FieldProviderResult:
+		m.ResetProviderResult()
+		return nil
+	case paymentrefundattempt.FieldManualReview:
+		m.ResetManualReview()
+		return nil
+	case paymentrefundattempt.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case paymentrefundattempt.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentRefundAttempt field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *PaymentRefundAttemptMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *PaymentRefundAttemptMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *PaymentRefundAttemptMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *PaymentRefundAttemptMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *PaymentRefundAttemptMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *PaymentRefundAttemptMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *PaymentRefundAttemptMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown PaymentRefundAttempt unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *PaymentRefundAttemptMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown PaymentRefundAttempt edge %s", name)
 }
 
 // PendingAuthSessionMutation represents an operation that mutates the PendingAuthSession nodes in the graph.

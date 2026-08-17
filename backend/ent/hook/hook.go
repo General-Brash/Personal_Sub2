@@ -393,6 +393,18 @@ func (f PaymentPurchaseReservationFunc) Mutate(ctx context.Context, m ent.Mutati
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PaymentPurchaseReservationMutation", m)
 }
 
+// The PaymentRefundAttemptFunc type is an adapter to allow the use of ordinary
+// function as PaymentRefundAttempt mutator.
+type PaymentRefundAttemptFunc func(context.Context, *ent.PaymentRefundAttemptMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PaymentRefundAttemptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PaymentRefundAttemptMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PaymentRefundAttemptMutation", m)
+}
+
 // The PendingAuthSessionFunc type is an adapter to allow the use of ordinary
 // function as PendingAuthSession mutator.
 type PendingAuthSessionFunc func(context.Context, *ent.PendingAuthSessionMutation) (ent.Value, error)

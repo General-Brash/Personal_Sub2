@@ -470,7 +470,7 @@ func (w *Wxpay) Refund(ctx context.Context, req payment.RefundRequest) (*payment
 	}
 	rs := refunddomestic.RefundsApiService{Client: c}
 	cur := wxpayCurrency
-	outRefundNo := wxpayRefundID(req.OrderID, req.Amount)
+	outRefundNo := wxpayRefundID(req.AttemptID, req.OrderID, req.Amount)
 	res, _, err := rs.Create(ctx, refunddomestic.CreateRequest{
 		OutTradeNo:  core.String(req.OrderID),
 		OutRefundNo: core.String(outRefundNo),
@@ -494,7 +494,7 @@ func (w *Wxpay) QueryRefund(ctx context.Context, req payment.RefundQueryRequest)
 	}
 	outRefundNo := strings.TrimSpace(req.RefundID)
 	if outRefundNo == "" {
-		outRefundNo = wxpayRefundID(req.OrderID, req.Amount)
+		outRefundNo = wxpayRefundID(req.AttemptID, req.OrderID, req.Amount)
 	}
 	if outRefundNo == "" {
 		return nil, fmt.Errorf("wxpay query refund: missing refund id")
@@ -511,7 +511,9 @@ func (w *Wxpay) QueryRefund(ctx context.Context, req payment.RefundQueryRequest)
 		switch *res.Status {
 		case refunddomestic.STATUS_SUCCESS:
 			status = payment.ProviderStatusSuccess
-		case refunddomestic.STATUS_CLOSED, refunddomestic.STATUS_ABNORMAL:
+		case refunddomestic.STATUS_CLOSED:
+			status = payment.ProviderStatusCanceled
+		case refunddomestic.STATUS_ABNORMAL:
 			status = payment.ProviderStatusFailed
 		default:
 			status = payment.ProviderStatusPending
@@ -520,7 +522,10 @@ func (w *Wxpay) QueryRefund(ctx context.Context, req payment.RefundQueryRequest)
 	return &payment.RefundResponse{RefundID: outRefundNo, Status: status}, nil
 }
 
-func wxpayRefundID(orderID, amount string) string {
+func wxpayRefundID(attemptID, orderID, amount string) string {
+	if attemptID = strings.TrimSpace(attemptID); attemptID != "" {
+		return attemptID
+	}
 	orderID = strings.TrimSpace(orderID)
 	if orderID == "" {
 		return ""

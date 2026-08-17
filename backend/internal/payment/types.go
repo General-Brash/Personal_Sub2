@@ -68,6 +68,7 @@ const (
 	ProviderStatusPaid     = "paid"
 	ProviderStatusSuccess  = "success"
 	ProviderStatusFailed   = "failed"
+	ProviderStatusCanceled = "canceled"
 	ProviderStatusRefunded = "refunded"
 )
 
@@ -179,19 +180,21 @@ type PaymentNotification struct {
 
 // RefundRequest contains the parameters for requesting a refund.
 type RefundRequest struct {
-	TradeNo string
-	OrderID string
-	Amount  string // Refund amount formatted to 2 decimal places
-	Reason  string
+	AttemptID string // Stable local refund-attempt identifier used for provider idempotency.
+	TradeNo   string
+	OrderID   string
+	Amount    string // Refund amount formatted to the order currency precision.
+	Reason    string
 }
 
 // RefundQueryRequest contains identifiers needed to query a previously
 // requested refund.
 type RefundQueryRequest struct {
-	TradeNo  string
-	OrderID  string
-	RefundID string
-	Amount   string
+	AttemptID string
+	TradeNo   string
+	OrderID   string
+	RefundID  string
+	Amount    string
 }
 
 // RefundResponse is returned after a refund request.

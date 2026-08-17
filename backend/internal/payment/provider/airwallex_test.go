@@ -350,3 +350,12 @@ func signedAirwallexHeaders(rawBody, timestamp, secret string) map[string]string
 		"x-signature": hex.EncodeToString(mac.Sum(nil)),
 	}
 }
+
+func TestAirwallexRefundRequestIDIncludesPersistedAttempt(t *testing.T) {
+	t.Parallel()
+	first := airwallexDeterministicRequestID("refund", "int_123", "attempt-1", "12.34")
+	replay := airwallexDeterministicRequestID("refund", "int_123", "attempt-1", "12.34")
+	second := airwallexDeterministicRequestID("refund", "int_123", "attempt-2", "12.34")
+	require.Equal(t, first, replay)
+	require.NotEqual(t, first, second)
+}

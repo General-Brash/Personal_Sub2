@@ -40,6 +40,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchaselimitevent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
+	"github.com/Wei-Shaw/sub2api/ent/paymentrefundattempt"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
@@ -982,6 +983,33 @@ func (f TraversePaymentPurchaseReservation) Traverse(ctx context.Context, q ent.
 	return fmt.Errorf("unexpected query type %T. expect *ent.PaymentPurchaseReservationQuery", q)
 }
 
+// The PaymentRefundAttemptFunc type is an adapter to allow the use of ordinary function as a Querier.
+type PaymentRefundAttemptFunc func(context.Context, *ent.PaymentRefundAttemptQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f PaymentRefundAttemptFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.PaymentRefundAttemptQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.PaymentRefundAttemptQuery", q)
+}
+
+// The TraversePaymentRefundAttempt type is an adapter to allow the use of ordinary function as Traverser.
+type TraversePaymentRefundAttempt func(context.Context, *ent.PaymentRefundAttemptQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraversePaymentRefundAttempt) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraversePaymentRefundAttempt) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.PaymentRefundAttemptQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.PaymentRefundAttemptQuery", q)
+}
+
 // The PendingAuthSessionFunc type is an adapter to allow the use of ordinary function as a Querier.
 type PendingAuthSessionFunc func(context.Context, *ent.PendingAuthSessionQuery) (ent.Value, error)
 
@@ -1562,6 +1590,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.PaymentPurchaseLimitEventQuery, predicate.PaymentPurchaseLimitEvent, paymentpurchaselimitevent.OrderOption]{typ: ent.TypePaymentPurchaseLimitEvent, tq: q}, nil
 	case *ent.PaymentPurchaseReservationQuery:
 		return &query[*ent.PaymentPurchaseReservationQuery, predicate.PaymentPurchaseReservation, paymentpurchasereservation.OrderOption]{typ: ent.TypePaymentPurchaseReservation, tq: q}, nil
+	case *ent.PaymentRefundAttemptQuery:
+		return &query[*ent.PaymentRefundAttemptQuery, predicate.PaymentRefundAttempt, paymentrefundattempt.OrderOption]{typ: ent.TypePaymentRefundAttempt, tq: q}, nil
 	case *ent.PendingAuthSessionQuery:
 		return &query[*ent.PendingAuthSessionQuery, predicate.PendingAuthSession, pendingauthsession.OrderOption]{typ: ent.TypePendingAuthSession, tq: q}, nil
 	case *ent.PromoCodeQuery:

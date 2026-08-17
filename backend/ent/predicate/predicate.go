@@ -102,6 +102,9 @@ type PaymentPurchaseLimitEvent func(*sql.Selector)
 // PaymentPurchaseReservation is the predicate function for paymentpurchasereservation builders.
 type PaymentPurchaseReservation func(*sql.Selector)
 
+// PaymentRefundAttempt is the predicate function for paymentrefundattempt builders.
+type PaymentRefundAttempt func(*sql.Selector)
+
 // PendingAuthSession is the predicate function for pendingauthsession builders.
 type PendingAuthSession func(*sql.Selector)
 

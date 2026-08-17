@@ -124,6 +124,7 @@ type OrderListParams struct {
 }
 
 type RefundPlan struct {
+	AttemptID       string
 	OrderID         int64
 	Order           *dbent.PaymentOrder
 	RefundAmount    float64

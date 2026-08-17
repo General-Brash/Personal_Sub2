@@ -1681,6 +1681,56 @@ var (
 			},
 		},
 	}
+	// PaymentRefundAttemptsColumns holds the columns for the "payment_refund_attempts" table.
+	PaymentRefundAttemptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "attempt_id", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "order_id", Type: field.TypeInt64},
+		{Name: "refund_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "gateway_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "reason", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "original_order_status", Type: field.TypeString, Size: 30},
+		{Name: "source", Type: field.TypeString, Size: 30, Default: "admin"},
+		{Name: "deduct_balance", Type: field.TypeBool},
+		{Name: "force", Type: field.TypeBool},
+		{Name: "deduction_type", Type: field.TypeString, Size: 20, Default: "none"},
+		{Name: "held_balance_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "subscription_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "subscription_days", Type: field.TypeInt, Default: 0},
+		{Name: "subscription_original_expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "subscription_original_status", Type: field.TypeString, Nullable: true, Size: 20},
+		{Name: "subscription_revoked", Type: field.TypeBool, Default: false},
+		{Name: "deduction_state", Type: field.TypeString, Size: 20, Default: "none"},
+		{Name: "provider_refund_id", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "provider_state", Type: field.TypeString, Size: 20, Default: "calling"},
+		{Name: "provider_result", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "manual_review", Type: field.TypeBool, Default: false},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// PaymentRefundAttemptsTable holds the schema information for the "payment_refund_attempts" table.
+	PaymentRefundAttemptsTable = &schema.Table{
+		Name:       "payment_refund_attempts",
+		Columns:    PaymentRefundAttemptsColumns,
+		PrimaryKey: []*schema.Column{PaymentRefundAttemptsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "paymentrefundattempt_order_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentRefundAttemptsColumns[2], PaymentRefundAttemptsColumns[22]},
+			},
+			{
+				Name:    "paymentrefundattempt_order_id_provider_state",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentRefundAttemptsColumns[2], PaymentRefundAttemptsColumns[19]},
+			},
+			{
+				Name:    "paymentrefundattempt_manual_review_provider_state",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentRefundAttemptsColumns[21], PaymentRefundAttemptsColumns[19]},
+			},
+		},
+	}
 	// PendingAuthSessionsColumns holds the columns for the "pending_auth_sessions" table.
 	PendingAuthSessionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2667,6 +2717,7 @@ var (
 		PaymentPurchaseCountersTable,
 		PaymentPurchaseLimitEventsTable,
 		PaymentPurchaseReservationsTable,
+		PaymentRefundAttemptsTable,
 		PendingAuthSessionsTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
@@ -2828,6 +2879,9 @@ func init() {
 	}
 	PaymentPurchaseReservationsTable.Annotation = &entsql.Annotation{
 		Table: "payment_purchase_reservations",
+	}
+	PaymentRefundAttemptsTable.Annotation = &entsql.Annotation{
+		Table: "payment_refund_attempts",
 	}
 	PendingAuthSessionsTable.ForeignKeys[0].RefTable = UsersTable
 	PendingAuthSessionsTable.Annotation = &entsql.Annotation{

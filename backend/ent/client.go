@@ -47,6 +47,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasecounter"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchaselimitevent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentpurchasereservation"
+	"github.com/Wei-Shaw/sub2api/ent/paymentrefundattempt"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -139,6 +140,8 @@ type Client struct {
 	PaymentPurchaseLimitEvent *PaymentPurchaseLimitEventClient
 	// PaymentPurchaseReservation is the client for interacting with the PaymentPurchaseReservation builders.
 	PaymentPurchaseReservation *PaymentPurchaseReservationClient
+	// PaymentRefundAttempt is the client for interacting with the PaymentRefundAttempt builders.
+	PaymentRefundAttempt *PaymentRefundAttemptClient
 	// PendingAuthSession is the client for interacting with the PendingAuthSession builders.
 	PendingAuthSession *PendingAuthSessionClient
 	// PromoCode is the client for interacting with the PromoCode builders.
@@ -220,6 +223,7 @@ func (c *Client) init() {
 	c.PaymentPurchaseCounter = NewPaymentPurchaseCounterClient(c.config)
 	c.PaymentPurchaseLimitEvent = NewPaymentPurchaseLimitEventClient(c.config)
 	c.PaymentPurchaseReservation = NewPaymentPurchaseReservationClient(c.config)
+	c.PaymentRefundAttempt = NewPaymentRefundAttemptClient(c.config)
 	c.PendingAuthSession = NewPendingAuthSessionClient(c.config)
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
@@ -363,6 +367,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PaymentPurchaseCounter:         NewPaymentPurchaseCounterClient(cfg),
 		PaymentPurchaseLimitEvent:      NewPaymentPurchaseLimitEventClient(cfg),
 		PaymentPurchaseReservation:     NewPaymentPurchaseReservationClient(cfg),
+		PaymentRefundAttempt:           NewPaymentRefundAttemptClient(cfg),
 		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
 		PromoCode:                      NewPromoCodeClient(cfg),
 		PromoCodeUsage:                 NewPromoCodeUsageClient(cfg),
@@ -433,6 +438,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PaymentPurchaseCounter:         NewPaymentPurchaseCounterClient(cfg),
 		PaymentPurchaseLimitEvent:      NewPaymentPurchaseLimitEventClient(cfg),
 		PaymentPurchaseReservation:     NewPaymentPurchaseReservationClient(cfg),
+		PaymentRefundAttempt:           NewPaymentRefundAttemptClient(cfg),
 		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
 		PromoCode:                      NewPromoCodeClient(cfg),
 		PromoCodeUsage:                 NewPromoCodeUsageClient(cfg),
@@ -491,12 +497,12 @@ func (c *Client) Use(hooks ...Hook) {
 		c.IdentityAdoptionDecision, c.MallDailyCreditSubscription, c.MallPurchase,
 		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
 		c.PaymentPurchaseCounter, c.PaymentPurchaseLimitEvent,
-		c.PaymentPurchaseReservation, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.TemporaryCreditConsumption,
-		c.TemporaryCreditGrant, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.PaymentPurchaseReservation, c.PaymentRefundAttempt, c.PendingAuthSession,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.TemporaryCreditConsumption, c.TemporaryCreditGrant, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -516,12 +522,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.IdentityAdoptionDecision, c.MallDailyCreditSubscription, c.MallPurchase,
 		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
 		c.PaymentPurchaseCounter, c.PaymentPurchaseLimitEvent,
-		c.PaymentPurchaseReservation, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.TemporaryCreditConsumption,
-		c.TemporaryCreditGrant, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.PaymentPurchaseReservation, c.PaymentRefundAttempt, c.PendingAuthSession,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.TemporaryCreditConsumption, c.TemporaryCreditGrant, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -594,6 +600,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PaymentPurchaseLimitEvent.mutate(ctx, m)
 	case *PaymentPurchaseReservationMutation:
 		return c.PaymentPurchaseReservation.mutate(ctx, m)
+	case *PaymentRefundAttemptMutation:
+		return c.PaymentRefundAttempt.mutate(ctx, m)
 	case *PendingAuthSessionMutation:
 		return c.PendingAuthSession.mutate(ctx, m)
 	case *PromoCodeMutation:
@@ -5588,6 +5596,139 @@ func (c *PaymentPurchaseReservationClient) mutate(ctx context.Context, m *Paymen
 	}
 }
 
+// PaymentRefundAttemptClient is a client for the PaymentRefundAttempt schema.
+type PaymentRefundAttemptClient struct {
+	config
+}
+
+// NewPaymentRefundAttemptClient returns a client for the PaymentRefundAttempt from the given config.
+func NewPaymentRefundAttemptClient(c config) *PaymentRefundAttemptClient {
+	return &PaymentRefundAttemptClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `paymentrefundattempt.Hooks(f(g(h())))`.
+func (c *PaymentRefundAttemptClient) Use(hooks ...Hook) {
+	c.hooks.PaymentRefundAttempt = append(c.hooks.PaymentRefundAttempt, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `paymentrefundattempt.Intercept(f(g(h())))`.
+func (c *PaymentRefundAttemptClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PaymentRefundAttempt = append(c.inters.PaymentRefundAttempt, interceptors...)
+}
+
+// Create returns a builder for creating a PaymentRefundAttempt entity.
+func (c *PaymentRefundAttemptClient) Create() *PaymentRefundAttemptCreate {
+	mutation := newPaymentRefundAttemptMutation(c.config, OpCreate)
+	return &PaymentRefundAttemptCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PaymentRefundAttempt entities.
+func (c *PaymentRefundAttemptClient) CreateBulk(builders ...*PaymentRefundAttemptCreate) *PaymentRefundAttemptCreateBulk {
+	return &PaymentRefundAttemptCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PaymentRefundAttemptClient) MapCreateBulk(slice any, setFunc func(*PaymentRefundAttemptCreate, int)) *PaymentRefundAttemptCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PaymentRefundAttemptCreateBulk{err: fmt.Errorf("calling to PaymentRefundAttemptClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PaymentRefundAttemptCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PaymentRefundAttemptCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PaymentRefundAttempt.
+func (c *PaymentRefundAttemptClient) Update() *PaymentRefundAttemptUpdate {
+	mutation := newPaymentRefundAttemptMutation(c.config, OpUpdate)
+	return &PaymentRefundAttemptUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PaymentRefundAttemptClient) UpdateOne(_m *PaymentRefundAttempt) *PaymentRefundAttemptUpdateOne {
+	mutation := newPaymentRefundAttemptMutation(c.config, OpUpdateOne, withPaymentRefundAttempt(_m))
+	return &PaymentRefundAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PaymentRefundAttemptClient) UpdateOneID(id int64) *PaymentRefundAttemptUpdateOne {
+	mutation := newPaymentRefundAttemptMutation(c.config, OpUpdateOne, withPaymentRefundAttemptID(id))
+	return &PaymentRefundAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PaymentRefundAttempt.
+func (c *PaymentRefundAttemptClient) Delete() *PaymentRefundAttemptDelete {
+	mutation := newPaymentRefundAttemptMutation(c.config, OpDelete)
+	return &PaymentRefundAttemptDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PaymentRefundAttemptClient) DeleteOne(_m *PaymentRefundAttempt) *PaymentRefundAttemptDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PaymentRefundAttemptClient) DeleteOneID(id int64) *PaymentRefundAttemptDeleteOne {
+	builder := c.Delete().Where(paymentrefundattempt.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PaymentRefundAttemptDeleteOne{builder}
+}
+
+// Query returns a query builder for PaymentRefundAttempt.
+func (c *PaymentRefundAttemptClient) Query() *PaymentRefundAttemptQuery {
+	return &PaymentRefundAttemptQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePaymentRefundAttempt},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PaymentRefundAttempt entity by its id.
+func (c *PaymentRefundAttemptClient) Get(ctx context.Context, id int64) (*PaymentRefundAttempt, error) {
+	return c.Query().Where(paymentrefundattempt.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PaymentRefundAttemptClient) GetX(ctx context.Context, id int64) *PaymentRefundAttempt {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PaymentRefundAttemptClient) Hooks() []Hook {
+	return c.hooks.PaymentRefundAttempt
+}
+
+// Interceptors returns the client interceptors.
+func (c *PaymentRefundAttemptClient) Interceptors() []Interceptor {
+	return c.inters.PaymentRefundAttempt
+}
+
+func (c *PaymentRefundAttemptClient) mutate(ctx context.Context, m *PaymentRefundAttemptMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PaymentRefundAttemptCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PaymentRefundAttemptUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PaymentRefundAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PaymentRefundAttemptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PaymentRefundAttempt mutation op: %q", m.Op())
+	}
+}
+
 // PendingAuthSessionClient is a client for the PendingAuthSession schema.
 type PendingAuthSessionClient struct {
 	config
@@ -8887,12 +9028,12 @@ type (
 		DailyCheckin, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, MallDailyCreditSubscription, MallPurchase,
 		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PaymentPurchaseCounter,
-		PaymentPurchaseLimitEvent, PaymentPurchaseReservation, PendingAuthSession,
-		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
-		SubscriptionPlan, TLSFingerprintProfile, TemporaryCreditConsumption,
-		TemporaryCreditGrant, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		PaymentPurchaseLimitEvent, PaymentPurchaseReservation, PaymentRefundAttempt,
+		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemCode,
+		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		TemporaryCreditConsumption, TemporaryCreditGrant, UsageCleanupTask, UsageLog,
+		User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, AffiliateRebateJob, Announcement,
@@ -8903,12 +9044,12 @@ type (
 		DailyCheckin, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, MallDailyCreditSubscription, MallPurchase,
 		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PaymentPurchaseCounter,
-		PaymentPurchaseLimitEvent, PaymentPurchaseReservation, PendingAuthSession,
-		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
-		SubscriptionPlan, TLSFingerprintProfile, TemporaryCreditConsumption,
-		TemporaryCreditGrant, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		PaymentPurchaseLimitEvent, PaymentPurchaseReservation, PaymentRefundAttempt,
+		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemCode,
+		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		TemporaryCreditConsumption, TemporaryCreditGrant, UsageCleanupTask, UsageLog,
+		User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

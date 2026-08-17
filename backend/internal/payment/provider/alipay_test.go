@@ -444,3 +444,24 @@ func TestParseAlipayAmount(t *testing.T) {
 		t.Fatal("expected error when no valid amount field exists")
 	}
 }
+
+func TestAlipayRefundRequestNoUsesPersistedAttemptID(t *testing.T) {
+	t.Parallel()
+	attemptID := "9d886b28-8159-44f7-9fa3-a9f90c98dc9e"
+	requireEqual := func(got, want string) {
+		t.Helper()
+		if got != want {
+			t.Fatalf("refund request number = %q, want %q", got, want)
+		}
+	}
+	requireEqual(alipayRefundRequestNo(attemptID, "sub2_order", "12.34"), attemptID)
+	fallback1 := alipayRefundRequestNo("", "sub2_order", "12.34")
+	fallback2 := alipayRefundRequestNo("", "sub2_order", "12.34")
+	requireEqual(fallback1, fallback2)
+	if len(fallback1) > 64 {
+		t.Fatalf("fallback refund request number length = %d, want <= 64", len(fallback1))
+	}
+	if fallback1 == alipayRefundRequestNo("", "sub2_order", "12.35") {
+		t.Fatal("different refund amounts must not share the fallback request number")
+	}
+}

@@ -78,6 +78,8 @@ type Tx struct {
 	PaymentPurchaseLimitEvent *PaymentPurchaseLimitEventClient
 	// PaymentPurchaseReservation is the client for interacting with the PaymentPurchaseReservation builders.
 	PaymentPurchaseReservation *PaymentPurchaseReservationClient
+	// PaymentRefundAttempt is the client for interacting with the PaymentRefundAttempt builders.
+	PaymentRefundAttempt *PaymentRefundAttemptClient
 	// PendingAuthSession is the client for interacting with the PendingAuthSession builders.
 	PendingAuthSession *PendingAuthSessionClient
 	// PromoCode is the client for interacting with the PromoCode builders.
@@ -279,6 +281,7 @@ func (tx *Tx) init() {
 	tx.PaymentPurchaseCounter = NewPaymentPurchaseCounterClient(tx.config)
 	tx.PaymentPurchaseLimitEvent = NewPaymentPurchaseLimitEventClient(tx.config)
 	tx.PaymentPurchaseReservation = NewPaymentPurchaseReservationClient(tx.config)
+	tx.PaymentRefundAttempt = NewPaymentRefundAttemptClient(tx.config)
 	tx.PendingAuthSession = NewPendingAuthSessionClient(tx.config)
 	tx.PromoCode = NewPromoCodeClient(tx.config)
 	tx.PromoCodeUsage = NewPromoCodeUsageClient(tx.config)

@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 const (
@@ -125,49 +126,41 @@ func (s *PaymentService) rejectLateProductPayment(ctx context.Context, order *db
 		"reason":     reason,
 	})
 
-	inst, err := s.getRefundOrderProviderInstance(ctx, order)
-	if err != nil || inst == nil || !inst.RefundEnabled || strings.TrimSpace(tradeNo) == "" {
-		detail := "automatic refund is unavailable"
-		if err != nil {
-			detail = err.Error()
-		}
-		return s.failRejectedProductRefund(ctx, order.ID, detail)
-	}
-	prov, err := s.createProviderFromInstance(ctx, inst)
+	claimedOrder, err := s.entClient.PaymentOrder.Get(ctx, order.ID)
 	if err != nil {
-		return s.failRejectedProductRefund(ctx, order.ID, err.Error())
+		return fmt.Errorf("reload claimed rejected product refund: %w", err)
 	}
-	resp, err := prov.Refund(ctx, payment.RefundRequest{
-		TradeNo: tradeNo,
-		OrderID: order.OutTradeNo,
-		Amount:  formatGatewayRefundAmount(paid, order),
-		Reason:  reason,
-	})
+	_, plan, created, err := s.createPurchaseLimitRejectedAttempt(ctx, claimedOrder, current.Status, reason)
 	if err != nil {
-		return s.failRejectedProductRefund(ctx, order.ID, err.Error())
+		return err
 	}
-	if err := validateRefundProviderResponse(resp); err != nil {
-		return s.failRejectedProductRefund(ctx, order.ID, err.Error())
+	if !created {
+		// A persisted attempt already owns this order. Never issue Refund again.
+		return nil
 	}
-
-	// Persist the provider result before the local terminal transition. A
-	// repeated callback can then finish the database state without issuing a
-	// second refund if this process stops between the two writes.
-	recordErr := s.recordPurchaseLimitRefundResult(ctx, order.ID, resp)
-	applyErr := s.applyRejectedProductRefundResult(ctx, order, reason, purchaseLimitRefundResult{
-		Status:   strings.TrimSpace(resp.Status),
-		RefundID: refundResponseID(resp),
-	})
-	if applyErr != nil {
-		if recordErr != nil {
-			return fmt.Errorf("%v; %w", recordErr, applyErr)
-		}
-		return applyErr
+	if strings.TrimSpace(tradeNo) == "" {
+		_, finishErr := s.finalizeRefundReturned(ctx, plan, nil, refundProviderStateFailed, "automatic refund is unavailable: missing provider trade number")
+		return finishErr
 	}
-	if recordErr != nil {
-		slog.Error("record rejected product refund result after local finalization", "orderID", order.ID, "error", recordErr)
+	prov, err := s.prepareRefundProvider(ctx, claimedOrder)
+	if err != nil {
+		_, finishErr := s.finalizeRefundReturned(ctx, plan, nil, refundProviderStateFailed, "automatic refund is unavailable: "+err.Error())
+		return finishErr
 	}
-	return nil
+	resp, callErr := s.callRefundProvider(ctx, plan, prov)
+	if callErr != nil && (resp == nil || !recognizedRefundProviderStatus(resp.Status)) {
+		_, stateErr := s.markRefundUnknown(ctx, plan, resp, callErr)
+		return stateErr
+	}
+	if resp == nil {
+		_, stateErr := s.markRefundUnknown(ctx, plan, nil, fmt.Errorf("automatic refund response missing"))
+		return stateErr
+	}
+	if recordErr := s.recordPurchaseLimitRefundResult(ctx, order.ID, resp); recordErr != nil {
+		slog.Error("record rejected product refund result", "orderID", order.ID, "error", recordErr)
+	}
+	_, finishErr := s.finishRefund(ctx, plan, resp)
+	return finishErr
 }
 
 func (s *PaymentService) applyRejectedProductRefundResult(ctx context.Context, order *dbent.PaymentOrder, reason string, result purchaseLimitRefundResult) error {
@@ -256,6 +249,30 @@ func (s *PaymentService) recoverRejectedProductRefund(ctx context.Context, order
 	if order == nil || order.Status != OrderStatusRefunding || !s.hasAuditLog(ctx, order.ID, purchaseLimitRejectedPaymentAudit) {
 		return false, nil
 	}
+	attempt, err := s.latestRefundAttempt(ctx, s.entClient, order.ID)
+	if err != nil {
+		return true, fmt.Errorf("load rejected product refund attempt: %w", err)
+	}
+	if attempt != nil {
+		plan := s.refundPlanFromAttempt(order, attempt)
+		switch attempt.ProviderState {
+		case refundProviderStateCalling:
+			if time.Now().Before(order.UpdatedAt.Add(paymentFulfillmentLeaseDuration)) {
+				return true, nil
+			}
+			_, stateErr := s.markRefundUnknown(ctx, plan, nil, fmt.Errorf("automatic refund was interrupted after the persisted provider-call boundary"))
+			return true, stateErr
+		case refundProviderStatePending:
+			_, stateErr := s.markRefundPending(ctx, plan, &payment.RefundResponse{RefundID: psStringValue(attempt.ProviderRefundID), Status: payment.ProviderStatusPending})
+			return true, stateErr
+		case refundProviderStateUnknown:
+			_, stateErr := s.markRefundUnknown(ctx, plan, nil, fmt.Errorf("automatic refund result requires manual reconciliation"))
+			return true, stateErr
+		default:
+			return true, nil
+		}
+	}
+
 	result, found, err := s.latestPurchaseLimitRefundResult(ctx, order.ID)
 	if err != nil {
 		return true, fmt.Errorf("load rejected product refund result: %w", err)
@@ -264,12 +281,21 @@ func (s *PaymentService) recoverRejectedProductRefund(ctx context.Context, order
 		return true, s.applyRejectedProductRefundResult(ctx, order, psStringValue(order.RefundReason), result)
 	}
 	if time.Now().Before(order.UpdatedAt.Add(paymentFulfillmentLeaseDuration)) {
-		// The original callback may still be waiting for the provider. ACK a
-		// duplicate callback and let that in-flight attempt finish.
 		return true, nil
 	}
-	detail := "automatic refund interrupted before the provider result was recorded; verify the provider before retrying"
-	return true, s.failRejectedProductRefund(ctx, order.ID, detail)
+	detail := "legacy automatic refund was interrupted without persisted attempt state; verify the provider manually"
+	updated, updateErr := s.entClient.PaymentOrder.Update().
+		Where(paymentorder.IDEQ(order.ID), paymentorder.StatusEQ(OrderStatusRefunding)).
+		SetStatus(OrderStatusRefundPending).
+		SetFailedReason(detail).
+		Save(ctx)
+	if updateErr != nil {
+		return true, fmt.Errorf("mark legacy rejected product refund for review: %w", updateErr)
+	}
+	if updated > 0 {
+		s.writeAuditLog(ctx, order.ID, "REFUND_LEGACY_MANUAL_REVIEW", "system", map[string]any{"detail": detail, "unfulfilled": true})
+	}
+	return true, nil
 }
 
 func (s *PaymentService) failRejectedProductRefund(ctx context.Context, orderID int64, detail string) error {
@@ -300,4 +326,103 @@ func (s *PaymentService) markRejectedProductRefundFailed(ctx context.Context, or
 		"unfulfilled": true,
 	})
 	return nil
+}
+
+func (s *PaymentService) queryAndFinalizeRejectedProductRefund(ctx context.Context, order *dbent.PaymentOrder) (*RefundResult, error) {
+	if order == nil {
+		return nil, infraerrors.NotFound("NOT_FOUND", "order not found")
+	}
+	if order.Status == OrderStatusRefunding {
+		_, recoverErr := s.recoverRejectedProductRefund(ctx, order)
+		if recoverErr != nil {
+			return nil, recoverErr
+		}
+		var err error
+		order, err = s.entClient.PaymentOrder.Get(ctx, order.ID)
+		if err != nil {
+			return nil, fmt.Errorf("reload rejected product refund: %w", err)
+		}
+	}
+	if order.Status == OrderStatusRefunded {
+		return &RefundResult{Success: true}, nil
+	}
+
+	attempt, err := s.latestRefundAttempt(ctx, s.entClient, order.ID)
+	if err != nil {
+		return nil, fmt.Errorf("load rejected product refund attempt: %w", err)
+	}
+	if attempt != nil {
+		if order.Status == OrderStatusRefundFailed {
+			return &RefundResult{Success: false, Warning: attempt.ProviderResult}, nil
+		}
+		if order.Status != OrderStatusRefundPending && order.Status != OrderStatusRefunding {
+			return nil, infraerrors.BadRequest("INVALID_STATUS", "automatic refund is not pending reconciliation")
+		}
+		plan := s.refundPlanFromAttempt(order, attempt)
+		prov, providerErr := s.prepareRefundProvider(ctx, order)
+		if providerErr != nil {
+			return nil, providerErr
+		}
+		queryProvider, ok := prov.(payment.RefundQueryProvider)
+		if !ok {
+			return s.markRefundManualReview(ctx, plan, "this payment provider cannot query the automatic refund; verify it manually")
+		}
+		resp, queryErr := queryProvider.QueryRefund(ctx, payment.RefundQueryRequest{
+			AttemptID: attempt.AttemptID,
+			TradeNo:   order.PaymentTradeNo,
+			OrderID:   order.OutTradeNo,
+			RefundID:  psStringValue(attempt.ProviderRefundID),
+			Amount:    formatGatewayRefundAmount(attempt.GatewayAmount, order),
+		})
+		if queryErr != nil {
+			return s.markRefundUnknown(ctx, plan, resp, fmt.Errorf("query automatic refund: %w", queryErr))
+		}
+		return s.finishRefund(ctx, plan, resp)
+	}
+
+	if order.Status != OrderStatusRefundPending {
+		return nil, infraerrors.Conflict("REFUND_MANUAL_REVIEW_REQUIRED", "legacy automatic refund has no persisted attempt state")
+	}
+	legacy, found, err := s.latestPurchaseLimitRefundResult(ctx, order.ID)
+	if err != nil {
+		return nil, fmt.Errorf("load legacy automatic refund result: %w", err)
+	}
+	if !found {
+		return nil, infraerrors.Conflict("REFUND_MANUAL_REVIEW_REQUIRED", "legacy automatic refund has no persisted provider result")
+	}
+	prov, err := s.getRefundProvider(ctx, order)
+	if err != nil {
+		return nil, fmt.Errorf("get legacy automatic refund provider: %w", err)
+	}
+	queryProvider, ok := prov.(payment.RefundQueryProvider)
+	if !ok {
+		return nil, infraerrors.Conflict("REFUND_MANUAL_REVIEW_REQUIRED", "legacy automatic refund provider cannot be queried")
+	}
+	gatewayAmount := calculateGatewayRefundAmount(order.Amount, order.PayAmount, order.RefundAmount, PaymentOrderCurrency(order))
+	resp, err := queryProvider.QueryRefund(ctx, payment.RefundQueryRequest{
+		TradeNo:  order.PaymentTradeNo,
+		OrderID:  order.OutTradeNo,
+		RefundID: legacy.RefundID,
+		Amount:   formatGatewayRefundAmount(gatewayAmount, order),
+	})
+	if err != nil {
+		return nil, infraerrors.Conflict("REFUND_MANUAL_REVIEW_REQUIRED", "legacy automatic refund query failed; verify it manually")
+	}
+	status := strings.TrimSpace(resp.Status)
+	switch status {
+	case payment.ProviderStatusSuccess, payment.ProviderStatusRefunded:
+		if err := s.applyRejectedProductRefundResult(ctx, order, psStringValue(order.RefundReason), purchaseLimitRefundResult{Status: status, RefundID: refundResponseID(resp)}); err != nil {
+			return nil, err
+		}
+		return &RefundResult{Success: true}, nil
+	case payment.ProviderStatusPending:
+		return &RefundResult{Success: false, Warning: "gateway refund is still pending confirmation"}, nil
+	case payment.ProviderStatusFailed, payment.ProviderStatusCanceled:
+		if err := s.markRejectedProductRefundFailed(ctx, order.ID, "automatic refund failed or was canceled"); err != nil {
+			return nil, err
+		}
+		return &RefundResult{Success: false, Warning: "automatic refund failed or was canceled"}, nil
+	default:
+		return nil, infraerrors.Conflict("REFUND_MANUAL_REVIEW_REQUIRED", "legacy automatic refund returned an unknown status")
+	}
 }

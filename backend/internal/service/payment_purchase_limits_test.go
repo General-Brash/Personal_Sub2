@@ -356,17 +356,29 @@ func TestCancelAndRefundReleaseOnlyEligiblePurchaseReservations(t *testing.T) {
 	require.NoError(t, consumePurchaseReservationTx(ctx, tx, refundable.ID))
 	require.NoError(t, tx.Commit())
 
-	_, err = svc.markRefundOk(ctx, &RefundPlan{OrderID: refundable.ID, Order: refundable, RefundAmount: 5, Reason: "partial"})
+	partialPlan := createPersistedPurchaseRefundAttempt(t, ctx, client, svc, refundable, 5)
+	_, err = svc.finalizeRefundSuccess(ctx, partialPlan, &payment.RefundResponse{RefundID: "rf-partial", Status: payment.ProviderStatusSuccess})
 	require.NoError(t, err)
 	reservation, err = client.PaymentPurchaseReservation.Query().
 		Where(paymentpurchasereservation.OrderIDEQ(refundable.ID)).Only(ctx)
 	require.NoError(t, err)
 	require.Equal(t, purchaseReservationConsumed, reservation.Status)
 
-	_, err = svc.markRefundOk(ctx, &RefundPlan{OrderID: refundable.ID, Order: refundable, RefundAmount: refundable.Amount, Reason: "full", Force: true})
+	fullRefundable := createPurchaseLimitTestOrder(t, ctx, client, userID, "REFUND-FULL-RELEASE")
+	tx, err = client.Tx(ctx)
+	require.NoError(t, err)
+	require.NoError(t, svc.reservePurchaseTx(ctx, tx, fullRefundable.ID, userID, &purchaseLimitSpec{
+		productType: purchaseProductCurrency, productID: 46, dailyLimit: 2, totalLimit: 2,
+	}, time.Now()))
+	require.NoError(t, consumePurchaseReservationTx(ctx, tx, fullRefundable.ID))
+	require.NoError(t, tx.Commit())
+	fullPlan := createPersistedPurchaseRefundAttempt(t, ctx, client, svc, fullRefundable, fullRefundable.Amount)
+	_, err = svc.finalizeRefundSuccess(ctx, fullPlan, &payment.RefundResponse{RefundID: "rf-full", Status: payment.ProviderStatusSuccess})
+	require.NoError(t, err)
+	_, err = svc.finalizeRefundSuccess(ctx, fullPlan, &payment.RefundResponse{RefundID: "rf-full", Status: payment.ProviderStatusSuccess})
 	require.NoError(t, err)
 	reservation, err = client.PaymentPurchaseReservation.Query().
-		Where(paymentpurchasereservation.OrderIDEQ(refundable.ID)).Only(ctx)
+		Where(paymentpurchasereservation.OrderIDEQ(fullRefundable.ID)).Only(ctx)
 	require.NoError(t, err)
 	require.Equal(t, purchaseReservationReleased, reservation.Status)
 }
@@ -579,7 +591,7 @@ func TestRejectedProductRefundRecoveryUsesRecordedResultWithoutSecondCallbackRef
 	require.NotNil(t, reloaded.RefundAt)
 }
 
-func TestRejectedProductRefundRecoveryMarksStaleUnknownAttemptFailed(t *testing.T) {
+func TestRejectedProductRefundRecoveryMarksStaleLegacyAttemptManualReview(t *testing.T) {
 	ctx := context.Background()
 	client := newPurchaseLimitTestClient(t)
 	userID := createPurchaseLimitTestUser(t, ctx, client)
@@ -602,7 +614,7 @@ func TestRejectedProductRefundRecoveryMarksStaleUnknownAttemptFailed(t *testing.
 
 	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
 	require.NoError(t, err)
-	require.Equal(t, OrderStatusRefundFailed, reloaded.Status)
+	require.Equal(t, OrderStatusRefundPending, reloaded.Status)
 	require.NotNil(t, reloaded.FailedReason)
 	require.Contains(t, *reloaded.FailedReason, "verify the provider")
 }
@@ -740,4 +752,35 @@ func createPurchaseLimitRefundAudit(t *testing.T, ctx context.Context, client *d
 		SetOperator("system").
 		Save(ctx)
 	require.NoError(t, err)
+}
+
+func createPersistedPurchaseRefundAttempt(t *testing.T, ctx context.Context, client *dbent.Client, svc *PaymentService, order *dbent.PaymentOrder, amount float64) *RefundPlan {
+	t.Helper()
+	updated, err := client.PaymentOrder.UpdateOneID(order.ID).
+		SetStatus(OrderStatusRefunding).
+		SetRefundAmount(amount).
+		SetRefundReason("purchase reservation refund test").
+		SetForceRefund(true).
+		Save(ctx)
+	require.NoError(t, err)
+	attempt, err := client.PaymentRefundAttempt.Create().
+		SetAttemptID(fmt.Sprintf("purchase-refund-%d", order.ID)).
+		SetOrderID(order.ID).
+		SetRefundAmount(amount).
+		SetGatewayAmount(amount).
+		SetReason("purchase reservation refund test").
+		SetOriginalOrderStatus(OrderStatusCompleted).
+		SetSource(refundAttemptSourceAdmin).
+		SetDeductBalance(false).
+		SetForce(true).
+		SetDeductionType(payment.DeductionTypeNone).
+		SetHeldBalanceAmount(0).
+		SetSubscriptionDays(0).
+		SetDeductionState(refundDeductionStateNone).
+		SetProviderState(refundProviderStateCalling).
+		SetProviderResult("").
+		SetManualReview(false).
+		Save(ctx)
+	require.NoError(t, err)
+	return svc.refundPlanFromAttempt(updated, attempt)
 }

@@ -707,3 +707,16 @@ func TestCreatePaymentMobileH5ReturnsNoAuthErrorWithoutNativeFallback(t *testing
 		t.Fatalf("error = %v, want NO_AUTH", err)
 	}
 }
+
+func TestWxpayRefundIDPrefersPersistedAttemptID(t *testing.T) {
+	t.Parallel()
+	attemptID := "947318a6-1d4d-4c39-85f5-bb6f4a77dc71"
+	if got := wxpayRefundID(attemptID, "sub2_order", "12.34"); got != attemptID {
+		t.Fatalf("wxpay refund id = %q, want persisted attempt id %q", got, attemptID)
+	}
+	fallback1 := wxpayRefundID("", "sub2_order", "12.34")
+	fallback2 := wxpayRefundID("", "sub2_order", "12.34")
+	if fallback1 != fallback2 {
+		t.Fatalf("wxpay fallback refund id is not stable: %q != %q", fallback1, fallback2)
+	}
+}
