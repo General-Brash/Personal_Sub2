@@ -570,6 +570,8 @@ export default {
       confirmRefund: '确认退款',
       refundSuccess: '退款成功',
       refundPending: '退款处理中，待网关确认',
+      partialRefundUnsupported: '该订单已完成部分退款，当前版本不支持再次退款',
+      refundUnavailableForStatus: '订单当前状态为 {status}，不能发起退款',
       queryRefundStatus: '查询退款状态',
       refundInfo: '退款信息',
       refundEnabled: '允许退款',

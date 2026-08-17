@@ -49,7 +49,7 @@
               <Icon name="refresh" size="sm" :class="refundQueryingIds.has(row.id) ? 'animate-spin' : ''" />
               {{ t('payment.admin.queryRefundStatus') }}
             </button>
-            <button v-else-if="row.status === 'COMPLETED' || row.status === 'PARTIALLY_REFUNDED'" @click="openRefundDialog(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">
+            <button v-else-if="row.status === 'COMPLETED'" @click="openRefundDialog(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">
               <Icon name="dollar" size="sm" />
               {{ t('payment.admin.refund') }}
             </button>
@@ -237,7 +237,24 @@ async function handleRetryOrder(order: PaymentOrder) {
   catch (err: unknown) { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) }
 }
 
+const refundableOrderStatuses = new Set<string>(['COMPLETED', 'REFUND_REQUESTED', 'REFUND_FAILED'])
+
+function canStartRefund(order: PaymentOrder): boolean {
+  return refundableOrderStatuses.has(order.status)
+}
+
+function showRefundUnavailable(order: PaymentOrder) {
+  const key = order.status === 'PARTIALLY_REFUNDED'
+    ? 'payment.admin.partialRefundUnsupported'
+    : 'payment.admin.refundUnavailableForStatus'
+  appStore.showError(t(key, { status: order.status }))
+}
+
 function openRefundDialog(order: PaymentOrder) {
+  if (!canStartRefund(order)) {
+    showRefundUnavailable(order)
+    return
+  }
   selectedOrder.value = order
   refundRequireForce.value = false
   refundWarning.value = ''
@@ -255,10 +272,16 @@ function isRefundPendingWarning(warning: string | undefined): boolean {
 }
 
 async function handleRefund(data: { amount: number; reason: string; deduct_balance: boolean; force: boolean }) {
-  if (!selectedOrder.value) return
+  const order = selectedOrder.value
+  if (!order) return
+  if (!canStartRefund(order)) {
+    showRefundUnavailable(order)
+    closeRefundDialog()
+    return
+  }
   refundSubmitting.value = true
   try {
-    const res = await adminPaymentAPI.refundOrder(selectedOrder.value.id, { amount: data.amount, reason: data.reason, deduct_balance: data.deduct_balance, force: data.force })
+    const res = await adminPaymentAPI.refundOrder(order.id, { amount: data.amount, reason: data.reason, deduct_balance: data.deduct_balance, force: data.force })
     if (res.data.success) {
       appStore.showSuccess(t('payment.admin.refundSuccess'))
       closeRefundDialog()

@@ -546,6 +546,8 @@ export default {
       confirmRefund: 'Confirm Refund',
       refundSuccess: 'Refund successful',
       refundPending: 'Refund pending gateway confirmation',
+      partialRefundUnsupported: 'This order was partially refunded; this version does not support another refund',
+      refundUnavailableForStatus: 'Orders in {status} status cannot start a refund',
       queryRefundStatus: 'Query refund status',
       refundInfo: 'Refund Info',
       refundEnabled: 'Refund Enabled',
