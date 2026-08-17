@@ -48,7 +48,7 @@ for compose in \
     ' "${path}")
 
     [[ -n "${block}" ]] || fail "${compose} has no intent-classifier service"
-    assert_contains "${block}" 'ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.6-P1.2'
+    assert_contains "${block}" 'ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.177-P1'
     assert_contains "${block}" 'target: /models'
     assert_contains "${block}" 'read_only: true'
     assert_contains "${block}" 'intent_classifier_state:/state'
@@ -64,7 +64,7 @@ done
 
 grep -q '^INTENT_CLASSIFIER_MODEL_DIR=./intent-models$' "${DEPLOY_DIR}/.env.example" \
     || fail '.env.example is missing the model directory'
-grep -q '^INTENT_CLASSIFIER_IMAGE=ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.6-P1.2$' \
+grep -q '^INTENT_CLASSIFIER_IMAGE=ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.177-P1$' \
     "${DEPLOY_DIR}/.env.example" \
     || fail '.env.example is missing the versioned GHCR classifier image'
 grep -q '^INTENT_CLASSIFIER_ADMIN_TOKEN=' "${DEPLOY_DIR}/.env.example" \

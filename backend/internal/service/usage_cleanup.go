@@ -2,6 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/binary"
+	"errors"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -14,6 +18,8 @@ const (
 	UsageCleanupStatusFailed    = "failed"
 	UsageCleanupStatusCanceled  = "canceled"
 )
+
+var ErrUsageCleanupSnapshotMismatch = errors.New("usage cleanup snapshot identity mismatch")
 
 // UsageCleanupFilters 定义清理任务过滤条件
 // 时间范围为必填，其他字段可选
@@ -30,18 +36,34 @@ type UsageCleanupFilters struct {
 	EndTime   time.Time `json:"end_time"`
 	// All is reserved for the explicit dangerous cleanup flow. Normal API
 	// requests must provide a bounded range and never set this field.
-	All                      bool    `json:"all,omitempty"`
-	DataCleanupAuditID       int64   `json:"data_cleanup_audit_id,omitempty"`
-	DataCleanupSnapshotMaxID int64   `json:"data_cleanup_snapshot_max_id,omitempty"`
-	DataCleanupSnapshotRows  int64   `json:"data_cleanup_snapshot_rows,omitempty"`
-	UserID                   *int64  `json:"user_id,omitempty"`
-	APIKeyID                 *int64  `json:"api_key_id,omitempty"`
-	AccountID                *int64  `json:"account_id,omitempty"`
-	GroupID                  *int64  `json:"group_id,omitempty"`
-	Model                    *string `json:"model,omitempty"`
-	RequestType              *int16  `json:"request_type,omitempty"`
-	Stream                   *bool   `json:"stream,omitempty"`
-	BillingType              *int8   `json:"billing_type,omitempty"`
+	All                          bool     `json:"all,omitempty"`
+	DataCleanupAuditID           int64    `json:"data_cleanup_audit_id,omitempty"`
+	DataCleanupSnapshotMaxID     int64    `json:"data_cleanup_snapshot_max_id,omitempty"`
+	DataCleanupSnapshotRows      int64    `json:"data_cleanup_snapshot_rows,omitempty"`
+	DataCleanupSnapshotBatchSize int      `json:"data_cleanup_snapshot_batch_size,omitempty"`
+	DataCleanupSnapshotDigests   []string `json:"data_cleanup_snapshot_digests,omitempty"`
+	DataCleanupSnapshotChunk     int      `json:"-"`
+	UserID                       *int64   `json:"user_id,omitempty"`
+	APIKeyID                     *int64   `json:"api_key_id,omitempty"`
+	AccountID                    *int64   `json:"account_id,omitempty"`
+	GroupID                      *int64   `json:"group_id,omitempty"`
+	Model                        *string  `json:"model,omitempty"`
+	RequestType                  *int16   `json:"request_type,omitempty"`
+	Stream                       *bool    `json:"stream,omitempty"`
+	BillingType                  *int8    `json:"billing_type,omitempty"`
+}
+
+// UsageCleanupRowIdentityDigest returns an order-sensitive digest for a row-ID
+// chunk. Preview and deletion use the same ordering, so same-count row
+// replacement is detected before a destructive batch is committed.
+func UsageCleanupRowIdentityDigest(ids []int64) string {
+	h := sha256.New()
+	var encoded [8]byte
+	for _, id := range ids {
+		binary.BigEndian.PutUint64(encoded[:], uint64(id))
+		_, _ = h.Write(encoded[:])
+	}
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
 
 // UsageCleanupTask 表示使用记录清理任务

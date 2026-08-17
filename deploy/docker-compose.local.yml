@@ -199,7 +199,7 @@ services:
   # Intent Classifier (internal secondary-review service)
   # ===========================================================================
   intent-classifier:
-    image: ${INTENT_CLASSIFIER_IMAGE:-ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.6-P1.2}
+    image: ${INTENT_CLASSIFIER_IMAGE:-ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.177-P1}
     build:
       context: ${INTENT_CLASSIFIER_BUILD_CONTEXT:-../services/intent-classifier}
       dockerfile: Dockerfile

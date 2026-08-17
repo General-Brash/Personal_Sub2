@@ -602,3 +602,74 @@ func TestBuildUsageCleanupWhereDataCleanupSnapshot(t *testing.T) {
 	require.Equal(t, "TRUE AND FALSE", where)
 	require.Empty(t, args)
 }
+
+func TestUsageCleanupRepositorySnapshotBatchRejectsSameCountReplacementAfterWorkerDelay(t *testing.T) {
+	setUsageCleanupRollupTestTimezone(t)
+	db, mock := newSQLMock(t)
+	repo := &usageCleanupRepository{sql: db}
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	filters := service.UsageCleanupFilters{
+		StartTime:                    start,
+		EndTime:                      end,
+		DataCleanupAuditID:           7,
+		DataCleanupSnapshotMaxID:     10,
+		DataCleanupSnapshotRows:      2,
+		DataCleanupSnapshotBatchSize: 2,
+		DataCleanupSnapshotDigests:   []string{service.UsageCleanupRowIdentityDigest([]int64{1, 2})},
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT id FROM usage_group_rollup_state.*FOR UPDATE").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectQuery("SELECT id, created_at.*FROM usage_logs").
+		WithArgs(start, end, int64(10), 2).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).
+			AddRow(int64(1), start.Add(time.Hour)).
+			AddRow(int64(3), start.Add(2*time.Hour)))
+	mock.ExpectRollback()
+
+	_, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
+	require.ErrorIs(t, err, service.ErrUsageCleanupSnapshotMismatch)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageCleanupRepositorySnapshotBatchPreservesDailyRollupInvalidation(t *testing.T) {
+	setUsageCleanupRollupTestTimezone(t)
+	db, mock := newSQLMock(t)
+	repo := &usageCleanupRepository{sql: db}
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	firstDeletedAt := start.Add(time.Hour)
+	secondDeletedAt := start.Add(2 * time.Hour)
+	filters := service.UsageCleanupFilters{
+		StartTime:                    start,
+		EndTime:                      end,
+		DataCleanupAuditID:           7,
+		DataCleanupSnapshotMaxID:     10,
+		DataCleanupSnapshotRows:      2,
+		DataCleanupSnapshotBatchSize: 2,
+		DataCleanupSnapshotDigests:   []string{service.UsageCleanupRowIdentityDigest([]int64{1, 2})},
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT id FROM usage_group_rollup_state.*FOR UPDATE").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectQuery("SELECT id, created_at.*FROM usage_logs").
+		WithArgs(start, end, int64(10), 2).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).
+			AddRow(int64(1), firstDeletedAt).
+			AddRow(int64(2), secondDeletedAt))
+	mock.ExpectQuery("DELETE FROM usage_logs WHERE id = ANY").
+		WithArgs(sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(firstDeletedAt).AddRow(secondDeletedAt))
+	mock.ExpectExec("UPDATE usage_group_rollup_state").
+		WithArgs(firstDeletedAt, "Asia/Shanghai").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	deleted, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), deleted)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

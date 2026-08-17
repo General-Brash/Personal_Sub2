@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -499,7 +500,7 @@ func TestGatewayServiceRecordUsageWithLongContext_BillingUsesDetachedContext(t *
 	require.NoError(t, quotaSvc.lastQuotaCtxErr)
 }
 
-func TestGatewayServiceRecordUsage_FallsBackToLocalRequestIDForUsageLog(t *testing.T) {
+func TestGatewayServiceRecordUsage_FallsBackToNamespacedLocalRequestIDForUsageLog(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
@@ -523,10 +524,10 @@ func TestGatewayServiceRecordUsage_FallsBackToLocalRequestIDForUsageLog(t *testi
 
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, "gateway-local-fallback", usageRepo.lastLog.RequestID)
+	require.Equal(t, "local:gateway-local-fallback", usageRepo.lastLog.RequestID)
 }
 
-func TestGatewayServiceRecordUsage_PrefersUpstreamRequestIDOverClientAndLocalRequestIDs(t *testing.T) {
+func TestGatewayServiceRecordUsage_PrefersStableClientRequestIDOverVolatileUpstreamID(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
 	svc := newGatewayRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
@@ -550,13 +551,13 @@ func TestGatewayServiceRecordUsage_PrefersUpstreamRequestIDOverClientAndLocalReq
 
 	require.NoError(t, err)
 	require.NotNil(t, billingRepo.lastCmd)
-	require.Equal(t, "upstream-volatile-456", billingRepo.lastCmd.RequestID)
+	require.Equal(t, "client:client-stable-123", billingRepo.lastCmd.RequestID)
 	require.NotNil(t, billingRepo.lastCmd.UsageLog)
-	require.Equal(t, "upstream-volatile-456", billingRepo.lastCmd.UsageLog.RequestID)
+	require.Equal(t, "client:client-stable-123", billingRepo.lastCmd.UsageLog.RequestID)
 	require.Zero(t, usageRepo.calls)
 }
 
-func TestGatewayServiceRecordUsage_UsesClientRequestIDWhenUpstreamAndLocalRequestIDsAreMissing(t *testing.T) {
+func TestGatewayServiceRecordUsage_UsesNamespacedClientRequestIDWhenUpstreamAndLocalRequestIDsAreMissing(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
 	svc := newGatewayRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
@@ -578,9 +579,9 @@ func TestGatewayServiceRecordUsage_UsesClientRequestIDWhenUpstreamAndLocalReques
 
 	require.NoError(t, err)
 	require.NotNil(t, billingRepo.lastCmd)
-	require.Equal(t, "client-original-789", billingRepo.lastCmd.RequestID)
+	require.Equal(t, "client:client-original-789", billingRepo.lastCmd.RequestID)
 	require.NotNil(t, billingRepo.lastCmd.UsageLog)
-	require.Equal(t, "client-original-789", billingRepo.lastCmd.UsageLog.RequestID)
+	require.Equal(t, "client:client-original-789", billingRepo.lastCmd.UsageLog.RequestID)
 	require.Zero(t, usageRepo.calls)
 }
 

@@ -13,6 +13,7 @@ import (
 	dbusagecleanuptask "github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 type usageCleanupRepository struct {
@@ -347,6 +348,13 @@ func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, filte
 	if whereClause == "" {
 		return 0, fmt.Errorf("cleanup filters missing time range")
 	}
+	if len(filters.DataCleanupSnapshotDigests) > 0 {
+		db, ok := r.sql.(*sql.DB)
+		if !ok {
+			return 0, errors.New("snapshot-bound usage cleanup requires a transactional database")
+		}
+		return r.deleteUsageLogsSnapshotBatchWithRollupInvalidation(ctx, db, filters, whereClause, args, limit)
+	}
 	args = append(args, limit)
 	if db, ok := r.sql.(*sql.DB); ok {
 		return r.deleteUsageLogsBatchWithRollupInvalidation(ctx, db, whereClause, args)
@@ -380,6 +388,113 @@ func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, filte
 	return deleted, nil
 }
 
+func (r *usageCleanupRepository) deleteUsageLogsSnapshotBatchWithRollupInvalidation(
+	ctx context.Context,
+	db *sql.DB,
+	filters service.UsageCleanupFilters,
+	whereClause string,
+	whereArgs []any,
+	limit int,
+) (int64, error) {
+	chunk := filters.DataCleanupSnapshotChunk
+	batchSize := filters.DataCleanupSnapshotBatchSize
+	if chunk < 0 || chunk >= len(filters.DataCleanupSnapshotDigests) || batchSize <= 0 {
+		return 0, service.ErrUsageCleanupSnapshotMismatch
+	}
+	offset := int64(chunk * batchSize)
+	remaining := filters.DataCleanupSnapshotRows - offset
+	if remaining <= 0 {
+		return 0, service.ErrUsageCleanupSnapshotMismatch
+	}
+	expectedRows := batchSize
+	if remaining < int64(expectedRows) {
+		expectedRows = int(remaining)
+	}
+	if limit != expectedRows {
+		return 0, service.ErrUsageCleanupSnapshotMismatch
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	rollback := func(err error) (int64, error) {
+		_ = tx.Rollback()
+		return 0, err
+	}
+	if err := lockGroupUsageRollupState(ctx, tx); err != nil {
+		return rollback(err)
+	}
+
+	selectArgs := append(append([]any{}, whereArgs...), expectedRows)
+	selectQuery := fmt.Sprintf(`
+		SELECT id, created_at
+		FROM usage_logs
+		WHERE %s
+		ORDER BY created_at ASC, id ASC
+		LIMIT $%d
+		FOR UPDATE
+	`, whereClause, len(selectArgs))
+	rows, err := tx.QueryContext(ctx, selectQuery, selectArgs...)
+	if err != nil {
+		return rollback(err)
+	}
+	ids := make([]int64, 0, expectedRows)
+	for rows.Next() {
+		var id int64
+		var createdAt time.Time
+		if err := rows.Scan(&id, &createdAt); err != nil {
+			_ = rows.Close()
+			return rollback(err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return rollback(err)
+	}
+	if err := rows.Close(); err != nil {
+		return rollback(err)
+	}
+	if len(ids) != expectedRows || service.UsageCleanupRowIdentityDigest(ids) != filters.DataCleanupSnapshotDigests[chunk] {
+		return rollback(service.ErrUsageCleanupSnapshotMismatch)
+	}
+
+	deletedRows, err := tx.QueryContext(ctx, `DELETE FROM usage_logs WHERE id = ANY($1) RETURNING created_at`, pq.Array(ids))
+	if err != nil {
+		return rollback(err)
+	}
+	var deleted int64
+	var earliestDeletedAt time.Time
+	for deletedRows.Next() {
+		var deletedAt time.Time
+		if err := deletedRows.Scan(&deletedAt); err != nil {
+			_ = deletedRows.Close()
+			return rollback(err)
+		}
+		deleted++
+		if earliestDeletedAt.IsZero() || deletedAt.Before(earliestDeletedAt) {
+			earliestDeletedAt = deletedAt
+		}
+	}
+	if err := deletedRows.Err(); err != nil {
+		_ = deletedRows.Close()
+		return rollback(err)
+	}
+	if err := deletedRows.Close(); err != nil {
+		return rollback(err)
+	}
+	if deleted != int64(expectedRows) {
+		return rollback(service.ErrUsageCleanupSnapshotMismatch)
+	}
+	if err := invalidateGroupUsageRollupsAt(ctx, tx, earliestDeletedAt); err != nil {
+		return rollback(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return deleted, nil
+}
 func (r *usageCleanupRepository) deleteUsageLogsBatchWithRollupInvalidation(ctx context.Context, db *sql.DB, whereClause string, args []any) (int64, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {

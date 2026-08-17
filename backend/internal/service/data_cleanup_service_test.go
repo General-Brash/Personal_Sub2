@@ -38,9 +38,16 @@ func TestDataCleanupPreviewTokenBindsNormalizedFilterAndSnapshot(t *testing.T) {
 
 	svc := testDataCleanupService(nil)
 	preview := &DataCleanupPreview{
-		MatchedRows:   7,
-		BlockedRows:   2,
-		snapshotMaxID: 91,
+		MatchedRows:       7,
+		BlockedRows:       2,
+		snapshotMaxID:     91,
+		snapshotBatchSize: 2,
+		snapshotDigests: []string{
+			UsageCleanupRowIdentityDigest([]int64{1, 2}),
+			UsageCleanupRowIdentityDigest([]int64{3, 4}),
+			UsageCleanupRowIdentityDigest([]int64{5, 6}),
+			UsageCleanupRowIdentityDigest([]int64{7}),
+		},
 	}
 	token, err := svc.signPreviewToken(filter, preview)
 	require.NoError(t, err)
@@ -52,6 +59,8 @@ func TestDataCleanupPreviewTokenBindsNormalizedFilterAndSnapshot(t *testing.T) {
 	require.Equal(t, int64(7), payload.PreviewRows)
 	require.Equal(t, int64(2), payload.BlockedRows)
 	require.Equal(t, int64(91), payload.SnapshotMaxID)
+	require.Equal(t, 2, payload.SnapshotBatchSize)
+	require.Equal(t, preview.snapshotDigests, payload.SnapshotDigests)
 
 	changed := filter
 	changedEnd := end.Add(time.Hour).UTC()
@@ -75,7 +84,12 @@ func TestDataCleanupExecuteUsesSnapshotBoundAndIndependentAudit(t *testing.T) {
 	start := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	end := start.Add(24 * time.Hour)
 	filter := DataCleanupFilter{Category: "ops_error_logs", Mode: DataCleanupModeRange, StartTime: &start, EndTime: &end}
-	preview := &DataCleanupPreview{MatchedRows: 2, snapshotMaxID: 10}
+	preview := &DataCleanupPreview{
+		MatchedRows:       2,
+		snapshotMaxID:     10,
+		snapshotBatchSize: dataCleanupBatchSize,
+		snapshotDigests:   []string{UsageCleanupRowIdentityDigest([]int64{1, 2})},
+	}
 	token, err := svc.signPreviewToken(filter, preview)
 	require.NoError(t, err)
 
@@ -86,6 +100,9 @@ func TestDataCleanupExecuteUsesSnapshotBoundAndIndependentAudit(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(*), COALESCE(MAX(target.id), 0), MIN(target.created_at), MAX(target.created_at) FROM ops_error_logs AS target WHERE target.created_at >= $1 AND target.created_at < $2 AND target.id <= $3")).
 		WithArgs(start, end, int64(10)).
 		WillReturnRows(sqlmock.NewRows([]string{"count", "max_id", "min_time", "max_time"}).AddRow(int64(2), int64(10), start, end.Add(-time.Second)))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT target.id FROM ops_error_logs AS target WHERE target.created_at >= $1 AND target.created_at < $2 AND target.id <= $3 ORDER BY target.id")).
+		WithArgs(start, end, int64(10)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)).AddRow(int64(2)))
 	mock.ExpectExec("DELETE FROM ops_error_logs AS target").
 		WithArgs(start, end, int64(10), int64(2)).
 		WillReturnResult(sqlmock.NewResult(0, 2))
@@ -122,4 +139,51 @@ func TestDataCleanupDateBoundaryUsesBusinessTimezone(t *testing.T) {
 	require.NoError(t, err)
 	instant := time.Date(2026, 7, 1, 16, 0, 0, 0, time.UTC)
 	require.Equal(t, "2026-07-02", dataCleanupDateBoundary(instant, loc))
+}
+
+func TestDataCleanupPreviewTokenRejectsMissingRowIdentity(t *testing.T) {
+	svc := testDataCleanupService(nil)
+	preview := &DataCleanupPreview{MatchedRows: 2, snapshotMaxID: 10}
+	token, err := svc.signPreviewToken(DataCleanupFilter{Category: "ops_error_logs", Mode: DataCleanupModeAll}, preview)
+	require.NoError(t, err)
+
+	_, err = svc.verifyPreviewToken(token)
+	require.Error(t, err)
+}
+
+func TestDataCleanupExecuteRejectsSameCountRowReplacement(t *testing.T) {
+	db, mock := newDataCleanupSQLMock(t)
+	svc := testDataCleanupService(db)
+	start := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	filter := DataCleanupFilter{Category: "ops_error_logs", Mode: DataCleanupModeRange, StartTime: &start, EndTime: &end}
+	preview := &DataCleanupPreview{
+		MatchedRows:       2,
+		snapshotMaxID:     10,
+		snapshotBatchSize: dataCleanupBatchSize,
+		snapshotDigests:   []string{UsageCleanupRowIdentityDigest([]int64{1, 2})},
+	}
+	token, err := svc.signPreviewToken(filter, preview)
+	require.NoError(t, err)
+
+	mock.ExpectQuery("INSERT INTO data_cleanup_audits").
+		WithArgs(int64(7), "admin@example.com", "jwt", "ops_error_logs", "range", sqlmock.AnyArg(), int64(2), int64(0), "running").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(4)))
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(*), COALESCE(MAX(target.id), 0), MIN(target.created_at), MAX(target.created_at) FROM ops_error_logs AS target WHERE target.created_at >= $1 AND target.created_at < $2 AND target.id <= $3")).
+		WithArgs(start, end, int64(10)).
+		WillReturnRows(sqlmock.NewRows([]string{"count", "max_id", "min_time", "max_time"}).AddRow(int64(2), int64(10), start, end.Add(-time.Second)))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT target.id FROM ops_error_logs AS target WHERE target.created_at >= $1 AND target.created_at < $2 AND target.id <= $3 ORDER BY target.id")).
+		WithArgs(start, end, int64(10)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)).AddRow(int64(3)))
+	mock.ExpectExec("UPDATE data_cleanup_audits").
+		WithArgs(int64(4), "failed", int64(0), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+
+	_, err = svc.Execute(context.Background(), filter, 2, "DELETE ops_error_logs 2", token, DataCleanupOperator{
+		UserID: 7, Email: "admin@example.com", AuthMethod: "jwt",
+	})
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

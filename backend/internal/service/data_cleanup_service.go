@@ -45,9 +45,11 @@ type DataCleanupPreview struct {
 	MaxRangeDays    int    `json:"max_range_days"`
 	DeletionWarning string `json:"deletion_warning,omitempty"`
 
-	snapshotMaxID int64
-	snapshotStart *time.Time
-	snapshotEnd   *time.Time
+	snapshotMaxID     int64
+	snapshotStart     *time.Time
+	snapshotEnd       *time.Time
+	snapshotBatchSize int
+	snapshotDigests   []string
 }
 
 type DataCleanupOperator struct {
@@ -92,13 +94,15 @@ type dataCleanupTarget struct {
 }
 
 type dataCleanupPreviewToken struct {
-	Filter        DataCleanupFilter `json:"filter"`
-	PreviewRows   int64             `json:"preview_rows"`
-	BlockedRows   int64             `json:"blocked_rows"`
-	SnapshotMaxID int64             `json:"snapshot_max_id"`
-	SnapshotStart *time.Time        `json:"snapshot_start,omitempty"`
-	SnapshotEnd   *time.Time        `json:"snapshot_end,omitempty"`
-	ExpiresAtUnix int64             `json:"expires_at"`
+	Filter            DataCleanupFilter `json:"filter"`
+	PreviewRows       int64             `json:"preview_rows"`
+	BlockedRows       int64             `json:"blocked_rows"`
+	SnapshotMaxID     int64             `json:"snapshot_max_id"`
+	SnapshotStart     *time.Time        `json:"snapshot_start,omitempty"`
+	SnapshotEnd       *time.Time        `json:"snapshot_end,omitempty"`
+	SnapshotBatchSize int               `json:"snapshot_batch_size"`
+	SnapshotDigests   []string          `json:"snapshot_digests"`
+	ExpiresAtUnix     int64             `json:"expires_at"`
 }
 
 var dataCleanupTargets = map[string]dataCleanupTarget{
@@ -171,26 +175,54 @@ func (s *DataCleanupService) SetAuditLogRetentionDays(ctx context.Context, days 
 }
 
 func (s *DataCleanupService) Preview(ctx context.Context, filter DataCleanupFilter) (*DataCleanupPreview, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("data cleanup service not initialized")
+	}
 	target, normalized, err := validateDataCleanupFilter(filter)
 	if err != nil {
 		return nil, err
 	}
-	matched, blocked, snapshotMaxID, snapshotStart, snapshotEnd, err := s.countRows(ctx, nil, normalized, target, nil)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = tx.Rollback() }()
+	matched, blocked, snapshotMaxID, snapshotStart, snapshotEnd, err := s.countRows(ctx, tx, normalized, target, nil)
+	if err != nil {
+		return nil, err
+	}
+	batchSize := dataCleanupBatchSize
+	orderBy := "target.id"
+	if normalized.Category == "usage_logs" {
+		orderBy = "target.created_at, target.id"
+		if s.usageCleanup != nil {
+			batchSize = s.usageCleanup.batchSize()
+		}
+	}
+	digests, snapshotRows, err := dataCleanupSnapshotDigests(ctx, tx, normalized, target, snapshotMaxID, batchSize, orderBy)
+	if err != nil {
+		return nil, err
+	}
+	if snapshotRows != matched {
+		return nil, infraerrors.Conflict("DATA_CLEANUP_PREVIEW_STALE", "cleanup rows changed while previewing; preview again")
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	preview := &DataCleanupPreview{
-		Category:        normalized.Category,
-		Mode:            normalized.Mode,
-		MatchedRows:     matched,
-		BlockedRows:     blocked,
-		Confirmation:    dataCleanupConfirmation(normalized, matched),
-		RequiresTOTP:    target.sensitive || normalized.Mode == DataCleanupModeAll,
-		MaxRangeDays:    dataCleanupMaxRangeDays,
-		DeletionWarning: target.warning,
-		snapshotMaxID:   snapshotMaxID,
-		snapshotStart:   snapshotStart,
-		snapshotEnd:     snapshotEnd,
+		Category:          normalized.Category,
+		Mode:              normalized.Mode,
+		MatchedRows:       matched,
+		BlockedRows:       blocked,
+		Confirmation:      dataCleanupConfirmation(normalized, matched),
+		RequiresTOTP:      target.sensitive || normalized.Mode == DataCleanupModeAll,
+		MaxRangeDays:      dataCleanupMaxRangeDays,
+		DeletionWarning:   target.warning,
+		snapshotMaxID:     snapshotMaxID,
+		snapshotStart:     snapshotStart,
+		snapshotEnd:       snapshotEnd,
+		snapshotBatchSize: batchSize,
+		snapshotDigests:   digests,
 	}
 	preview.PreviewToken, err = s.signPreviewToken(normalized, preview)
 	if err != nil {
@@ -225,13 +257,15 @@ func (s *DataCleanupService) Execute(
 		return nil, infraerrors.Conflict("DATA_CLEANUP_PREVIEW_MISMATCH", "cleanup preview does not match the requested filter")
 	}
 	preview := &DataCleanupPreview{
-		Category:      normalized.Category,
-		Mode:          normalized.Mode,
-		MatchedRows:   token.PreviewRows,
-		BlockedRows:   token.BlockedRows,
-		snapshotMaxID: token.SnapshotMaxID,
-		snapshotStart: token.SnapshotStart,
-		snapshotEnd:   token.SnapshotEnd,
+		Category:          normalized.Category,
+		Mode:              normalized.Mode,
+		MatchedRows:       token.PreviewRows,
+		BlockedRows:       token.BlockedRows,
+		snapshotMaxID:     token.SnapshotMaxID,
+		snapshotStart:     token.SnapshotStart,
+		snapshotEnd:       token.SnapshotEnd,
+		snapshotBatchSize: token.SnapshotBatchSize,
+		snapshotDigests:   append([]string(nil), token.SnapshotDigests...),
 	}
 	if strings.TrimSpace(confirmation) != dataCleanupConfirmation(normalized, token.PreviewRows) {
 		return nil, infraerrors.BadRequest("DATA_CLEANUP_CONFIRMATION_INVALID", "confirmation text does not match")
@@ -242,8 +276,12 @@ func (s *DataCleanupService) Execute(
 		if err != nil {
 			return nil, err
 		}
-		if matched != token.PreviewRows || blocked != token.BlockedRows {
-			return nil, infraerrors.Conflict("DATA_CLEANUP_PREVIEW_STALE", "cleanup preview changed; preview again before executing")
+		digests, snapshotRows, err := dataCleanupSnapshotDigests(ctx, s.db, normalized, target, token.SnapshotMaxID, token.SnapshotBatchSize, "target.created_at, target.id")
+		if err != nil {
+			return nil, err
+		}
+		if matched != token.PreviewRows || blocked != token.BlockedRows || !sameDataCleanupSnapshot(digests, snapshotRows, token.SnapshotDigests, token.PreviewRows) {
+			return nil, infraerrors.Conflict("DATA_CLEANUP_PREVIEW_STALE", "cleanup preview row identity changed; preview again before executing")
 		}
 		return s.queueUsageCleanup(ctx, normalized, preview, operator)
 	}
@@ -330,13 +368,15 @@ func (s *DataCleanupService) signPreviewToken(filter DataCleanupFilter, preview 
 		return "", errors.New("data cleanup preview token service not initialized")
 	}
 	payload := dataCleanupPreviewToken{
-		Filter:        filter,
-		PreviewRows:   preview.MatchedRows,
-		BlockedRows:   preview.BlockedRows,
-		SnapshotMaxID: preview.snapshotMaxID,
-		SnapshotStart: preview.snapshotStart,
-		SnapshotEnd:   preview.snapshotEnd,
-		ExpiresAtUnix: time.Now().UTC().Add(dataCleanupPreviewTTL).Unix(),
+		Filter:            filter,
+		PreviewRows:       preview.MatchedRows,
+		BlockedRows:       preview.BlockedRows,
+		SnapshotMaxID:     preview.snapshotMaxID,
+		SnapshotStart:     preview.snapshotStart,
+		SnapshotEnd:       preview.snapshotEnd,
+		SnapshotBatchSize: preview.snapshotBatchSize,
+		SnapshotDigests:   append([]string(nil), preview.snapshotDigests...),
+		ExpiresAtUnix:     time.Now().UTC().Add(dataCleanupPreviewTTL).Unix(),
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -374,6 +414,13 @@ func (s *DataCleanupService) verifyPreviewToken(token string) (*dataCleanupPrevi
 	}
 	if payload.ExpiresAtUnix <= time.Now().UTC().Unix() {
 		return nil, infraerrors.Conflict("DATA_CLEANUP_PREVIEW_EXPIRED", "cleanup preview expired; preview again before executing")
+	}
+	expectedChunks := 0
+	if payload.PreviewRows > 0 && payload.SnapshotBatchSize > 0 {
+		expectedChunks = int((payload.PreviewRows + int64(payload.SnapshotBatchSize) - 1) / int64(payload.SnapshotBatchSize))
+	}
+	if payload.SnapshotBatchSize <= 0 || len(payload.SnapshotDigests) != expectedChunks {
+		return nil, infraerrors.BadRequest("DATA_CLEANUP_PREVIEW_TOKEN_INVALID", "cleanup preview token is missing row identity data")
 	}
 	return &payload, nil
 }
@@ -477,6 +524,65 @@ func (s *DataCleanupService) countRows(
 	return matched, blocked, maxID, snapshotStart, snapshotEnd, nil
 }
 
+type dataCleanupRowsQueryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func dataCleanupSnapshotDigests(
+	ctx context.Context,
+	queryer dataCleanupRowsQueryer,
+	filter DataCleanupFilter,
+	target dataCleanupTarget,
+	snapshotMaxID int64,
+	batchSize int,
+	orderBy string,
+) ([]string, int64, error) {
+	if batchSize <= 0 {
+		batchSize = dataCleanupBatchSize
+	}
+	where, args := dataCleanupWhere(filter, target, &snapshotMaxID)
+	query := fmt.Sprintf("SELECT target.id FROM %s AS target WHERE %s ORDER BY %s", target.table, where, orderBy)
+	rows, err := queryer.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	digests := make([]string, 0)
+	ids := make([]int64, 0, batchSize)
+	var total int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, 0, err
+		}
+		ids = append(ids, id)
+		total++
+		if len(ids) == batchSize {
+			digests = append(digests, UsageCleanupRowIdentityDigest(ids))
+			ids = ids[:0]
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if len(ids) > 0 {
+		digests = append(digests, UsageCleanupRowIdentityDigest(ids))
+	}
+	return digests, total, nil
+}
+
+func sameDataCleanupSnapshot(digests []string, rows int64, expectedDigests []string, expectedRows int64) bool {
+	if rows != expectedRows || len(digests) != len(expectedDigests) {
+		return false
+	}
+	for i := range digests {
+		if !hmac.Equal([]byte(digests[i]), []byte(expectedDigests[i])) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *DataCleanupService) executeTransactional(
 	ctx context.Context,
 	filter DataCleanupFilter,
@@ -507,9 +613,24 @@ func (s *DataCleanupService) executeTransactional(
 		s.finishAuditFailureDetached(auditID, filter, preview, operator, err)
 		return nil, err
 	}
+	digests, snapshotRows, err := dataCleanupSnapshotDigests(ctx, tx, filter, target, preview.snapshotMaxID, preview.snapshotBatchSize, "target.id")
+	if err != nil {
+		s.finishAuditFailureDetached(auditID, filter, preview, operator, err)
+		return nil, err
+	}
+	if !sameDataCleanupSnapshot(digests, snapshotRows, preview.snapshotDigests, preview.MatchedRows) {
+		err = infraerrors.Conflict("DATA_CLEANUP_PREVIEW_STALE", "cleanup preview row identity changed; preview again before executing")
+		s.finishAuditFailureDetached(auditID, filter, preview, operator, err)
+		return nil, err
+	}
 	deleted, err := deleteDataCleanupRows(ctx, tx, filter, target, preview.snapshotMaxID, preview.MatchedRows)
 	if err != nil {
 		_ = tx.Rollback()
+		s.finishAuditFailureDetached(auditID, filter, preview, operator, err)
+		return nil, err
+	}
+	if deleted != preview.MatchedRows {
+		err = infraerrors.Conflict("DATA_CLEANUP_PREVIEW_STALE", "cleanup row identity changed during execution; transaction rolled back")
 		s.finishAuditFailureDetached(auditID, filter, preview, operator, err)
 		return nil, err
 	}
@@ -598,10 +719,12 @@ func (s *DataCleanupService) queueUsageCleanup(ctx context.Context, filter DataC
 
 func buildDataCleanupUsageFilters(filter DataCleanupFilter, preview *DataCleanupPreview, auditID int64) UsageCleanupFilters {
 	usageFilter := UsageCleanupFilters{
-		All:                      filter.Mode == DataCleanupModeAll,
-		DataCleanupAuditID:       auditID,
-		DataCleanupSnapshotMaxID: preview.snapshotMaxID,
-		DataCleanupSnapshotRows:  preview.MatchedRows,
+		All:                          filter.Mode == DataCleanupModeAll,
+		DataCleanupAuditID:           auditID,
+		DataCleanupSnapshotMaxID:     preview.snapshotMaxID,
+		DataCleanupSnapshotRows:      preview.MatchedRows,
+		DataCleanupSnapshotBatchSize: preview.snapshotBatchSize,
+		DataCleanupSnapshotDigests:   append([]string(nil), preview.snapshotDigests...),
 	}
 	if filter.StartTime != nil {
 		usageFilter.StartTime = filter.StartTime.UTC()
@@ -627,11 +750,13 @@ func insertDataCleanupAudit(ctx context.Context, executor interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, filter DataCleanupFilter, preview *DataCleanupPreview, operator DataCleanupOperator, status string) (int64, error) {
 	filtersJSON, _ := json.Marshal(map[string]any{
-		"category":        filter.Category,
-		"mode":            filter.Mode,
-		"start_time":      filter.StartTime,
-		"end_time":        filter.EndTime,
-		"snapshot_max_id": preview.snapshotMaxID,
+		"category":              filter.Category,
+		"mode":                  filter.Mode,
+		"start_time":            filter.StartTime,
+		"end_time":              filter.EndTime,
+		"snapshot_max_id":       preview.snapshotMaxID,
+		"snapshot_batch_size":   preview.snapshotBatchSize,
+		"snapshot_digest_count": len(preview.snapshotDigests),
 	})
 	var id int64
 	err := executor.QueryRowContext(ctx, `

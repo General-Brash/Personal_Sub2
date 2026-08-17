@@ -972,3 +972,28 @@ func TestUsageCleanupServiceIsTaskCanceledError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "status err")
 }
+
+func TestUsageCleanupServiceRejectsWorkerDelayRowReplacement(t *testing.T) {
+	digest := UsageCleanupRowIdentityDigest([]int64{1, 2})
+	repo := &cleanupRepoStub{
+		statusByID:  map[int64]string{41: UsageCleanupStatusRunning},
+		deleteQueue: []cleanupDeleteResponse{{err: ErrUsageCleanupSnapshotMismatch}},
+	}
+	svc := NewUsageCleanupService(repo, nil, nil, &config.Config{UsageCleanup: config.UsageCleanupConfig{Enabled: true, BatchSize: 5}})
+	task := &UsageCleanupTask{
+		ID: 41,
+		Filters: UsageCleanupFilters{
+			DataCleanupAuditID:           9,
+			DataCleanupSnapshotRows:      2,
+			DataCleanupSnapshotBatchSize: 2,
+			DataCleanupSnapshotDigests:   []string{digest},
+		},
+	}
+
+	svc.executeTask(context.Background(), task)
+	require.Len(t, repo.deleteCalls, 1)
+	require.Equal(t, 2, repo.deleteCalls[0].limit)
+	require.Equal(t, 0, repo.deleteCalls[0].filters.DataCleanupSnapshotChunk)
+	require.Len(t, repo.markFailed, 1)
+	require.Contains(t, repo.markFailed[0].errMsg, ErrUsageCleanupSnapshotMismatch.Error())
+}

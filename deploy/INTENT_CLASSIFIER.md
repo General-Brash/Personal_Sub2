@@ -5,7 +5,7 @@ The intent classifier is an internal secondary-review service. Sub2API calls it 
 ## Network and Storage Contract
 
 - Docker service root: `http://intent-classifier:8080`
-- Release image: `ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.6-P1.2`
+- Release image: `ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.177-P1`
 - Bare-metal service root: `http://127.0.0.1:18080`
 - Model packages: `/models` in Docker or `/var/lib/sub2api/intent-models` with systemd; always read-only to the service
 - Runtime state: `/state/active.json` in Docker or `/var/lib/sub2api/intent-classifier-state/active.json` with systemd; writable and persistent
@@ -53,7 +53,7 @@ MODELS_DIR="${INTENT_CLASSIFIER_MODEL_DIR:-./intent-models}"
 test -d "$SOURCE" || { echo "model package directory not found" >&2; exit 1; }
 mkdir -p "$MODELS_DIR"
 MODELS_DIR="$(cd "$MODELS_DIR" && pwd)"
-IMAGE="${INTENT_CLASSIFIER_IMAGE:-ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.6-P1.2}"
+IMAGE="${INTENT_CLASSIFIER_IMAGE:-ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.177-P1}"
 docker compose pull intent-classifier
 docker run --rm \
   --user "$(id -u):$(id -g)" \
@@ -68,7 +68,7 @@ From the `deploy/` directory, PowerShell with Docker Desktop uses the image's no
 ```powershell
 $Source = (Resolve-Path 'C:\model-import\cyber-intent-v20260720').Path
 $Models = Join-Path (Get-Location) 'intent-models'
-$Image = 'ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.6-P1.2'
+$Image = 'ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.177-P1'
 New-Item -ItemType Directory -Force -Path $Models | Out-Null
 $Models = (Resolve-Path $Models).Path
 docker run --rm `

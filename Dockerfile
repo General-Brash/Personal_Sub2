@@ -110,7 +110,7 @@ FROM ${ALPINE_IMAGE}
 # Labels
 LABEL maintainer="General-Brash <github.com/General-Brash>"
 LABEL org.opencontainers.image.title="Personal_Sub2"
-LABEL org.opencontainers.image.description="Personal_Sub2 - personal edition based on the official v0.1.169 codebase"
+LABEL org.opencontainers.image.description="Personal_Sub2 - personal edition based on the official v0.1.177 codebase"
 LABEL org.opencontainers.image.source="https://github.com/General-Brash/Personal_Sub2"
 LABEL org.opencontainers.image.documentation="https://github.com/General-Brash/Personal_Sub2#readme"
 LABEL org.opencontainers.image.url="https://github.com/General-Brash/Personal_Sub2"

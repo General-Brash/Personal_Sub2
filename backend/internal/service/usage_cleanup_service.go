@@ -285,7 +285,18 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 				deleteLimit = int(remaining)
 			}
 		}
-		deleted, err := s.repo.DeleteUsageLogsBatch(ctx, task.Filters, deleteLimit)
+		batchFilters := task.Filters
+		if len(task.Filters.DataCleanupSnapshotDigests) > 0 {
+			if batchSize <= 0 || deletedTotal%int64(batchSize) != 0 {
+				err := ErrUsageCleanupSnapshotMismatch
+				s.markTaskFailed(task.ID, deletedTotal, err)
+				task.DeletedRows = deletedTotal
+				s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusFailed, err)
+				return
+			}
+			batchFilters.DataCleanupSnapshotChunk = int(deletedTotal / int64(batchSize))
+		}
+		deleted, err := s.repo.DeleteUsageLogsBatch(ctx, batchFilters, deleteLimit)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				// 任务被中断（例如服务停止/超时），保持 running 状态，后续通过 stale reclaim 续跑。
