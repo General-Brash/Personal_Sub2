@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.1.177`. This integration line is released as `v0.1.177-P1`.
+Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.1.178`. This integration line is released as `v0.1.178-P1`.
 
 English | [中文](README_CN.md) | [日本語](README_JA.md)
 
@@ -13,7 +13,7 @@ English | [中文](README_CN.md) | [日本語](README_JA.md)
 
 Production model weights are not included. Before enabling model-backed secondary review, prepare and activate a package as described in [`MODEL_PACKAGE.md`](services/intent-classifier/MODEL_PACKAGE.md).
 
-## Official v0.1.177 Integration
+## Official v0.1.178 Integration
 
 - **Upstream URL safety**: Validates client-controlled OpenAI Responses subpaths, Gemini model/action paths, and Grok video request IDs before forwarding, rejecting path fragments that could alter upstream URL structure.
 - **Runtime pricing and billing**: Docker and GoReleaser image builds now carry fallback pricing resources at runtime; GPT-5.6 Luna/Terra rates and GLM-5.2 fallback pricing are corrected.

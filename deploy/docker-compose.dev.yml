@@ -97,7 +97,7 @@ services:
       start_period: 30s
 
   intent-classifier:
-    image: ${INTENT_CLASSIFIER_IMAGE:-ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.177-P1}
+    image: ${INTENT_CLASSIFIER_IMAGE:-ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.178-P1}
     build:
       context: ${INTENT_CLASSIFIER_BUILD_CONTEXT:-../services/intent-classifier}
       dockerfile: Dockerfile

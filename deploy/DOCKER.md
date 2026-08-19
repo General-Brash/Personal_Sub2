@@ -1,6 +1,6 @@
 # Personal_Sub2 Container Image
 
-Personal_Sub2 is a personally developed and maintained edition based on the official `v0.1.177` codebase.
+Personal_Sub2 is a personally developed and maintained edition based on the official `v0.1.178` codebase.
 
 ## Quick Start
 

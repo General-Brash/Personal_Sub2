@@ -856,8 +856,8 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		requestedModel = input.OriginalModel
 	}
 
-	// ??? preflight ??????????? fail closed????????????? 0 ??
-	cost, pricingErr := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
+	// 计费前置检查必须保持 fail-closed；使用 178 的定价时间参数。
+	cost, pricingErr := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, pricingAt, opts)
 	if pricingErr != nil {
 		logger.L().Error("gateway_usage.billing_pricing_failure_after_response",
 			zap.String("billing_model", billingModel),
@@ -867,7 +867,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		)
 		return pricingErr
 	}
-	// response_model????????????????????????
+	// response_model 定价在响应模型可识别且有明确价格时覆盖基准。
 	if responseModel := responseModelBillingDeclaration(
 		input.BillingModelSource,
 		result.UpstreamResponseModel,
@@ -875,12 +875,13 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		result.ImageCount > 0 || result.AudioUsage != nil || result.SearchCount > 0,
 	); responseModel != "" && !strings.EqualFold(responseModel, strings.TrimSpace(billingModel)) {
 		if identified, responseChannelPriced := s.hasIdentifiedResponseModelPricing(ctx, responseModel, apiKey); identified {
-			responseCost, responsePricingErr := s.calculateRecordUsageCost(ctx, result, apiKey, responseModel, multiplier, imageMultiplier, opts)
+			responseCost, responsePricingErr := s.calculateRecordUsageCost(ctx, result, apiKey, responseModel, multiplier, imageMultiplier, pricingAt, opts)
 			if responsePricingErr != nil {
 				logger.L().Warn("gateway_usage.response_model_pricing_failed", zap.String("response_model", responseModel), zap.Error(responsePricingErr))
 			} else {
 				baselineChannelPriced := s.resolveChannelPricing(ctx, billingModel, apiKey) != nil
 				if responseModelBillingAdoptable(cost, responseCost, baselineChannelPriced, responseChannelPriced) {
+					// billingModel 仅用于定价查表，后续流程只消费 cost。
 					logResponseModelBillingApplied("service.gateway", account, result.RequestID, billingModel, responseModel, cost, responseCost)
 					cost = responseCost
 				}
@@ -968,12 +969,13 @@ func (s *GatewayService) calculateRecordUsageCost(
 	billingModel string,
 	multiplier float64,
 	imageMultiplier float64,
+	pricingAt time.Time,
 	opts *recordUsageOpts,
 ) (*CostBreakdown, error) {
 	// 图片生成：渠道定价为 token 计费时走 token 路径，否则走图片计费
 	if result.ImageCount > 0 {
 		if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil && resolved.Mode == BillingModeToken {
-			return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, opts)
+			return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt, opts)
 		}
 		return s.calculateImageCost(ctx, result, apiKey, billingModel, imageMultiplier)
 	}
@@ -997,7 +999,7 @@ func (s *GatewayService) calculateRecordUsageCost(
 	}
 
 	// Token 计费；SearchCount 为叠加 surcharge（不替代 token）。
-	tokenCost, tokenErr := s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, opts)
+	tokenCost, tokenErr := s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt, opts)
 	if tokenErr != nil {
 		return nil, tokenErr
 	}
@@ -1158,6 +1160,7 @@ func (s *GatewayService) calculateTokenCost(
 	apiKey *APIKey,
 	billingModel string,
 	multiplier float64,
+	pricingAt time.Time,
 	opts *recordUsageOpts,
 ) (*CostBreakdown, error) {
 	tokens := UsageTokens{
@@ -1185,6 +1188,7 @@ func (s *GatewayService) calculateTokenCost(
 			Tokens:         tokens,
 			RequestCount:   1,
 			RateMultiplier: multiplier,
+			PricingAt:      pricingAt,
 			Resolver:       s.resolver,
 			Resolved:       resolved,
 		})
@@ -1195,7 +1199,7 @@ func (s *GatewayService) calculateTokenCost(
 		gid := apiKey.Group.ID
 		cost, err = s.billingService.CalculateCostUnified(CostInput{
 			Ctx: ctx, Model: billingModel, GroupID: &gid, Group: apiKey.Group,
-			Tokens: tokens, RequestCount: 1, RateMultiplier: multiplier, Resolver: s.resolver,
+			Tokens: tokens, RequestCount: 1, RateMultiplier: multiplier, PricingAt: pricingAt, Resolver: s.resolver,
 		})
 	} else {
 		cost, err = s.billingService.CalculateCost(billingModel, tokens, multiplier)

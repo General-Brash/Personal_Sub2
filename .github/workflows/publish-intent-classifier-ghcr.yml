@@ -10,7 +10,7 @@ on:
         description: 'Existing release tag to publish'
         required: true
         type: string
-        default: 'v0.1.177-P1'
+        default: 'v0.1.178-P1'
 
 permissions:
   contents: read
