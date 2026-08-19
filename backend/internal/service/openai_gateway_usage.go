@@ -631,6 +631,7 @@ func isGrokVideoUsageResult(result *OpenAIForwardResult, billingModels []string)
 	return true
 }
 
+//nolint:unused // 由 unit 测试覆盖的定价错误分类辅助函数。
 func isUsagePricingUnavailableError(err error) bool {
 	if err == nil {
 		return false

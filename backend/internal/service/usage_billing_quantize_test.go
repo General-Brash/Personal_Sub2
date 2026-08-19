@@ -37,7 +37,7 @@ func TestUsageBillingCommandQuantizesBalanceAndQuotaIdentically(t *testing.T) {
 		BalanceCost:     actualCost,
 		APIKeyQuotaCost: actualCost,
 	}
-	cmd.Normalize()
+	require.NoError(t, cmd.Normalize())
 
 	require.Equal(t, cmd.BalanceCost, cmd.APIKeyQuotaCost,
 		"余额扣减与 API Key 配额累加必须使用同一个规范金额")
@@ -90,7 +90,7 @@ func TestQuantizedAmountsReconcileExactlyOverManyApplications(t *testing.T) {
 		APIKeyQuotaCost:     actualCost,
 		APIKeyRateLimitCost: actualCost,
 	}
-	cmd.Normalize()
+	require.NoError(t, cmd.Normalize())
 
 	unit := decimal.NewFromFloat(cmd.BalanceCost)
 	for _, n := range []int64{1, 10, 100, 1000} {
@@ -126,7 +126,7 @@ func TestNormalizeQuantizesEveryMonetaryField(t *testing.T) {
 		APIKeyRateLimitCost: raw,
 		AccountQuotaCost:    raw,
 	}
-	cmd.Normalize()
+	require.NoError(t, cmd.Normalize())
 
 	for name, got := range map[string]float64{
 		"BalanceCost":         cmd.BalanceCost,
@@ -159,7 +159,7 @@ func TestNormalizeKeepsFingerprintDerivedFromRawAmounts(t *testing.T) {
 	cmd := newCmd()
 	expected := buildUsageBillingFingerprint(newCmd())
 
-	cmd.Normalize()
+	require.NoError(t, cmd.Normalize())
 	require.Equal(t, expected, cmd.RequestFingerprint)
 }
 
@@ -170,7 +170,7 @@ func TestNormalizePreservesExplicitFingerprint(t *testing.T) {
 		RequestFingerprint: "preset-fingerprint",
 		BalanceCost:        0.0000781234567,
 	}
-	cmd.Normalize()
+	require.NoError(t, cmd.Normalize())
 
 	require.Equal(t, "preset-fingerprint", cmd.RequestFingerprint)
 	require.LessOrEqual(t, decimalPlaces(cmd.BalanceCost), int32(UsageBillingMonetaryScale))

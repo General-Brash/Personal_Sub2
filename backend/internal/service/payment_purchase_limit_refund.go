@@ -298,6 +298,7 @@ func (s *PaymentService) recoverRejectedProductRefund(ctx context.Context, order
 	return true, nil
 }
 
+//nolint:unused // 保留给旧拒付退款兼容路径。
 func (s *PaymentService) failRejectedProductRefund(ctx context.Context, orderID int64, detail string) error {
 	if err := s.recordPurchaseLimitRefundResult(ctx, orderID, &payment.RefundResponse{Status: payment.ProviderStatusFailed}); err != nil {
 		slog.Error("record rejected product refund failure", "orderID", orderID, "error", err)

@@ -61,6 +61,7 @@ func refundAttemptAllowsRetry(attempt *dbent.PaymentRefundAttempt) bool {
 	return attempt.DeductionState == refundDeductionStateReturned || attempt.DeductionState == refundDeductionStateNone
 }
 
+//nolint:unused // 保留给 unit 测试与退款状态审查使用。
 func refundAttemptIsActive(attempt *dbent.PaymentRefundAttempt) bool {
 	if attempt == nil {
 		return false

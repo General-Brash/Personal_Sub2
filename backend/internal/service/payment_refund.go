@@ -346,6 +346,7 @@ func (s *PaymentService) prepareRefundProvider(ctx context.Context, order *dbent
 	return prov, nil
 }
 
+//nolint:unused // 保留给旧支付网关兼容路径。
 func (s *PaymentService) gwRefund(ctx context.Context, plan *RefundPlan) (*payment.RefundResponse, error) {
 	if plan == nil || plan.Order == nil {
 		return nil, infraerrors.BadRequest("INVALID_REFUND_PLAN", "invalid refund plan")
@@ -386,6 +387,7 @@ func recognizedRefundProviderStatus(status string) bool {
 	}
 }
 
+//nolint:unused // 由 unit 测试覆盖的响应校验辅助函数。
 func validateRefundProviderResponse(resp *payment.RefundResponse) error {
 	if resp == nil {
 		return fmt.Errorf("payment refund response missing")
