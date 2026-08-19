@@ -339,6 +339,7 @@ func parsePaymentResumeSigningKey(raw string) []byte {
 	return []byte(raw)
 }
 
+//nolint:unused // 保留给 unit 测试与兼容支付路径使用。
 func psSliceContains(sl []string, s string) bool {
 	for _, v := range sl {
 		if v == s {
