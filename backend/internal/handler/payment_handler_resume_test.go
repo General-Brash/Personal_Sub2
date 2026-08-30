@@ -143,6 +143,7 @@ func TestVerifyOrderPublicReturnsLegacyOrderState(t *testing.T) {
 	require.Equal(t, "legacy-order-no", resp.Data["out_trade_no"])
 	require.Equal(t, service.OrderStatusPending, resp.Data["status"])
 	require.Equal(t, false, resp.Data["paid"])
+	require.Equal(t, payment.OrderTypeBalance, resp.Data["order_type"])
 	require.NotEmpty(t, resp.Data["created_at"])
 	require.NotEmpty(t, resp.Data["expires_at"])
 	for _, field := range []string{
@@ -152,7 +153,6 @@ func TestVerifyOrderPublicReturnsLegacyOrderState(t *testing.T) {
 		"fee_rate",
 		"currency",
 		"payment_type",
-		"order_type",
 		"refund_amount",
 		"refund_reason",
 		"refund_requested_at",
@@ -163,6 +163,52 @@ func TestVerifyOrderPublicReturnsLegacyOrderState(t *testing.T) {
 		require.NotContains(t, resp.Data, field)
 	}
 	require.NotZero(t, order.ID)
+}
+
+func TestPublicOrderVerifyOrderTypeAllowlist(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		input string
+		want  string
+	}{
+		{input: payment.OrderTypeBalance, want: payment.OrderTypeBalance},
+		{input: " subscription ", want: payment.OrderTypeSubscription},
+		{input: "legacy", want: ""},
+		{input: "", want: ""},
+	} {
+		require.Equal(t, test.want, publicOrderVerifyOrderType(test.input))
+	}
+}
+
+func TestBuildPublicOrderVerifyResultAllowsOrderTypeWithoutSensitiveFields(t *testing.T) {
+	createdAt := time.Now()
+	expiresAt := createdAt.Add(time.Hour)
+	for _, orderType := range []string{payment.OrderTypeBalance, payment.OrderTypeSubscription} {
+		result := buildPublicOrderVerifyResult(&dbent.PaymentOrder{
+			OutTradeNo: "public-builder-" + orderType,
+			OrderType:  orderType,
+			Status:     service.OrderStatusCompleted,
+			CreatedAt:  createdAt,
+			ExpiresAt:  expiresAt,
+		})
+
+		require.Equal(t, orderType, result.OrderType)
+		require.Equal(t, service.OrderStatusCompleted, result.Status)
+		require.True(t, result.Paid)
+
+		payload, err := json.Marshal(result)
+		require.NoError(t, err)
+		var fields map[string]any
+		require.NoError(t, json.Unmarshal(payload, &fields))
+		require.Equal(t, orderType, fields["order_type"])
+		for _, field := range []string{
+			"id", "amount", "pay_amount", "fee_rate", "currency", "payment_type",
+			"refund_amount", "refund_reason", "refund_requested_at", "refund_requested_by",
+			"refund_request_reason", "plan_id",
+		} {
+			require.NotContains(t, fields, field)
+		}
+	}
 }
 
 func TestResolveOrderPublicByResumeTokenReturnsFrontendContractFields(t *testing.T) {

@@ -109,6 +109,27 @@ func latestRefundAttemptForTest(t *testing.T, ctx context.Context, client *dbent
 	return attempt
 }
 
+func TestPrepareRefundZeroAmountMeansFullRefund(t *testing.T) {
+	f := newRefundTestFixture(t, 100)
+
+	plan, result, err := f.service.PrepareRefund(f.ctx, f.order.ID, 0, "full refund", true, true)
+	require.NoError(t, err)
+	require.Nil(t, result)
+	require.NotNil(t, plan)
+	require.Equal(t, f.order.Amount, plan.RefundAmount)
+}
+
+func TestPrepareRefundRejectsNegativeAmount(t *testing.T) {
+	f := newRefundTestFixture(t, 100)
+
+	plan, result, err := f.service.PrepareRefund(f.ctx, f.order.ID, -1, "negative refund", true, true)
+	require.Nil(t, plan)
+	require.Nil(t, result)
+	require.Error(t, err)
+	require.Equal(t, "INVALID_AMOUNT", infraerrors.Reason(err))
+	require.Zero(t, f.provider.refundCalls)
+}
+
 func TestExecuteRefundAtomicHoldInsufficientSkipsProvider(t *testing.T) {
 	f := newRefundTestFixture(t, 100)
 	plan := f.prepare(t, 100, false, true)

@@ -17,8 +17,25 @@ assert_contains() {
     [[ "${text}" == *"${expected}"* ]] || fail "Missing '${expected}'"
 }
 
+SUB2API_DEFAULT_IMAGE='ghcr.io/general-brash/personal_sub2:latest'
+SUB2API_IMAGE_EXPRESSION='image: ${SUB2API_IMAGE:-ghcr.io/general-brash/personal_sub2:latest}'
+SUB2API_TAG_OVERRIDE='ghcr.io/general-brash/personal_sub2:v0.1.183-P1'
+SUB2API_DIGEST_OVERRIDE='ghcr.io/general-brash/personal_sub2@sha256:0000000000000000000000000000000000000000000000000000000000000000'
+
+assert_sub2api_image_resolution() {
+    local override="$1"
+    local expected="$2"
+    local resolved="${override:-${SUB2API_DEFAULT_IMAGE}}"
+
+    [[ "${resolved}" == "${expected}" ]] || fail "SUB2API_IMAGE resolves to '${resolved}', expected '${expected}'"
+}
+
+assert_sub2api_image_resolution '' "${SUB2API_DEFAULT_IMAGE}"
+assert_sub2api_image_resolution "${SUB2API_TAG_OVERRIDE}" "${SUB2API_TAG_OVERRIDE}"
+assert_sub2api_image_resolution "${SUB2API_DIGEST_OVERRIDE}" "${SUB2API_DIGEST_OVERRIDE}"
 for compose in \
     docker-compose.yml \
+    docker-compose.dev.yml \
     docker-compose.local.yml \
     docker-compose.standalone.yml; do
     path="${DEPLOY_DIR}/${compose}"
@@ -29,7 +46,7 @@ for compose in \
     ' "${path}")
 
     [[ -n "${block}" ]] || fail "${compose} has no sub2api service"
-    assert_contains "${block}" 'image: ghcr.io/general-brash/personal_sub2:latest'
+    assert_contains "${block}" "${SUB2API_IMAGE_EXPRESSION}"
     if [[ "${block}" == *'weishaw/sub2api'* ]]; then
         fail "${compose} uses the official sub2api image"
     fi
@@ -48,7 +65,7 @@ for compose in \
     ' "${path}")
 
     [[ -n "${block}" ]] || fail "${compose} has no intent-classifier service"
-    assert_contains "${block}" 'ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.178-P1'
+    assert_contains "${block}" 'ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.183-P1'
     assert_contains "${block}" 'target: /models'
     assert_contains "${block}" 'read_only: true'
     assert_contains "${block}" 'intent_classifier_state:/state'
@@ -64,7 +81,7 @@ done
 
 grep -q '^INTENT_CLASSIFIER_MODEL_DIR=./intent-models$' "${DEPLOY_DIR}/.env.example" \
     || fail '.env.example is missing the model directory'
-grep -q '^INTENT_CLASSIFIER_IMAGE=ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.178-P1$' \
+grep -q '^INTENT_CLASSIFIER_IMAGE=ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.183-P1$' \
     "${DEPLOY_DIR}/.env.example" \
     || fail '.env.example is missing the versioned GHCR classifier image'
 grep -q '^INTENT_CLASSIFIER_ADMIN_TOKEN=' "${DEPLOY_DIR}/.env.example" \
@@ -98,13 +115,20 @@ for expected in \
     'context: ./services/intent-classifier' \
     'platforms: linux/amd64,linux/arm64' \
     'type=raw,value=${{ env.VERSION }}' \
-    'type=raw,value=latest' \
     'type=raw,value=sha-${{ steps.source.outputs.sha }}' \
     'provenance: false' \
     'sbom: false'; do
     grep -Fq -- "${expected}" "${workflow}" \
         || fail "classifier publish workflow is missing ${expected}"
 done
+
+grep -Fq "type=raw,value=latest,enable=\${{ needs.resolve_release.outputs.publish_moving_tags == 'true' }}" "${workflow}" \
+    || fail 'classifier latest tag is not gated to tag pushes'
+
+grep -Fq 'EVENT_SHA: ${{ github.sha }}' "${workflow}" \
+    || fail 'classifier workflow does not capture the tag event SHA'
+grep -Fq 'if [[ "$target_commit" != "$EVENT_SHA" ]]' "${workflow}" \
+    || fail 'classifier workflow does not bind the tag to the event SHA'
 
 if grep -Eq 'model\.onnx|intent-models|/models' "${workflow}"; then
     fail 'classifier publish workflow must not package model data'

@@ -44,7 +44,8 @@ dockers:
     image_templates:
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-amd64"
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}"
-      - "ghcr.io/general-brash/personal_sub2:latest"
+      - "ghcr.io/general-brash/personal_sub2:sha-{{ .Commit }}-amd64"
+      - "ghcr.io/general-brash/personal_sub2:sha-{{ .Commit }}"
     dockerfile: Dockerfile.goreleaser
     use: buildx
     extra_files:

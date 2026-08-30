@@ -782,6 +782,7 @@ type PublicOrderVerifyResult struct {
 	OutTradeNo  string     `json:"out_trade_no"`
 	Status      string     `json:"status"`
 	Paid        bool       `json:"paid"`
+	OrderType   string     `json:"order_type"`
 	CreatedAt   time.Time  `json:"created_at"`
 	ExpiresAt   time.Time  `json:"expires_at"`
 	PaidAt      *time.Time `json:"paid_at,omitempty"`
@@ -821,10 +822,25 @@ func buildPublicOrderVerifyResult(order *dbent.PaymentOrder) PublicOrderVerifyRe
 		OutTradeNo:  order.OutTradeNo,
 		Status:      order.Status,
 		Paid:        publicOrderStatusPaid(order.Status),
+		OrderType:   publicOrderVerifyOrderType(order.OrderType),
 		CreatedAt:   order.CreatedAt,
 		ExpiresAt:   order.ExpiresAt,
 		PaidAt:      order.PaidAt,
 		CompletedAt: order.CompletedAt,
+	}
+}
+
+// publicOrderVerifyOrderType is intentionally a small allowlist. Unknown or
+// legacy values are returned as empty rather than being treated as balance by
+// the anonymous result page.
+func publicOrderVerifyOrderType(orderType string) string {
+	switch strings.ToLower(strings.TrimSpace(orderType)) {
+	case payment.OrderTypeBalance:
+		return payment.OrderTypeBalance
+	case payment.OrderTypeSubscription:
+		return payment.OrderTypeSubscription
+	default:
+		return ""
 	}
 }
 

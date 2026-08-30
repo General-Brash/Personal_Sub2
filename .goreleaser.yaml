@@ -95,6 +95,7 @@ dockers:
     goarch: amd64
     image_templates:
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-amd64"
+      - "ghcr.io/general-brash/personal_sub2:sha-{{ .Commit }}-amd64"
     dockerfile: Dockerfile.goreleaser
     use: buildx
     extra_files:
@@ -111,6 +112,7 @@ dockers:
     goarch: arm64
     image_templates:
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-arm64"
+      - "ghcr.io/general-brash/personal_sub2:sha-{{ .Commit }}-arm64"
     dockerfile: Dockerfile.goreleaser
     use: buildx
     extra_files:
@@ -132,19 +134,19 @@ docker_manifests:
       - "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:{{ .Version }}-arm64"
 
   - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:latest"
-    skip_push: '{{ if eq .Env.DOCKERHUB_USERNAME "skip" }}true{{ else }}false{{ end }}'
+    skip_push: '{{ if eq .Env.DOCKERHUB_USERNAME "skip" }}true{{ else if ne .Env.PUBLISH_MOVING_TAGS "true" }}true{{ else }}false{{ end }}'
     image_templates:
       - "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:{{ .Version }}-amd64"
       - "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:{{ .Version }}-arm64"
 
   - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:{{ .Major }}.{{ .Minor }}"
-    skip_push: '{{ if eq .Env.DOCKERHUB_USERNAME "skip" }}true{{ else }}false{{ end }}'
+    skip_push: '{{ if eq .Env.DOCKERHUB_USERNAME "skip" }}true{{ else if ne .Env.PUBLISH_MOVING_TAGS "true" }}true{{ else }}false{{ end }}'
     image_templates:
       - "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:{{ .Version }}-amd64"
       - "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:{{ .Version }}-arm64"
 
   - name_template: "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:{{ .Major }}"
-    skip_push: '{{ if eq .Env.DOCKERHUB_USERNAME "skip" }}true{{ else }}false{{ end }}'
+    skip_push: '{{ if eq .Env.DOCKERHUB_USERNAME "skip" }}true{{ else if ne .Env.PUBLISH_MOVING_TAGS "true" }}true{{ else }}false{{ end }}'
     image_templates:
       - "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:{{ .Version }}-amd64"
       - "{{ .Env.DOCKERHUB_USERNAME }}/sub2api:{{ .Version }}-arm64"
@@ -155,17 +157,25 @@ docker_manifests:
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-amd64"
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-arm64"
 
+  - name_template: "ghcr.io/general-brash/personal_sub2:sha-{{ .Commit }}"
+    image_templates:
+      - "ghcr.io/general-brash/personal_sub2:sha-{{ .Commit }}-amd64"
+      - "ghcr.io/general-brash/personal_sub2:sha-{{ .Commit }}-arm64"
+
   - name_template: "ghcr.io/general-brash/personal_sub2:latest"
+    skip_push: '{{ if ne .Env.PUBLISH_MOVING_TAGS "true" }}true{{ else }}false{{ end }}'
     image_templates:
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-amd64"
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-arm64"
 
   - name_template: "ghcr.io/general-brash/personal_sub2:{{ .Major }}.{{ .Minor }}"
+    skip_push: '{{ if ne .Env.PUBLISH_MOVING_TAGS "true" }}true{{ else }}false{{ end }}'
     image_templates:
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-amd64"
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-arm64"
 
   - name_template: "ghcr.io/general-brash/personal_sub2:{{ .Major }}"
+    skip_push: '{{ if ne .Env.PUBLISH_MOVING_TAGS "true" }}true{{ else }}false{{ end }}'
     image_templates:
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-amd64"
       - "ghcr.io/general-brash/personal_sub2:{{ .Tag }}-arm64"

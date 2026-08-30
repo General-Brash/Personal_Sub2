@@ -11,6 +11,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -56,6 +57,111 @@ func TestFilterCNProviderBillingModelCandidates(t *testing.T) {
 	require.Equal(t, []string{"claude-sonnet-4-5", "gpt-5.4"}, passthrough)
 
 	require.Nil(t, svc.filterCNProviderBillingModelCandidates(context.Background(), nil, apiKey, nil))
+}
+
+func TestPrepareCNProviderBillingModelCandidatesObservedUpstreamIsExclusive(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	apiKey := &APIKey{Group: &Group{ID: 1, Platform: PlatformKimi}}
+	account := &Account{
+		ID:       11,
+		Platform: PlatformKimi,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"claude-*": "kimi-k2"},
+		},
+	}
+
+	got := svc.prepareCNProviderBillingModelCandidates(
+		context.Background(), account, apiKey,
+		[]string{"gpt-5.6", "claude-sonnet-4-5"},
+		"kimi-k2", "gpt-5.6", "gpt-5.6",
+	)
+
+	require.Equal(t, []string{"kimi-k2"}, got,
+		"observed upstream model must suppress every request alias that was not sent")
+}
+
+func TestPrepareCNProviderBillingModelCandidatesExplicitChannelAndAccountMappingAreExclusive(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	apiKey := &APIKey{Group: &Group{ID: 2, Platform: PlatformZhipu}}
+	account := &Account{
+		ID:       12,
+		Platform: PlatformZhipu,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"channel-glm": "glm-5"},
+		},
+	}
+
+	got := svc.prepareCNProviderBillingModelCandidates(
+		context.Background(), account, apiKey,
+		[]string{"claude-sonnet-4-5", "gpt-5.6"},
+		"", "channel-glm", "public-alias",
+	)
+
+	require.Equal(t, []string{"glm-5"}, got,
+		"explicit channel mapping followed by account mapping must be the only billing chain")
+}
+
+func TestPrepareCNProviderBillingModelCandidatesEqualChannelModelAllowsClaudeToCNMapping(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	apiKey := &APIKey{Group: &Group{ID: 3, Platform: PlatformDeepseek}}
+	account := &Account{
+		ID:       13,
+		Platform: PlatformDeepseek,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"claude-*": "deepseek-chat"},
+		},
+	}
+
+	got := svc.prepareCNProviderBillingModelCandidates(
+		context.Background(), account, apiKey,
+		[]string{"gpt-5.6", "claude-sonnet-4-5"},
+		"", "claude-sonnet-4-5", "claude-sonnet-4-5",
+	)
+
+	require.Equal(t, []string{"deepseek-chat"}, got,
+		"channelMappedModel equal to original must not suppress a legal claude-to-CN account mapping")
+}
+
+func TestPrepareCNProviderBillingModelCandidatesMissingObservedChainMapsOriginalOnly(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	apiKey := &APIKey{Group: &Group{ID: 31, Platform: PlatformKimi}}
+	account := &Account{
+		ID:       31,
+		Platform: PlatformKimi,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"claude-*": "kimi-k2"},
+		},
+	}
+
+	got := svc.prepareCNProviderBillingModelCandidates(
+		context.Background(), account, apiKey,
+		[]string{"gpt-5.6", "claude-sonnet-4-5", "unused-alias"},
+		"", "", "claude-sonnet-4-5",
+	)
+
+	require.Equal(t, []string{"kimi-k2"}, got,
+		"without an observed upstream model only the first original candidate may receive one account mapping")
+}
+
+func TestPrepareCNProviderBillingModelCandidatesRejectsObservedClaudeFallback(t *testing.T) {
+	apiKey := &APIKey{Group: &Group{ID: 4, Platform: PlatformKimi}}
+	account := &Account{ID: 14, Platform: PlatformKimi}
+	billing := newTestBillingService()
+	svc := &OpenAIGatewayService{billingService: billing}
+	candidates := svc.prepareCNProviderBillingModelCandidates(
+		context.Background(), account, apiKey,
+		[]string{"custom-model", "kimi-k2"},
+		"claude-sonnet-4-5", "", "custom-model",
+	)
+
+	require.Empty(t, candidates,
+		"observed Claude-compatible CN upstream must not fall back to an unobserved CN or Claude alias without explicit pricing")
+	_, err := svc.calculateOpenAIRecordUsageCost(
+		context.Background(), &OpenAIForwardResult{Model: "custom-model"}, apiKey,
+		candidates, 1, 1, 1, 1, UsageTokens{InputTokens: 10}, "", nil, time.Time{},
+	)
+	require.Error(t, err)
+	require.True(t, isUsagePricingUnavailableError(err))
 }
 
 func TestCalculateOpenAIRecordUsageCost_EmptyCandidatesIsPricingUnavailable(t *testing.T) {
@@ -141,4 +247,113 @@ func TestHandle403_CNProviderStructured403TempUnschedulableFirstHit(t *testing.T
 	require.Equal(t, 0, repo.setErrorCalls, "首次结构化 403 应临时停调而非永久禁用")
 	require.Equal(t, 1, repo.tempCalls)
 	require.Contains(t, repo.lastTempReason, "(1/3)")
+}
+
+func TestIsCNProviderConcurrencyLimit403_ExactClassification(t *testing.T) {
+	kimi := &Account{Platform: PlatformKimi}
+
+	require.True(t, isCNProviderConcurrencyLimit403(kimi, kimiConcurrentRequestLimitMessage))
+	require.True(t, isCNProviderConcurrencyLimit403(kimi, "  "+kimiConcurrentRequestLimitMessage+"\n"))
+
+	for name, tc := range map[string]struct {
+		account *Account
+		message string
+	}{
+		"permission denied":              {kimi, "You do not have permission to access this resource."},
+		"generic concurrency wording":    {kimi, "concurrent request limit reached"},
+		"near match missing punctuation": {kimi, "You've reached your concurrent request limit. Please wait for your ongoing requests to finish and try again"},
+		"other CN provider":              {&Account{Platform: PlatformZhipu}, kimiConcurrentRequestLimitMessage},
+		"non CN provider":                {&Account{Platform: PlatformOpenAI}, kimiConcurrentRequestLimitMessage},
+		"nil account":                    {nil, kimiConcurrentRequestLimitMessage},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.False(t, isCNProviderConcurrencyLimit403(tc.account, tc.message))
+		})
+	}
+}
+
+func TestHandle403_OtherCNProviderWithKimiConcurrencyMessageUsesNormalPolicy(t *testing.T) {
+	repo := &rateLimitAccountRepoStub{}
+	counter := &openAI403CounterCacheStub{counts: []int64{openAI403DisableThreshold}}
+	blocker := &runtimeBlockRecorder{}
+	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	service.SetOpenAI403CounterCache(counter)
+	service.SetAccountRuntimeBlocker(blocker)
+	account := &Account{ID: 405, Platform: PlatformZhipu, Type: AccountTypeAPIKey}
+
+	shouldDisable := service.HandleUpstreamError(
+		context.Background(), account, http.StatusForbidden, http.Header{},
+		[]byte(`{"error":{"message":"You've reached your concurrent request limit. Please wait for your ongoing requests to finish and try again."}}`),
+	)
+
+	require.True(t, shouldDisable)
+	require.Equal(t, 1, repo.setErrorCalls, "non-Kimi CN provider must retain the normal permanent-error policy")
+	require.Equal(t, 0, repo.tempCalls)
+	require.Empty(t, counter.counts, "normal CN 403 policy must consume the counter result")
+	require.Equal(t, []string{"auth_error"}, blocker.reasons, "the Kimi-specific runtime block must not apply")
+}
+
+func TestHandle403_CNProviderConcurrencyLimitAlwaysUsesTemporaryCooldown(t *testing.T) {
+	repo := &rateLimitAccountRepoStub{}
+	counter := &openAI403CounterCacheStub{counts: []int64{openAI403DisableThreshold}}
+	blocker := &runtimeBlockRecorder{}
+	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	service.SetOpenAI403CounterCache(counter)
+	service.SetAccountRuntimeBlocker(blocker)
+	account := &Account{ID: 403, Platform: PlatformKimi, Type: AccountTypeAPIKey}
+
+	shouldDisable := service.HandleUpstreamError(
+		context.Background(), account, http.StatusForbidden, http.Header{},
+		[]byte(`{"error":{"message":"You've reached your concurrent request limit. Please wait for your ongoing requests to finish and try again."}}`),
+	)
+
+	require.True(t, shouldDisable, "the request must still fail over to another account")
+	require.Equal(t, 0, repo.setErrorCalls)
+	require.Equal(t, 1, repo.tempCalls)
+	require.Contains(t, repo.lastTempReason, cnConcurrencyLimitReasonPrefix)
+	require.Equal(t, []int64{openAI403DisableThreshold}, counter.counts, "transient concurrency 403 must bypass the permanent-error counter")
+	require.Len(t, blocker.accounts, 1)
+	require.Equal(t, cnConcurrencyLimitReasonPrefix, blocker.reasons[0])
+	require.True(t, blocker.until[0].After(time.Now()))
+}
+
+func TestHandle403_KimiConcurrencyLimitRepositoryFailureKeepsRuntimeBlock(t *testing.T) {
+	repo := &rateLimitAccountRepoStub{tempErr: errors.New("repository unavailable")}
+	counter := &openAI403CounterCacheStub{counts: []int64{openAI403DisableThreshold}}
+	blocker := &runtimeBlockRecorder{}
+	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	service.SetOpenAI403CounterCache(counter)
+	service.SetAccountRuntimeBlocker(blocker)
+	account := &Account{ID: 406, Platform: PlatformKimi, Type: AccountTypeAPIKey}
+
+	shouldDisable := service.HandleUpstreamError(
+		context.Background(), account, http.StatusForbidden, http.Header{},
+		[]byte(`{"error":{"message":"You've reached your concurrent request limit. Please wait for your ongoing requests to finish and try again."}}`),
+	)
+
+	require.True(t, shouldDisable, "the current request must fail over even when persistence fails")
+	require.Equal(t, 1, repo.tempCalls, "the temporary cooldown should still be persisted when possible")
+	require.Equal(t, 0, repo.setErrorCalls, "persistence failure must not fall back to permanent account error")
+	require.Equal(t, []int64{openAI403DisableThreshold}, counter.counts, "persistence failure must not enter the permanent-error counter path")
+	require.Len(t, blocker.accounts, 1, "the in-memory runtime block must survive repository failure")
+	require.Same(t, account, blocker.accounts[0])
+	require.Equal(t, cnConcurrencyLimitReasonPrefix, blocker.reasons[0])
+	require.True(t, blocker.until[0].After(time.Now()))
+}
+
+func TestHandle403_CNProviderNearMatchRetainsNormalPermanentErrorPolicy(t *testing.T) {
+	repo := &rateLimitAccountRepoStub{}
+	counter := &openAI403CounterCacheStub{counts: []int64{openAI403DisableThreshold}}
+	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	service.SetOpenAI403CounterCache(counter)
+	account := &Account{ID: 404, Platform: PlatformKimi, Type: AccountTypeAPIKey}
+
+	shouldDisable := service.HandleUpstreamError(
+		context.Background(), account, http.StatusForbidden, http.Header{},
+		[]byte(`{"error":{"message":"You've reached your concurrent request limit. Please contact support."}}`),
+	)
+
+	require.True(t, shouldDisable)
+	require.Equal(t, 1, repo.setErrorCalls, "non-exact 403 must retain existing permission/auth protection")
+	require.Equal(t, 0, repo.tempCalls)
 }

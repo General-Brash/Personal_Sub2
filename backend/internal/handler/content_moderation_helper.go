@@ -20,6 +20,9 @@ func contentModerationStatus(decision *service.ContentModerationDecision) int {
 }
 
 func contentModerationErrorCode(decision *service.ContentModerationDecision) string {
+	if decision != nil && strings.TrimSpace(decision.ErrorCode) != "" {
+		return strings.TrimSpace(decision.ErrorCode)
+	}
 	return "content_policy_violation"
 }
 

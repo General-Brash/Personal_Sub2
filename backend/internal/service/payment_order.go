@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
@@ -193,6 +194,9 @@ func (s *PaymentService) createOrderInTxWithProduct(ctx context.Context, req Cre
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := lockPaymentOrderLimitUser(ctx, tx, req.UserID, paymentAuditDialect(tx.Client()) == dialect.Postgres); err != nil {
+		return nil, err
+	}
 	if err := s.checkPendingLimit(ctx, tx, req.UserID, cfg.MaxPendingOrders); err != nil {
 		return nil, err
 	}
@@ -304,6 +308,49 @@ func (s *PaymentService) allocateOutTradeNo(ctx context.Context, tx *dbent.Tx) (
 		}
 	}
 	return "", fmt.Errorf("generate unique out_trade_no: exhausted %d attempts", maxAttempts)
+}
+
+// lockPaymentOrderLimitUser serializes the global pending/daily payment limits
+// for one user. All order-creation limit checks run after this lock and before
+// the new order is committed, so concurrent requests observe each other's
+// committed orders instead of both passing a stale count.
+//
+// SQLite does not support FOR UPDATE; unit tests keep the same query path
+// without that clause. PostgreSQL callers use the row lock, matching the
+// existing user-first lock order used by balance and temporary-credit flows.
+func lockPaymentOrderLimitUser(ctx context.Context, tx paymentPurchaseSQL, userID int64, forUpdate bool) error {
+	query := `
+SELECT id
+FROM users
+WHERE id = $1 AND deleted_at IS NULL`
+	if forUpdate {
+		query += "\nFOR UPDATE"
+	}
+	rows, err := tx.QueryContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("lock payment limit user: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("iterate payment limit user lock: %w", err)
+		}
+		return ErrUserNotFound
+	}
+	var lockedUserID int64
+	if err := rows.Scan(&lockedUserID); err != nil {
+		return fmt.Errorf("scan payment limit user lock: %w", err)
+	}
+	if lockedUserID != userID {
+		return errors.New("payment limit user lock returned an unexpected user")
+	}
+	if rows.Next() {
+		return errors.New("payment limit user lock returned multiple users")
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate payment limit user lock: %w", err)
+	}
+	return nil
 }
 
 func (s *PaymentService) checkPendingLimit(ctx context.Context, tx *dbent.Tx, userID int64, max int) error {

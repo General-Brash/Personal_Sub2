@@ -256,7 +256,7 @@ func stampGrokQuotaSnapshotForPlan(account *Account, snapshot *xai.QuotaSnapshot
 	if strings.TrimSpace(snapshot.Model) == "" {
 		model = strings.TrimSpace(model)
 		if model != "" {
-			snapshot.Model = xai.ResolveGrokTextResponsesModelID(model)
+			snapshot.Model = xai.CanonicalGrokRuntimeModelID(model)
 		}
 	}
 	var prev *xai.QuotaSnapshot

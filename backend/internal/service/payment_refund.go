@@ -257,7 +257,10 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 	if math.IsNaN(amt) || math.IsInf(amt, 0) {
 		return nil, nil, infraerrors.BadRequest("INVALID_AMOUNT", "invalid refund amount")
 	}
-	if amt <= 0 {
+	if amt < 0 {
+		return nil, nil, infraerrors.BadRequest("INVALID_AMOUNT", "invalid refund amount")
+	}
+	if amt == 0 {
 		amt = o.Amount
 	}
 	orderCurrency := PaymentOrderCurrency(o)

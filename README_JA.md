@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 は、公式 Sub2API `v0.1.178` を基に個人で開発し、独立して保守しているバージョンです。この統合リリースは `v0.1.178-P1` です。
+Personal_Sub2 は、公式 Sub2API `v0.1.178` を基に個人で開発し、`v0.1.183` までの公式更新を取り込んだ独立保守版です。この統合リリースは `v0.1.183-P1` です。
 
 [English](README.md) | [中文](README_CN.md) | 日本語
 
@@ -13,7 +13,7 @@ Personal_Sub2 は、公式 Sub2API `v0.1.178` を基に個人で開発し、独�
 
 本番用モデルの重みは含まれていません。モデルによる二次レビューを有効にする前に、[`MODEL_PACKAGE.md`](services/intent-classifier/MODEL_PACKAGE.md) に従ってモデルパッケージを用意し、アクティベートしてください。
 
-## 公式 v0.1.178 の統合内容
+## 公式 v0.1.178–v0.1.183 の統合内容
 
 - **アップストリーム URL の安全性**：クライアントが制御する OpenAI Responses のサブパス、Gemini のモデル／アクションパス、Grok 動画のリクエスト ID を転送前に検証し、上流 URL の構造を変え得るパス片を拒否します。
 - **実行時料金データと課金**：Docker および GoReleaser のイメージビルドに実行時のフォールバック料金リソースを含め、GPT-5.6 Luna/Terra の料金と GLM-5.2 のフォールバック料金を修正しました。
@@ -21,6 +21,12 @@ Personal_Sub2 は、公式 Sub2API `v0.1.178` を基に個人で開発し、独�
 - **プロキシ切断サーキットの耐障害性**：全候補が隔離対象プロキシを共有する場合、OpenAI プロキシ切断隔離は fail-open で自動的に許可します。短時間に集中した切断は 1 件に集約され、明示的な無効化スイッチも備えます。
 - **ルーティングとスケジューリングの正確性**：通常グループの分離を維持しつつ Composite グループで設定済みの具体的なモデルプラットフォームを表示し、トークン更新ではスケジュール不可のアカウントを除外します。
 - **プロトコルと UI の修正**：標準準拠の SMTP メッセージを生成し、Anthropic の分類器／トークン数計算と Qwen3Guard 補助フィールドの互換性を改善し、サブスクリプションの期限表示と長いプラン名の表示を修正しました。
+
+### 公式 v0.1.179–v0.1.183 の追加内容
+
+- **プロトコルとメディアの拡張（v0.1.179）**：OpenAI Responses のファイル／画像入力と `file_search` 互換、Kimi・Zhipu・DeepSeek の adaptive プロトコルルーティングとマルチプロトコル Base URL、Claude Code 分析ブロック、Web Search と Grok メディア処理、Composite の対応プラットフォームを追加しました。
+- **料金、ルーティング、プラグイン（v0.1.180）**：チャネル倍率と時間帯料金、Composite の中国系プロバイダー向けルート、1M コンテキストと service tier 課金、プラグイン管理、およびゲートウェイのスケジューリング／プロトコル修正を追加しました。
+- **Responses と信頼性（v0.1.181–v0.1.183）**：Responses Lite／ツール互換、トークンとキャッシュ課金、OAuth のクォータ超過と一時的失敗の区別、Kimi の同時実行冷却とセッション粘性、カスタムツール／Tool Search、Composite 監視集約、決済成功後の残高更新を改善しました。
 
 ## インストールとアップグレード
 
@@ -53,7 +59,7 @@ ghcr.io/general-brash/personal_sub2
 
 ## ソースからのビルド
 
-必要環境：Go 1.26.5、Node.js 20+、pnpm 9、PostgreSQL、Redis。
+必要環境：Go 1.27.0、Node.js 20+、pnpm 9、PostgreSQL、Redis。
 
 ```bash
 git clone https://github.com/General-Brash/Personal_Sub2.git
@@ -93,6 +99,17 @@ pnpm run test:run
 - API キー、アクセストークン、データベースパスワード、`.env` および `config.yaml` の機密情報をコミットまたは公開しないでください。
 - アップグレード、移行、セキュリティポリシー変更の前にバックアップを取得し、非本番環境で検証してください。
 - 本プロジェクトは現状のまま提供され、アカウント、サービス、データ、コンプライアンス上のリスクは利用者が負います。
+
+## ❤️ スポンサー
+
+<table>
+
+<tr>
+<td width="180"><a href="https://go.apimart.ai/gh-sub2api"><img src="assets/partners/logos/apimart.jpg" alt="APIMart" width="150"></a></td>
+<td>APIMart のご支援に感謝します！<a href="https://go.apimart.ai/gh-sub2api">APIMart</a> は AI 画像・動画生成に特化した低価格 API プラットフォームです。GPT-Image-2 は 1 枚 $0.006 から、1 ドルで 160 枚以上の画像を生成できます。画像と動画の両方に対応する非同期 API を 1 つで利用でき、タスクを送信して ID を取得し、ポーリングまたはコールバックで結果を取得できます。数万枚規模のバッチ処理でもタイムアウトせず、モデルを変更してもコードの変更は不要です。月額料金なしの従量課金制で、<a href="https://go.apimart.ai/gh-sub2api">こちらの登録リンク</a>からすぐに利用を開始できます。</td>
+</tr>
+
+</table>
 
 ## ライセンス
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
 // In-memory team+model rate-limit overlay for Grok OAuth. When xAI rate-limits
@@ -43,6 +45,7 @@ func grokTeamFingerprint(teamID string) string {
 }
 
 func grokTeamModelRateLimitKey(teamFingerprint, model string) string {
+	model = xai.CanonicalGrokRuntimeModelID(model)
 	return teamFingerprint + "|" + strings.ToLower(strings.TrimSpace(model))
 }
 
@@ -60,7 +63,7 @@ func markGrokTeamModelRateLimit(account *Account, model string, until time.Time)
 		return
 	}
 	fp := grokTeamFingerprint(accountGrokTeamID(account))
-	model = strings.TrimSpace(model)
+	model = resolveGrokCanonicalUpstreamModel(account, model)
 	if fp == "" || model == "" || until.IsZero() {
 		return
 	}
@@ -94,7 +97,7 @@ func isGrokTeamModelRateLimited(account *Account, model string, now time.Time) b
 		return false
 	}
 	fp := grokTeamFingerprint(accountGrokTeamID(account))
-	model = strings.TrimSpace(model)
+	model = resolveGrokCanonicalUpstreamModel(account, model)
 	if fp == "" || model == "" {
 		return false
 	}

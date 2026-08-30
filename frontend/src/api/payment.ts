@@ -14,17 +14,58 @@ import type {
   MallPurchaseResult,
   CreateOrderRequest,
   CreateOrderResult,
+  OrderType,
   PaymentOrder
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
 import type { LedgerResponse } from '@/types/finance'
 
+export type PublicOrderType = OrderType | ''
+
+/** Minimal anonymous response returned by /payment/public/orders/verify. */
 export interface PublicOrderVerifyResult {
   out_trade_no: string
   status: string
   paid: boolean
+  order_type: PublicOrderType
   created_at: string
   expires_at: string
+  paid_at?: string
+  completed_at?: string
+}
+
+/**
+ * Full signed response returned by /payment/public/orders/resolve.
+ *
+ * This mirrors the backend PublicOrderResult rather than the minimal legacy
+ * verification payload. The backend exposes order_type/status as strings, so
+ * unknown persisted values remain representable and callers must not infer a
+ * balance order unless the value is exactly "balance".
+ */
+export interface PublicOrderResult {
+  id: number
+  out_trade_no: string
+  amount: number
+  pay_amount: number
+  fee_rate: number
+  currency: string
+  payment_type: string
+  order_type: string
+  status: string
+  created_at: string
+  expires_at: string
+  paid_at?: string
+  completed_at?: string
+  refund_amount: number
+  refund_reason?: string
+  refund_requested_at?: string
+  refund_requested_by?: string
+  refund_request_reason?: string
+  plan_id?: number
+  currency_product_id?: number
+  currency_product_name?: string
+  currency_product_payment_price?: number
+  currency_product_credited_amount?: number
 }
 
 export const paymentAPI = {
@@ -99,7 +140,7 @@ export const paymentAPI = {
 
   /** Resolve an order from a signed resume token without auth */
   resolveOrderPublicByResumeToken(resumeToken: string) {
-    return apiClient.post<PublicOrderVerifyResult>('/payment/public/orders/resolve', { resume_token: resumeToken })
+    return apiClient.post<PublicOrderResult>('/payment/public/orders/resolve', { resume_token: resumeToken })
   },
 
   /** Request a refund for a completed order */

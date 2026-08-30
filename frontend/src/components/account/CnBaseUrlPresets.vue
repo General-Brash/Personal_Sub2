@@ -30,7 +30,7 @@ const props = defineProps<{
   /** 当前已选账号类型，用于过滤和高亮匹配的预设 */
   mode?: 'payg' | 'coding'
   /** 当前已选 API 协议，用于过滤和高亮匹配的预设 */
-  protocol?: 'chat_completions' | 'anthropic' | 'responses'
+  protocol?: 'adaptive' | 'chat_completions' | 'anthropic' | 'responses'
   /** 当前输入框中的 base url，用于高亮完全匹配项 */
   currentUrl?: string
 }>()
@@ -46,8 +46,13 @@ const presets = computed(() => {
   return all.filter(p => p.protocol === props.protocol)
 })
 
-const isActive = (preset: CnBaseUrlPreset) =>
-  (props.mode != null && preset.mode === props.mode) || preset.url === props.currentUrl
+const isActive = (preset: CnBaseUrlPreset) => {
+  const currentUrl = props.currentUrl?.trim() ?? ''
+  if (currentUrl) {
+    return props.mode != null && preset.mode === props.mode && preset.url === currentUrl
+  }
+  return props.mode != null && preset.mode === props.mode
+}
 
 const displayUrl = (url: string) => url.replace(/^https?:\/\//i, '')
 </script>

@@ -146,6 +146,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if !isGrokVideoUsageResult(result, nil) {
 		ApplyOpenAIImageBillingResolution(result)
 	}
+	logServiceTierBillingDowngrade("service.openai_gateway", account, result.RequestID, ApplyOpenAIServiceTierBillingResolution(result))
 
 	// OpenAI input_tokens 是总输入，包含缓存读取和缓存写入明细。
 	// 将三类 token 拆成互斥桶，避免缓存写入同时按普通输入和 cache_write 重复计费。
@@ -201,7 +202,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		result.UpstreamModel,
 		result.Model,
 	)
-	billingModels = s.filterCNProviderBillingModelCandidates(ctx, account, apiKey, billingModels)
+	billingModels = s.prepareCNProviderBillingModelCandidates(
+		ctx, account, apiKey, billingModels,
+		result.UpstreamModel, input.ChannelMappedModel, input.OriginalModel,
+	)
 	serviceTier := ""
 	if result.ServiceTier != nil {
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
@@ -253,7 +257,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			result.AudioUsage != nil || result.SearchCount > 0,
 	); responseModel != "" && !strings.EqualFold(responseModel, baselineBillingModel) {
 		if identified, responseChannelPriced := s.hasIdentifiedOpenAIResponsePricing(ctx, responseModel, apiKey); identified {
-			responseModels := s.filterCNProviderBillingModelCandidates(ctx, account, apiKey, usageBillingModelCandidates(responseModel))
+			responseModels := s.prepareCNProviderBillingModelCandidates(
+				ctx, account, apiKey, usageBillingModelCandidates(responseModel),
+				result.UpstreamResponseModel, "", "",
+			)
 			responseCost, responseErr := s.calculateOpenAIRecordUsageCost(
 				ctx, result, apiKey, responseModels, multiplier, imageMultiplier,
 				videoMultiplier, baseMultiplier, tokens, serviceTier, longContextBillingGate, pricingAt,
@@ -858,6 +865,105 @@ func groupMediaPricingLooksIncomplete(group *Group) bool {
 // zero_cost），与定价层「未知型号不回退以避免误计价」的既有设计意图一致；
 // 运营者的修复手段是配置账号级 model_mapping（映射到已定价的 CN 模型）或
 // 分组/渠道显式定价。
+// appendAccountMappedUsageBillingModelCandidates keeps the original billing
+// candidates authoritative, but adds the account's mapped model as a fallback
+// when the relay reports a channel-facing model that has no catalog price.
+// This is needed for WS passthrough, where channel mapping and account mapping
+// are intentionally recorded separately.
+func appendAccountMappedUsageBillingModelCandidates(account *Account, candidates []string) []string {
+	if account == nil || len(candidates) == 0 {
+		return candidates
+	}
+	seen := make(map[string]struct{}, len(candidates)*2)
+	out := append([]string(nil), candidates...)
+	for _, candidate := range candidates {
+		trimmed := strings.TrimSpace(candidate)
+		if trimmed == "" {
+			continue
+		}
+		seen[strings.ToLower(trimmed)] = struct{}{}
+	}
+	for _, candidate := range candidates {
+		mapped, matched := account.ResolveMappedModel(candidate)
+		if !matched {
+			continue
+		}
+		mapped = strings.TrimSpace(mapped)
+		if mapped == "" {
+			continue
+		}
+		key := strings.ToLower(mapped)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, mapped)
+	}
+	return out
+}
+
+// prepareCNProviderBillingModelCandidates keeps the actual forwarding chain
+// separate from request/response aliases. For CN providers, aliases that were
+// never sent upstream must not become an accidental global price-card fallback.
+func (s *OpenAIGatewayService) prepareCNProviderBillingModelCandidates(
+	ctx context.Context,
+	account *Account,
+	apiKey *APIKey,
+	requestCandidates []string,
+	upstreamModel string,
+	channelMappedModel string,
+	originalModel string,
+) []string {
+	var candidates []string
+	if account != nil && account.IsCNProvider() {
+		candidates = cnProviderActualBillingModelCandidates(
+			account, requestCandidates, upstreamModel, channelMappedModel, originalModel,
+		)
+	} else {
+		// Preserve the established non-CN fallback ordering.
+		candidates = appendAccountMappedUsageBillingModelCandidates(account, requestCandidates)
+	}
+	return s.filterCNProviderBillingModelCandidates(ctx, account, apiKey, candidates)
+}
+
+func cnProviderActualBillingModelCandidates(
+	account *Account,
+	requestCandidates []string,
+	upstreamModel string,
+	channelMappedModel string,
+	originalModel string,
+) []string {
+	// A non-empty UpstreamModel is the authoritative model actually sent. Do
+	// not append request/response aliases or apply a second account mapping.
+	if upstreamModel = strings.TrimSpace(upstreamModel); upstreamModel != "" {
+		return usageBillingModelCandidates(upstreamModel)
+	}
+
+	// ChannelMappedModel is also authoritative when present, including the
+	// common no-channel-mapping case where it equals OriginalModel. In that
+	// case an explicit account mapping such as claude-* -> kimi-* must still be
+	// applied; equality must not suppress a legal one-hop mapping.
+	authoritativeModel := strings.TrimSpace(channelMappedModel)
+	if authoritativeModel == "" {
+		authoritativeModel = strings.TrimSpace(originalModel)
+	}
+	if authoritativeModel == "" {
+		authoritativeModel = firstUsageBillingModel(requestCandidates)
+	}
+	if authoritativeModel == "" {
+		return nil
+	}
+
+	if account != nil {
+		if mapped, matched := account.ResolveMappedModel(authoritativeModel); matched {
+			return usageBillingModelCandidates(mapped)
+		}
+	}
+	// With no observed upstream model, retain only the first authoritative
+	// model. Alternate request/response aliases remain non-authoritative.
+	return usageBillingModelCandidates(authoritativeModel)
+}
+
 func (s *OpenAIGatewayService) filterCNProviderBillingModelCandidates(ctx context.Context, account *Account, apiKey *APIKey, candidates []string) []string {
 	if account == nil || !account.IsCNProvider() {
 		return candidates
@@ -1071,7 +1177,9 @@ func (s *OpenAIGatewayService) updateCodexUsageSnapshot(ctx context.Context, acc
 	go func() {
 		updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = s.accountRepo.UpdateExtra(updateCtx, accountID, updates)
+		if err := s.accountRepo.UpdateExtra(updateCtx, accountID, updates); err == nil {
+			notifyOpenAIAutoReset(accountID)
+		}
 	}()
 }
 

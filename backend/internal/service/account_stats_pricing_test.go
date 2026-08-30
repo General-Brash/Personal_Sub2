@@ -242,8 +242,8 @@ func TestCalculateStatsCost_TokenBilling_WithImageOutput(t *testing.T) {
 	}
 	result := calculateStatsCost(pricing, tokens, 1)
 	require.NotNil(t, result)
-	// 100*0.001 + 50*0.002 + 10*0.01 = 0.1 + 0.1 + 0.1 = 0.3
-	require.InDelta(t, 0.3, *result, 1e-12)
+	// 100*0.001 + (50-10)*0.002 + 10*0.01 = 0.1 + 0.08 + 0.1 = 0.28
+	require.InDelta(t, 0.28, *result, 1e-12)
 }
 
 func TestCalculateStatsCost_TokenBilling_PartialPricesNil(t *testing.T) {
@@ -594,8 +594,8 @@ func TestTryModelFilePricing_WithImageOutput(t *testing.T) {
 	}
 	result := tryModelFilePricing(bs, "claude-sonnet-4", tokens, "")
 	require.NotNil(t, result)
-	// 100*0.001 + 50*0.002 + 10*0.01 = 0.1 + 0.1 + 0.1 = 0.3
-	require.InDelta(t, 0.3, *result, 1e-12)
+	// 100*0.001 + (50-10)*0.002 + 10*0.01 = 0.1 + 0.08 + 0.1 = 0.28
+	require.InDelta(t, 0.28, *result, 1e-12)
 }
 
 func TestTryModelFilePricing_WithCacheTokens(t *testing.T) {
@@ -694,11 +694,11 @@ func TestResolveAccountStatsCost_HitsCustomRule(t *testing.T) {
 		context.Background(),
 		cs, nil, // billingService not needed when custom rule hits
 		1, 10, "claude-sonnet-4",
-		tokens, 1, 999.0, "priority", // 自定义账号价格不叠加服务层级倍率
+		tokens, 1, 999.0, "priority", // 自定义账号价格使用统一服务层级语义
 	)
 	require.NotNil(t, result)
-	// 100*0.01 + 50*0.02 = 1.0 + 1.0 = 2.0
-	require.InDelta(t, 2.0, *result, 1e-12)
+	// 统一 priority 默认倍率 2x：100*0.01*2 + 50*0.02*2 = 4.0
+	require.InDelta(t, 4.0, *result, 1e-12)
 }
 
 func TestResolveAccountStatsCost_ApplyPricingToAccountStats_UsesTotalCost(t *testing.T) {
@@ -766,6 +766,26 @@ func TestResolveAccountStatsCost_FallsBackToLiteLLM(t *testing.T) {
 	require.NotNil(t, result)
 	// 100*0.001 + 50*0.002 = 0.1 + 0.1 = 0.2
 	require.InDelta(t, 0.2, *result, 1e-12)
+}
+
+func TestResolveAccountStatsCost_FallbackHonorsAnthropicFast(t *testing.T) {
+	channel := &Channel{ID: 1, Status: StatusActive}
+	cs := newTestChannelServiceForStats(t, channel, 10, "anthropic")
+	bs := newTestBillingServiceWithPrices(map[string]*ModelPricing{
+		"claude-opus-5": {
+			InputPricePerToken:  5e-6,
+			OutputPricePerToken: 25e-6,
+		},
+	})
+
+	result := resolveAccountStatsCost(
+		context.Background(), cs, bs,
+		1, 10, "claude-opus-5",
+		UsageTokens{InputTokens: 1_000_000, OutputTokens: 1_000_000},
+		1, 0, "fast",
+	)
+	require.NotNil(t, result)
+	require.InDelta(t, 60, *result, 1e-12)
 }
 
 func TestResolveAccountStatsCost_Gemini36FlashTierUsesFallbackPricing(t *testing.T) {
@@ -905,4 +925,118 @@ func newTestChannelServiceForStats(t *testing.T, channel *Channel, groupID int64
 	cache.loadedAt = time.Now()
 	cs.cache.Store(cache)
 	return cs
+}
+
+func TestCalculateStatsCostForUsageUsesUnifiedIntervalAndFastPricing(t *testing.T) {
+	inputPrice := 0.001
+	outputPrice := 0.002
+	fastMultiplier := 2.5
+	intervalInputMultiplier := 3.0
+	intervalOutputMultiplier := 4.0
+	pricing := &ChannelModelPricing{
+		BillingMode:    BillingModeToken,
+		InputPrice:     &inputPrice,
+		OutputPrice:    &outputPrice,
+		FastMultiplier: &fastMultiplier,
+		Intervals: []PricingInterval{{
+			MinTokens:        100,
+			InputMultiplier:  &intervalInputMultiplier,
+			OutputMultiplier: &intervalOutputMultiplier,
+		}},
+	}
+
+	cost, supported := calculateStatsCostForUsage(nil, "custom-model", pricing, UsageTokens{
+		InputTokens:  200,
+		OutputTokens: 50,
+	}, accountStatsUsage{ServiceTier: "fast"})
+	require.True(t, supported)
+	require.NotNil(t, cost)
+	// (200*0.001*3 + 50*0.002*4) * 2.5 = 2.5
+	require.InDelta(t, 2.5, *cost, 1e-12)
+}
+
+func TestCalculateStatsCostForUsageIncludesImageInputPricing(t *testing.T) {
+	inputPrice := 0.001
+	imageInputPrice := 0.003
+	outputPrice := 0.002
+	pricing := &ChannelModelPricing{
+		BillingMode:     BillingModeToken,
+		InputPrice:      &inputPrice,
+		ImageInputPrice: &imageInputPrice,
+		OutputPrice:     &outputPrice,
+	}
+
+	cost, supported := calculateStatsCostForUsage(nil, "custom-model", pricing, UsageTokens{
+		InputTokens:      100,
+		ImageInputTokens: 40,
+		OutputTokens:     50,
+	}, accountStatsUsage{})
+	require.True(t, supported)
+	require.NotNil(t, cost)
+	// 60*0.001 + 40*0.003 + 50*0.002 = 0.28
+	require.InDelta(t, 0.28, *cost, 1e-12)
+}
+
+func TestApplyAccountStatsCostVideoUsesCountTimesDuration(t *testing.T) {
+	videoPrice := 0.037
+	billingMode := string(BillingModeVideo)
+	resolution := VideoBillingResolution720P
+	duration := 10
+	channel := &Channel{
+		ID:                         1,
+		Status:                     StatusActive,
+		ApplyPricingToAccountStats: false,
+		AccountStatsPricingRules: []AccountStatsPricingRule{{
+			GroupIDs: []int64{10},
+			Pricing: []ChannelModelPricing{{
+				Models:          []string{"grok-imagine-video-1.5"},
+				BillingMode:     BillingModeVideo,
+				PerRequestPrice: &videoPrice,
+			}},
+		}},
+	}
+	cs := newTestChannelServiceForStats(t, channel, 10, "openai")
+	usageLog := &UsageLog{
+		BillingMode:          &billingMode,
+		VideoCount:           2,
+		VideoResolution:      &resolution,
+		VideoDurationSeconds: &duration,
+	}
+
+	applyAccountStatsCost(
+		context.Background(), usageLog, cs, nil,
+		1, 10, "grok-imagine-video-1.5", "grok-imagine-video-1.5", UsageTokens{}, 999,
+	)
+
+	require.NotNil(t, usageLog.AccountStatsCost)
+	// 0.037 USD/s * 10 seconds * 2 videos = 0.74 USD.
+	require.InDelta(t, 0.74, *usageLog.AccountStatsCost, 1e-12)
+}
+
+func TestCalculateStatsCostForUsageRejectsUnknownBillingMode(t *testing.T) {
+	inputPrice := 0.001
+	pricing := &ChannelModelPricing{
+		BillingMode: BillingMode("unsupported"),
+		InputPrice:  &inputPrice,
+	}
+
+	cost, supported := calculateStatsCostForUsage(nil, "custom-model", pricing, UsageTokens{
+		InputTokens: 100,
+	}, accountStatsUsage{})
+	require.False(t, supported)
+	require.Nil(t, cost)
+	require.Nil(t, calculateStatsCost(pricing, UsageTokens{InputTokens: 100}, 1))
+}
+
+func TestAccountStatsUsageFromLogUsesBillingTierForRequestPricing(t *testing.T) {
+	billingMode := string(BillingModePerRequest)
+	billingTier := "4K"
+	usageLog := &UsageLog{BillingMode: &billingMode, BillingTier: &billingTier}
+
+	usage := accountStatsUsageFromLog(usageLog, 1)
+
+	require.Equal(t, BillingModePerRequest, usage.BillingMode)
+	require.Equal(t, "4K", usage.BillingTier)
+	require.Equal(t, "4K", usage.SizeTier)
+	require.Equal(t, 1, usage.RequestCount)
 }

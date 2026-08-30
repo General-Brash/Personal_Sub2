@@ -141,6 +141,9 @@ func validateTokenModelPricing(model string, pricing *ModelPricing) error {
 			return err
 		}
 	}
+	if err := validateModelPricingMultipliers(model, "token", pricing); err != nil {
+		return err
+	}
 	if !modelPricingInputPresent(pricing) || !modelPricingOutputPresent(pricing) {
 		return billingPricingUnavailable(model, "token")
 	}
@@ -166,6 +169,9 @@ func (s *BillingService) PreflightTokenPricing(ctx context.Context, model string
 	if resolved == nil {
 		return billingPricingUnavailable(model, "token")
 	}
+	if err := validateResolvedPricingMultipliers(model, resolved); err != nil {
+		return err
+	}
 	switch resolved.Mode {
 	case BillingModePerRequest, BillingModeImage:
 		return validateResolvedPerRequestPricing(model, resolved)
@@ -179,7 +185,8 @@ func (s *BillingService) PreflightTokenPricing(ctx context.Context, model string
 			}
 		}
 		for i := range resolved.Intervals {
-			pricing := intervalToModelPricing(&resolved.Intervals[i], resolved.SupportsCacheBreakdown, resolved.channelPricing)
+			pricing := intervalToModelPricing(&resolved.Intervals[i], resolved.BasePricing, resolved.channelPricing)
+			pricing.SupportsCacheBreakdown = resolved.SupportsCacheBreakdown
 			if err := validateTokenModelPricing(model, pricing); err != nil {
 				return err
 			}

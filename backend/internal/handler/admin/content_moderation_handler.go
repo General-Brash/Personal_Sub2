@@ -20,10 +20,11 @@ func NewContentModerationHandler(svc *service.ContentModerationService) *Content
 }
 
 type contentModerationConfigRequest struct {
-	Enabled *bool   `json:"enabled"`
-	Mode    *string `json:"mode"`
-	BaseURL *string `json:"base_url"`
-	Model   *string `json:"model"`
+	Enabled       *bool   `json:"enabled"`
+	Mode          *string `json:"mode"`
+	FailurePolicy *string `json:"failure_policy"`
+	BaseURL       *string `json:"base_url"`
+	Model         *string `json:"model"`
 	// 审计请求使用的代理服务器：null 不修改；0 清除（直连）；>0 指定代理。
 	ProxyID              *int64              `json:"proxy_id"`
 	APIKey               *string             `json:"api_key"`
@@ -94,6 +95,7 @@ func (h *ContentModerationHandler) UpdateConfig(c *gin.Context) {
 	cfg, err := h.service.UpdateConfig(c.Request.Context(), service.UpdateContentModerationConfigInput{
 		Enabled:                        req.Enabled,
 		Mode:                           req.Mode,
+		FailurePolicy:                  req.FailurePolicy,
 		BaseURL:                        req.BaseURL,
 		Model:                          req.Model,
 		ProxyID:                        req.ProxyID,

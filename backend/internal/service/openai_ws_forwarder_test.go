@@ -134,6 +134,36 @@ func TestOpenAIForwardResultSucceededForScheduling_TerminalEvents(t *testing.T) 
 	}
 }
 
+func TestOpenAIWSPairedServerErrorAppliesModelSideEffectsOnce(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	svc.rateLimitService = NewRateLimitService(transientCooldownAccountRepo{}, nil, &config.Config{}, nil, nil)
+	account := &Account{ID: 5204, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	errorEvent := []byte(`{"type":"error","error":{"code":"server_error","type":"server_error","message":"Internal error"}}`)
+	failedEvent := []byte(`{"type":"response.failed","response":{"error":{"code":"server_error","type":"server_error","message":"Internal error"}}}`)
+	applied := false
+
+	require.True(t, svc.applyOpenAIWSFailureSideEffectsOnce(
+		context.Background(), account, "gpt-5.5", http.Header{}, "error", errorEvent, &applied,
+	))
+	require.False(t, svc.applyOpenAIWSFailureSideEffectsOnce(
+		context.Background(), account, "gpt-5.5", http.Header{}, "response.failed", failedEvent, &applied,
+	))
+	require.True(t, applied)
+	require.JSONEq(t, `{"type":"error","error":{"code":"server_error","type":"server_error","message":"Internal error"}}`, string(errorEvent))
+	require.JSONEq(t, `{"type":"response.failed","response":{"error":{"code":"server_error","type":"server_error","message":"Internal error"}}}`, string(failedEvent))
+
+	state := svc.getOpenAIAccountModelTransientState()
+	require.NotNil(t, state)
+	key, ok := openAIAccountModelTransientKey(account.ID, "gpt-5.5")
+	require.True(t, ok)
+	state.mu.Lock()
+	entry, exists := state.entries[key]
+	state.mu.Unlock()
+	require.True(t, exists)
+	require.Equal(t, 1, entry.failureStreak, "error + response.failed must advance one failure streak")
+	require.False(t, svc.isOpenAIAccountModelRuntimeBlocked(account, "gpt-5.5"), "streak one must not enter cooldown")
+}
+
 func TestOpenAIWSTerminalEvent_ResponseFailedRecordsModelTransient(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	svc.rateLimitService = NewRateLimitService(transientCooldownAccountRepo{}, nil, &config.Config{}, nil, nil)

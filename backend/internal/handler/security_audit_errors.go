@@ -152,7 +152,7 @@ func (d legacyContentModerationDecision) toService() *service.ContentModerationD
 	if d.value == nil {
 		return nil
 	}
-	return &service.ContentModerationDecision{Allowed: d.value.Allowed, Blocked: d.value.Blocked, Flagged: d.value.Flagged, Message: d.value.Message, StatusCode: d.value.StatusCode, Action: d.value.Action}
+	return &service.ContentModerationDecision{Allowed: d.value.Allowed, Blocked: d.value.Blocked, Flagged: d.value.Flagged, Message: d.value.Message, StatusCode: d.value.StatusCode, ErrorCode: d.value.ErrorCode, Action: d.value.Action}
 }
 
 func securityAuditWSCloseStatus(decision *securityaudit.Decision) coderws.StatusCode {

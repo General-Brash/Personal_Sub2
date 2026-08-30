@@ -1927,3 +1927,271 @@ func TestContentModerationUpdateConfig_CyberPolicyExcludeFromBanCount(t *testing
 	require.NoError(t, err)
 	require.False(t, view.CyberPolicyExcludeFromBanCount)
 }
+
+func TestParseContentModerationConfig_LegacyDefaultsFailurePolicyToFailOpen(t *testing.T) {
+	cfg, err := parseContentModerationConfig(`{"enabled":true,"mode":"pre_block"}`)
+
+	require.NoError(t, err)
+	require.Equal(t, ContentModerationFailurePolicyFailOpen, cfg.FailurePolicy)
+}
+
+func TestParseContentModerationConfig_RejectsUnknownFailurePolicy(t *testing.T) {
+	_, err := parseContentModerationConfig(`{"failure_policy":"unknown"}`)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "INVALID_CONTENT_MODERATION_FAILURE_POLICY")
+}
+
+func TestParseContentModerationConfig_FailClosedObserveModeIsRejected(t *testing.T) {
+	_, err := parseContentModerationConfig(`{"enabled":true,"mode":"observe","failure_policy":"fail_closed"}`)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "INVALID_CONTENT_MODERATION_FAILURE_POLICY")
+}
+
+func TestContentModerationUpdateConfig_FailurePolicyRoundTrip(t *testing.T) {
+	settingRepo := &contentModerationTestSettingRepo{values: map[string]string{}}
+	svc := NewContentModerationService(settingRepo, nil, nil, nil, nil, nil, nil, nil)
+
+	view, err := svc.GetConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, ContentModerationFailurePolicyFailOpen, view.FailurePolicy)
+
+	failClosed := ContentModerationFailurePolicyFailClosed
+	view, err = svc.UpdateConfig(context.Background(), UpdateContentModerationConfigInput{FailurePolicy: &failClosed})
+	require.NoError(t, err)
+	require.Equal(t, ContentModerationFailurePolicyFailClosed, view.FailurePolicy)
+
+	var saved ContentModerationConfig
+	require.NoError(t, json.Unmarshal([]byte(settingRepo.values[SettingKeyContentModerationConfig]), &saved))
+	require.Equal(t, ContentModerationFailurePolicyFailClosed, saved.FailurePolicy)
+
+	view, err = svc.GetConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, ContentModerationFailurePolicyFailClosed, view.FailurePolicy)
+}
+
+func TestContentModerationCheck_FailOpenAPIErrorAllows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	cfg := defaultContentModerationConfig()
+	cfg.Enabled = true
+	cfg.Mode = ContentModerationModePreBlock
+	cfg.BaseURL = server.URL
+	cfg.APIKeys = []string{"sk-test"}
+	cfg.RetryCount = 0
+	rawCfg, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyRiskControlEnabled:      "true",
+			SettingKeyContentModerationConfig: string(rawCfg),
+		}},
+		&contentModerationTestRepo{},
+		&contentModerationTestHashCache{},
+		nil, nil, nil, nil, nil,
+	)
+
+	decision, err := svc.Check(context.Background(), ContentModerationCheckInput{
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"clean prompt"}]}`),
+	})
+
+	require.NoError(t, err)
+	require.True(t, decision.Allowed)
+	require.False(t, decision.Unavailable)
+	require.Equal(t, ContentModerationActionAllow, decision.Action)
+}
+
+func TestContentModerationCheck_FailClosedAPIErrorReturnsUnavailable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	cfg := defaultContentModerationConfig()
+	cfg.Enabled = true
+	cfg.Mode = ContentModerationModePreBlock
+	cfg.FailurePolicy = ContentModerationFailurePolicyFailClosed
+	cfg.BaseURL = server.URL
+	cfg.APIKeys = []string{"sk-test"}
+	cfg.RetryCount = 0
+	rawCfg, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyRiskControlEnabled:      "true",
+			SettingKeyContentModerationConfig: string(rawCfg),
+		}},
+		&contentModerationTestRepo{},
+		&contentModerationTestHashCache{},
+		nil, nil, nil, nil, nil,
+	)
+
+	decision, err := svc.Check(context.Background(), ContentModerationCheckInput{
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"clean prompt"}]}`),
+	})
+
+	require.NoError(t, err)
+	require.False(t, decision.Allowed)
+	require.True(t, decision.Blocked)
+	require.True(t, decision.Unavailable)
+	require.Equal(t, http.StatusServiceUnavailable, decision.StatusCode)
+	require.Equal(t, ContentModerationErrorCodeUnavailable, decision.ErrorCode)
+	require.Equal(t, ContentModerationActionError, decision.Action)
+}
+
+func TestContentModerationCheck_FailClosedWithoutAPIKeysReturnsUnavailable(t *testing.T) {
+	cfg := defaultContentModerationConfig()
+	cfg.Enabled = true
+	cfg.Mode = ContentModerationModePreBlock
+	cfg.FailurePolicy = ContentModerationFailurePolicyFailClosed
+	rawCfg, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyRiskControlEnabled:      "true",
+			SettingKeyContentModerationConfig: string(rawCfg),
+		}},
+		&contentModerationTestRepo{},
+		&contentModerationTestHashCache{},
+		nil, nil, nil, nil, nil,
+	)
+
+	decision, err := svc.Check(context.Background(), ContentModerationCheckInput{
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"clean prompt"}]}`),
+	})
+
+	require.NoError(t, err)
+	require.False(t, decision.Allowed)
+	require.True(t, decision.Unavailable)
+	require.Equal(t, http.StatusServiceUnavailable, decision.StatusCode)
+}
+
+func TestContentModerationCheck_FailClosedServiceUnavailableReturnsUnavailable(t *testing.T) {
+	cfg := defaultContentModerationConfig()
+	cfg.Enabled = true
+	cfg.Mode = ContentModerationModePreBlock
+	cfg.FailurePolicy = ContentModerationFailurePolicyFailClosed
+	rawCfg, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyRiskControlEnabled:      "true",
+			SettingKeyContentModerationConfig: string(rawCfg),
+		}},
+		nil,
+		nil,
+		nil, nil, nil, nil, nil,
+	)
+
+	decision, err := svc.Check(context.Background(), ContentModerationCheckInput{
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"clean prompt"}]}`),
+	})
+
+	require.NoError(t, err)
+	require.False(t, decision.Allowed)
+	require.True(t, decision.Unavailable)
+	require.Equal(t, http.StatusServiceUnavailable, decision.StatusCode)
+}
+
+func TestContentModerationCheck_ConfigActivationFailureReturnsUnavailable(t *testing.T) {
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyRiskControlEnabled:      "true",
+			SettingKeyContentModerationConfig: `{invalid`,
+		}},
+		nil,
+		nil,
+		nil, nil, nil, nil, nil,
+	)
+
+	decision, err := svc.Check(context.Background(), ContentModerationCheckInput{
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"clean prompt"}]}`),
+	})
+
+	require.NoError(t, err)
+	require.False(t, decision.Allowed)
+	require.True(t, decision.Unavailable)
+	require.Equal(t, http.StatusServiceUnavailable, decision.StatusCode)
+	require.Equal(t, ContentModerationErrorCodeUnavailable, decision.ErrorCode)
+}
+
+func TestContentModerationCheck_FailurePolicyKeepsNormalAllowAndBlockPaths(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		score := 0.1
+		if calls == 2 {
+			score = 0.99
+		}
+		_ = json.NewEncoder(w).Encode(moderationAPIResponse{Results: []moderationAPIResult{{CategoryScores: map[string]float64{"sexual": score}}}})
+	}))
+	defer server.Close()
+
+	cfg := defaultContentModerationConfig()
+	cfg.Enabled = true
+	cfg.Mode = ContentModerationModePreBlock
+	cfg.FailurePolicy = ContentModerationFailurePolicyFailClosed
+	cfg.BaseURL = server.URL
+	cfg.APIKeys = []string{"sk-test"}
+	cfg.RetryCount = 0
+	rawCfg, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyRiskControlEnabled:      "true",
+			SettingKeyContentModerationConfig: string(rawCfg),
+		}},
+		&contentModerationTestRepo{},
+		&contentModerationTestHashCache{},
+		nil, nil, nil, nil, nil,
+	)
+
+	input := ContentModerationCheckInput{
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"prompt"}]}`),
+	}
+	decision, err := svc.Check(context.Background(), input)
+	require.NoError(t, err)
+	require.True(t, decision.Allowed)
+	require.False(t, decision.Unavailable)
+
+	decision, err = svc.Check(context.Background(), input)
+	require.NoError(t, err)
+	require.False(t, decision.Allowed)
+	require.True(t, decision.Blocked)
+	require.False(t, decision.Unavailable)
+	require.Equal(t, ContentModerationActionBlock, decision.Action)
+}
+
+func TestContentModerationStatusIncludesFailurePolicy(t *testing.T) {
+	cfg := defaultContentModerationConfig()
+	cfg.FailurePolicy = ContentModerationFailurePolicyFailClosed
+	rawCfg, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyRiskControlEnabled:      "true",
+			SettingKeyContentModerationConfig: string(rawCfg),
+		}},
+		nil, nil, nil, nil, nil, nil, nil,
+	)
+
+	status, err := svc.GetStatus(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, ContentModerationFailurePolicyFailClosed, status.FailurePolicy)
+}

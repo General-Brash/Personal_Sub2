@@ -90,6 +90,46 @@ func TestCanonicalizeReturnURL(t *testing.T) {
 	}
 }
 
+func TestCanonicalizeReturnURLAllowsHTTPOnlyWithExplicitDevelopmentConfig(t *testing.T) {
+	t.Setenv(paymentReturnURLAllowInsecureHTTPEnvKey, "true")
+
+	got, err := CanonicalizeReturnURL(
+		"http://app.example.com/payment/result?from=checkout",
+		"app.example.com",
+		"http://app.example.com/purchase",
+	)
+	if err != nil {
+		t.Fatalf("CanonicalizeReturnURL returned error: %v", err)
+	}
+	if got != "http://app.example.com/payment/result?from=checkout" {
+		t.Fatalf("CanonicalizeReturnURL = %q, want %q", got, "http://app.example.com/payment/result?from=checkout")
+	}
+}
+
+func TestCanonicalizeReturnURLRejectsHTTPWithoutExplicitDevelopmentConfig(t *testing.T) {
+	t.Setenv(paymentReturnURLAllowInsecureHTTPEnvKey, "false")
+
+	if _, err := CanonicalizeReturnURL(
+		"http://app.example.com/payment/result",
+		"app.example.com",
+		"http://app.example.com/purchase",
+	); err == nil {
+		t.Fatal("CanonicalizeReturnURL should reject HTTP without explicit development configuration")
+	}
+}
+
+func TestCanonicalizeReturnURLRejectsHTTPForHTTPSRequest(t *testing.T) {
+	t.Setenv(paymentReturnURLAllowInsecureHTTPEnvKey, "true")
+
+	if _, err := CanonicalizeReturnURL(
+		"http://app.example.com/payment/result",
+		"app.example.com",
+		"https://app.example.com/purchase",
+	); err == nil {
+		t.Fatal("CanonicalizeReturnURL should reject HTTP when the browser origin is HTTPS")
+	}
+}
+
 func TestCanonicalizeReturnURLRejectsRelativeURL(t *testing.T) {
 	t.Parallel()
 

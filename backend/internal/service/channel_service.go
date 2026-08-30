@@ -358,7 +358,7 @@ func isPlatformPricingMatch(groupPlatform, pricingPlatform string) bool {
 // fallback used before a request target has been resolved.
 func matchingPlatforms(groupPlatform string) []string {
 	if groupPlatform == PlatformComposite {
-		return []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok}
+		return []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek}
 	}
 	return []string{groupPlatform}
 }
@@ -765,6 +765,32 @@ func checkPricesNotNegative(p ChannelModelPricing) error {
 			}
 		}
 	}
+	for _, c := range []struct {
+		field string
+		val   *float64
+	}{
+		{"fast_multiplier", p.FastMultiplier},
+		{"flex_multiplier", p.FlexMultiplier},
+	} {
+		if c.val != nil && !isFinitePositiveBillingMultiplier(*c.val) {
+			return infraerrors.BadRequest("INVALID_MULTIPLIER", fmt.Sprintf("%s must be finite and > 0", c.field))
+		}
+	}
+	for _, iv := range p.Intervals {
+		for _, c := range []struct {
+			field string
+			val   *float64
+		}{
+			{"interval.input_multiplier", iv.InputMultiplier},
+			{"interval.output_multiplier", iv.OutputMultiplier},
+			{"interval.cache_write_multiplier", iv.CacheWriteMultiplier},
+			{"interval.cache_read_multiplier", iv.CacheReadMultiplier},
+		} {
+			if c.val != nil && !isFinitePositiveBillingMultiplier(*c.val) {
+				return infraerrors.BadRequest("INVALID_MULTIPLIER", fmt.Sprintf("%s must be finite and > 0", c.field))
+			}
+		}
+	}
 	return nil
 }
 
@@ -772,7 +798,9 @@ func checkIntervalsHavePrices(p ChannelModelPricing) error {
 	for _, iv := range p.Intervals {
 		if iv.InputPrice == nil && iv.OutputPrice == nil &&
 			iv.CacheWritePrice == nil && iv.CacheReadPrice == nil &&
-			iv.PerRequestPrice == nil {
+			iv.PerRequestPrice == nil && iv.InputMultiplier == nil &&
+			iv.OutputMultiplier == nil && iv.CacheWriteMultiplier == nil &&
+			iv.CacheReadMultiplier == nil {
 			return infraerrors.BadRequest(
 				"INTERVAL_MISSING_PRICE",
 				fmt.Sprintf("interval [%d, %s] has no price fields set for model %v",

@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.1.178`. This integration line is released as `v0.1.178-P1`.
+Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.1.178`, incorporating official updates through `v0.1.183`. This integration line is released as `v0.1.183-P1`.
 
 English | [中文](README_CN.md) | [日本語](README_JA.md)
 
@@ -13,7 +13,7 @@ English | [中文](README_CN.md) | [日本語](README_JA.md)
 
 Production model weights are not included. Before enabling model-backed secondary review, prepare and activate a package as described in [`MODEL_PACKAGE.md`](services/intent-classifier/MODEL_PACKAGE.md).
 
-## Official v0.1.178 Integration
+## Official v0.1.178–v0.1.183 Integration
 
 - **Upstream URL safety**: Validates client-controlled OpenAI Responses subpaths, Gemini model/action paths, and Grok video request IDs before forwarding, rejecting path fragments that could alter upstream URL structure.
 - **Runtime pricing and billing**: Docker and GoReleaser image builds now carry fallback pricing resources at runtime; GPT-5.6 Luna/Terra rates and GLM-5.2 fallback pricing are corrected.
@@ -21,6 +21,12 @@ Production model weights are not included. Before enabling model-backed secondar
 - **Proxy stream-circuit resilience**: OpenAI proxy disconnect quarantine now fails open when every candidate shares a quarantined proxy, collapses burst disconnects into one event, and provides an explicit disable switch.
 - **Routing and scheduling correctness**: Composite groups expose their configured concrete model platforms while ordinary group isolation remains intact, and token refresh skips unschedulable accounts.
 - **Protocol and UI fixes**: Generates standards-compliant SMTP messages, improves Anthropic classifier/count-token compatibility and Qwen3Guard auxiliary-field handling, and corrects subscription expiry labels and long plan-title display.
+
+### Official v0.1.179–v0.1.183 additions
+
+- **Protocol and media expansion (v0.1.179)**: Adds OpenAI Responses file/image and `file_search` compatibility, adaptive Kimi/Zhipu/DeepSeek protocol routing, multi-protocol Base URLs, Claude Code analysis blocks, enhanced web search and Grok media handling, plus broader Composite platform support.
+- **Pricing, routing, and plugins (v0.1.180)**: Adds channel price multipliers and time pricing, Composite domestic-provider routes, 1M-context and service-tier billing support, plugin management, and related gateway scheduling and protocol fixes.
+- **Responses and reliability (v0.1.181–v0.1.183)**: Improves Responses Lite/tool compatibility, token and cache accounting, OAuth quota-versus-transient failure handling, Kimi concurrency cooling and session stickiness, custom tools/tool search, Composite monitoring, and payment-result balance refresh.
 
 ## Installation and Upgrade
 
@@ -53,7 +59,7 @@ See [`deploy/`](deploy/) for deployment files and runtime settings. For containe
 
 ## Build from Source
 
-Requirements: Go 1.26.5, Node.js 20+, pnpm 9, PostgreSQL, and Redis.
+Requirements: Go 1.27.0, Node.js 20+, pnpm 9, PostgreSQL, and Redis.
 
 ```bash
 git clone https://github.com/General-Brash/Personal_Sub2.git
@@ -93,6 +99,17 @@ See [`DEV_GUIDE.md`](DEV_GUIDE.md) for additional repository development convent
 - Never commit or disclose API keys, access tokens, database passwords, or sensitive values from `.env` and `config.yaml`.
 - Back up and validate in a non-production environment before upgrades, migrations, or security-policy changes.
 - This project is provided as-is; users are responsible for account, service, data, and compliance risks.
+
+## ❤️ Sponsors
+
+<table>
+
+<tr>
+<td width="180"><a href="https://go.apimart.ai/gh-sub2api"><img src="assets/partners/logos/apimart.jpg" alt="APIMart" width="150"></a></td>
+<td>Thanks to APIMart for sponsoring this project! <a href="https://go.apimart.ai/gh-sub2api">APIMart</a> is a low-cost API platform for AI image and video generation — GPT-Image-2 from $0.006 per image, with 160+ images per dollar. One async API covers both image and video: submit a task, get an ID, and retrieve results via polling or callback. Batch tens of thousands of images without timeouts, and switch models without changing code. Pay as you go with no monthly fee — <a href="https://go.apimart.ai/gh-sub2api">sign up here</a> to get started.</td>
+</tr>
+
+</table>
 
 ## License
 

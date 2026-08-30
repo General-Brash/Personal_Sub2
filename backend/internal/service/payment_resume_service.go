@@ -10,12 +10,14 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/spf13/viper"
 )
 
 const paymentResultReturnPath = "/payment/result"
@@ -245,6 +247,9 @@ func CanonicalizeReturnURL(raw string, srcHost string, srcURL string) (string, e
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must use http or https")
 	}
+	if parsed.Scheme == "http" && !allowInsecurePaymentReturnURL(srcURL) {
+		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "http return_url requires an explicitly configured local development request")
+	}
 	parsed.Fragment = ""
 	if parsed.Path == "" {
 		parsed.Path = "/"
@@ -256,6 +261,40 @@ func CanonicalizeReturnURL(raw string, srcHost string, srcURL string) (string, e
 		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must use the same host as the current site or browser origin")
 	}
 	return parsed.String(), nil
+}
+
+const (
+	paymentReturnURLAllowInsecureHTTPConfigKey = "security.url_allowlist.allow_insecure_http"
+	paymentReturnURLAllowInsecureHTTPEnvKey    = "SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP"
+)
+
+// allowInsecurePaymentReturnURL deliberately requires two independent signals:
+// the current browser origin/referer must itself be HTTP, and the existing
+// security setting must be explicitly enabled in config.yaml or the matching
+// environment variable. An absent referer is not enough to opt into HTTP,
+// which keeps production HTTPS requests from silently carrying resume tokens
+// to cleartext URLs.
+func allowInsecurePaymentReturnURL(srcURL string) bool {
+	referer := strings.TrimSpace(srcURL)
+	if referer == "" {
+		return false
+	}
+	parsedReferer, err := url.Parse(referer)
+	if err != nil || parsedReferer.Host == "" || !strings.EqualFold(parsedReferer.Scheme, "http") {
+		return false
+	}
+	return explicitAllowInsecureHTTP()
+}
+
+func explicitAllowInsecureHTTP() bool {
+	if raw, ok := os.LookupEnv(paymentReturnURLAllowInsecureHTTPEnvKey); ok {
+		enabled, err := strconv.ParseBool(strings.TrimSpace(raw))
+		return err == nil && enabled
+	}
+	if !viper.InConfig(paymentReturnURLAllowInsecureHTTPConfigKey) {
+		return false
+	}
+	return viper.GetBool(paymentReturnURLAllowInsecureHTTPConfigKey)
 }
 
 func allowedReturnURLHost(returnURLHost string, requestHost string, refererURL string) bool {

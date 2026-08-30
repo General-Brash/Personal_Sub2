@@ -15,6 +15,26 @@ FRONTEND_CRITICAL_VITEST := \
 	src/features/channel-monitor-v2/__tests__/monitorFormat.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorZoom.spec.ts
 
+# v0.1.179-v0.1.183 P1 merge regression specs
+FRONTEND_CRITICAL_VITEST += \
+	src/components/account/__tests__/CNProviderBalanceCell.spec.ts \
+	src/components/account/__tests__/CNProviderQuotaCell.spec.ts \
+	src/components/account/__tests__/CnBaseUrlPresets.spec.ts \
+	src/components/account/__tests__/credentialsBuilder.cnAdaptive.spec.ts \
+	src/components/account/__tests__/longContextBilling.spec.ts \
+	src/components/admin/monitor/__tests__/MonitorPrimaryModelCell.spec.ts \
+	src/components/admin/user/__tests__/UserEditModal.spec.ts \
+	src/components/modelPlaza/__tests__/PlazaGroupSection.spec.ts \
+	src/constants/__tests__/platforms.spec.ts \
+	src/views/admin/__tests__/AccountsView.priorityColumn.spec.ts \
+	src/views/admin/__tests__/ChannelMonitorView.checkModeBadge.spec.ts \
+	src/views/admin/__tests__/GroupsView.compositePlatforms.spec.ts \
+	src/views/admin/__tests__/PluginsView.spec.ts \
+	src/views/admin/__tests__/ProxiesView.ipv6.spec.ts \
+	src/views/admin/__tests__/channelPlatformOptions.spec.ts \
+	src/views/admin/__tests__/platformFilterCatalogUsage.spec.ts \
+	src/views/admin/ops/components/__tests__/OpsErrorDetailModal.spec.ts
+
 # 一键编译前后端
 build: build-backend build-frontend
 

@@ -4,6 +4,8 @@ package service
 
 import (
 	"testing"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -56,6 +58,54 @@ func TestGrokTeamModelRateLimit_Expires(t *testing.T) {
 	// mark clamps expired until into default TTL from "now" — use direct store inject via past+recheck
 	// After mark with past, resolveGrokTeamRateLimitUntil path isn't used; mark uses now+default when until not after now.
 	require.True(t, isGrokTeamModelRateLimited(a, "grok-4.5", time.Now()))
+}
+
+func TestGrokTeamModelRateLimitFilterUsesRuntimeCrossClientDefault(t *testing.T) {
+	original := xai.RuntimeModelMappingOptions()
+	t.Cleanup(func() { xai.SetRuntimeModelMappingOptions(original) })
+	xai.SetRuntimeModelMappingOptions(xai.ModelMappingOptions{
+		DefaultText:          "grok-4.6",
+		EnableCrossClientMap: true,
+	})
+
+	now := time.Now()
+	account := Account{
+		ID:       302,
+		Platform: PlatformGrok,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"team_id": "team-runtime-cross-client-302",
+		},
+	}
+	// The real Grok forwarding path maps gpt-* to the runtime default.
+	markGrokTeamModelRateLimit(&account, "grok-4.6", now.Add(time.Hour))
+	require.Equal(t, "grok-4.6", canonicalOpenAIAccountSchedulingModel(&account, "gpt-5"))
+	require.Empty(t, filterGrokTeamModelRateLimitedAccounts([]Account{account}, "gpt-5", now))
+
+	xai.SetRuntimeModelMappingOptions(xai.ModelMappingOptions{
+		DefaultText:          "grok-4.6",
+		EnableCrossClientMap: false,
+	})
+	// Disabled cross-client mapping keeps the original client model and does
+	// not reuse the Grok native cooldown key.
+	require.Equal(t, "gpt-5", canonicalOpenAIAccountSchedulingModel(&account, "gpt-5"))
+	require.Len(t, filterGrokTeamModelRateLimitedAccounts([]Account{account}, "gpt-5", now), 1)
+}
+
+func TestGrokTeamModelRateLimitBuildRuntimeIDUsesPublicCooldownKey(t *testing.T) {
+	now := time.Now()
+	account := &Account{
+		ID:       303,
+		Platform: PlatformGrok,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"team_id": "team-build-runtime-303",
+		},
+	}
+	markGrokTeamModelRateLimit(account, "grok-4.6-build", now.Add(time.Hour))
+
+	require.True(t, isGrokTeamModelRateLimited(account, "grok-4.6", now))
+	require.Empty(t, filterGrokTeamModelRateLimitedAccounts([]Account{*account}, "grok-4.6", now))
 }
 
 func TestGrokTeamModelRateLimitFilterUsesMappedUpstreamModel(t *testing.T) {

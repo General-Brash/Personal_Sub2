@@ -18,30 +18,128 @@ on:
 
 # Only workflow_dispatch may opt into a simple release.
 # Tag pushes always use the full config so archives and checksums are generated.
-env:
-  SIMPLE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simple_release == 'true' }}
-
 permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: personal-sub2-release
+  cancel-in-progress: false
+
 jobs:
+  resolve_release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.resolve.outputs.tag_name }}
+      target_commit: ${{ steps.resolve.outputs.target_commit }}
+      simple_release: ${{ steps.resolve.outputs.simple_release }}
+      publish_moving_tags: ${{ steps.resolve.outputs.publish_moving_tags }}
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag and resolve immutable commit
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_SHA: ${{ github.sha }}
+          SIMPLE_RELEASE_INPUT: ${{ inputs.simple_release }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag_name="$INPUT_TAG"
+            simple_release="${SIMPLE_RELEASE_INPUT:-false}"
+            publish_moving_tags="false"
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            tag_name="$REF_NAME"
+            simple_release="false"
+            publish_moving_tags="true"
+          else
+            echo "Unsupported release event: $EVENT_NAME" >&2
+            exit 1
+          fi
+
+          tag_regex='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([-.][0-9A-Za-z]+)*)?$'
+          if [[ ! "$tag_name" =~ $tag_regex ]]; then
+            echo "Invalid release tag format: $tag_name" >&2
+            echo 'Expected v<major>.<minor>.<patch> with an optional semver prerelease suffix, such as v0.1.183 or v0.1.183-P1.' >&2
+            exit 1
+          fi
+
+          if [[ "$simple_release" != "true" && "$simple_release" != "false" ]]; then
+            echo "Invalid simple_release value: $simple_release" >&2
+            exit 1
+          fi
+
+          if ! git fetch --force --no-tags origin "refs/tags/${tag_name}:refs/tags/${tag_name}"; then
+            echo "Release tag does not exist on origin: $tag_name" >&2
+            exit 1
+          fi
+          if ! git show-ref --verify --quiet "refs/tags/$tag_name"; then
+            echo "Release tag is unavailable after fetch: $tag_name" >&2
+            exit 1
+          fi
+
+          target_commit="$(git rev-parse --verify "refs/tags/$tag_name^{}")"
+          if [[ ! "$target_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Resolved release target is not a commit: $target_commit" >&2
+            exit 1
+          fi
+
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            if [[ ! "$EVENT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Invalid event SHA for tag push: $EVENT_SHA" >&2
+              exit 1
+            fi
+            if [[ "$target_commit" != "$EVENT_SHA" ]]; then
+              echo "Release tag $tag_name resolves to $target_commit, but the tag event targets $EVENT_SHA" >&2
+              exit 1
+            fi
+          fi
+
+          printf 'tag_name=%s\n' "$tag_name" >> "$GITHUB_OUTPUT"
+          printf 'target_commit=%s\n' "$target_commit" >> "$GITHUB_OUTPUT"
+          printf 'simple_release=%s\n' "$simple_release" >> "$GITHUB_OUTPUT"
+          printf 'publish_moving_tags=%s\n' "$publish_moving_tags" >> "$GITHUB_OUTPUT"
+          echo "Resolved $tag_name to immutable commit $target_commit"
+
   # Update VERSION file with tag version
   update-version:
+    needs: resolve_release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout release commit
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.resolve_release.outputs.target_commit }}
+
+      - name: Verify release checkout
+        env:
+          EXPECTED_TARGET_COMMIT: ${{ needs.resolve_release.outputs.target_commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_commit="$(git rev-parse --verify 'HEAD^{commit}')"
+          if [[ "$actual_commit" != "$EXPECTED_TARGET_COMMIT" ]]; then
+            echo "Checked-out commit $actual_commit does not match $EXPECTED_TARGET_COMMIT" >&2
+            exit 1
+          fi
 
       - name: Update VERSION file
+        env:
+          RELEASE_TAG: ${{ needs.resolve_release.outputs.tag_name }}
+        shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION=${{ github.event.inputs.tag }}
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
-          fi
-          echo "$VERSION" > backend/cmd/server/VERSION
-          echo "Updated VERSION file to: $VERSION"
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_TAG" > backend/cmd/server/VERSION
+          echo "Updated VERSION file to: $RELEASE_TAG"
 
       - name: Upload VERSION artifact
         uses: actions/upload-artifact@v7
@@ -51,10 +149,48 @@ jobs:
           retention-days: 1
 
   build-frontend:
+    needs: resolve_release
+    outputs:
+      target_commit: ${{ steps.verify_release_checkout.outputs.target_commit }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout immutable release commit
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.resolve_release.outputs.target_commit }}
+
+      - name: Verify release checkout
+        id: verify_release_checkout
+        env:
+          EXPECTED_TARGET_COMMIT: ${{ needs.resolve_release.outputs.target_commit }}
+          RELEASE_TAG: ${{ needs.resolve_release.outputs.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_TARGET_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid target commit from resolve job: $EXPECTED_TARGET_COMMIT" >&2
+            exit 1
+          fi
+
+          actual_commit="$(git rev-parse --verify 'HEAD^{commit}')"
+          if [[ "$actual_commit" != "$EXPECTED_TARGET_COMMIT" ]]; then
+            echo "Checked-out commit $actual_commit does not match $EXPECTED_TARGET_COMMIT" >&2
+            exit 1
+          fi
+
+          if ! git fetch --force --no-tags origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"; then
+            echo "Release tag is unavailable during frontend build: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          tag_commit="$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{}")"
+          if [[ "$tag_commit" != "$EXPECTED_TARGET_COMMIT" ]]; then
+            echo "Release tag $RELEASE_TAG moved from $EXPECTED_TARGET_COMMIT to $tag_commit" >&2
+            exit 1
+          fi
+
+          printf 'target_commit=%s\n' "$EXPECTED_TARGET_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "Frontend checkout is pinned to $EXPECTED_TARGET_COMMIT"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -84,14 +220,47 @@ jobs:
           retention-days: 1
 
   release:
-    needs: [update-version, build-frontend]
+    needs: [resolve_release, update-version, build-frontend]
     runs-on: ubuntu-latest
+    env:
+      SIMPLE_RELEASE: ${{ needs.resolve_release.outputs.simple_release }}
+      PUBLISH_MOVING_TAGS: ${{ needs.resolve_release.outputs.publish_moving_tags }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
-      - name: Checkout
+      - name: Checkout immutable release commit
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ needs.build-frontend.outputs.target_commit }}
+
+      - name: Verify immutable release checkout
+        env:
+          EXPECTED_TARGET_COMMIT: ${{ needs.build-frontend.outputs.target_commit }}
+          RELEASE_TAG: ${{ needs.resolve_release.outputs.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_TARGET_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid target commit from frontend job: $EXPECTED_TARGET_COMMIT" >&2
+            exit 1
+          fi
+
+          actual_commit="$(git rev-parse --verify 'HEAD^{commit}')"
+          if [[ "$actual_commit" != "$EXPECTED_TARGET_COMMIT" ]]; then
+            echo "Release checkout $actual_commit does not match frontend target $EXPECTED_TARGET_COMMIT" >&2
+            exit 1
+          fi
+
+          if ! git fetch --force --no-tags origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"; then
+            echo "Release tag is unavailable during release: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          tag_commit="$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{}")"
+          if [[ "$tag_commit" != "$EXPECTED_TARGET_COMMIT" ]]; then
+            echo "Release tag $RELEASE_TAG moved from $EXPECTED_TARGET_COMMIT to $tag_commit" >&2
+            exit 1
+          fi
+          echo "Release checkout and tag $RELEASE_TAG both resolve to $EXPECTED_TARGET_COMMIT"
 
       - name: Download VERSION artifact
         uses: actions/download-artifact@v8
@@ -113,8 +282,10 @@ jobs:
           cache-dependency-path: backend/go.sum
 
       - name: Verify Go version
+        shell: bash
         run: |
-          go version | grep -q 'go1.26.6'
+          set -euo pipefail
+          go version | grep -q 'go1.27.0'
 
       # Docker setup for GoReleaser
       - name: Set up QEMU
@@ -126,8 +297,6 @@ jobs:
       - name: Login to DockerHub
         if: ${{ env.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@v3
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -139,46 +308,75 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Fetch tags with annotations
-        run: |
-          # 确保获取完整的 annotated tag 信息
-          git fetch --tags --force
-
       - name: Get tag message
         id: tag_message
+        env:
+          RELEASE_TAG: ${{ needs.resolve_release.outputs.tag_name }}
+        shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG_NAME=${{ github.event.inputs.tag }}
-          else
-            TAG_NAME=${GITHUB_REF#refs/tags/}
+          set -euo pipefail
+          umask 077
+          message_file="$RUNNER_TEMP/release-tag-message"
+          git for-each-ref --format='%(contents:body)' "refs/tags/$RELEASE_TAG" > "$message_file"
+          message_b64="$(base64 --wrap=0 "$message_file")"
+          printf 'message_b64=%s\n' "$message_b64" >> "$GITHUB_OUTPUT"
+          echo "Tag message encoded without embedding it in a shell script"
+
+      - name: Prepare tag message environment
+        env:
+          TAG_MESSAGE_B64: ${{ steps.tag_message.outputs.message_b64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          message_file="$RUNNER_TEMP/release-tag-message-decoded"
+          printf '%s' "$TAG_MESSAGE_B64" | base64 --decode > "$message_file"
+
+          if [[ ! -s "$message_file" ]]; then
+            printf 'TAG_MESSAGE=\n' >> "$GITHUB_ENV"
+            exit 0
           fi
-          echo "Processing tag: $TAG_NAME"
 
-          # 获取完整的 tag message（跳过第一行标题）
-          TAG_MESSAGE=$(git tag -l --format='%(contents:body)' "$TAG_NAME")
+          delimiter="release_tag_message_$(od -An -N16 -tx1 /dev/urandom | tr -d '[:space:]')"
+          while grep -Fqx -- "$delimiter" "$message_file"; do
+            delimiter="release_tag_message_$(od -An -N16 -tx1 /dev/urandom | tr -d '[:space:]')"
+          done
 
-          # 调试输出
-          echo "Tag message length: ${#TAG_MESSAGE}"
-          echo "Tag message preview:"
-          echo "$TAG_MESSAGE" | head -10
-
-          # 使用 EOF 分隔符处理多行内容
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          printf 'TAG_MESSAGE<<%s\n' "$delimiter" >> "$GITHUB_ENV"
+          cat "$message_file" >> "$GITHUB_ENV"
+          printf '\n%s\n' "$delimiter" >> "$GITHUB_ENV"
 
       - name: Set lowercase owner for GHCR
         id: lowercase
-        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner_lower="$(printf '%s' "$REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          printf 'owner=%s\n' "$owner_lower" >> "$GITHUB_OUTPUT"
 
-      - name: Run GoReleaser
+      - name: Run GoReleaser (simple)
+        if: ${{ env.SIMPLE_RELEASE == 'true' }}
         uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
-          args: release --clean --skip=validate ${{ env.SIMPLE_RELEASE == 'true' && '--config=.goreleaser.simple.yaml' || '' }}
+          args: release --clean --skip=validate --config=.goreleaser.simple.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_MESSAGE: ${{ steps.tag_message.outputs.message }}
+          GITHUB_REPO_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO_OWNER_LOWER: ${{ steps.lowercase.outputs.owner }}
+          GITHUB_REPO_NAME: ${{ github.event.repository.name }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || 'skip' }}
+
+      - name: Run GoReleaser (full)
+        if: ${{ env.SIMPLE_RELEASE != 'true' }}
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: '~> v2'
+          args: release --clean --skip=validate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO_OWNER: ${{ github.repository_owner }}
           GITHUB_REPO_OWNER_LOWER: ${{ steps.lowercase.outputs.owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}
@@ -188,8 +386,6 @@ jobs:
       - name: Update DockerHub description
         if: ${{ env.SIMPLE_RELEASE != 'true' && env.DOCKERHUB_USERNAME != '' }}
         uses: peter-evans/dockerhub-description@v5
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -203,47 +399,38 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          RELEASE_TAG: ${{ needs.resolve_release.outputs.tag_name }}
+          REPOSITORY: ${{ github.repository }}
         continue-on-error: true
+        shell: bash
         run: |
-          # 检查必要的环境变量
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+          set -euo pipefail
+          if [[ -z "$TELEGRAM_BOT_TOKEN" || -z "$TELEGRAM_CHAT_ID" ]]; then
             echo "Telegram credentials not configured, skipping notification"
             exit 0
           fi
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG_NAME=${{ github.event.inputs.tag }}
-          else
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-          fi
-          VERSION=$TAG_NAME
-          IMAGE_VERSION=${TAG_NAME#v}
-          REPO="${{ github.repository }}"
+          VERSION="$RELEASE_TAG"
+          IMAGE_VERSION="${RELEASE_TAG#v}"
           GHCR_IMAGE="ghcr.io/general-brash/personal_sub2"
 
-          # 获取 tag message 内容并转义 Markdown 特殊字符
-          TAG_MESSAGE='${{ steps.tag_message.outputs.message }}'
-          TAG_MESSAGE=$(echo "$TAG_MESSAGE" | sed 's/\([_*`\[]\)/\\\1/g')
+          # Escape Markdown characters using the environment value populated from a secure file.
+          TAG_MESSAGE_ESCAPED="$(printf '%s' "$TAG_MESSAGE" | sed 's/\([_*`\[]\)/\\\\\1/g')"
 
-          # 限制消息长度（Telegram 消息限制 4096 字符，预留空间给头尾固定内容）
-          if [ ${#TAG_MESSAGE} -gt 3500 ]; then
-            TAG_MESSAGE="${TAG_MESSAGE:0:3500}..."
+          # Limit message length (Telegram message limit is 4096 characters).
+          if (( ${#TAG_MESSAGE_ESCAPED} > 3500 )); then
+            TAG_MESSAGE_ESCAPED="${TAG_MESSAGE_ESCAPED:0:3500}..."
           fi
 
-          # 构建消息内容
           MESSAGE="🚀 *Sub2API 新版本发布！*"$'\n'$'\n'
-          MESSAGE+="📦 版本号: \`${VERSION}\`"$'\n'$'\n'
-
-          # 添加更新内容
-          if [ -n "$TAG_MESSAGE" ]; then
-            MESSAGE+="${TAG_MESSAGE}"$'\n'$'\n'
+          MESSAGE+="📦 版本号: \`$VERSION\`"$'\n'$'\n'
+          if [[ -n "$TAG_MESSAGE_ESCAPED" ]]; then
+            MESSAGE+="$TAG_MESSAGE_ESCAPED"$'\n'$'\n'
           fi
 
           MESSAGE+="🐳 *Docker 部署:*"$'\n'
           MESSAGE+="\`\`\`bash"$'\n'
-          # 根据是否配置 DockerHub 动态生成
-          if [ -n "$DOCKERHUB_USERNAME" ]; then
+          if [[ -n "$DOCKERHUB_USERNAME" ]]; then
             DOCKER_IMAGE="${DOCKERHUB_USERNAME}/sub2api"
             MESSAGE+="# Docker Hub"$'\n'
             MESSAGE+="docker pull ${DOCKER_IMAGE}:${IMAGE_VERSION}"$'\n'
@@ -252,19 +439,18 @@ jobs:
           MESSAGE+="docker pull ${GHCR_IMAGE}:${VERSION}"$'\n'
           MESSAGE+="\`\`\`"$'\n'$'\n'
           MESSAGE+="🔗 *相关链接:*"$'\n'
-          MESSAGE+="• [GitHub Release](https://github.com/${REPO}/releases/tag/${TAG_NAME})"$'\n'
-          if [ -n "$DOCKERHUB_USERNAME" ]; then
+          MESSAGE+="• [GitHub Release](https://github.com/${REPOSITORY}/releases/tag/${RELEASE_TAG})"$'\n'
+          if [[ -n "$DOCKERHUB_USERNAME" ]]; then
             MESSAGE+="• [Docker Hub](https://hub.docker.com/r/${DOCKER_IMAGE})"$'\n'
           fi
-          MESSAGE+="• [GitHub Packages](https://github.com/${REPO}/pkgs/container/personal_sub2)"$'\n'$'\n'
-          MESSAGE+="#Sub2API #Release #${TAG_NAME//./_}"
+          MESSAGE+="• [GitHub Packages](https://github.com/${REPOSITORY}/pkgs/container/personal_sub2)"$'\n'$'\n'
+          MESSAGE+="#Sub2API #Release #${RELEASE_TAG//./_}"
 
-          # 发送消息
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
-              --arg chat_id "${TELEGRAM_CHAT_ID}" \
-              --arg text "${MESSAGE}" \
+              --arg chat_id "$TELEGRAM_CHAT_ID" \
+              --arg text "$MESSAGE" \
               '{
                 chat_id: $chat_id,
                 text: $text,
@@ -273,7 +459,7 @@ jobs:
               }')"
 
   sync-version-file:
-    needs: [release]
+    needs: [resolve_release, release]
     if: ${{ needs.release.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -283,23 +469,30 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
 
       - name: Sync VERSION file to released tag
+        env:
+          RELEASE_TAG: ${{ needs.resolve_release.outputs.tag_name }}
+          RELEASE_TARGET_COMMIT: ${{ needs.resolve_release.outputs.target_commit }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION=${{ github.event.inputs.tag }}
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
-          fi
-
-          CURRENT_VERSION=$(tr -d '\r\n' < backend/cmd/server/VERSION || true)
-          if [ "$CURRENT_VERSION" = "$VERSION" ]; then
-            echo "VERSION file already matches $VERSION"
+          set -euo pipefail
+          default_branch_commit="$(git rev-parse --verify 'HEAD^{commit}')"
+          if [[ "$default_branch_commit" != "$RELEASE_TARGET_COMMIT" ]]; then
+            echo "Skipping VERSION sync: release tag $RELEASE_TAG resolves to $RELEASE_TARGET_COMMIT, but default branch $DEFAULT_BRANCH is at $default_branch_commit."
+            echo "VERSION is only synced when the release tag is the current default branch tip."
             exit 0
           fi
 
-          echo "$VERSION" > backend/cmd/server/VERSION
+          current_version="$(tr -d '\r\n' < backend/cmd/server/VERSION || true)"
+          if [[ "$current_version" == "$RELEASE_TAG" ]]; then
+            echo "VERSION file already matches $RELEASE_TAG"
+            exit 0
+          fi
+
+          printf '%s\n' "$RELEASE_TAG" > backend/cmd/server/VERSION
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add backend/cmd/server/VERSION
-          git commit -m "chore: sync VERSION to ${VERSION} [skip ci]"
-          git push origin HEAD:${{ github.event.repository.default_branch }}
+          git commit -m "chore: sync VERSION to ${RELEASE_TAG} [skip ci]"
+          git push origin "HEAD:${DEFAULT_BRANCH}"

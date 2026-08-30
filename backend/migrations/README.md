@@ -71,13 +71,8 @@ Why?
    - If rollback is needed, create a new migration file to revert
 
 3. **Test locally**
-   ```bash
-   # Apply migration
-   make migrate-up
-
-   # Test rollback
-   make migrate-down
-   ```
+   - Run the normal application startup/migration path against a disposable development database; pending files are applied automatically by the runner.
+   - Verify schema and data integrity. If recovery behavior is required, test a database backup restore or a compensating forward migration in the disposable environment.
 
 4. **Commit and deploy**
    ```bash
@@ -122,11 +117,11 @@ touch migrations/018_your_new_change.sql
 
 1. **Keep migrations small and focused**
    - One logical change per migration
-   - Easier to review and rollback
+   - Easier to review and recover
 
-2. **Write reversible migrations**
-   - Always provide a working Down migration
-   - Test rollback before committing
+2. **Design safe forward-only migrations**
+   - Do not add Up/Down sections or require a Down migration; the runner executes the complete file as forward SQL.
+   - If a change must be reversed, use a tested database backup restore or create a new compensating forward migration.
 
 3. **Use transactions**
    - Wrap DDL statements in transactions when possible
@@ -137,9 +132,9 @@ touch migrations/018_your_new_change.sql
    - Document any special considerations
 
 5. **Test in development first**
-   - Apply migration locally
+   - Apply the migration through normal service startup and the migration runner
    - Verify data integrity
-   - Test rollback
+   - Test the documented recovery procedure (backup restore or compensating migration) when applicable
 
 ## Example Migration
 
@@ -167,8 +162,8 @@ See "If You Accidentally Modified an Applied Migration" above.
 # Check migration status
 psql -d sub2api -c "SELECT * FROM schema_migrations ORDER BY applied_at DESC;"
 
-# Manually rollback if needed (use with caution)
-# Better to fix the migration and create a new one
+# The runner has no automatic down-migration operation. For recovery, use a
+# tested database backup restore or create a new compensating forward migration.
 ```
 
 ### Need to Skip a Migration (Emergency Only)

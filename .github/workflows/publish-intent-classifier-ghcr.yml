@@ -10,41 +10,135 @@ on:
         description: 'Existing release tag to publish'
         required: true
         type: string
-        default: 'v0.1.178-P1'
+        default: 'v0.1.183-P1'
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: publish-intent-classifier-${{ github.ref }}-${{ inputs.version || '' }}
-  cancel-in-progress: true
+  group: publish-intent-classifier
+  cancel-in-progress: false
 
 env:
   IMAGE_NAME: ghcr.io/general-brash/personal_sub2-intent-classifier
-  VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
 
 jobs:
+  resolve_release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.resolve.outputs.tag_name }}
+      target_commit: ${{ steps.resolve.outputs.target_commit }}
+      publish_moving_tags: ${{ steps.resolve.outputs.publish_moving_tags }}
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag and resolve immutable commit
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag_name="$INPUT_VERSION"
+            publish_moving_tags="false"
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            tag_name="$REF_NAME"
+            publish_moving_tags="true"
+          else
+            echo "Unsupported publish event: $EVENT_NAME" >&2
+            exit 1
+          fi
+
+          tag_regex='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([-.][0-9A-Za-z]+)*)?$'
+          if [[ ! "$tag_name" =~ $tag_regex ]]; then
+            echo "Invalid release tag format: $tag_name" >&2
+            echo 'Expected v<major>.<minor>.<patch> with an optional semver prerelease suffix, such as v0.1.183 or v0.1.183-P1.' >&2
+            exit 1
+          fi
+
+          if ! git fetch --force --no-tags origin "refs/tags/${tag_name}:refs/tags/${tag_name}"; then
+            echo "Release tag does not exist on origin: $tag_name" >&2
+            exit 1
+          fi
+          if ! git show-ref --verify --quiet "refs/tags/$tag_name"; then
+            echo "Release tag is unavailable after fetch: $tag_name" >&2
+            exit 1
+          fi
+
+          target_commit="$(git rev-parse --verify "refs/tags/$tag_name^{}")"
+          if [[ ! "$target_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Resolved release target is not a commit: $target_commit" >&2
+            exit 1
+          fi
+
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            if [[ ! "$EVENT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Invalid event SHA for tag push: $EVENT_SHA" >&2
+              exit 1
+            fi
+            if [[ "$target_commit" != "$EVENT_SHA" ]]; then
+              echo "Release tag $tag_name resolves to $target_commit, but the tag event targets $EVENT_SHA" >&2
+              exit 1
+            fi
+          fi
+
+          printf 'tag_name=%s\n' "$tag_name" >> "$GITHUB_OUTPUT"
+          printf 'target_commit=%s\n' "$target_commit" >> "$GITHUB_OUTPUT"
+          printf 'publish_moving_tags=%s\n' "$publish_moving_tags" >> "$GITHUB_OUTPUT"
+          echo "Resolved $tag_name to immutable commit $target_commit"
+
   publish:
+    needs: resolve_release
     name: Build and publish classifier image
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.resolve_release.outputs.tag_name }}
+      PUBLISH_MOVING_TAGS: ${{ needs.resolve_release.outputs.publish_moving_tags }}
 
     steps:
       - name: Check out release source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+          fetch-depth: 0
+          ref: ${{ needs.resolve_release.outputs.target_commit }}
 
-      - name: Resolve source metadata
+      - name: Verify release checkout and tag
         id: source
+        env:
+          RELEASE_TAG: ${{ needs.resolve_release.outputs.tag_name }}
+          EXPECTED_TARGET_COMMIT: ${{ needs.resolve_release.outputs.target_commit }}
         shell: bash
         run: |
-          if [[ ! "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release version: ${VERSION}" >&2
+          set -euo pipefail
+
+          actual_commit="$(git rev-parse --verify 'HEAD^{commit}')"
+          if [[ "$actual_commit" != "$EXPECTED_TARGET_COMMIT" ]]; then
+            echo "Checked-out commit $actual_commit does not match $EXPECTED_TARGET_COMMIT" >&2
             exit 1
           fi
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+          if ! git fetch --force --no-tags origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"; then
+            echo "Release tag is unavailable during classifier publish: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          tag_commit="$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{}")"
+          if [[ "$tag_commit" != "$EXPECTED_TARGET_COMMIT" ]]; then
+            echo "Release tag $RELEASE_TAG moved from $EXPECTED_TARGET_COMMIT to $tag_commit" >&2
+            exit 1
+          fi
+
+          printf 'sha=%s\n' "$EXPECTED_TARGET_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "Release checkout and tag $RELEASE_TAG both resolve to $EXPECTED_TARGET_COMMIT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -66,7 +160,7 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ env.VERSION }}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ needs.resolve_release.outputs.publish_moving_tags == 'true' }}
             type=raw,value=sha-${{ steps.source.outputs.sha }}
           labels: |
             org.opencontainers.image.title=Sub2API Intent Classifier

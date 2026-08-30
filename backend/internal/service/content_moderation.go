@@ -31,6 +31,12 @@ const (
 	ContentModerationModeObserve  = "observe"
 	ContentModerationModePreBlock = "pre_block"
 
+	// ContentModerationFailurePolicyFailOpen preserves the historical behavior
+	// of allowing gateway traffic when the moderation dependency cannot decide.
+	ContentModerationFailurePolicyFailOpen   = "fail_open"
+	ContentModerationFailurePolicyFailClosed = "fail_closed"
+	ContentModerationErrorCodeUnavailable    = "content_moderation_unavailable"
+
 	contentModerationAPIKeysModeAppend  = "append"
 	contentModerationAPIKeysModeReplace = "replace"
 
@@ -72,6 +78,7 @@ const (
 	defaultContentModerationViolationWindowHours = 720
 	defaultContentModerationBlockHTTPStatus      = http.StatusForbidden
 	defaultContentModerationBlockMessage         = "内容审计命中风险规则，请调整输入后重试"
+	defaultContentModerationUnavailableMessage   = "内容审核服务暂时不可用，请稍后重试"
 	defaultContentModerationRetryCount           = 2
 	maxContentModerationRetryCount               = 5
 	defaultContentModerationHitRetentionDays     = 180
@@ -139,10 +146,11 @@ func ContentModerationCategories() []string {
 }
 
 type ContentModerationConfig struct {
-	Enabled bool   `json:"enabled"`
-	Mode    string `json:"mode"`
-	BaseURL string `json:"base_url"`
-	Model   string `json:"model"`
+	Enabled       bool   `json:"enabled"`
+	Mode          string `json:"mode"`
+	FailurePolicy string `json:"failure_policy"`
+	BaseURL       string `json:"base_url"`
+	Model         string `json:"model"`
 	// ProxyID 指定审计请求使用的代理服务器（IP管理-代理服务器），nil 表示直连。
 	ProxyID              *int64                                 `json:"proxy_id,omitempty"`
 	APIKey               string                                 `json:"api_key,omitempty"`
@@ -178,6 +186,7 @@ type ContentModerationConfig struct {
 type ContentModerationConfigView struct {
 	Enabled                        bool                            `json:"enabled"`
 	Mode                           string                          `json:"mode"`
+	FailurePolicy                  string                          `json:"failure_policy"`
 	BaseURL                        string                          `json:"base_url"`
 	Model                          string                          `json:"model"`
 	ProxyID                        *int64                          `json:"proxy_id"`
@@ -267,10 +276,11 @@ type ContentModerationTestAuditResult struct {
 }
 
 type UpdateContentModerationConfigInput struct {
-	Enabled *bool   `json:"enabled"`
-	Mode    *string `json:"mode"`
-	BaseURL *string `json:"base_url"`
-	Model   *string `json:"model"`
+	Enabled       *bool   `json:"enabled"`
+	Mode          *string `json:"mode"`
+	FailurePolicy *string `json:"failure_policy"`
+	BaseURL       *string `json:"base_url"`
+	Model         *string `json:"model"`
 	// ProxyID nil 表示不修改；<=0 表示清除代理（恢复直连）；>0 表示指定代理。
 	ProxyID                        *int64                        `json:"proxy_id"`
 	APIKey                         *string                       `json:"api_key"`
@@ -376,9 +386,11 @@ func (in ContentModerationInput) Hash() string {
 type ContentModerationDecision struct {
 	Allowed         bool               `json:"allowed"`
 	Blocked         bool               `json:"blocked"`
+	Unavailable     bool               `json:"unavailable,omitempty"`
 	Flagged         bool               `json:"flagged"`
 	Message         string             `json:"message"`
 	StatusCode      int                `json:"status_code"`
+	ErrorCode       string             `json:"error_code,omitempty"`
 	InputHash       string             `json:"input_hash,omitempty"`
 	HighestCategory string             `json:"highest_category"`
 	HighestScore    float64            `json:"highest_score"`
@@ -438,6 +450,7 @@ type ContentModerationRuntimeStatus struct {
 	Enabled                      bool                            `json:"enabled"`
 	RiskControlEnabled           bool                            `json:"risk_control_enabled"`
 	Mode                         string                          `json:"mode"`
+	FailurePolicy                string                          `json:"failure_policy"`
 	WorkerCount                  int                             `json:"worker_count"`
 	MaxWorkers                   int                             `json:"max_workers"`
 	ActiveWorkers                int                             `json:"active_workers"`
@@ -628,6 +641,9 @@ func (s *ContentModerationService) UpdateConfig(ctx context.Context, input Updat
 	}
 	if input.Mode != nil {
 		cfg.Mode = strings.TrimSpace(*input.Mode)
+	}
+	if input.FailurePolicy != nil {
+		cfg.FailurePolicy = strings.TrimSpace(*input.FailurePolicy)
 	}
 	if input.BaseURL != nil {
 		cfg.BaseURL = strings.TrimSpace(*input.BaseURL)
@@ -820,7 +836,8 @@ func (s *ContentModerationService) TestAPIKeys(ctx context.Context, input TestCo
 
 func (s *ContentModerationService) Check(ctx context.Context, input ContentModerationCheckInput) (*ContentModerationDecision, error) {
 	allow := &ContentModerationDecision{Allowed: true, Action: ContentModerationActionAllow}
-	if s == nil || s.settingRepo == nil || s.repo == nil {
+	// 没有配置仓储时无法知道是否启用了高安全策略；为兼容旧的未配置部署保留放行。
+	if s == nil || s.settingRepo == nil {
 		slog.Info("content_moderation.skip_unavailable",
 			"user_id", input.UserID,
 			"api_key_id", input.APIKeyID,
@@ -831,14 +848,25 @@ func (s *ContentModerationService) Check(ctx context.Context, input ContentModer
 	}
 	runtimeSnapshot, err := s.loadRuntimeSnapshot(ctx)
 	if err != nil {
-		slog.Warn("content_moderation.skip_config_load_failed",
+		slog.Warn("content_moderation.config_activation_failed",
 			"user_id", input.UserID,
 			"api_key_id", input.APIKeyID,
 			"group_id", contentModerationLogGroupID(input.GroupID),
 			"endpoint", input.Endpoint,
 			"protocol", input.Protocol,
 			"error", err)
-		return allow, nil
+		// 配置无法激活时策略本身未知，采用保守的拒绝而不是绕过审核。
+		return contentModerationUnavailableDecision(), nil
+	}
+	if runtimeSnapshot == nil || runtimeSnapshot.config == nil {
+		slog.Warn("content_moderation.config_activation_failed",
+			"user_id", input.UserID,
+			"api_key_id", input.APIKeyID,
+			"group_id", contentModerationLogGroupID(input.GroupID),
+			"endpoint", input.Endpoint,
+			"protocol", input.Protocol,
+			"error", "runtime snapshot is empty")
+		return contentModerationUnavailableDecision(), nil
 	}
 	if !runtimeSnapshot.riskControlEnabled {
 		slog.Info("content_moderation.skip_feature_disabled",
@@ -870,6 +898,7 @@ func (s *ContentModerationService) Check(ctx context.Context, input ContentModer
 		"configured_models", cfg.ModelFilter.Models,
 		"in_model_scope", inModelScope,
 		"sample_rate", cfg.SampleRate,
+		"failure_policy", cfg.FailurePolicy,
 		"api_key_count", len(cfg.apiKeys()),
 		"pre_hash_check_enabled", cfg.PreHashCheckEnabled,
 		"record_non_hits", cfg.RecordNonHits)
@@ -925,6 +954,26 @@ func (s *ContentModerationService) Check(ctx context.Context, input ContentModer
 			"endpoint", input.Endpoint,
 			"protocol", input.Protocol,
 			"body_bytes", len(input.Body))
+		return allow, nil
+	}
+	if s.repo == nil {
+		if cfg.shouldFailClosed() {
+			slog.Warn("content_moderation.service_unavailable_fail_closed",
+				"user_id", input.UserID,
+				"api_key_id", input.APIKeyID,
+				"group_id", contentModerationLogGroupID(input.GroupID),
+				"endpoint", input.Endpoint,
+				"protocol", input.Protocol,
+				"failure_policy", cfg.FailurePolicy)
+			return contentModerationUnavailableDecision(), nil
+		}
+		slog.Info("content_moderation.skip_unavailable",
+			"user_id", input.UserID,
+			"api_key_id", input.APIKeyID,
+			"group_id", contentModerationLogGroupID(input.GroupID),
+			"endpoint", input.Endpoint,
+			"protocol", input.Protocol,
+			"failure_policy", cfg.FailurePolicy)
 		return allow, nil
 	}
 	content.Normalize()
@@ -1012,8 +1061,9 @@ func (s *ContentModerationService) Check(ctx context.Context, input ContentModer
 			"api_key_id", input.APIKeyID,
 			"group_id", contentModerationLogGroupID(input.GroupID),
 			"endpoint", input.Endpoint,
-			"protocol", input.Protocol)
-		return allow, nil
+			"protocol", input.Protocol,
+			"failure_policy", cfg.FailurePolicy)
+		return contentModerationFailureDecision(cfg), nil
 	}
 	if cfg.Mode == ContentModerationModeObserve {
 		slog.Info("content_moderation.enqueue_observe",
@@ -1031,7 +1081,6 @@ func (s *ContentModerationService) Check(ctx context.Context, input ContentModer
 }
 
 func (s *ContentModerationService) checkSync(ctx context.Context, input ContentModerationCheckInput, cfg *ContentModerationConfig, content ContentModerationInput, hashText string, queueDelay *int, allowBlock bool) *ContentModerationDecision {
-	allow := &ContentModerationDecision{Allowed: true, Action: ContentModerationActionAllow}
 	trackPreBlock := queueDelay == nil && allowBlock && cfg != nil && cfg.Mode == ContentModerationModePreBlock
 	if trackPreBlock {
 		s.preBlockActive.Add(1)
@@ -1051,6 +1100,7 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 			"endpoint", input.Endpoint,
 			"protocol", input.Protocol,
 			"mode", cfg.Mode,
+			"failure_policy", cfg.FailurePolicy,
 			"allow_block", allowBlock,
 			"queue_delay_ms", queueDelay,
 			"latency_ms", latency,
@@ -1062,7 +1112,7 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 			log := s.buildLog(input, cfg, ContentModerationActionError, false, "", 0, nil, content.ExcerptText(), &latency, queueDelay, err.Error())
 			_ = s.repo.CreateLog(ctx, log)
 		}
-		return allow
+		return contentModerationFailureDecision(cfg)
 	}
 
 	flagged, highestCategory, highestScore := evaluateModerationScores(result.CategoryScores, cfg.Thresholds)
@@ -1413,6 +1463,7 @@ func (s *ContentModerationService) GetStatus(ctx context.Context) (*ContentModer
 		Enabled:                      cfg.Enabled,
 		RiskControlEnabled:           riskEnabled,
 		Mode:                         cfg.Mode,
+		FailurePolicy:                cfg.FailurePolicy,
 		WorkerCount:                  cfg.WorkerCount,
 		MaxWorkers:                   maxContentModerationWorkerCount,
 		ActiveWorkers:                active,
@@ -1492,14 +1543,15 @@ func (s *ContentModerationService) loadConfig(ctx context.Context) (*ContentMode
 
 func parseContentModerationConfig(raw string) (*ContentModerationConfig, error) {
 	cfg := defaultContentModerationConfig()
-	if strings.TrimSpace(raw) == "" {
-		cfg.normalize()
-		return cfg, nil
-	}
-	if err := json.Unmarshal([]byte(raw), cfg); err != nil {
-		return nil, infraerrors.BadRequest("INVALID_CONTENT_MODERATION_CONFIG", "内容审计配置不是有效 JSON")
+	if strings.TrimSpace(raw) != "" {
+		if err := json.Unmarshal([]byte(raw), cfg); err != nil {
+			return nil, infraerrors.BadRequest("INVALID_CONTENT_MODERATION_CONFIG", "内容审计配置不是有效 JSON")
+		}
 	}
 	cfg.normalize()
+	if err := validateContentModerationFailurePolicyForMode(cfg.FailurePolicy, cfg.Mode); err != nil {
+		return nil, err
+	}
 	return cfg, nil
 }
 
@@ -1651,6 +1703,9 @@ func (s *ContentModerationService) validateConfig(ctx context.Context, cfg *Cont
 	case ContentModerationModeOff, ContentModerationModeObserve, ContentModerationModePreBlock:
 	default:
 		return infraerrors.BadRequest("INVALID_CONTENT_MODERATION_MODE", "内容审计模式无效")
+	}
+	if err := validateContentModerationFailurePolicyForMode(cfg.FailurePolicy, cfg.Mode); err != nil {
+		return err
 	}
 	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
 		return infraerrors.BadRequest("INVALID_CONTENT_MODERATION_BASE_URL", "OpenAI Base URL 无效")
@@ -2081,10 +2136,68 @@ func (s *ContentModerationService) siteName(ctx context.Context) string {
 	return strings.TrimSpace(name)
 }
 
+func normalizeContentModerationFailurePolicy(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "":
+		return ContentModerationFailurePolicyFailOpen
+	case ContentModerationFailurePolicyFailOpen:
+		return ContentModerationFailurePolicyFailOpen
+	case ContentModerationFailurePolicyFailClosed:
+		return ContentModerationFailurePolicyFailClosed
+	default:
+		// Keep unknown values visible so validation rejects them instead of
+		// silently downgrading a malformed high-security configuration.
+		return strings.ToLower(strings.TrimSpace(raw))
+	}
+}
+
+func validateContentModerationFailurePolicy(policy string) error {
+	switch policy {
+	case ContentModerationFailurePolicyFailOpen, ContentModerationFailurePolicyFailClosed:
+		return nil
+	default:
+		return infraerrors.BadRequest("INVALID_CONTENT_MODERATION_FAILURE_POLICY", "内容审计失败策略无效")
+	}
+}
+
+func validateContentModerationFailurePolicyForMode(policy, mode string) error {
+	if err := validateContentModerationFailurePolicy(policy); err != nil {
+		return err
+	}
+	if policy == ContentModerationFailurePolicyFailClosed && mode == ContentModerationModeObserve {
+		return infraerrors.BadRequest("INVALID_CONTENT_MODERATION_FAILURE_POLICY", "fail_closed 失败策略仅支持 pre_block 模式")
+	}
+	return nil
+}
+
+func (cfg *ContentModerationConfig) shouldFailClosed() bool {
+	return cfg != nil && cfg.FailurePolicy == ContentModerationFailurePolicyFailClosed
+}
+
+func contentModerationUnavailableDecision() *ContentModerationDecision {
+	return &ContentModerationDecision{
+		Allowed:     false,
+		Blocked:     true, // 保持旧版网关 gate 语义，同时用 503/Unavailable 表示依赖不可用。
+		Unavailable: true,
+		Message:     defaultContentModerationUnavailableMessage,
+		StatusCode:  http.StatusServiceUnavailable,
+		ErrorCode:   ContentModerationErrorCodeUnavailable,
+		Action:      ContentModerationActionError,
+	}
+}
+
+func contentModerationFailureDecision(cfg *ContentModerationConfig) *ContentModerationDecision {
+	if cfg == nil || !cfg.shouldFailClosed() {
+		return &ContentModerationDecision{Allowed: true, Action: ContentModerationActionAllow}
+	}
+	return contentModerationUnavailableDecision()
+}
+
 func defaultContentModerationConfig() *ContentModerationConfig {
 	return &ContentModerationConfig{
 		Enabled:              false,
 		Mode:                 ContentModerationModePreBlock,
+		FailurePolicy:        ContentModerationFailurePolicyFailOpen,
 		BaseURL:              defaultContentModerationBaseURL,
 		Model:                defaultContentModerationModel,
 		TimeoutMS:            defaultContentModerationTimeoutMS,
@@ -2143,6 +2256,7 @@ func (cfg *ContentModerationConfig) normalize() {
 	if cfg.Mode == "" {
 		cfg.Mode = ContentModerationModePreBlock
 	}
+	cfg.FailurePolicy = normalizeContentModerationFailurePolicy(cfg.FailurePolicy)
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = defaultContentModerationBaseURL
 	}
@@ -2416,6 +2530,7 @@ func (s *ContentModerationService) configView(cfg *ContentModerationConfig) *Con
 	return &ContentModerationConfigView{
 		Enabled:                        cfg.Enabled,
 		Mode:                           cfg.Mode,
+		FailurePolicy:                  cfg.FailurePolicy,
 		BaseURL:                        cfg.BaseURL,
 		Model:                          cfg.Model,
 		ProxyID:                        cloneInt64Ptr(cfg.ProxyID),

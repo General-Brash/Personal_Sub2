@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
 // Process-local per-account model soft-blocks for Grok free-usage that names a
@@ -31,12 +33,13 @@ const (
 )
 
 func grokModelQuotaBlockKey(accountID int64, model string) string {
+	model = xai.CanonicalGrokRuntimeModelID(model)
 	return strings.TrimSpace(strings.ToLower(model)) + "|" + strconv.FormatInt(accountID, 10)
 }
 
 // markGrokModelQuotaBlock soft-blocks accountID for model until the given time.
 func markGrokModelQuotaBlock(accountID int64, model string, until time.Time) {
-	model = strings.TrimSpace(model)
+	model = xai.CanonicalGrokRuntimeModelID(model)
 	if accountID <= 0 || model == "" || until.IsZero() {
 		return
 	}
@@ -58,7 +61,7 @@ const (
 // markGrokModelTransientBlock soft-blocks a single model for a short capacity
 // burst without the free-usage 20m floor (and without unscheduling the account).
 func markGrokModelTransientBlock(accountID int64, model string, until time.Time) {
-	model = strings.TrimSpace(model)
+	model = xai.CanonicalGrokRuntimeModelID(model)
 	if accountID <= 0 || model == "" || until.IsZero() {
 		return
 	}
@@ -89,7 +92,7 @@ func storeGrokModelQuotaBlock(accountID int64, model string, until, now time.Tim
 
 // isGrokModelQuotaBlocked reports whether this account cannot serve model now.
 func isGrokModelQuotaBlocked(accountID int64, model string, now time.Time) bool {
-	model = strings.TrimSpace(model)
+	model = xai.CanonicalGrokRuntimeModelID(model)
 	if accountID <= 0 || model == "" {
 		return false
 	}

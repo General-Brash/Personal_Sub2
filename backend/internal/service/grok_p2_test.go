@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,6 +40,44 @@ func TestGrokModelQuotaBlockFiltersMappedUpstreamModel(t *testing.T) {
 	}
 
 	require.Empty(t, filterGrokModelQuotaBlockedAccounts([]Account{account}, "gpt-5", time.Now()))
+}
+
+func TestGrokModelQuotaBlockFilterUsesRuntimeCrossClientDefault(t *testing.T) {
+	original := xai.RuntimeModelMappingOptions()
+	t.Cleanup(func() { xai.SetRuntimeModelMappingOptions(original) })
+	xai.SetRuntimeModelMappingOptions(xai.ModelMappingOptions{
+		DefaultText:          "grok-4.6",
+		EnableCrossClientMap: true,
+	})
+
+	id := time.Now().UnixNano()%1_000_000 + 8000
+	account := Account{ID: id, Platform: PlatformGrok, Type: AccountTypeOAuth}
+	markGrokModelQuotaBlock(id, "grok-4.6", time.Now().Add(time.Hour))
+	require.Empty(t, filterGrokModelQuotaBlockedAccounts([]Account{account}, "gpt-5", time.Now()))
+
+	xai.SetRuntimeModelMappingOptions(xai.ModelMappingOptions{
+		DefaultText:          "grok-4.6",
+		EnableCrossClientMap: false,
+	})
+	require.Len(t, filterGrokModelQuotaBlockedAccounts([]Account{account}, "gpt-5", time.Now()), 1,
+		"关闭 cross-client 映射后，gpt-5 不应复用 grok-4.6 的模型冷却键")
+}
+
+func TestGrokFailurePayloadCanonicalizesRuntimeBuildIDs(t *testing.T) {
+	require.Equal(t, "grok-4.6", normalizeGrokFailureModelID(" grok-4.6-build. "))
+	require.Equal(t, "grok-4.5", extractGrokFailureModel(`model grok-4.5-build`, nil, "grok-4.6"))
+	require.Equal(t, "grok-4.6", extractGrokFailureModel("", []byte(`{"error":{"model":"grok-4.6-build"}}`), ""))
+}
+
+func TestGrokBuildRuntimeIDsShareQuotaAndTransientCooldownKeys(t *testing.T) {
+	id := time.Now().UnixNano()%1_000_000 + 9000
+	now := time.Now()
+	markGrokModelQuotaBlock(id, "grok-4.6-build", now.Add(time.Hour))
+	require.True(t, isGrokModelQuotaBlocked(id, "grok-4.6", now))
+
+	transientID := id + 1
+	markGrokModelTransientBlock(transientID, "grok-4.5-build", now.Add(time.Minute))
+	require.True(t, isGrokModelQuotaBlocked(transientID, "grok-4.5", now))
 }
 
 func TestIsGrokModelSpecificFreeUsage(t *testing.T) {
