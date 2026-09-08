@@ -145,8 +145,12 @@ type AccountTestService struct {
 	httpUpstream              HTTPUpstream
 	cfg                       *config.Config
 	settingService            *SettingService
+	pluginManager             *PluginManager
 	tlsFPProfileService       *TLSFingerprintProfileService
 	agentIdentityTaskMu       sync.Mutex
+	modelMetadataRegistryMu   sync.Mutex
+	modelMetadataRegistry     map[string]modelsDevProvider
+	modelMetadataRegistryAt   time.Time
 	agentIdentityWS           agentIdentityWSConnectionInvalidator
 	// grokWSDialer is optional; realtime account tests use the default OpenAI-style
 	// WS dialer when nil (supports proxy + coder/websocket handshake).
@@ -156,6 +160,12 @@ type AccountTestService struct {
 func (s *AccountTestService) SetSettingService(settingService *SettingService) {
 	if s != nil {
 		s.settingService = settingService
+	}
+}
+
+func (s *AccountTestService) SetPluginManager(pluginManager *PluginManager) {
+	if s != nil {
+		s.pluginManager = pluginManager
 	}
 }
 

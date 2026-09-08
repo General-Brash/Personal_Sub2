@@ -133,6 +133,12 @@ func openAIWSPassthroughPolicyModelFromSessionFrame(account *Account, payload []
 	return normalizeOpenAIModelForUpstream(account, account.GetMappedModel(original))
 }
 
+func captureOpenAIWSRequestedReasoningEffort(hooks *OpenAIWSIngressHooks, turn int, payload []byte, model string) {
+	if hooks != nil && hooks.CaptureRequestedReasoningEffort != nil {
+		hooks.CaptureRequestedReasoningEffort(turn, payload, model)
+	}
+}
+
 type openAIWSPassthroughUsageMeta struct {
 	serviceTier     atomic.Pointer[string]
 	reasoningEffort atomic.Pointer[string]
@@ -681,12 +687,18 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		}
 		firstClientMessage = liteFirstMessage
 	}
-	if hooks != nil && (hooks.MaxReasoningEffort != "" || len(hooks.ReasoningEffortMappings) > 0) {
-		if capped, changed := ApplyOpenAIReasoningEffortPolicy(firstClientMessage, hooks.MaxReasoningEffort, hooks.ReasoningEffortMappings); changed {
-			firstClientMessage = capped
-		}
-	}
 	requestModel := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "model").String())
+	requestedEffortModel := requestModel
+	if hooks != nil {
+		requestedEffortModel = firstNonEmpty(requestModel, hooks.InitialRequestModel)
+	}
+	captureOpenAIWSRequestedReasoningEffort(hooks, 1, firstClientMessage, requestedEffortModel)
+	if capped, policyErr := applyOpenAIWSReasoningEffortPolicy(firstClientMessage, hooks); policyErr != nil {
+		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+		return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, policyErr.Error(), policyErr)
+	} else {
+		firstClientMessage = capped
+	}
 	requestPreviousResponseID := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "previous_response_id").String())
 	logOpenAIWSV2Passthrough(
 		"relay_start account_id=%d model=%s previous_response_id=%s first_message_type=%s first_message_bytes=%d",
@@ -769,6 +781,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	usageMeta.initFromFirstFrame(firstClientMessage, capturedSessionModel)
 	promptCacheKey := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "prompt_cache_key").String())
 
+	_, initialUpstreamModel := usageMeta.turnModels(capturedSessionModel)
+	SetOpsUpstreamModel(c, initialUpstreamModel)
 	wsURL, err := s.buildOpenAIResponsesWSURL(account)
 	if err != nil {
 		return fmt.Errorf("build ws url: %w", err)
@@ -956,6 +970,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					}
 				}()
 			}
+			turnNo := int(completedTurns.Load()) + 1
+			if turnNo < 2 {
+				turnNo = 2
+			}
+			requestModelForThisFrame := ""
 			if isResponseCreate {
 				if account.IsOpenAIOAuth() && isOpenAIResponsesLiteWebSocketPayload(payload) {
 					litePayload, _, liteErr := normalizeOpenAIResponsesLiteToolsPayload(payload)
@@ -964,21 +983,16 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					}
 					payload = litePayload
 				}
-				if hooks != nil && (hooks.MaxReasoningEffort != "" || len(hooks.ReasoningEffortMappings) > 0) {
-					if capped, changed := ApplyOpenAIReasoningEffortPolicy(payload, hooks.MaxReasoningEffort, hooks.ReasoningEffortMappings); changed {
-						payload = capped
-					}
-				}
-			}
-			turnNo := int(completedTurns.Load()) + 1
-			if turnNo < 2 {
-				turnNo = 2
-			}
-			requestModelForThisFrame := ""
-			if isResponseCreate {
 				requestModelForThisFrame = usageMeta.requestModelForFrame(payload)
 				if requestModelForThisFrame == "" {
 					requestModelForThisFrame = capturedSessionModel
+				}
+				captureOpenAIWSRequestedReasoningEffort(hooks, turnNo, payload, requestModelForThisFrame)
+				if capped, policyErr := applyOpenAIWSReasoningEffortPolicy(payload, hooks); policyErr != nil {
+					MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+					return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, policyErr.Error(), policyErr)
+				} else {
+					payload = capped
 				}
 				if hooks != nil && hooks.BeforeRequest != nil {
 					if err := hooks.BeforeRequest(turnNo, payload, requestModelForThisFrame); err != nil {
@@ -1038,6 +1052,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			//     service_tier 时按 default 处理，billing 应如实反映。
 			if policyErr == nil && blocked == nil && isResponseCreate {
 				usageMeta.updateFromResponseCreate(out, model, requestModelForThisFrame)
+				_, actualModel := usageMeta.turnModels(requestModelForThisFrame)
+				SetOpsUpstreamModel(c, actualModel)
 				responseCreateAtCopy := responseCreateAt
 				acceptedTurnStartedAt.Store(&responseCreateAtCopy)
 				acceptedTurn = true
@@ -1235,6 +1251,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		},
 	})
 	if cause := context.Cause(ctx); cause != nil {
+		if isOpenAIWSSessionPreempted(ctx) {
+			return errOpenAIWSSessionPreempted
+		}
 		status := coderws.StatusGoingAway
 		reason := "websocket request canceled"
 		if errors.Is(cause, ErrOpenAIWSIngressLeaseLost) {
@@ -1260,6 +1279,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		UpstreamModel:                 openAIWSDifferentModel(resultRequestModel, resultUpstreamModel),
 		UpstreamResponseModel:         relayResult.ResponseModel,
 		UpstreamResponseModelConflict: relayResult.ResponseModelConflict,
+		UpstreamResponseServiceTier:   normalizeObservedOpenAIServiceTier(relayResult.ResponseServiceTier),
 		ServiceTier:                   usageMeta.serviceTier.Load(),
 		ReasoningEffort:               usageMeta.reasoningEffort.Load(),
 		Stream:                        true,
@@ -1309,10 +1329,13 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	var firstOutputTimeoutErr *openAIWSPassthroughFirstOutputTimeoutError
 	if errors.As(relayErr, &firstOutputTimeoutErr) {
 		deadline := firstOutputTimeoutErr.deadline
+		wsProxyID, wsProxyName := opsUpstreamWSProxyAttribution(account)
 		failoverErr := s.newOpenAIFirstOutputTimeoutError(
 			ctx,
 			c,
 			account,
+			wsProxyID,
+			wsProxyName,
 			deadline.startedAt,
 			deadline.requestModel,
 			deadline.reasoningEffort,

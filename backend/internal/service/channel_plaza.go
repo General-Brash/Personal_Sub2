@@ -10,6 +10,7 @@ import (
 // PlazaOfficialPricing 模型广场展示用的 LiteLLM 官方参考价（USD per token）。
 // 字段为 nil 表示官方数据中该项缺失（0 视为未配置）。
 type PlazaOfficialPricing struct {
+	Intervals         []PricingInterval
 	InputPrice        *float64
 	OutputPrice       *float64
 	CacheWritePrice   *float64 // 5m 缓存写入（= LiteLLM cache_creation）
@@ -19,10 +20,12 @@ type PlazaOfficialPricing struct {
 
 // PlazaModel 模型广场中单个模型条目：渠道定价 + 官方参考价。
 type PlazaModel struct {
-	Name            string
-	Platform        string
-	Pricing         *ChannelModelPricing
-	OfficialPricing *PlazaOfficialPricing
+	LongContextBasis ContextPricingBasis
+	TimePricing      *TimePricingSchedule
+	Name             string
+	Platform         string
+	Pricing          *ChannelModelPricing
+	OfficialPricing  *PlazaOfficialPricing
 }
 
 // PlazaGroup 模型广场中以分组为顶层的条目。
@@ -31,17 +34,18 @@ type PlazaModel struct {
 // 支持模型（普通分组按分组平台隔离，Composite 分组展开关联渠道已配置的
 // 具体平台），与「可用渠道」页口径一致。
 type PlazaGroup struct {
-	ID                 int64
-	Name               string
-	Description        string
-	Platform           string
-	SubscriptionType   string
-	RateMultiplier     float64
-	PeakRateEnabled    bool
-	PeakStart          string
-	PeakEnd            string
-	PeakRateMultiplier float64
-	IsExclusive        bool
+	LongContextPricingEnabled bool
+	ID                        int64
+	Name                      string
+	Description               string
+	Platform                  string
+	SubscriptionType          string
+	RateMultiplier            float64
+	PeakRateEnabled           bool
+	PeakStart                 string
+	PeakEnd                   string
+	PeakRateMultiplier        float64
+	IsExclusive               bool
 	// 图片按次实付倍率：ImageRateIndependent 为 true 时，图片计费模型的实付
 	// = 档位价 × ImageRateMultiplier，不乘分组/用户专属倍率（与计费口径一致）。
 	ImageRateIndependent bool
@@ -82,19 +86,20 @@ func (s *ChannelService) ListPlazaGroups(ctx context.Context) ([]PlazaGroup, err
 	for i := range groups {
 		g := &groups[i]
 		byGroup[g.ID] = &PlazaGroup{
-			ID:                   g.ID,
-			Name:                 g.Name,
-			Description:          g.Description,
-			Platform:             g.Platform,
-			SubscriptionType:     g.SubscriptionType,
-			RateMultiplier:       g.RateMultiplier,
-			PeakRateEnabled:      g.PeakRateEnabled,
-			PeakStart:            g.PeakStart,
-			PeakEnd:              g.PeakEnd,
-			PeakRateMultiplier:   g.PeakRateMultiplier,
-			IsExclusive:          g.IsExclusive,
-			ImageRateIndependent: g.ImageRateIndependent,
-			ImageRateMultiplier:  g.ImageRateMultiplier,
+			LongContextPricingEnabled: g.LongContextPricingEnabled,
+			ID:                        g.ID,
+			Name:                      g.Name,
+			Description:               g.Description,
+			Platform:                  g.Platform,
+			SubscriptionType:          g.SubscriptionType,
+			RateMultiplier:            g.RateMultiplier,
+			PeakRateEnabled:           g.PeakRateEnabled,
+			PeakStart:                 g.PeakStart,
+			PeakEnd:                   g.PeakEnd,
+			PeakRateMultiplier:        g.PeakRateMultiplier,
+			IsExclusive:               g.IsExclusive,
+			ImageRateIndependent:      g.ImageRateIndependent,
+			ImageRateMultiplier:       g.ImageRateMultiplier,
 		}
 		groupEnt[g.ID] = g
 		order = append(order, g.ID)
@@ -167,7 +172,8 @@ func (s *ChannelService) ListPlazaGroups(ctx context.Context) ([]PlazaGroup, err
 			return pg.Models[i].Platform < pg.Models[j].Platform
 		})
 		for j := range pg.Models {
-			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(pg.Models[j].Name, officialMemo)
+			s.fillPlazaDisplayPricing(ctx, &pg.Models[j], groupEnt[gid])
+			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
 		}
 		out = append(out, *pg)
 	}
@@ -230,12 +236,25 @@ func plazaImageDisplayPricing(p *ChannelModelPricing, g *Group) *ChannelModelPri
 
 // lookupOfficialPricing 查询模型的 LiteLLM 官方参考价，带 memo 避免同名模型重复转换。
 // pricingService 为 nil（测试场景）或查不到时返回 nil。
-func (s *ChannelService) lookupOfficialPricing(modelName string, memo map[string]*PlazaOfficialPricing) *PlazaOfficialPricing {
-	if s.pricingService == nil {
-		return nil
-	}
+func (s *ChannelService) lookupOfficialPricing(ctx context.Context, modelName string, memo map[string]*PlazaOfficialPricing) *PlazaOfficialPricing {
 	if cached, ok := memo[modelName]; ok {
 		return cached
+	}
+	if s.plazaBillingService != nil && s.plazaBillingService.HasIdentifiedTokenPricing(modelName) {
+		if mp, err := s.plazaBillingService.GetModelPricing(modelName); err == nil && mp != nil {
+			result := &PlazaOfficialPricing{InputPrice: nonZeroPtr(mp.InputPricePerToken), OutputPrice: nonZeroPtr(mp.OutputPricePerToken), CacheWritePrice: nonZeroPtr(mp.CacheCreationPricePerToken), CacheReadPrice: nonZeroPtr(mp.CacheReadPricePerToken)}
+			if mp.SupportsCacheBreakdown {
+				result.CacheWrite1hPrice = nonZeroPtr(mp.CacheCreation1hPrice)
+			}
+			if sched, err := s.plazaBillingService.ResolveContextPricingSchedule(ctx, s.plazaResolver, ContextPricingScheduleInput{Model: modelName}); err == nil && sched != nil && len(sched.Tiers) > 1 {
+				result.Intervals = plazaIntervalsFromTiers(sched.Tiers)
+			}
+			memo[modelName] = result
+			return result
+		}
+	}
+	if s.pricingService == nil {
+		return nil
 	}
 	var result *PlazaOfficialPricing
 	if lp := s.pricingService.GetModelPricing(modelName); lp != nil && !lp.TokenPricingAbsent {
@@ -253,4 +272,77 @@ func (s *ChannelService) lookupOfficialPricing(modelName string, memo map[string
 	}
 	memo[modelName] = result
 	return result
+}
+
+func (s *ChannelService) fillPlazaDisplayPricing(ctx context.Context, m *PlazaModel, g *Group) {
+	if s.plazaBillingService != nil && s.plazaResolver != nil {
+		sched, err := s.plazaBillingService.ResolveContextPricingSchedule(ctx, s.plazaResolver, ContextPricingScheduleInput{
+			Model:    m.Name,
+			Group:    g,
+			Platform: m.Platform,
+		})
+		if err == nil && sched != nil && len(sched.Tiers) > 0 {
+			m.Pricing = withDefaultMaxReasoningEffortMultiplier(plazaPricingFromSchedule(m.Pricing, sched), m.Name)
+			if len(sched.Tiers) > 1 {
+				m.LongContextBasis = sched.Basis
+			}
+			m.TimePricing = sched.TimePricing
+			return
+		}
+	}
+	m.Pricing = withDefaultMaxReasoningEffortMultiplier(plazaImageDisplayPricing(m.Pricing, g), m.Name)
+}
+
+func withDefaultMaxReasoningEffortMultiplier(pricing *ChannelModelPricing, model string) *ChannelModelPricing {
+	if pricing == nil || pricing.MaxReasoningEffortMultiplier != nil {
+		return pricing
+	}
+	multiplier := defaultMaxReasoningEffortMultiplier(model)
+	if multiplier == nil {
+		return pricing
+	}
+	cloned := pricing.Clone()
+	cloned.MaxReasoningEffortMultiplier = multiplier
+	return &cloned
+}
+
+// plazaPricingFromSchedule 把阶梯表压成展示用的 ChannelModelPricing：
+// 平价取首档单价，多档时 Intervals 逐档给出绝对单价；图片/按次字段沿用原始定价。
+func plazaPricingFromSchedule(raw *ChannelModelPricing, sched *ContextPricingSchedule) *ChannelModelPricing {
+	out := &ChannelModelPricing{BillingMode: BillingModeToken}
+	if raw != nil {
+		out.ImageInputPrice = raw.ImageInputPrice
+		out.CacheWrite1hPrice = raw.CacheWrite1hPrice
+		out.FastMultiplier = raw.FastMultiplier
+		out.FlexMultiplier = raw.FlexMultiplier
+		out.ImageOutputPrice = raw.ImageOutputPrice
+		out.PerRequestPrice = raw.PerRequestPrice
+		out.MaxReasoningEffortMultiplier = raw.MaxReasoningEffortMultiplier
+	}
+	first := sched.Tiers[0]
+	out.InputPrice = first.Input
+	out.OutputPrice = first.Output
+	out.CacheWritePrice = first.CacheWrite
+	out.CacheReadPrice = first.CacheRead
+	if len(sched.Tiers) > 1 {
+		out.Intervals = plazaIntervalsFromTiers(sched.Tiers)
+	}
+	return out
+}
+
+func plazaIntervalsFromTiers(tiers []ContextPricingTier) []PricingInterval {
+	intervals := make([]PricingInterval, 0, len(tiers))
+	for i, t := range tiers {
+		intervals = append(intervals, PricingInterval{
+			MinTokens:       t.MinTokens,
+			MaxTokens:       t.MaxTokens,
+			TierLabel:       t.Label,
+			InputPrice:      t.Input,
+			OutputPrice:     t.Output,
+			CacheWritePrice: t.CacheWrite,
+			CacheReadPrice:  t.CacheRead,
+			SortOrder:       i,
+		})
+	}
+	return intervals
 }

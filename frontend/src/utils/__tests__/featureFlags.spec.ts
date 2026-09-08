@@ -21,6 +21,7 @@ const pageVisibilityFlags = [
   FeatureFlags.adminBankTransactions,
   FeatureFlags.adminAuditLogs,
   FeatureFlags.adminOps,
+  FeatureFlags.pluginManagement,
 ]
 
 describe('page visibility feature flags', () => {
@@ -40,6 +41,7 @@ describe('page visibility feature flags', () => {
       { key: 'admin_bank_transactions_enabled', mode: 'opt-out' },
       { key: 'admin_audit_logs_enabled', mode: 'opt-out' },
       { key: 'admin_ops_enabled', mode: 'opt-out' },
+      { key: 'plugin_management_enabled', mode: 'opt-out' },
     ])
   })
 

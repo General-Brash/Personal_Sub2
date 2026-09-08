@@ -149,6 +149,20 @@ When using Docker Compose with `AUTO_SETUP=true`:
    docker compose logs sub2api | grep "admin password"
    ```
 
+### Startup and Database Recovery
+
+Personal_Sub2 applies database migrations during application startup. PostgreSQL can
+remain in its recovery/startup phase briefly after a host or Docker daemon
+restart. The application retries transient PostgreSQL startup and connection
+errors with bounded exponential backoff, then starts automatically when the
+database becomes ready. Authentication errors, migration checksum mismatches,
+SQL errors, and other permanent configuration or data errors fail immediately.
+
+The Compose deployment checks PostgreSQL readiness with both `pg_isready` and a
+simple SQL query. `depends_on: condition: service_healthy` controls dependency
+ordering for a fresh Compose start, while application-level retries cover
+recovery of existing containers after a host restart.
+
 ### Database Migration Notes (PostgreSQL)
 
 - Migrations are applied in lexicographic order (e.g. `001_...sql`, `002_...sql`).
@@ -244,6 +258,7 @@ docker compose down -v
 | `SERVER_PORT` | No | `8080` | Server port |
 | `ADMIN_EMAIL` | No | `admin@sub2api.local` | Admin email |
 | `ADMIN_PASSWORD` | No | *(auto-generated)* | Admin password |
+| `SUB2API_IMAGE_TAG` | No | `latest` | Shared normalized Docker/intent-classifier image tag; pin to `0.2.0-P1` for a release |
 | `INTENT_CLASSIFIER_ADMIN_TOKEN` | **Yes** | - | Loopback model-management token; use a dedicated random value |
 | `INTENT_CLASSIFIER_API_TOKEN` | Recommended | *(empty)* | Classification token; save the same value in Secondary Review settings |
 | `INTENT_CLASSIFIER_MODEL_DIR` | No | `./intent-models` | Host directory mounted into the classifier read-only |

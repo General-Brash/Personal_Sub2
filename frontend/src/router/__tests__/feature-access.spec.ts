@@ -37,6 +37,7 @@ const appStore = vi.hoisted(() => ({
     admin_bank_transactions_enabled?: boolean
     admin_audit_logs_enabled?: boolean
     admin_ops_enabled?: boolean
+    plugin_management_enabled?: boolean
     custom_menu_items?: []
   },
   fetchPublicSettings: vi.fn(),
@@ -166,6 +167,7 @@ describe('feature route guard', () => {
     ['/admin/bank/transactions', 'admin_bank_transactions_enabled'],
     ['/admin/audit-logs', 'admin_audit_logs_enabled'],
     ['/admin/ops', 'admin_ops_enabled'],
+    ['/admin/plugins', 'plugin_management_enabled'],
   ])('binds %s to the %s route meta flag', (path, key) => {
     const route = routerHarness.routes.find((item) => item.path === path)
 
@@ -177,6 +179,7 @@ describe('feature route guard', () => {
     ['/admin/bank/transactions', 'admin_bank_transactions_enabled'],
     ['/admin/audit-logs', 'admin_audit_logs_enabled'],
     ['/admin/ops', 'admin_ops_enabled'],
+    ['/admin/plugins', 'plugin_management_enabled'],
   ])('blocks direct access to disabled administrator page %s', async (path, key) => {
     const route = routerHarness.routes.find((item) => item.path === path)
     authStore.isAdmin = true
@@ -189,6 +192,17 @@ describe('feature route guard', () => {
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith('/admin/dashboard')
     expect(appStore.showWarning).toHaveBeenCalledWith('common.pageDisabledByAdmin')
+  })
+
+  it('registers the plugin page as an administrator-only route', () => {
+    const route = routerHarness.routes.find((item) => item.path === '/admin/plugins')
+
+    expect(route?.name).toBe('AdminPlugins')
+    expect(route?.meta).toMatchObject({
+      requiresAuth: true,
+      requiresAdmin: true,
+      titleKey: 'admin.plugins.title',
+    })
   })
 
   it.each(['/monitor', '/admin/channels/monitor'])(

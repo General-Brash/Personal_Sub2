@@ -157,6 +157,10 @@ type ChannelService struct {
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	pricingService       *PricingService // 用于「可用渠道」展示时回落到全局定价；可为 nil（测试场景）
 
+	// Bound once by the shared resolver during application construction.
+	plazaBillingService *BillingService
+	plazaResolver       *ModelPricingResolver
+
 	cache   atomic.Value // *channelCache
 	cacheSF singleflight.Group
 }
@@ -726,6 +730,7 @@ func checkPricesNotNegative(p ChannelModelPricing) error {
 		{"input_price", p.InputPrice},
 		{"output_price", p.OutputPrice},
 		{"cache_write_price", p.CacheWritePrice},
+		{"cache_write_1h_price", p.CacheWrite1hPrice},
 		{"cache_read_price", p.CacheReadPrice},
 		{"image_input_price", p.ImageInputPrice},
 		{"image_output_price", p.ImageOutputPrice},
@@ -742,6 +747,21 @@ func checkPricesNotNegative(p ChannelModelPricing) error {
 			return infraerrors.BadRequest("INVALID_PRICE", fmt.Sprintf("%s must be finite and between 0 and %g", c.field, float64(maxBillingUnitPriceUSD)))
 		}
 	}
+	for _, multiplier := range []struct {
+		field string
+		val   *float64
+	}{
+		{"fast_multiplier", p.FastMultiplier},
+		{"flex_multiplier", p.FlexMultiplier},
+		{"max_reasoning_effort_multiplier", p.MaxReasoningEffortMultiplier},
+	} {
+		if multiplier.val == nil {
+			continue
+		}
+		if *multiplier.val <= 0 || math.IsNaN(*multiplier.val) || math.IsInf(*multiplier.val, 0) {
+			return infraerrors.BadRequest("INVALID_MULTIPLIER", fmt.Sprintf("%s must be finite and greater than 0", multiplier.field))
+		}
+	}
 	for _, iv := range p.Intervals {
 		intervalChecks := []struct {
 			field string
@@ -750,6 +770,7 @@ func checkPricesNotNegative(p ChannelModelPricing) error {
 			{"interval.input_price", iv.InputPrice},
 			{"interval.output_price", iv.OutputPrice},
 			{"interval.cache_write_price", iv.CacheWritePrice},
+			{"interval.cache_write_1h_price", iv.CacheWrite1hPrice},
 			{"interval.cache_read_price", iv.CacheReadPrice},
 			{"interval.per_request_price", iv.PerRequestPrice},
 		}
@@ -764,6 +785,22 @@ func checkPricesNotNegative(p ChannelModelPricing) error {
 				return infraerrors.BadRequest("INVALID_PRICE", fmt.Sprintf("%s must be finite and between 0 and %g", c.field, float64(maxBillingUnitPriceUSD)))
 			}
 		}
+		for _, multiplier := range []struct {
+			field string
+			val   *float64
+		}{
+			{"interval.input_multiplier", iv.InputMultiplier},
+			{"interval.output_multiplier", iv.OutputMultiplier},
+			{"interval.cache_write_multiplier", iv.CacheWriteMultiplier},
+			{"interval.cache_read_multiplier", iv.CacheReadMultiplier},
+		} {
+			if multiplier.val == nil {
+				continue
+			}
+			if *multiplier.val <= 0 || math.IsNaN(*multiplier.val) || math.IsInf(*multiplier.val, 0) {
+				return infraerrors.BadRequest("INVALID_MULTIPLIER", fmt.Sprintf("%s must be finite and greater than 0", multiplier.field))
+			}
+		}
 	}
 	return nil
 }
@@ -771,8 +808,9 @@ func checkPricesNotNegative(p ChannelModelPricing) error {
 func checkIntervalsHavePrices(p ChannelModelPricing) error {
 	for _, iv := range p.Intervals {
 		if iv.InputPrice == nil && iv.OutputPrice == nil &&
-			iv.CacheWritePrice == nil && iv.CacheReadPrice == nil &&
-			iv.PerRequestPrice == nil {
+			iv.CacheWritePrice == nil && iv.CacheWrite1hPrice == nil && iv.CacheReadPrice == nil &&
+			iv.PerRequestPrice == nil && iv.InputMultiplier == nil && iv.OutputMultiplier == nil &&
+			iv.CacheWriteMultiplier == nil && iv.CacheReadMultiplier == nil {
 			return infraerrors.BadRequest(
 				"INTERVAL_MISSING_PRICE",
 				fmt.Sprintf("interval [%d, %s] has no price fields set for model %v",

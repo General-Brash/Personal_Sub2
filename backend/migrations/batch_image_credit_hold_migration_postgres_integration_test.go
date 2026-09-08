@@ -14,14 +14,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/migrations"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
 )
 
 const batchImageCreditHoldMigration = "183_personal_batch_image_credit_holds.sql"
 
 func TestBatchImageCreditHoldMigration_PostgresForwardConstraintsAndReplay(t *testing.T) {
-	testcontainers.SkipIfProviderIsNotHealthy(t)
-
 	ctx := context.Background()
 	db := newMigrationTestPostgres(t, ctx)
 	require.NoError(t, createBatchImageCreditHoldPrerequisites(ctx, db))

@@ -40,11 +40,11 @@ func setOpenAICodexRoutingHint(headers http.Header, account *Account, model stri
 	// canonicalization and therefore becomes "priority"; flex stays "flex".
 	canonicalTier := normalizedOpenAIServiceTierValue(serviceTier)
 	// This backport has no Codex model-catalog snapshot with which to validate
-	// arbitrary tier ids. Keep the hint to the two effective tiers Codex itself
+	// arbitrary tier ids. Keep the hint to the supported effective tiers Codex itself
 	// selects; default, missing, and other gateway-compatible API values remain
 	// model-only rather than expanding the ChatGPT routing protocol here.
 	switch canonicalTier {
-	case OpenAIFastTierPriority, OpenAIFastTierFlex:
+	case OpenAIFastTierPriority, OpenAIFastTierFlex, OpenAIFastTierUltrafast:
 	default:
 		canonicalTier = ""
 	}

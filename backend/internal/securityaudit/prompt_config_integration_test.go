@@ -1,3 +1,5 @@
+//go:build integration
+
 package securityaudit
 
 import (
@@ -5,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -19,8 +20,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
-
-const promptAuditRedisTestEnv = "PROMPT_AUDIT_TEST_REDIS_ADDR"
 
 type postgresPromptAuditSettingRepository struct{ db *sql.DB }
 
@@ -136,10 +135,7 @@ func waitForConfigVersion(t *testing.T, manager *ConfigManager, version int64, t
 }
 
 func TestPromptAuditConfigCASSecretRoundTripInvalidationAndTTL(t *testing.T) {
-	redisAddress := strings.TrimSpace(os.Getenv(promptAuditRedisTestEnv))
-	if redisAddress == "" {
-		t.Skip(promptAuditRedisTestEnv + " is not set")
-	}
+	redisAddress := promptAuditRedisAddress()
 	db := openPromptAuditIntegrationDB(t)
 	settingRepo := postgresPromptAuditSettingRepository{db: db}
 	require.NoError(t, settingRepo.Set(context.Background(), SettingKeyRiskControl, "true"))

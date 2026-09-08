@@ -21,9 +21,12 @@ const (
 // where a conflict flag makes billing fall back to the baseline model
 // (see responseModelBillingDeclaration).
 type upstreamResponseModelObserver struct {
-	first    string
-	terminal string
-	conflict bool
+	first             string
+	terminal          string
+	conflict          bool
+	firstTier         string
+	firstTierConflict bool
+	terminalTier      string
 }
 
 func (o *upstreamResponseModelObserver) Observe(model string, terminal bool) {
@@ -57,17 +60,38 @@ func normalizeObservedUpstreamResponseModel(model string) string {
 }
 
 func (o *upstreamResponseModelObserver) ObserveOpenAI(payload []byte, eventType string) {
-	model := firstValidTrimmedGJSONModel(payload, "response.model", "model")
-	o.Observe(model, isUpstreamResponseModelTerminalEvent(eventType))
+	model := firstValidTrimmedGJSONString(payload, "response.model", "model")
+	terminal := isUpstreamResponseModelTerminalEvent(eventType)
+	o.Observe(model, terminal)
+	// Every payload that declares a service tier also declares a model, so
+	// model-free delta frames skip the extra lookups entirely.
+	if model == "" {
+		return
+	}
+	// Non-terminal Responses API events echo the requested tier rather than the
+	// tier actually used. Only terminal events and untyped payloads (chat
+	// completions chunks, non-streaming bodies) report the processing tier.
+	if !terminal && strings.TrimSpace(eventType) != "" {
+		return
+	}
+	tier := normalizeObservedOpenAIServiceTier(firstValidTrimmedGJSONString(payload, "response.service_tier", "service_tier"))
+	o.ObserveServiceTier(tier, terminal)
 }
 
 func (o *upstreamResponseModelObserver) ObserveAnthropic(payload []byte) {
-	model := firstValidTrimmedGJSONModel(payload, "message.model", "model")
+	model := firstValidTrimmedGJSONString(payload, "message.model", "model")
 	o.Observe(model, false)
+	// usage.speed travels with the message object (message_start in streams,
+	// the top-level body otherwise), i.e. only in payloads that declare a model.
+	if model == "" {
+		return
+	}
+	tier := normalizeObservedAnthropicSpeed(firstValidTrimmedGJSONString(payload, "message.usage.speed", "usage.speed"))
+	o.ObserveServiceTier(tier, false)
 }
 
 func (o *upstreamResponseModelObserver) ObserveGemini(payload []byte) {
-	model := firstValidTrimmedGJSONModel(
+	model := firstValidTrimmedGJSONString(
 		payload,
 		"modelVersion",
 		"response.modelVersion",
@@ -124,13 +148,12 @@ func observeOpenAISSEBody(observer *upstreamResponseModelObserver, body string) 
 	if observer == nil || strings.TrimSpace(body) == "" {
 		return
 	}
-	forEachOpenAISSEDataPayload(body, func(payload []byte) {
-		eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
+	forEachOpenAISSEFrame(body, func(eventType string, payload []byte) {
 		observer.ObserveOpenAI(payload, eventType)
 	})
 }
 
-func firstValidTrimmedGJSONModel(payload []byte, paths ...string) string {
+func firstValidTrimmedGJSONString(payload []byte, paths ...string) string {
 	if len(payload) == 0 {
 		return ""
 	}
@@ -200,4 +223,66 @@ func upstreamSentModel(requestedModel, upstreamModel string) string {
 		sentModel = strings.TrimSpace(requestedModel)
 	}
 	return sentModel
+}
+
+func (o *upstreamResponseModelObserver) ObserveServiceTier(tier string, terminal bool) {
+	if o == nil || tier == "" {
+		return
+	}
+	if terminal {
+		o.terminalTier = tier
+		return
+	}
+	if o.firstTier == "" {
+		o.firstTier = tier
+		return
+	}
+	if o.firstTier != tier {
+		o.firstTierConflict = true
+	}
+}
+
+func (o *upstreamResponseModelObserver) ServiceTier() string {
+	if o == nil {
+		return ""
+	}
+	if o.terminalTier != "" {
+		return o.terminalTier
+	}
+	if o.firstTierConflict {
+		return ""
+	}
+	return o.firstTier
+}
+
+func normalizeObservedOpenAIServiceTier(raw string) string {
+	switch value := strings.ToLower(strings.TrimSpace(raw)); value {
+	case "priority", "fast":
+		return OpenAIFastTierPriority
+	case "default", "flex", "scale":
+		return value
+	default:
+		return ""
+	}
+}
+
+func normalizeObservedAnthropicSpeed(raw string) string {
+	switch value := strings.ToLower(strings.TrimSpace(raw)); value {
+	case "fast", "standard":
+		return value
+	default:
+		return ""
+	}
+}
+
+func observedUpstreamResponseServiceTier(c *gin.Context) string {
+	return upstreamResponseModelObserverFromContext(c).ServiceTier()
+}
+
+func resolvedOpenAIUpstreamServiceTierFromObserver(_ *upstreamResponseModelObserver, outboundBodyTier *string) *string {
+	return outboundBodyTier
+}
+
+func resolvedOpenAIUpstreamServiceTier(c *gin.Context, outboundBodyTier *string) *string {
+	return resolvedOpenAIUpstreamServiceTierFromObserver(upstreamResponseModelObserverFromContext(c), outboundBodyTier)
 }

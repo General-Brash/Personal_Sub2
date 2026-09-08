@@ -31,6 +31,7 @@ describe('TimePricingSection', () => {
 
     expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({
       timezone: 'Asia/Shanghai',
+      weekdays_only: false,
       periods: [{ start_time: '', end_time: '', multiplier: '1.00' }],
     })
     expect(value.periods).toHaveLength(0)

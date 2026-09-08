@@ -1517,7 +1517,7 @@ func TestClient_FetchAvailableModels_Success_RealCall(t *testing.T) {
 	withMockBaseURLs(t, []string{server.URL})
 
 	client := mustNewClient(t, "")
-	resp, rawResp, err := client.FetchAvailableModels(context.Background(), "test-token", "project-abc")
+	resp, rawResp, err := client.FetchAvailableModels(context.Background(), "test-token", "project-abc", fetchAvailableModelsBodyLimit)
 	if err != nil {
 		t.Fatalf("FetchAvailableModels 失败: %v", err)
 	}
@@ -1572,7 +1572,7 @@ func TestClient_FetchAvailableModels_HTTPError_RealCall(t *testing.T) {
 	withMockBaseURLs(t, []string{server.URL})
 
 	client := mustNewClient(t, "")
-	_, _, err := client.FetchAvailableModels(context.Background(), "bad-token", "proj")
+	_, _, err := client.FetchAvailableModels(context.Background(), "bad-token", "proj", fetchAvailableModelsBodyLimit)
 	if err == nil {
 		t.Fatal("服务器返回 403 时应返回错误")
 	}
@@ -1592,7 +1592,7 @@ func TestClient_FetchAvailableModels_InvalidJSON_RealCall(t *testing.T) {
 	withMockBaseURLs(t, []string{server.URL})
 
 	client := mustNewClient(t, "")
-	_, _, err := client.FetchAvailableModels(context.Background(), "token", "proj")
+	_, _, err := client.FetchAvailableModels(context.Background(), "token", "proj", fetchAvailableModelsBodyLimit)
 	if err == nil {
 		t.Fatal("无效 JSON 响应应返回错误")
 	}
@@ -1622,7 +1622,7 @@ func TestClient_FetchAvailableModels_URLFallback_RealCall(t *testing.T) {
 	withMockBaseURLs(t, []string{server1.URL, server2.URL})
 
 	client := mustNewClient(t, "")
-	resp, _, err := client.FetchAvailableModels(context.Background(), "token", "proj")
+	resp, _, err := client.FetchAvailableModels(context.Background(), "token", "proj", fetchAvailableModelsBodyLimit)
 	if err != nil {
 		t.Fatalf("FetchAvailableModels 应在 fallback 后成功: %v", err)
 	}
@@ -1650,7 +1650,7 @@ func TestClient_FetchAvailableModels_AllURLsFail_RealCall(t *testing.T) {
 	withMockBaseURLs(t, []string{server1.URL, server2.URL})
 
 	client := mustNewClient(t, "")
-	_, _, err := client.FetchAvailableModels(context.Background(), "token", "proj")
+	_, _, err := client.FetchAvailableModels(context.Background(), "token", "proj", fetchAvailableModelsBodyLimit)
 	if err == nil {
 		t.Fatal("所有 URL 都失败时应返回错误")
 	}
@@ -1669,7 +1669,7 @@ func TestClient_FetchAvailableModels_ContextCanceled_RealCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, _, err := client.FetchAvailableModels(ctx, "token", "proj")
+	_, _, err := client.FetchAvailableModels(ctx, "token", "proj", fetchAvailableModelsBodyLimit)
 	if err == nil {
 		t.Fatal("context 取消时应返回错误")
 	}
@@ -1686,7 +1686,7 @@ func TestClient_FetchAvailableModels_EmptyModels_RealCall(t *testing.T) {
 	withMockBaseURLs(t, []string{server.URL})
 
 	client := mustNewClient(t, "")
-	resp, rawResp, err := client.FetchAvailableModels(context.Background(), "token", "proj")
+	resp, rawResp, err := client.FetchAvailableModels(context.Background(), "token", "proj", fetchAvailableModelsBodyLimit)
 	if err != nil {
 		t.Fatalf("FetchAvailableModels 失败: %v", err)
 	}
@@ -1748,7 +1748,7 @@ func TestClient_FetchAvailableModels_404Fallback_RealCall(t *testing.T) {
 	withMockBaseURLs(t, []string{server1.URL, server2.URL})
 
 	client := mustNewClient(t, "")
-	resp, _, err := client.FetchAvailableModels(context.Background(), "token", "proj")
+	resp, _, err := client.FetchAvailableModels(context.Background(), "token", "proj", fetchAvailableModelsBodyLimit)
 	if err != nil {
 		t.Fatalf("FetchAvailableModels 应在 404 fallback 后成功: %v", err)
 	}

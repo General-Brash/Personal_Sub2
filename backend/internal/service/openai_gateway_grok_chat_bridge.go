@@ -623,6 +623,8 @@ func (s *OpenAIGatewayService) forwardGrokChatCompletionsViaResponses(
 			kind = "failover"
 		}
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			ProxyID:            opsUpstreamProxyID(account),
+			ProxyName:          opsUpstreamProxyName(account),
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,
@@ -654,6 +656,7 @@ func (s *OpenAIGatewayService) forwardGrokChatCompletionsViaResponses(
 	if result != nil {
 		result.UpstreamEndpoint = grokChatResponsesEndpoint
 		result.ResponseHeaders = resp.Header.Clone()
+		result.UpstreamHeaders = resp.Header.Clone()
 		if result.RequestID == "" {
 			result.RequestID = firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id"))
 		}

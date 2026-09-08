@@ -3,9 +3,11 @@ package repository
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"io/fs"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -14,6 +16,60 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
 )
+
+func TestApplyMigrationsFS_OfficialV021TransactionalSQLmockPaths(t *testing.T) {
+	tests := []struct {
+		name       string
+		migration  string
+		execRegexp string
+		sql        string
+	}{
+		{
+			name:       "232 upstream request id column",
+			migration:  "232_add_usage_log_upstream_request_id.sql",
+			execRegexp: "ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS upstream_request_id",
+			sql:        "ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS upstream_request_id VARCHAR(128);",
+		},
+		{
+			name:       "234 channel max reasoning effort multiplier",
+			migration:  "234_channel_max_reasoning_effort_multiplier.sql",
+			execRegexp: "ALTER TABLE channel_model_pricing ADD COLUMN IF NOT EXISTS max_reasoning_effort_multiplier",
+			sql:        "ALTER TABLE channel_model_pricing ADD COLUMN IF NOT EXISTS max_reasoning_effort_multiplier NUMERIC(10,4);",
+		},
+		{
+			name:       "234 group codex models manifest config",
+			migration:  "234_group_codex_models_manifest_config.sql",
+			execRegexp: "ALTER TABLE groups ADD COLUMN IF NOT EXISTS codex_models_manifest_config",
+			sql:        "ALTER TABLE groups ADD COLUMN IF NOT EXISTS codex_models_manifest_config JSONB NOT NULL DEFAULT '{}'::jsonb;",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+
+			prepareMigrationsBootstrapExpectations(mock)
+			mock.ExpectQuery(regexp.QuoteMeta("SELECT checksum FROM schema_migrations WHERE filename = $1")).
+				WithArgs(tt.migration).
+				WillReturnError(sql.ErrNoRows)
+			mock.ExpectBegin()
+			mock.ExpectExec(tt.execRegexp).
+				WillReturnResult(sqlmock.NewResult(0, 0))
+			mock.ExpectExec(regexp.QuoteMeta("INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)")).
+				WithArgs(tt.migration, migrationChecksum(tt.sql)).
+				WillReturnResult(sqlmock.NewResult(1, 1))
+			mock.ExpectCommit()
+			mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
+				WithArgs(migrationsAdvisoryLockID).
+				WillReturnResult(sqlmock.NewResult(0, 1))
+
+			fsys := fstest.MapFS{tt.migration: &fstest.MapFile{Data: []byte(tt.sql)}}
+			require.NoError(t, applyMigrationsFS(context.Background(), db, fsys))
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
 
 func TestApplyMigrations_NilDB(t *testing.T) {
 	err := ApplyMigrations(context.Background(), nil)

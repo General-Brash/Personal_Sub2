@@ -247,3 +247,15 @@ func TestWithOpenAIWSStateStoreRedisTimeout_WithParentContext(t *testing.T) {
 	_, ok := ctx.Deadline()
 	require.True(t, ok, "应附加短超时")
 }
+
+func TestOpenAIWSStateStore_InvalidEncryptedContentLineage(t *testing.T) {
+	store := NewOpenAIWSStateStore(nil)
+	require.False(t, store.HasAnySessionInvalidEncryptedContent())
+	store.MarkSessionInvalidEncryptedContent(1, "session-a", []string{" d1 ", "", "d2"}, time.Minute)
+	store.MarkSessionInvalidEncryptedContent(1, "session-a", []string{"d2", "d3"}, time.Minute)
+	require.True(t, store.HasAnySessionInvalidEncryptedContent())
+	digests := store.GetSessionInvalidEncryptedContentDigests(1, "session-a")
+	require.Len(t, digests, 3)
+	require.Contains(t, digests, "d1")
+	require.NotContains(t, store.GetSessionInvalidEncryptedContentDigests(2, "session-a"), "d1")
+}

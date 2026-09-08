@@ -122,6 +122,29 @@ func TestWSResponseCreate_ForcePriorityRewritesKnownTier(t *testing.T) {
 	}
 }
 
+func TestWSResponseCreate_GroupForceOverridesClientTierForCompositeSnapshot(t *testing.T) {
+	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	group := &Group{
+		ID:              1,
+		Platform:        PlatformComposite,
+		Status:          StatusActive,
+		Hydrated:        true,
+		ForceOpenAIFast: true,
+	}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+
+	updated, blocked, err := svc.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, "gpt-5.5", []byte(`{"type":"response.create","model":"gpt-5.5","service_tier":"flex"}`))
+	require.NoError(t, err)
+	require.Nil(t, blocked)
+	require.Equal(t, OpenAIFastTierPriority, gjson.GetBytes(updated, "service_tier").String())
+
+	updated, blocked, err = svc.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, "gpt-5.5", []byte(`{"type":"response.create","model":"gpt-5.5"}`))
+	require.NoError(t, err)
+	require.Nil(t, blocked)
+	require.Equal(t, OpenAIFastTierPriority, gjson.GetBytes(updated, "service_tier").String())
+}
+
 func TestWSResponseCreate_FlexPassThrough(t *testing.T) {
 	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
 	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}

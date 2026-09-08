@@ -10,13 +10,15 @@ import (
 	"io"
 	"net/http"
 	"os"
+
+	validation "github.com/Wei-Shaw/sub2api/internal/repository/validation"
 	"strings"
 	"testing"
 	"time"
 )
 
 var (
-	baseURL = getEnv("BASE_URL", "http://localhost:8080")
+	baseURL = ""
 	// ENDPOINT_PREFIX: 端点前缀，支持混合模式和非混合模式测试
 	// - "" (默认): 使用 /v1/messages, /v1beta/models（混合模式，可调度 antigravity 账户）
 	// - "/antigravity": 使用 /antigravity/v1/messages, /antigravity/v1beta/models（非混合模式，仅 antigravity 账户）
@@ -68,6 +70,16 @@ var geminiModels = []string{
 }
 
 func TestMain(m *testing.M) {
+	cfg, err := validation.LoadDedicatedIntegrationConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "e2e integration target rejected: %v\n", err)
+		os.Exit(2)
+	}
+	baseURL, err = validation.RequireAppBaseURL(cfg, os.Getenv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "e2e application endpoint rejected: %v\n", err)
+		os.Exit(2)
+	}
 	mode := "混合模式"
 	if endpointPrefix != "" {
 		mode = "Antigravity 模式"
@@ -90,7 +102,7 @@ func requireClaudeAPIKey(t *testing.T) string {
 	t.Helper()
 	key := strings.TrimSpace(os.Getenv(claudeAPIKeyEnv))
 	if key == "" {
-		t.Skipf("未设置 %s，跳过 Claude 相关 E2E 测试", claudeAPIKeyEnv)
+		t.Fatalf("未设置必需的 E2E 凭据环境变量 %s", claudeAPIKeyEnv)
 	}
 	return key
 }
@@ -99,7 +111,7 @@ func requireGeminiAPIKey(t *testing.T) string {
 	t.Helper()
 	key := strings.TrimSpace(os.Getenv(geminiAPIKeyEnv))
 	if key == "" {
-		t.Skipf("未设置 %s，跳过 Gemini 相关 E2E 测试", geminiAPIKeyEnv)
+		t.Fatalf("未设置必需的 E2E 凭据环境变量 %s", geminiAPIKeyEnv)
 	}
 	return key
 }

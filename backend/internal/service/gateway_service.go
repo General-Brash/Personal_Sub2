@@ -591,8 +591,10 @@ type AudioUsage struct {
 
 type ForwardResult struct {
 	RequestID string
-	Usage     ClaudeUsage
-	Model     string
+	// UpstreamHeaders preserves the direct response headers for configured upstream attribution.
+	UpstreamHeaders http.Header
+	Usage           ClaudeUsage
+	Model           string
 	// UpstreamModel is the actual upstream model after mapping.
 	// Prefer empty when it is identical to Model; persistence normalizes equal values away as no-op mappings.
 	UpstreamModel string
@@ -600,11 +602,18 @@ type ForwardResult struct {
 	// response before any client-facing rewrite or protocol conversion.
 	UpstreamResponseModel         string
 	UpstreamResponseModelConflict bool
-	Stream                        bool
-	Duration                      time.Duration
-	FirstTokenMs                  *int // 首字时间（流式请求）
-	ClientDisconnect              bool // 客户端是否在流式传输过程中断开
-	ReasoningEffort               *string
+	// UpstreamResponseServiceTier is the tier reported by the direct upstream.
+	UpstreamResponseServiceTier string
+	Stream                      bool
+	Duration                    time.Duration
+	FirstTokenMs                *int // 首字时间（流式请求）
+	ClientDisconnect            bool // 客户端是否在流式传输过程中断开
+	ReasoningEffort             *string
+	// RequestedReasoningEffort preserves the client-requested effort before any
+	// protocol conversion or group policy rewrite.
+	RequestedReasoningEffort *string
+	// ServiceTier is the final request tier after policy normalization.
+	ServiceTier *string
 
 	// 图片生成计费字段（图片生成模型使用）
 	ImageCount         int    // 生成的图片数量

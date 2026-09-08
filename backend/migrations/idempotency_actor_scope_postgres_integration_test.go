@@ -16,21 +16,17 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/repository"
+	validation "github.com/Wei-Shaw/sub2api/internal/repository/validation"
 	"github.com/Wei-Shaw/sub2api/migrations"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
 const (
 	idempotencyActorScopeMigration = "176_idempotency_actor_scope.sql"
-	postgresImage                  = "postgres:18.1-alpine3.23"
 )
 
 func TestIdempotencyActorScopeMigration_PostgresLegacyContract(t *testing.T) {
-	testcontainers.SkipIfProviderIsNotHealthy(t)
-
 	ctx := context.Background()
 	db := newMigrationTestPostgres(t, ctx)
 	require.NoError(t, createLegacyIdempotencyTable(ctx, db))
@@ -71,25 +67,12 @@ func TestIdempotencyActorScopeMigration_PostgresLegacyContract(t *testing.T) {
 
 func newMigrationTestPostgres(t *testing.T, ctx context.Context) *sql.DB {
 	t.Helper()
-
-	container, err := tcpostgres.Run(
-		ctx,
-		postgresImage,
-		tcpostgres.WithDatabase("sub2api_migrations_test"),
-		tcpostgres.WithUsername("postgres"),
-		tcpostgres.WithPassword("postgres"),
-	)
-	testcontainers.CleanupContainer(t, container)
-	require.NoError(t, err)
-
-	dsn, err := container.ConnectionString(ctx, "sslmode=disable", "TimeZone=UTC")
-	require.NoError(t, err)
+	dsn := validation.DatabaseDSN(migrationValidationConfig)
+	require.NotEmpty(t, dsn)
 	db, err := sql.Open("postgres", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	require.Eventually(t, func() bool {
-		return db.PingContext(ctx) == nil
-	}, 30*time.Second, 250*time.Millisecond)
+	require.Eventually(t, func() bool { return db.PingContext(ctx) == nil }, 30*time.Second, 250*time.Millisecond)
 	return db
 }
 

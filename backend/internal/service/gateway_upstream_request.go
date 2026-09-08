@@ -85,8 +85,8 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	}
 
 	// 同步 billing header cc_version 与实际发送的 User-Agent 版本
-	if fingerprint != nil {
-		body = syncBillingHeaderVersion(body, fingerprint.UserAgent)
+	if userAgent := effectiveBillingUserAgent(tokenType, mimicClaudeCode, fingerprint); userAgent != "" {
+		body = syncBillingHeaderVersion(body, userAgent)
 	}
 
 	// === 计算最终 anthropic-beta header（先于 body sanitize 与 CCH 签名）===

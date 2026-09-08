@@ -85,20 +85,21 @@ type UpdateProfileRequest struct {
 
 type userProfileResponse struct {
 	dto.User
-	AvatarURL         string                                 `json:"avatar_url,omitempty"`
-	AvatarSource      *userProfileSourceContext              `json:"avatar_source,omitempty"`
-	UsernameSource    *userProfileSourceContext              `json:"username_source,omitempty"`
-	DisplayNameSource *userProfileSourceContext              `json:"display_name_source,omitempty"`
-	NicknameSource    *userProfileSourceContext              `json:"nickname_source,omitempty"`
-	ProfileSources    map[string]*userProfileSourceContext   `json:"profile_sources,omitempty"`
-	Identities        service.UserIdentitySummarySet         `json:"identities"`
-	AuthBindings      map[string]service.UserIdentitySummary `json:"auth_bindings"`
-	IdentityBindings  map[string]service.UserIdentitySummary `json:"identity_bindings"`
-	EmailBound        bool                                   `json:"email_bound"`
-	LinuxDoBound      bool                                   `json:"linuxdo_bound"`
-	OIDCBound         bool                                   `json:"oidc_bound"`
-	WeChatBound       bool                                   `json:"wechat_bound"`
-	DingTalkBound     bool                                   `json:"dingtalk_bound"`
+	TemporaryCreditAvailable *float64                               `json:"temporary_credit_available,omitempty"`
+	AvatarURL                string                                 `json:"avatar_url,omitempty"`
+	AvatarSource             *userProfileSourceContext              `json:"avatar_source,omitempty"`
+	UsernameSource           *userProfileSourceContext              `json:"username_source,omitempty"`
+	DisplayNameSource        *userProfileSourceContext              `json:"display_name_source,omitempty"`
+	NicknameSource           *userProfileSourceContext              `json:"nickname_source,omitempty"`
+	ProfileSources           map[string]*userProfileSourceContext   `json:"profile_sources,omitempty"`
+	Identities               service.UserIdentitySummarySet         `json:"identities"`
+	AuthBindings             map[string]service.UserIdentitySummary `json:"auth_bindings"`
+	IdentityBindings         map[string]service.UserIdentitySummary `json:"identity_bindings"`
+	EmailBound               bool                                   `json:"email_bound"`
+	LinuxDoBound             bool                                   `json:"linuxdo_bound"`
+	OIDCBound                bool                                   `json:"oidc_bound"`
+	WeChatBound              bool                                   `json:"wechat_bound"`
+	DingTalkBound            bool                                   `json:"dingtalk_bound"`
 }
 
 type userProfileSourceContext struct {

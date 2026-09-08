@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -907,4 +908,73 @@ func TestCloneOpenAIWSRawMessages(t *testing.T) {
 		require.NotNil(t, cloned)
 		require.Len(t, cloned, 0)
 	})
+}
+
+func TestOpenAIWSReplaySequenceSharesBodiesAndOwnsHeaders(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte(`{"input":[{"type":"input_text","text":"hello"},{"type":"input_text","text":"world"}]}`)
+	items, exists, err := openAIWSExtractNormalizedInputSequence(payload)
+	require.NoError(t, err)
+	require.True(t, exists)
+	require.Len(t, items, 2)
+	for _, item := range items {
+		start := bytes.Index(payload, item)
+		require.GreaterOrEqual(t, start, 0)
+		require.Same(t, &payload[start], &item[0], "replay body must share the immutable client payload")
+	}
+
+	history := []json.RawMessage{items[0]}
+	delta := []json.RawMessage{items[1]}
+	combined := combineOpenAIWSReplayItems(history, delta)
+	require.Len(t, combined, 2)
+	require.NotSame(t, &history[0], &combined[0], "combined history needs an independent header")
+	require.Same(t, &history[0][0], &combined[0][0], "history body must not be copied")
+	require.Same(t, &delta[0][0], &combined[1][0], "delta body must not be copied")
+
+	// Appending to the merged header must not consume capacity in a predecessor.
+	combined = append(combined, json.RawMessage(`{"type":"input_text","text":"later"}`))
+	require.Len(t, history, 1)
+	require.Equal(t, "hello", gjson.GetBytes(history[0], "text").String())
+}
+
+func TestOpenAIWSSessionPreemptRegistryCancelsOnlySameScope(t *testing.T) {
+	var registry openAIWSSessionPreemptRegistry
+	key := openAIWSSessionPreemptKey{groupID: 7, apiKeyID: 11, sessionHash: "session"}
+	other := openAIWSSessionPreemptKey{groupID: 7, apiKeyID: 12, sessionHash: "session"}
+
+	firstCtx, firstCancel := context.WithCancel(context.Background())
+	firstCleanup, replaced := registry.Begin(key, firstCancel)
+	require.False(t, replaced)
+	otherCtx, otherCancel := context.WithCancel(context.Background())
+	otherCleanup, replaced := registry.Begin(other, otherCancel)
+	require.False(t, replaced)
+	secondCtx, secondCancel := context.WithCancel(context.Background())
+	secondCleanup, replaced := registry.Begin(key, secondCancel)
+	require.True(t, replaced)
+	require.ErrorIs(t, firstCtx.Err(), context.Canceled)
+	require.NoError(t, otherCtx.Err())
+	require.NoError(t, secondCtx.Err())
+
+	firstCleanup() // stale cleanup cannot remove the replacement.
+	require.NoError(t, secondCtx.Err())
+	secondCleanup()
+	otherCleanup()
+}
+
+func TestNewOpenAIWSSessionPreemptKeyRequiresCompleteScope(t *testing.T) {
+	for _, tc := range []struct {
+		groupID, apiKeyID int64
+		session           string
+	}{
+		{groupID: 0, apiKeyID: 1, session: "s"},
+		{groupID: 1, apiKeyID: 0, session: "s"},
+		{groupID: 1, apiKeyID: 1, session: " "},
+	} {
+		_, ok := newOpenAIWSSessionPreemptKey(tc.groupID, tc.apiKeyID, tc.session)
+		require.False(t, ok)
+	}
+	key, ok := newOpenAIWSSessionPreemptKey(1, 2, " session ")
+	require.True(t, ok)
+	require.Equal(t, "session", key.sessionHash)
 }

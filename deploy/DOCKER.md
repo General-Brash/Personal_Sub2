@@ -1,6 +1,6 @@
-# Personal_Sub2 Container Image
+# Personal_Sub2 0.2.0-P1 Container Image
 
-Personal_Sub2 is a personally developed and maintained edition based on the official `v0.1.178` codebase.
+Personal_Sub2 is the Personal edition integrating the official `v0.2.0` gateway baseline while retaining Personal billing, deployment, and intent-classifier capabilities.
 
 ## Quick Start
 
@@ -51,6 +51,20 @@ volumes:
   redis_data:
 ```
 
+## Startup and Database Recovery
+
+Personal_Sub2 applies database migrations during application startup. PostgreSQL can
+remain in its recovery/startup phase briefly after a host or Docker daemon
+restart. The application retries transient PostgreSQL startup and connection
+errors with bounded exponential backoff, then starts automatically when the
+database becomes ready. Authentication errors, migration checksum mismatches,
+SQL errors, and incompatible data fail immediately.
+
+The Compose deployment checks PostgreSQL readiness with both `pg_isready` and a
+simple SQL query. `depends_on: condition: service_healthy` orders a fresh
+Compose start, while application-level retries cover recovery of existing
+containers after a host restart.
+
 ## Environment Variables
 
 | Variable | Description | Required | Default |
@@ -67,8 +81,9 @@ volumes:
 
 ## Tags
 
-- `latest` - Latest personal-edition image
-- `v0.1.6-Pn` - Personal release image
+- `latest` - Latest stable Personal_Sub2 image
+- `0.2.0-P1` - Normalized Personal release image tag
+- `x.y` / `x` - Rolling minor/major aliases when published
 - `sha-<commit>` - Image built from a specific commit
 
 ## Links

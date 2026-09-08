@@ -22,6 +22,42 @@ func MarkOpenAINativeCompactionV2(c *gin.Context) {
 	}
 }
 
+// NormalizeCompactionTriggerInputOrder keeps one compaction trigger as the final input item.
+func NormalizeCompactionTriggerInputOrder(body []byte) ([]byte, bool, error) {
+	if len(body) == 0 {
+		return body, false, nil
+	}
+	var payload map[string]any
+	if err := decodeOpenAIJSONUseNumber(body, &payload); err != nil {
+		return body, false, err
+	}
+	input, ok := payload["input"].([]any)
+	if !ok || len(input) == 0 {
+		return body, false, nil
+	}
+	count := 0
+	normalized := make([]any, 0, len(input))
+	for _, raw := range input {
+		if item, ok := raw.(map[string]any); ok && item["type"] == "compaction_trigger" {
+			count++
+			continue
+		}
+		normalized = append(normalized, raw)
+	}
+	if count == 0 || (count == 1) {
+		if last, ok := input[len(input)-1].(map[string]any); ok && last["type"] == "compaction_trigger" {
+			return body, false, nil
+		}
+	}
+	normalized = append(normalized, map[string]any{"type": "compaction_trigger"})
+	payload["input"] = normalized
+	encoded, err := marshalOpenAIUpstreamJSON(payload)
+	if err != nil {
+		return body, false, err
+	}
+	return encoded, true, nil
+}
+
 func isOpenAINativeCompactionV2(c *gin.Context) bool {
 	if c == nil {
 		return false

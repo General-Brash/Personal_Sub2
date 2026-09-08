@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -38,6 +39,39 @@ func (r codexModelsFailoverAccountRepo) ListSchedulableByPlatform(_ context.Cont
 	for _, account := range r.accounts {
 		if account.Platform == platform {
 			accounts = append(accounts, account)
+		}
+	}
+	return accounts, nil
+}
+
+func (r codexModelsFailoverAccountRepo) ListSchedulableByGroupID(_ context.Context, groupID int64) ([]service.Account, error) {
+	accounts := make([]service.Account, 0, len(r.accounts))
+	for _, account := range r.accounts {
+		for _, memberGroupID := range account.GroupIDs {
+			if memberGroupID == groupID && account.Schedulable && account.Status == service.StatusActive {
+				accounts = append(accounts, account)
+				break
+			}
+		}
+	}
+	return accounts, nil
+}
+
+func (r codexModelsFailoverAccountRepo) ListModelAvailabilityCandidates(ctx context.Context, groupID *int64, platforms []string, _ bool) ([]service.Account, error) {
+	if groupID == nil {
+		return nil, nil
+	}
+	members, err := r.ListSchedulableByGroupID(ctx, *groupID)
+	if err != nil {
+		return nil, err
+	}
+	accounts := make([]service.Account, 0, len(members))
+	for _, account := range members {
+		for _, platform := range platforms {
+			if account.Platform == platform {
+				accounts = append(accounts, account)
+				break
+			}
 		}
 	}
 	return accounts, nil
@@ -135,9 +169,7 @@ func TestCodexModelsFailsOverFromRetryableUpstreamStatus(t *testing.T) {
 			if recorder.Code != http.StatusOK {
 				t.Fatalf("status: got %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
 			}
-			if got, want := recorder.Body.String(), `{"models":[{"slug":"gpt-5.6-sol"}]}`; got != want {
-				t.Fatalf("body: got %q, want %q", got, want)
-			}
+			requireCompleteCodexModelsHandlerResponse(t, recorder, "gpt-5.6-sol")
 		})
 	}
 }
@@ -170,9 +202,7 @@ func TestCodexModelsFailsOverFromInvalidManifestEnvelope(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
-	if got, want := recorder.Body.String(), `{"models":[{"slug":"gpt-5.6-sol"}]}`; got != want {
-		t.Fatalf("body: got %q, want %q", got, want)
-	}
+	requireCompleteCodexModelsHandlerResponse(t, recorder, "gpt-5.6-sol")
 }
 
 func TestCodexModelsDoesNotFailOverFromPermanentUpstreamStatus(t *testing.T) {
@@ -180,7 +210,6 @@ func TestCodexModelsDoesNotFailOverFromPermanentUpstreamStatus(t *testing.T) {
 		http.StatusBadRequest,
 		http.StatusUnauthorized,
 		http.StatusForbidden,
-		http.StatusNotFound,
 		600,
 	}
 	for _, status := range statuses {
@@ -263,6 +292,7 @@ func newCodexModelsFailoverTestHandlerWithAccountCount(firstStatus, accountCount
 		accounts = append(accounts, service.Account{
 			ID:          int64(i),
 			Name:        fmt.Sprintf("upstream-%d", i),
+			GroupIDs:    []int64{groupID},
 			Platform:    service.PlatformOpenAI,
 			Type:        service.AccountTypeAPIKey,
 			Status:      service.StatusActive,
@@ -310,4 +340,51 @@ func equalInt64Slices(got, want []int64) bool {
 		}
 	}
 	return true
+}
+
+func requireCompleteCodexModelsHandlerResponse(t *testing.T, recorder *httptest.ResponseRecorder, slug string) {
+	t.Helper()
+
+	var envelope struct {
+		Models []map[string]any `json:"models"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode body: %v; body=%s", err, recorder.Body.String())
+	}
+	if len(envelope.Models) != 1 {
+		t.Fatalf("models count: got %d, want 1; body=%s", len(envelope.Models), recorder.Body.String())
+	}
+	model := envelope.Models[0]
+	if got := model["slug"]; got != slug {
+		t.Fatalf("slug: got %v, want %q", got, slug)
+	}
+	if levels, ok := model["supported_reasoning_levels"].([]any); !ok || len(levels) == 0 {
+		t.Fatalf("supported_reasoning_levels must be populated: %v", model["supported_reasoning_levels"])
+	}
+	if messages, ok := model["model_messages"].(map[string]any); !ok || messages["instructions_template"] == "" {
+		t.Fatalf("model_messages.instructions_template must be populated: %v", model["model_messages"])
+	}
+	if policy, ok := model["truncation_policy"].(map[string]any); !ok || len(policy) == 0 {
+		t.Fatalf("truncation_policy must be populated: %v", model["truncation_policy"])
+	}
+	modalities, ok := model["input_modalities"].([]any)
+	if !ok || len(modalities) != 2 || modalities[0] != "text" || modalities[1] != "image" {
+		t.Fatalf("known GPT model modalities: got %v, want [text image]", model["input_modalities"])
+	}
+}
+
+func TestCodexModelsFailsOverWhenAPIKeyModelsEndpointIsUnavailable(t *testing.T) {
+	for _, status := range []int{http.StatusNotFound, http.StatusMethodNotAllowed} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			handler, upstream, groupID := newCodexModelsFailoverTestHandler(status)
+			recorder := performCodexModelsRequest(t, handler, groupID)
+
+			if got, want := upstream.calls(), []int64{1, 2}; !equalInt64Slices(got, want) {
+				t.Fatalf("upstream account calls: got %v, want %v", got, want)
+			}
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status: got %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+			}
+		})
+	}
 }

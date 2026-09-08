@@ -152,6 +152,7 @@ type SettingService struct {
 	// This per-service field also gives tests natural isolation — each SettingService
 	// instance owns its own cache, no shared package-level state.
 	openAIQuotaAutoPauseSettingsCache atomic.Value // *cachedOpenAIQuotaAutoPauseSettings
+	openAIAPIKeyHealthBreakerCache    atomic.Value // *cachedOpenAIAPIKeyHealthBreakerSettings
 	openAIQuotaAutoPauseSettingsSF    singleflight.Group
 
 	channelMonitorRuntimeListenersMu sync.Mutex

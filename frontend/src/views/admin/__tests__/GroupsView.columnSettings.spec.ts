@@ -392,21 +392,6 @@ describe('admin GroupsView column settings', () => {
     expect(getCapacitySummary).toHaveBeenCalledTimes(1)
   })
 
-  it('formats final price previews with two decimals without changing precise inputs', async () => {
-    const wrapper = await mountView()
-    const view = wrapper.vm as any
-
-    view.createForm.image_price_1k = 1.23456789
-    view.createForm.video_price_480p = 0.005
-    view.createForm.web_search_price_per_call = 0.0049
-
-    expect(view.createImageFinalPricePreview[0].value).toBe('$1.23')
-    expect(view.createVideoFinalPricePreview[0].value).toBe('$0.01')
-    expect(view.createWebSearchFinalPricePreview).toBe('$0.00')
-    expect(view.createForm.image_price_1k).toBe(1.23456789)
-    expect(view.createForm.video_price_480p).toBe(0.005)
-    expect(view.createForm.web_search_price_per_call).toBe(0.0049)
-  })
   it('renders yesterday usage between today and total', async () => {
     getUsageSummary.mockResolvedValue([
       { group_id: 1, today_cost: 1.25, yesterday_cost: 2.5, total_cost: 9.75 },

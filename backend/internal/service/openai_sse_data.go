@@ -68,3 +68,41 @@ func emitOpenAISSEDataPayload(data string, fn func([]byte)) {
 	}
 	fn([]byte(data))
 }
+
+func forEachOpenAISSEFrame(body string, fn func(string, []byte)) {
+	if fn == nil || strings.TrimSpace(body) == "" {
+		return
+	}
+	var parser openAICompatSSEFrameParser
+	emit := func(frame openAICompatSSEFrame, ok bool) {
+		if !ok {
+			return
+		}
+		emitData := func(value string) {
+			value = strings.TrimSpace(value)
+			if value == "" || value == "[DONE]" {
+				return
+			}
+			data := []byte(value)
+			fn(effectiveOpenAISSEEventType(data, frame.EventType), data)
+		}
+		if gjson.Valid(frame.Data) {
+			emitData(frame.Data)
+			return
+		}
+		for _, value := range strings.Split(frame.Data, "\n") {
+			emitData(value)
+		}
+	}
+	for _, line := range strings.Split(body, "\n") {
+		emit(parser.AddLine(strings.TrimRight(line, "\r")))
+	}
+	emit(parser.Finish())
+}
+
+func effectiveOpenAISSEEventType(payload []byte, eventType string) string {
+	if payloadType := strings.TrimSpace(gjson.GetBytes(payload, "type").String()); payloadType != "" {
+		return payloadType
+	}
+	return strings.TrimSpace(eventType)
+}

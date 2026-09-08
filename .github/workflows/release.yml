@@ -7,11 +7,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., v1.0.0)'
+        description: 'Existing release tag to release (e.g., v0.2.1-P1)'
         required: true
         type: string
+        default: 'v0.2.1-P1'
       simple_release:
         description: 'Simple release: only x86_64 GHCR image, skip other artifacts'
+        required: false
+        type: boolean
+        default: false
+      promote_latest:
+        description: 'Also move latest to this tag (manual runs default to false)'
         required: false
         type: boolean
         default: false
@@ -19,42 +25,142 @@ on:
 # Only workflow_dispatch may opt into a simple release.
 # Tag pushes always use the full config so archives and checksums are generated.
 env:
-  SIMPLE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simple_release == 'true' }}
+  SIMPLE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.simple_release }}
+  PROMOTE_LATEST: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_latest }}
 
 permissions:
   contents: write
   packages: write
 
 jobs:
+  resolve-target:
+    name: Resolve release tag and commit
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+      target_sha: ${{ steps.resolve.outputs.target_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve and verify target tag
+        id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG_NAME="${DISPATCH_TAG}"
+          else
+            TAG_NAME="${REF_NAME}"
+          fi
+
+          if [[ ! "${TAG_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: ${TAG_NAME}" >&2
+            exit 1
+          fi
+
+          git fetch --force --tags
+          if ! TARGET_SHA="$(git rev-parse --verify --quiet "${TAG_NAME}^{commit}")"; then
+            echo "Release tag does not resolve to a commit: ${TAG_NAME}" >&2
+            exit 1
+          fi
+
+          if [[ "${EVENT_NAME}" == "push" && "${TARGET_SHA}" != "${WORKFLOW_SHA}" ]]; then
+            echo "Tag target ${TARGET_SHA} does not match workflow SHA ${WORKFLOW_SHA}" >&2
+            exit 1
+          fi
+
+          VERSION="${TAG_NAME#v}"
+          printf 'tag=%s\n' "${TAG_NAME}" >> "${GITHUB_OUTPUT}"
+          printf 'version=%s\n' "${VERSION}" >> "${GITHUB_OUTPUT}"
+          printf 'target_sha=%s\n' "${TARGET_SHA}" >> "${GITHUB_OUTPUT}"
+
   # Update VERSION file with tag version
   update-version:
+    needs: resolve-target
+    outputs:
+      source_sha: ${{ steps.verify_source.outputs.source_sha }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-target.outputs.target_sha }}
+          fetch-depth: 1
 
       - name: Update VERSION file
+        id: verify_source
+        env:
+          TARGET_SHA: ${{ needs.resolve-target.outputs.target_sha }}
+          TARGET_VERSION: ${{ needs.resolve-target.outputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION=${{ github.event.inputs.tag }}
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          if [[ "${SOURCE_SHA}" != "${TARGET_SHA}" ]]; then
+            echo "VERSION source SHA ${SOURCE_SHA} does not match target ${TARGET_SHA}" >&2
+            exit 1
           fi
-          echo "$VERSION" > backend/cmd/server/VERSION
-          echo "Updated VERSION file to: $VERSION"
+          printf '%s\n' "${TARGET_VERSION}" > backend/cmd/server/VERSION
+          VERSION="$(tr -d '\r\n' < backend/cmd/server/VERSION)"
+          if [[ "${VERSION}" != "${TARGET_VERSION}" ]]; then
+            echo "VERSION file ${VERSION} does not match target version ${TARGET_VERSION}" >&2
+            exit 1
+          fi
+          printf 'source_sha=%s\n' "${SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "Updated VERSION file to: ${VERSION} from ${SOURCE_SHA}"
 
       - name: Upload VERSION artifact
         uses: actions/upload-artifact@v7
         with:
-          name: version-file
+          name: version-file-${{ needs.resolve-target.outputs.target_sha }}
           path: backend/cmd/server/VERSION
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Record VERSION source SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.verify_source.outputs.source_sha }}
+        run: printf '%s\n' "${SOURCE_SHA}" > version-source.sha
+
+      - name: Upload VERSION source marker
+        uses: actions/upload-artifact@v7
+        with:
+          name: version-source-${{ needs.resolve-target.outputs.target_sha }}
+          path: version-source.sha
+          if-no-files-found: error
           retention-days: 1
 
   build-frontend:
+    needs: resolve-target
+    outputs:
+      source_sha: ${{ steps.verify_source.outputs.source_sha }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-target.outputs.target_sha }}
+          fetch-depth: 1
+
+      - name: Verify frontend source SHA
+        id: verify_source
+        env:
+          TARGET_SHA: ${{ needs.resolve-target.outputs.target_sha }}
+        run: |
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          if [[ "${SOURCE_SHA}" != "${TARGET_SHA}" ]]; then
+            echo "Frontend source SHA ${SOURCE_SHA} does not match target ${TARGET_SHA}" >&2
+            exit 1
+          fi
+          printf 'source_sha=%s\n' "${SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -79,42 +185,125 @@ jobs:
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v7
         with:
-          name: frontend-dist
+          name: frontend-dist-${{ needs.resolve-target.outputs.target_sha }}
           path: backend/internal/web/dist/
+          if-no-files-found: error
           retention-days: 1
 
+      - name: Record frontend source SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.verify_source.outputs.source_sha }}
+        run: printf '%s\n' "${SOURCE_SHA}" > frontend-source.sha
+
+      - name: Upload frontend source marker
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-source-${{ needs.resolve-target.outputs.target_sha }}
+          path: frontend-source.sha
+          if-no-files-found: error
+          retention-days: 1
+
+  # Reuse the normal CI and security workflows as release gates. Each called
+  # workflow checks out the exact target SHA supplied here.
+  backend-ci:
+    name: Backend CI release gate
+    needs: resolve-target
+    uses: ./.github/workflows/backend-ci.yml
+    with:
+      target_sha: ${{ needs.resolve-target.outputs.target_sha }}
+      release_gate: true
+
+  security-scan:
+    name: Security release gate
+    needs: resolve-target
+    uses: ./.github/workflows/security-scan.yml
+    with:
+      target_sha: ${{ needs.resolve-target.outputs.target_sha }}
+
+  intent-classifier:
+    name: Intent classifier release gate
+    needs: [resolve-target, backend-ci, security-scan]
+    uses: ./.github/workflows/publish-intent-classifier-ghcr.yml
+    with:
+      tag: ${{ needs.resolve-target.outputs.tag }}
+      target_sha: ${{ needs.resolve-target.outputs.target_sha }}
+      simple_release: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simple_release == 'true' }}
+      promote_latest: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.promote_latest == 'true' }}
+
   release:
-    needs: [update-version, build-frontend]
+    needs: [resolve-target, update-version, build-frontend, backend-ci, security-scan, intent-classifier]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ needs.resolve-target.outputs.target_sha }}
 
       - name: Download VERSION artifact
         uses: actions/download-artifact@v8
         with:
-          name: version-file
+          name: version-file-${{ needs.resolve-target.outputs.target_sha }}
           path: backend/cmd/server/
+
+      - name: Download VERSION source marker
+        uses: actions/download-artifact@v8
+        with:
+          name: version-source-${{ needs.resolve-target.outputs.target_sha }}
+          path: .release-metadata/version/
 
       - name: Download frontend artifact
         uses: actions/download-artifact@v8
         with:
-          name: frontend-dist
+          name: frontend-dist-${{ needs.resolve-target.outputs.target_sha }}
           path: backend/internal/web/dist/
+
+      - name: Download frontend source marker
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-source-${{ needs.resolve-target.outputs.target_sha }}
+          path: .release-metadata/frontend/
+
+      - name: Verify release source and prerequisite artifacts
+        env:
+          TARGET_SHA: ${{ needs.resolve-target.outputs.target_sha }}
+          TARGET_VERSION: ${{ needs.resolve-target.outputs.version }}
+          VERSION_JOB_SHA: ${{ needs.update-version.outputs.source_sha }}
+          FRONTEND_JOB_SHA: ${{ needs.build-frontend.outputs.source_sha }}
+        run: |
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          if [[ "${SOURCE_SHA}" != "${TARGET_SHA}" ]]; then
+            echo "Release checkout SHA ${SOURCE_SHA} does not match target ${TARGET_SHA}" >&2
+            exit 1
+          fi
+          if [[ "${VERSION_JOB_SHA}" != "${TARGET_SHA}" || "${FRONTEND_JOB_SHA}" != "${TARGET_SHA}" ]]; then
+            echo "A prerequisite job did not use target SHA ${TARGET_SHA}" >&2
+            exit 1
+          fi
+          if [[ "$(tr -d '\r\n' < backend/cmd/server/VERSION)" != "${TARGET_VERSION}" ]]; then
+            echo "Downloaded VERSION does not match target version ${TARGET_VERSION}" >&2
+            exit 1
+          fi
+          if [[ "$(tr -d '\r\n' < .release-metadata/version/version-source.sha)" != "${TARGET_SHA}" ]]; then
+            echo "VERSION artifact source marker does not match target ${TARGET_SHA}" >&2
+            exit 1
+          fi
+          if [[ "$(tr -d '\r\n' < .release-metadata/frontend/frontend-source.sha)" != "${TARGET_SHA}" ]]; then
+            echo "Frontend artifact source marker does not match target ${TARGET_SHA}" >&2
+            exit 1
+          fi
 
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: backend/go.mod
+          go-version: '1.27.0'
           check-latest: false
           cache-dependency-path: backend/go.sum
 
       - name: Verify Go version
         run: |
-          go version | grep -q 'go1.26.6'
+          go version | grep -q 'go1.27.0'
 
       # Docker setup for GoReleaser
       - name: Set up QEMU
@@ -146,12 +335,9 @@ jobs:
 
       - name: Get tag message
         id: tag_message
+        env:
+          TAG_NAME: ${{ needs.resolve-target.outputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG_NAME=${{ github.event.inputs.tag }}
-          else
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-          fi
           echo "Processing tag: $TAG_NAME"
 
           # 获取完整的 tag message（跳过第一行标题）
@@ -175,7 +361,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
-          args: release --clean --skip=validate ${{ env.SIMPLE_RELEASE == 'true' && '--config=.goreleaser.simple.yaml' || '' }}
+          args: release --clean ${{ env.SIMPLE_RELEASE == 'true' && '--config=.goreleaser.simple.yaml' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_MESSAGE: ${{ steps.tag_message.outputs.message }}
@@ -183,6 +369,7 @@ jobs:
           GITHUB_REPO_OWNER_LOWER: ${{ steps.lowercase.outputs.owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || 'skip' }}
+          PROMOTE_LATEST: ${{ env.PROMOTE_LATEST }}
 
       # Update DockerHub description
       - name: Update DockerHub description
@@ -217,10 +404,9 @@ jobs:
           else
             TAG_NAME=${GITHUB_REF#refs/tags/}
           fi
-          VERSION=$TAG_NAME
-          IMAGE_VERSION=${TAG_NAME#v}
+          VERSION=${TAG_NAME#v}
           REPO="${{ github.repository }}"
-          GHCR_IMAGE="ghcr.io/general-brash/personal_sub2"
+          GHCR_IMAGE="ghcr.io/${REPO,,}"  # ${,,} converts to lowercase
 
           # 获取 tag message 内容并转义 Markdown 特殊字符
           TAG_MESSAGE='${{ steps.tag_message.outputs.message }}'
@@ -246,7 +432,7 @@ jobs:
           if [ -n "$DOCKERHUB_USERNAME" ]; then
             DOCKER_IMAGE="${DOCKERHUB_USERNAME}/sub2api"
             MESSAGE+="# Docker Hub"$'\n'
-            MESSAGE+="docker pull ${DOCKER_IMAGE}:${IMAGE_VERSION}"$'\n'
+            MESSAGE+="docker pull ${DOCKER_IMAGE}:${VERSION}"$'\n'
             MESSAGE+="# GitHub Container Registry"$'\n'
           fi
           MESSAGE+="docker pull ${GHCR_IMAGE}:${VERSION}"$'\n'
@@ -271,35 +457,3 @@ jobs:
                 parse_mode: "Markdown",
                 disable_web_page_preview: true
               }')"
-
-  sync-version-file:
-    needs: [release]
-    if: ${{ needs.release.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout default branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-
-      - name: Sync VERSION file to released tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION=${{ github.event.inputs.tag }}
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
-          fi
-
-          CURRENT_VERSION=$(tr -d '\r\n' < backend/cmd/server/VERSION || true)
-          if [ "$CURRENT_VERSION" = "$VERSION" ]; then
-            echo "VERSION file already matches $VERSION"
-            exit 0
-          fi
-
-          echo "$VERSION" > backend/cmd/server/VERSION
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/cmd/server/VERSION
-          git commit -m "chore: sync VERSION to ${VERSION} [skip ci]"
-          git push origin HEAD:${{ github.event.repository.default_branch }}

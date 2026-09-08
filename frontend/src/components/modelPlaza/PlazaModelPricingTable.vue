@@ -81,6 +81,20 @@
               >
                 {{ billingModeLabel(m) }}
               </span>
+              <span
+                v-if="m.long_context_basis === 'marginal'"
+                class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
+                :title="t('modelPlaza.table.tierHintMarginal')"
+              >
+                {{ t('modelPlaza.table.marginalBadge') }}
+              </span>
+              <span
+                v-if="m.pricing?.max_reasoning_effort_multiplier"
+                class="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+                :title="t('modelPlaza.table.maxReasoningMultiplierHint', { multiplier: m.pricing.max_reasoning_effort_multiplier })"
+              >
+                {{ t('modelPlaza.table.maxReasoningMultiplierBadge', { multiplier: m.pricing.max_reasoning_effort_multiplier }) }}
+              </span>
             </div>
           </td>
 

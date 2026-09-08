@@ -183,6 +183,8 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 				kind = "failover"
 			}
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				ProxyID:            opsUpstreamProxyID(account),
+				ProxyName:          opsUpstreamProxyName(account),
 				Platform:           account.Platform,
 				AccountID:          account.ID,
 				AccountName:        account.Name,
@@ -366,14 +368,16 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 
 	return &OpenAIForwardResult{
 		RequestID:                     requestID,
+		UpstreamHeaders:               resp.Header,
 		Usage:                         usage,
 		Model:                         originalModel,
 		BillingModel:                  billingModel,
 		UpstreamModel:                 upstreamModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+		UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
 		ReasoningEffort:               reasoningEffort,
-		ServiceTier:                   serviceTier,
+		ServiceTier:                   resolvedOpenAIUpstreamServiceTier(c, serviceTier),
 		Stream:                        true,
 		Duration:                      time.Since(startTime),
 		FirstTokenMs:                  firstTokenMs,
@@ -466,14 +470,16 @@ func (s *OpenAIGatewayService) bufferRawChatCompletions(
 
 	return &OpenAIForwardResult{
 		RequestID:                     requestID,
+		UpstreamHeaders:               resp.Header,
 		Usage:                         usage,
 		Model:                         originalModel,
 		BillingModel:                  billingModel,
 		UpstreamModel:                 upstreamModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+		UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
 		ReasoningEffort:               reasoningEffort,
-		ServiceTier:                   serviceTier,
+		ServiceTier:                   resolvedOpenAIUpstreamServiceTier(c, serviceTier),
 		Stream:                        false,
 		Duration:                      time.Since(startTime),
 	}, nil

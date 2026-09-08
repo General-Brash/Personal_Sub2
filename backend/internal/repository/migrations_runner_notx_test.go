@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"testing/fstest"
 
@@ -116,6 +117,66 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_t_b ON t(b);
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestApplyMigrationsFS_UpstreamRequestIDIndexMigration_IndexAbsentCreatesIndex(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	prepareMigrationsBootstrapExpectations(mock)
+	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").WithArgs(usageLogsUpstreamRequestIDIndexMigration).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT EXISTS \\(").WithArgs(usageLogsUpstreamRequestIDIndex).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectExec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_upstream_request_id").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO schema_migrations \\(filename, checksum\\) VALUES \\(\\$1, \\$2\\)").WithArgs(usageLogsUpstreamRequestIDIndexMigration, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").WithArgs(migrationsAdvisoryLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	fsys := fstest.MapFS{usageLogsUpstreamRequestIDIndexMigration: &fstest.MapFile{Data: []byte(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_upstream_request_id ON usage_logs (upstream_request_id) WHERE upstream_request_id IS NOT NULL;`)}}
+	require.NoError(t, applyMigrationsFS(context.Background(), db, fsys))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyMigrationsFS_UpstreamRequestIDIndexMigration_ValidIndexSkipsDrop(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	prepareMigrationsBootstrapExpectations(mock)
+	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").WithArgs(usageLogsUpstreamRequestIDIndexMigration).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT EXISTS \\(").WithArgs(usageLogsUpstreamRequestIDIndex).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectExec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_upstream_request_id").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO schema_migrations \\(filename, checksum\\) VALUES \\(\\$1, \\$2\\)").WithArgs(usageLogsUpstreamRequestIDIndexMigration, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").WithArgs(migrationsAdvisoryLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	fsys := fstest.MapFS{usageLogsUpstreamRequestIDIndexMigration: &fstest.MapFile{Data: []byte(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_upstream_request_id ON usage_logs (upstream_request_id) WHERE upstream_request_id IS NOT NULL;`)}}
+	require.NoError(t, applyMigrationsFS(context.Background(), db, fsys))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyMigrationsFS_UpstreamRequestIDIndexMigration_DeleteInvalidIndexFailureStopsRetry(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	prepareMigrationsBootstrapExpectations(mock)
+	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").WithArgs(usageLogsUpstreamRequestIDIndexMigration).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT EXISTS \\(").WithArgs(usageLogsUpstreamRequestIDIndex).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectExec("DROP INDEX CONCURRENTLY IF EXISTS idx_usage_logs_upstream_request_id").WillReturnError(errors.New("drop failed"))
+	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").WithArgs(migrationsAdvisoryLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	fsys := fstest.MapFS{usageLogsUpstreamRequestIDIndexMigration: &fstest.MapFile{Data: []byte(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_upstream_request_id ON usage_logs (upstream_request_id) WHERE upstream_request_id IS NOT NULL;`)}}
+	require.Error(t, applyMigrationsFS(context.Background(), db, fsys))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyMigrationsFS_UpstreamRequestIDIndexMigration_DropsInvalidIndexBeforeRetry(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	prepareMigrationsBootstrapExpectations(mock)
+	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").WithArgs(usageLogsUpstreamRequestIDIndexMigration).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT EXISTS \\(").WithArgs(usageLogsUpstreamRequestIDIndex).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectExec("DROP INDEX CONCURRENTLY IF EXISTS idx_usage_logs_upstream_request_id").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_upstream_request_id").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO schema_migrations \\(filename, checksum\\) VALUES \\(\\$1, \\$2\\)").WithArgs(usageLogsUpstreamRequestIDIndexMigration, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").WithArgs(migrationsAdvisoryLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	fsys := fstest.MapFS{usageLogsUpstreamRequestIDIndexMigration: &fstest.MapFile{Data: []byte(`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_upstream_request_id ON usage_logs (upstream_request_id) WHERE upstream_request_id IS NOT NULL;`)}}
+	require.NoError(t, applyMigrationsFS(context.Background(), db, fsys))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestApplyMigrationsFS_NonTransactionalMigration_LatestAPIKeyIPIndexDropsInvalidIndexBeforeRetry(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -183,6 +244,47 @@ func TestApplyMigrationsFS_NonTransactionalMigration_UsageModelMismatchIndexDrop
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_upstream_model_mismatch_created_at
     ON usage_logs (created_at DESC, id DESC)
     WHERE upstream_model_mismatch IS TRUE;
+`)},
+	}
+
+	err = applyMigrationsFS(context.Background(), db, fsys)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyMigrationsFS_NonTransactionalMigration_EffectiveModelIndexesDropInvalidIndexesBeforeRetry(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	prepareMigrationsBootstrapExpectations(mock)
+	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
+		WithArgs(usageLogsEffectiveModelIndexesMigration).
+		WillReturnError(sql.ErrNoRows)
+	for _, indexName := range []string{usageLogsEffectiveRequestedModelIndex, usageLogsEffectiveUpstreamModelIndex} {
+		mock.ExpectQuery("SELECT EXISTS \\(").
+			WithArgs(indexName).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+		mock.ExpectExec("DROP INDEX CONCURRENTLY IF EXISTS " + indexName).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+	}
+	mock.ExpectExec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_effective_requested_model_created").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_effective_upstream_model_created").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO schema_migrations \\(filename, checksum\\) VALUES \\(\\$1, \\$2\\)").
+		WithArgs(usageLogsEffectiveModelIndexesMigration, sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
+		WithArgs(migrationsAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	fsys := fstest.MapFS{
+		usageLogsEffectiveModelIndexesMigration: &fstest.MapFile{Data: []byte(`
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_effective_requested_model_created
+    ON usage_logs ((COALESCE(NULLIF(BTRIM(requested_model), ''), model)), created_at DESC, id DESC);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_usage_logs_effective_upstream_model_created
+    ON usage_logs ((COALESCE(NULLIF(BTRIM(upstream_model), ''), model)), created_at DESC, id DESC);
 `)},
 	}
 

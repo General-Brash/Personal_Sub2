@@ -160,6 +160,9 @@ type httpUpstreamService struct {
 	cfg     *config.Config                  // 全局配置
 	mu      sync.RWMutex                    // 保护 clients map 的读写锁
 	clients map[string]*upstreamClientEntry // 客户端缓存池，key 由隔离策略决定
+	// lookupIP is injectable so public-host enforcement can be tested without
+	// consulting the machine DNS configuration or contacting real destinations.
+	lookupIP func(context.Context, string) ([]net.IP, error)
 	// OpenAI 走 HTTP/HTTPS 代理时的 H2->H1 回退状态（key=标准化 proxyKey）
 	openAIHTTP2Fallbacks sync.Map
 }
@@ -176,6 +179,9 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 	return &httpUpstreamService{
 		cfg:     cfg,
 		clients: make(map[string]*upstreamClientEntry),
+		lookupIP: func(ctx context.Context, host string) ([]net.IP, error) {
+			return net.DefaultResolver.LookupIP(ctx, "ip", host)
+		},
 	}
 }
 
@@ -212,7 +218,7 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 	}
 
 	// 执行请求
-	client := httpClientForUpstreamRequest(entry.client, req)
+	client := s.httpClientForUpstreamRequest(entry.client, req)
 	client = httpClientWithGrokAccessDeniedFallback(client)
 	resp, err := servertiming.Do(client, req)
 	if err != nil {
@@ -276,7 +282,7 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 		return nil, err
 	}
 
-	client := httpClientForUpstreamRequest(entry.client, req)
+	client := s.httpClientForUpstreamRequest(entry.client, req)
 	client = httpClientWithGrokAccessDeniedFallback(client)
 	resp, err := servertiming.Do(client, req)
 	if err != nil {
@@ -296,15 +302,45 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 	return resp, nil
 }
 
-func httpClientForUpstreamRequest(client *http.Client, req *http.Request) *http.Client {
-	if client == nil || req == nil || !service.HTTPUpstreamRedirectsDisabled(req.Context()) {
+// httpClientForUpstreamRequest derives a request-scoped client. Public-hosts-only
+// must be enforced both by CheckRedirect and by the RoundTripper; a context marker
+// alone would not protect a request that reaches the cached transport directly.
+//
+// For the standard transport, the RoundTripper resolves immediately before the
+// connection and rewrites the network destination to that checked IP literal while
+// preserving the original Host and TLS ServerName. Direct and SOCKS paths use the
+// checked IP as their network target. For an HTTP proxy, an opaque checked-IP URI
+// keeps the proxy's absolute-form authority bound to that IP while retaining the
+// original Host header; HTTPS proxy routing remains fail-closed. SOCKS CONNECT
+// targets are likewise bound to the checked address instead of asking the proxy to
+// resolve the untrusted hostname.
+func (s *httpUpstreamService) httpClientForUpstreamRequest(client *http.Client, req *http.Request) *http.Client {
+	if client == nil || req == nil {
 		return client
 	}
-	clone := *client
-	clone.CheckRedirect = func(*http.Request, []*http.Request) error {
-		return http.ErrUseLastResponse
+	ctx := req.Context()
+	switch {
+	case service.HTTPUpstreamPublicHostsOnly(ctx):
+		// Public-host-only is the stronger request policy. If a caller combines
+		// it with the credential-probe redirect policy, never let the latter
+		// replace the per-hop public-host checks.
+		clone := *client
+		clone.CheckRedirect = s.redirectChecker
+		base := client.Transport
+		if base == nil {
+			base = http.DefaultTransport
+		}
+		clone.Transport = &publicHostsOnlyTransport{base: base, resolve: s.lookupPublicRequestHost}
+		return &clone
+	case service.HTTPUpstreamRedirectsDisabled(ctx):
+		clone := *client
+		clone.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+		return &clone
+	default:
+		return client
 	}
-	return &clone
 }
 
 // grokAccessDeniedFallbackTransport preserves the subscription CLI proxy as
@@ -586,7 +622,13 @@ func (s *httpUpstreamService) shouldValidateResolvedIP() bool {
 	return !s.cfg.Security.URLAllowlist.AllowPrivateHosts
 }
 
+// validateRequestHost validates the initial request and every redirect hop.
+// Public-hosts-only is request-scoped and overrides the general Personal policy.
 func (s *httpUpstreamService) validateRequestHost(req *http.Request) error {
+	publicHostsOnly := req != nil && service.HTTPUpstreamPublicHostsOnly(req.Context())
+	if publicHostsOnly {
+		return s.validatePublicRequestHost(req)
+	}
 	if !s.shouldValidateResolvedIP() {
 		return nil
 	}
@@ -603,11 +645,208 @@ func (s *httpUpstreamService) validateRequestHost(req *http.Request) error {
 	return nil
 }
 
+func (s *httpUpstreamService) validatePublicRequestHost(req *http.Request) error {
+	if req == nil || req.URL == nil {
+		return errors.New("request url is nil")
+	}
+	host := strings.TrimSpace(req.URL.Hostname())
+	if host == "" {
+		return errors.New("request host is empty")
+	}
+	_, err := s.lookupPublicRequestHost(req.Context(), host)
+	return err
+}
+
+// lookupPublicRequestHost performs one fail-closed resolution under a bounded
+// context. Callers use its exact result either to validate a request hop or to
+// bind the following direct socket dial to a checked address.
+func (s *httpUpstreamService) lookupPublicRequestHost(ctx context.Context, host string) ([]net.IP, error) {
+	lookupIP := s.lookupIP
+	if lookupIP == nil {
+		lookupIP = func(ctx context.Context, host string) ([]net.IP, error) {
+			return net.DefaultResolver.LookupIP(ctx, "ip", host)
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	ips, err := lookupIP(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("dns resolution failed: %w", err)
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("host %s has no addresses", host)
+	}
+	for _, ip := range ips {
+		if !isPublicResolvedIP(ip) {
+			return nil, fmt.Errorf("resolved ip %s is not allowed", ip)
+		}
+	}
+	return ips, nil
+}
+
+func isPublicResolvedIP(ip net.IP) bool {
+	return ip != nil && ip.IsGlobalUnicast() && !ip.IsLoopback() && !ip.IsPrivate() &&
+		!ip.IsLinkLocalUnicast() && !ip.IsLinkLocalMulticast() && !ip.IsUnspecified()
+}
+
 func (s *httpUpstreamService) redirectChecker(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return errors.New("stopped after 10 redirects")
 	}
 	return s.validateRequestHost(req)
+}
+
+type publicHostsOnlyTransport struct {
+	base    http.RoundTripper
+	resolve func(context.Context, string) ([]net.IP, error)
+}
+
+func (t *publicHostsOnlyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t == nil || t.base == nil {
+		return nil, errors.New("public-host transport base is nil")
+	}
+	if req == nil || req.URL == nil {
+		return nil, errors.New("request url is nil")
+	}
+	if t.resolve == nil {
+		return nil, errors.New("public-host resolver is nil")
+	}
+	host := strings.TrimSpace(req.URL.Hostname())
+	if host == "" {
+		return nil, errors.New("request host is empty")
+	}
+	ips, err := t.resolve(req.Context(), host)
+	if err != nil {
+		return nil, err
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("host %s has no addresses", host)
+	}
+	for _, ip := range ips {
+		if !isPublicResolvedIP(ip) {
+			return nil, fmt.Errorf("resolved ip %s is not allowed", ip)
+		}
+	}
+
+	transport, ok := t.base.(*http.Transport)
+	if !ok || transport == nil {
+		// A generic RoundTripper cannot be proven to use the checked address.
+		// Never call it after only a resolver check: production custom transports
+		// would otherwise be able to bypass the actual dial boundary.
+		return nil, errors.New("public-host transport requires *http.Transport")
+	}
+	boundReq, boundTransport, err := bindPublicHostRoundTrip(req, transport, ips[0])
+	if err != nil {
+		return nil, err
+	}
+	resp, err := boundTransport.RoundTrip(boundReq)
+	if resp != nil {
+		resp.Request = req
+		if resp.Body != nil {
+			resp.Body = &closeIdleTransportBody{ReadCloser: resp.Body, transport: boundTransport}
+		} else {
+			boundTransport.CloseIdleConnections()
+		}
+	} else {
+		boundTransport.CloseIdleConnections()
+	}
+	return resp, err
+}
+
+type closeIdleTransportBody struct {
+	io.ReadCloser
+	transport *http.Transport
+	once      sync.Once
+}
+
+func (b *closeIdleTransportBody) Close() error {
+	if b == nil {
+		return nil
+	}
+	err := b.ReadCloser.Close()
+	b.once.Do(func() {
+		if b.transport != nil {
+			b.transport.CloseIdleConnections()
+		}
+	})
+	return err
+}
+
+func bindPublicHostRoundTrip(req *http.Request, transport *http.Transport, ip net.IP) (*http.Request, *http.Transport, error) {
+	if req == nil || req.URL == nil || transport == nil || ip == nil {
+		return nil, nil, errors.New("cannot bind public-host round trip")
+	}
+	if !isPublicResolvedIP(ip) {
+		return nil, nil, fmt.Errorf("resolved ip %s is not allowed", ip)
+	}
+	originalHost := req.URL.Hostname()
+	port := req.URL.Port()
+	if port == "" {
+		if strings.EqualFold(req.URL.Scheme, "https") {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+
+	boundReq := req.Clone(req.Context())
+	boundURL := *req.URL
+	boundURL.Host = net.JoinHostPort(ip.String(), port)
+	boundReq.URL = &boundURL
+	boundReq.Host = req.Host
+	if boundReq.Host == "" {
+		boundReq.Host = req.URL.Host
+	}
+
+	boundTransport := transport.Clone()
+	// Each wrapper instance serves one RoundTrip; do not leave an unreachable
+	// per-request idle pool behind after the response body is closed.
+	boundTransport.DisableKeepAlives = true
+	if boundTransport.Proxy != nil {
+		proxyURL, err := boundTransport.Proxy(boundReq)
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolve proxy for public-host request: %w", err)
+		}
+		if proxyURL != nil && strings.EqualFold(proxyURL.Scheme, "https") {
+			return nil, nil, errors.New("public-host-only image download cannot safely use an HTTPS proxy")
+		}
+		if proxyURL != nil && strings.EqualFold(proxyURL.Scheme, "http") && strings.EqualFold(boundURL.Scheme, "http") {
+			// net/http's Request.WriteProxy builds its absolute URI from Request.Host.
+			// Use URL.Opaque for this one HTTP-proxy branch so the proxy receives the
+			// checked IP as its authority without replacing the original Host header.
+			escapedPath := boundURL.EscapedPath()
+			if escapedPath == "" {
+				escapedPath = "/"
+			}
+			boundURL.Opaque = "//" + boundURL.Host + escapedPath
+		}
+		// Resolve the proxy decision once. A request-dependent Proxy function
+		// must not be able to change the route after the checked request is
+		// prepared (for example, from direct to an HTTPS proxy).
+		resolvedProxyURL := cloneURL(proxyURL)
+		boundTransport.Proxy = func(*http.Request) (*url.URL, error) {
+			return cloneURL(resolvedProxyURL), nil
+		}
+	}
+	if boundTransport.DialTLSContext != nil {
+		// A custom TLS dialer receives only the network address. The shared
+		// fingerprint dialers also derive SNI from that address, so passing the
+		// checked IP would change SNI while passing the original host would
+		// reintroduce DNS. Fail closed rather than claim the transport is bound.
+		return nil, nil, errors.New("public-host-only cannot safely use a custom TLS dialer")
+	}
+	tlsConfig := boundTransport.TLSClientConfig
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{}
+	} else {
+		tlsConfig = tlsConfig.Clone()
+	}
+	// Public-host-only binds the socket to the checked IP and must keep the
+	// original hostname for certificate validation and SNI. Do not inherit a
+	// caller-supplied name that could point TLS at a different virtual host.
+	tlsConfig.ServerName = originalHost
+	boundTransport.TLSClientConfig = tlsConfig
+	return boundReq, boundTransport, nil
 }
 
 // acquireClient 获取或创建客户端，并标记为进行中请求

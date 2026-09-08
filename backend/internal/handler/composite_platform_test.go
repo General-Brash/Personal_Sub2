@@ -92,9 +92,13 @@ func TestOpenAIReasoningEffortPolicyForCompositeTarget(t *testing.T) {
 	openAICtx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	openAICtx.Request = httptest.NewRequest("POST", "/v1/responses", nil)
 	openAICtx.Request = openAICtx.Request.WithContext(service.WithResolvedTargetPlatform(openAICtx.Request.Context(), service.PlatformOpenAI))
-	got, changed := applyOpenAIReasoningEffortPolicyForRequest(openAICtx, apiKey, body)
+	got, changed, err := applyOpenAIReasoningEffortPolicyForRequest(openAICtx, apiKey, body)
+	require.NoError(t, err)
 	require.True(t, changed)
 	require.JSONEq(t, `{"reasoning":{"effort":"medium"}}`, string(got))
+	requested := service.RequestedReasoningEffortFromContext(openAICtx.Request.Context())
+	require.NotNil(t, requested)
+	require.Equal(t, "max", *requested)
 
 	bindOpenAIReasoningEffortPolicyForMessagesRequest(openAICtx, apiKey, []byte(`{"output_config":{"effort":"max"}}`))
 	bound, changed := service.ApplyOpenAIReasoningEffortPolicyFromContext(openAICtx.Request.Context(), body)
@@ -112,9 +116,28 @@ func TestOpenAIReasoningEffortPolicyForCompositeTarget(t *testing.T) {
 	grokCtx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	grokCtx.Request = httptest.NewRequest("POST", "/v1/responses", nil)
 	grokCtx.Request = grokCtx.Request.WithContext(service.WithResolvedTargetPlatform(grokCtx.Request.Context(), service.PlatformGrok))
-	got, changed = applyOpenAIReasoningEffortPolicyForRequest(grokCtx, apiKey, body)
+	got, changed, err = applyOpenAIReasoningEffortPolicyForRequest(grokCtx, apiKey, body)
+	require.NoError(t, err)
 	require.False(t, changed)
 	require.Equal(t, body, got)
+}
+
+func TestOpenAIReasoningEffortPolicyForCompositeTarget_DeniesOverLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+	c.Request = c.Request.WithContext(service.WithResolvedTargetPlatform(c.Request.Context(), service.PlatformOpenAI))
+	apiKey := &service.APIKey{Group: &service.Group{
+		Platform:                    service.PlatformComposite,
+		MaxReasoningEffort:          "medium",
+		MaxReasoningEffortOverLimit: service.ReasoningEffortOverLimitDeny,
+	}}
+
+	updated, changed, err := applyOpenAIReasoningEffortPolicyForRequest(c, apiKey, []byte(`{"reasoning":{"effort":"high"}}`))
+	var overLimitErr *service.ReasoningEffortOverLimitError
+	require.ErrorAs(t, err, &overLimitErr)
+	require.False(t, changed)
+	require.JSONEq(t, `{"reasoning":{"effort":"high"}}`, string(updated))
 }
 
 func TestClientRequestedModelUsesCompositePublicModel(t *testing.T) {

@@ -179,7 +179,7 @@ func (s *BillingService) PreflightTokenPricing(ctx context.Context, model string
 			}
 		}
 		for i := range resolved.Intervals {
-			pricing := intervalToModelPricing(&resolved.Intervals[i], resolved.SupportsCacheBreakdown, resolved.channelPricing)
+			pricing := intervalToModelPricingWithBase(&resolved.Intervals[i], resolved.BasePricing, resolved.channelPricing)
 			if err := validateTokenModelPricing(model, pricing); err != nil {
 				return err
 			}

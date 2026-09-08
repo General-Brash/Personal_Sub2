@@ -690,3 +690,26 @@ func TestAPIKeyService_GetByKey_SingleflightCollapses(t *testing.T) {
 	}
 	require.Equal(t, int32(1), atomic.LoadInt32(&calls))
 }
+
+func TestAPIKeyService_SnapshotRoundTripPreservesCodexModelsManifestConfig(t *testing.T) {
+	svc := NewAPIKeyService(nil, nil, nil, nil, nil, nil, &config.Config{})
+	groupID := int64(9)
+	apiKey := &APIKey{
+		ID: 1, UserID: 2, Key: "k-codex-manifest", Status: StatusActive, GroupID: &groupID,
+		User: &User{ID: 2, Status: StatusActive, Role: RoleUser, Balance: 10, Concurrency: 3},
+		Group: &Group{
+			ID: groupID, Name: "openai", Platform: PlatformOpenAI, Status: StatusActive,
+			SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 1,
+			CodexModelsManifestConfig: GroupCodexModelsManifestConfig{
+				Enabled: true, AccountIDs: []int64{202, 101}, FallbackToScheduler: true,
+			},
+		},
+	}
+
+	snapshot := svc.snapshotFromAPIKey(context.Background(), apiKey)
+	require.NotNil(t, snapshot)
+	require.Equal(t, apiKey.Group.CodexModelsManifestConfig, snapshot.Group.CodexModelsManifestConfig)
+	roundTrip := svc.snapshotToAPIKey(apiKey.Key, snapshot)
+	require.NotNil(t, roundTrip)
+	require.Equal(t, apiKey.Group.CodexModelsManifestConfig, roundTrip.Group.CodexModelsManifestConfig)
+}

@@ -89,6 +89,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // video_duration_seconds
 			sqlmock.AnyArg(), // service_tier
 			sqlmock.AnyArg(), // reasoning_effort
+			sqlmock.AnyArg(), // requested_reasoning_effort
 			sqlmock.AnyArg(), // inbound_endpoint
 			sqlmock.AnyArg(), // upstream_endpoint
 			log.CacheTTLOverridden,
@@ -98,7 +99,9 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // billing_tier
 			sqlmock.AnyArg(), // billing_mode
 			sqlmock.AnyArg(), // account_stats_cost
-			sqlmock.AnyArg(), // session_id
+			sql.NullString{}, // upstream_request_id
+			sql.NullString{}, // session_id
+			log.NativeCompactionV2,
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
@@ -180,9 +183,10 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // video_resolution
 			sqlmock.AnyArg(), // video_duration_seconds
 			serviceTier,
-			sqlmock.AnyArg(),
-			sqlmock.AnyArg(),
-			sqlmock.AnyArg(),
+			sqlmock.AnyArg(), // reasoning_effort
+			sqlmock.AnyArg(), // requested_reasoning_effort
+			sqlmock.AnyArg(), // inbound_endpoint
+			sqlmock.AnyArg(), // upstream_endpoint
 			log.CacheTTLOverridden,
 			log.LongContextBillingApplied,
 			sqlmock.AnyArg(), // channel_id
@@ -190,7 +194,9 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // billing_tier
 			sqlmock.AnyArg(), // billing_mode
 			sqlmock.AnyArg(), // account_stats_cost
-			sqlmock.AnyArg(), // session_id
+			sql.NullString{}, // upstream_request_id
+			sql.NullString{}, // session_id
+			log.NativeCompactionV2,
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
@@ -801,6 +807,17 @@ func (s usageLogScannerStub) Scan(dest ...any) error {
 	return nil
 }
 
+func TestAppendNativeCompactionV2WhereCondition(t *testing.T) {
+	enabled := true
+	conditions, args := appendNativeCompactionV2WhereCondition(nil, nil, &enabled, "ul")
+	require.Equal(t, []string{"ul.native_compaction_v2 = $1"}, conditions)
+	require.Equal(t, []any{true}, args)
+
+	conditions, args = appendNativeCompactionV2WhereCondition(conditions, args, nil, "ul")
+	require.Len(t, conditions, 1)
+	require.Len(t, args, 1)
+}
+
 func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 	t.Run("image_size_metadata_is_scanned", func(t *testing.T) {
 		now := time.Now().UTC()
@@ -844,14 +861,17 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			sql.NullString{},
 			sql.NullString{},
+			sql.NullString{},
 			false,
 			false,
 			sql.NullInt64{},
 			sql.NullString{},
 			sql.NullString{},
 			sql.NullString{},
-			sql.NullFloat64{},
-			sql.NullString{},
+			sql.NullFloat64{}, // account_stats_cost
+			sql.NullString{},  // upstream_request_id
+			sql.NullString{},  // session_id
+			false,             // native_compaction_v2
 			now,
 		}})
 		require.NoError(t, err)
@@ -918,9 +938,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{}, // video_resolution
 			sql.NullInt64{},  // video_duration_seconds
 			sql.NullString{Valid: true, String: "priority"},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
+			sql.NullString{}, // reasoning_effort
+			sql.NullString{}, // requested_reasoning_effort
+			sql.NullString{}, // inbound_endpoint
+			sql.NullString{}, // upstream_endpoint
 			false,
 			false,
 			sql.NullInt64{},   // channel_id
@@ -928,7 +949,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // billing_tier
 			sql.NullString{},  // billing_mode
 			sql.NullFloat64{}, // account_stats_cost
+			sql.NullString{},  // upstream_request_id
 			sql.NullString{},  // session_id
+			false,             // native_compaction_v2
 			now,
 		}})
 		require.NoError(t, err)
@@ -978,9 +1001,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{}, // video_resolution
 			sql.NullInt64{},  // video_duration_seconds
 			sql.NullString{Valid: true, String: "flex"},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
+			sql.NullString{}, // reasoning_effort
+			sql.NullString{}, // requested_reasoning_effort
+			sql.NullString{}, // inbound_endpoint
+			sql.NullString{}, // upstream_endpoint
 			false,
 			false,
 			sql.NullInt64{},   // channel_id
@@ -988,7 +1012,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // billing_tier
 			sql.NullString{},  // billing_mode
 			sql.NullFloat64{}, // account_stats_cost
+			sql.NullString{},  // upstream_request_id
 			sql.NullString{},  // session_id
+			false,             // native_compaction_v2
 			now,
 		}})
 		require.NoError(t, err)
@@ -1038,9 +1064,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{}, // video_resolution
 			sql.NullInt64{},  // video_duration_seconds
 			sql.NullString{Valid: true, String: "priority"},
-			sql.NullString{},
-			sql.NullString{},
-			sql.NullString{},
+			sql.NullString{}, // reasoning_effort
+			sql.NullString{Valid: true, String: "max"}, // requested_reasoning_effort
+			sql.NullString{}, // inbound_endpoint
+			sql.NullString{}, // upstream_endpoint
 			false,
 			false,
 			sql.NullInt64{},   // channel_id
@@ -1048,12 +1075,17 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // billing_tier
 			sql.NullString{},  // billing_mode
 			sql.NullFloat64{}, // account_stats_cost
+			sql.NullString{},  // upstream_request_id
 			sql.NullString{},  // session_id
+			true,              // native_compaction_v2
 			now,
 		}})
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "priority", *log.ServiceTier)
+		require.NotNil(t, log.RequestedReasoningEffort)
+		require.Equal(t, "max", *log.RequestedReasoningEffort)
+		require.True(t, log.NativeCompactionV2)
 	})
 
 }

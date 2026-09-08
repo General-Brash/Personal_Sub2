@@ -11,14 +11,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/migrations"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
 )
 
 const dailyCheckinMigration = "175_daily_checkin_temporary_credits.sql"
 
 func TestDailyCheckinAndActorScopeMigrations_PostgresForwardAndReentrant(t *testing.T) {
-	testcontainers.SkipIfProviderIsNotHealthy(t)
-
 	ctx := context.Background()
 	db := newMigrationTestPostgres(t, ctx)
 	require.NoError(t, createDailyCheckinMigrationPrerequisites(ctx, db))

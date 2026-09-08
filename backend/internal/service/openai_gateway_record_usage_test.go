@@ -350,7 +350,7 @@ func TestOpenAIGatewayServiceRecordUsage_ZeroUsageStillWritesUsageLog(t *testing
 	require.Zero(t, billingRepo.lastCmd.AccountQuotaCost)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_MissingPricingFailsClosedWithoutUsageLog(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_MissingPricingPreservesPersonalZeroCostLedgerPolicy(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
 	userRepo := &openAIRecordUsageUserRepoStub{}
@@ -374,16 +374,21 @@ func TestOpenAIGatewayServiceRecordUsage_MissingPricingFailsClosedWithoutUsageLo
 		APIKeyService: quotaSvc,
 	})
 
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrModelPricingUnavailable)
-	require.Equal(t, 0, billingRepo.calls)
+	require.NoError(t, err)
+	require.Equal(t, 1, billingRepo.calls)
 	require.Equal(t, 0, usageRepo.calls)
 	require.Equal(t, 0, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
 	require.Equal(t, 0, quotaSvc.quotaCalls)
 	require.Equal(t, 0, quotaSvc.rateLimitCalls)
-	require.Nil(t, billingRepo.lastCmd)
-	require.Nil(t, usageRepo.lastLog)
+	log := requireUnifiedUsageLog(t, billingRepo, usageRepo)
+	require.Equal(t, "resp_missing_pricing", log.RequestID)
+	require.Equal(t, "pricing-missing-test-model", log.Model)
+	require.Equal(t, 1200, log.InputTokens)
+	require.Equal(t, 300, log.OutputTokens)
+	require.Zero(t, log.TotalCost)
+	require.Zero(t, log.ActualCost)
+	require.Zero(t, billingRepo.lastCmd.BalanceCost)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_UsesUserSpecificGroupRate(t *testing.T) {
@@ -1872,7 +1877,7 @@ func TestOpenAIGatewayServiceRecordUsage_FallsBackToUpstreamModelWhenPrimaryUnpr
 	require.InDelta(t, expectedCost.ActualCost, userRepo.lastAmount, 1e-12)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_UnpricedTokenModelFailsClosedWithoutUsageLog(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_UnpricedTokenModelPreservesPersonalZeroCostUsage(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
@@ -1890,10 +1895,14 @@ func TestOpenAIGatewayServiceRecordUsage_UnpricedTokenModelFailsClosedWithoutUsa
 		Account: &Account{ID: 30},
 	})
 
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrModelPricingUnavailable)
-	require.Equal(t, 0, usageRepo.calls)
-	require.Nil(t, usageRepo.lastLog)
+	require.NoError(t, err)
+	require.Equal(t, 1, usageRepo.calls)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, "resp_unpriceable_without_upstream", usageRepo.lastLog.RequestID)
+	require.Equal(t, 20, usageRepo.lastLog.InputTokens)
+	require.Equal(t, 10, usageRepo.lastLog.OutputTokens)
+	require.Zero(t, usageRepo.lastLog.TotalCost)
+	require.Zero(t, usageRepo.lastLog.ActualCost)
 	require.Equal(t, 0, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
 }

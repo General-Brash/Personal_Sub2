@@ -8,7 +8,7 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.26.6-alpine
+ARG GOLANG_IMAGE=golang:1.27.0-alpine
 ARG ALPINE_IMAGE=alpine:3.21
 ARG POSTGRES_IMAGE=postgres:18-alpine
 ARG GOPROXY=https://goproxy.cn,direct
@@ -89,6 +89,7 @@ RUN --mount=type=cache,id=sub2api-gomod,target=/go/pkg/mod \
     --mount=type=cache,id=sub2api-gobuild,target=/root/.cache/go-build \
     VERSION_VALUE="${VERSION}" && \
     if [ -z "${VERSION_VALUE}" ]; then VERSION_VALUE="$(./scripts/resolve-version.sh)"; fi && \
+    VERSION_VALUE="${VERSION_VALUE#v}" && \
     DATE_VALUE="${DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
     -tags embed \
@@ -110,7 +111,7 @@ FROM ${ALPINE_IMAGE}
 # Labels
 LABEL maintainer="General-Brash <github.com/General-Brash>"
 LABEL org.opencontainers.image.title="Personal_Sub2"
-LABEL org.opencontainers.image.description="Personal_Sub2 - personal edition based on the official v0.1.178 codebase"
+LABEL org.opencontainers.image.description="Personal_Sub2 - Personal AI API Gateway (official v0.2.1-P1 integration)"
 LABEL org.opencontainers.image.source="https://github.com/General-Brash/Personal_Sub2"
 LABEL org.opencontainers.image.documentation="https://github.com/General-Brash/Personal_Sub2#readme"
 LABEL org.opencontainers.image.url="https://github.com/General-Brash/Personal_Sub2"

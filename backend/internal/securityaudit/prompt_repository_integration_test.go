@@ -1,3 +1,5 @@
+//go:build integration
+
 package securityaudit
 
 import (
@@ -18,13 +20,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const promptAuditPostgresTestEnv = "PROMPT_AUDIT_TEST_POSTGRES_DSN"
-
 func openPromptAuditIntegrationDB(t *testing.T) *sql.DB {
 	t.Helper()
-	dsn := strings.TrimSpace(os.Getenv(promptAuditPostgresTestEnv))
+	dsn := promptAuditPostgresDSN()
 	if dsn == "" {
-		t.Skip(promptAuditPostgresTestEnv + " is not set")
+		t.Fatal("dedicated validation config resolved an empty database DSN")
 	}
 	db, err := sql.Open("postgres", dsn)
 	require.NoError(t, err)

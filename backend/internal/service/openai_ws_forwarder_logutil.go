@@ -161,12 +161,15 @@ func openAIWSEventMayContainToolCalls(eventType string) bool {
 }
 
 func openAIWSEventShouldParseUsage(eventType string) bool {
-	switch strings.TrimSpace(eventType) {
-	case "response.completed", "response.done", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
+	eventType = strings.TrimSpace(eventType)
+	if eventType == "error" || openAIStreamEventTypeIsTerminal(eventType) {
 		return true
-	default:
-		return false
 	}
+	return strings.HasPrefix(eventType, "response.") && !strings.HasSuffix(eventType, ".delta")
+}
+
+func openAIWSMessageShouldParseUsage(eventType string, message []byte) bool {
+	return openAIWSEventShouldParseUsage(eventType) && bytes.Contains(message, []byte(`"usage"`))
 }
 
 func parseOpenAIWSEventEnvelope(message []byte) (eventType string, responseID string, response gjson.Result) {

@@ -1,28 +1,51 @@
 name: Publish Intent Classifier Image
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # Release owns tag publication after CI and security gates pass.
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Existing release tag to publish'
+        required: true
+        type: string
+      target_sha:
+        description: 'Commit SHA the release tag must resolve to'
+        required: true
+        type: string
+      simple_release:
+        description: 'Only publish the linux/amd64 image'
+        required: false
+        type: boolean
+        default: false
+      promote_latest:
+        description: 'Also move classifier latest to this tag'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       version:
         description: 'Existing release tag to publish'
         required: true
         type: string
-        default: 'v0.1.178-P1'
+        default: 'v0.2.1-P1'
+      promote_latest:
+        description: 'Also move classifier latest to this tag (manual runs default to false)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: publish-intent-classifier-${{ github.ref }}-${{ inputs.version || '' }}
+  group: publish-intent-classifier-${{ github.workflow }}-${{ inputs.target_sha || github.sha }}-${{ inputs.tag || inputs.version || github.ref_name }}
   cancel-in-progress: true
 
 env:
   IMAGE_NAME: ghcr.io/general-brash/personal_sub2-intent-classifier
-  VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+  TAG_NAME: ${{ inputs.tag || inputs.version || github.ref_name }}
 
 jobs:
   publish:
@@ -32,19 +55,51 @@ jobs:
 
     steps:
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+          ref: ${{ env.TAG_NAME }}
+          fetch-depth: 0
 
       - name: Resolve source metadata
         id: source
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_TARGET_SHA: ${{ inputs.target_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
         run: |
-          if [[ ! "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release version: ${VERSION}" >&2
+          if [[ ! "${TAG_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: ${TAG_NAME}" >&2
             exit 1
           fi
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+          git fetch --force --tags
+          if ! TARGET_SHA="$(git rev-parse --verify --quiet "${TAG_NAME}^{commit}")"; then
+            echo "Release tag does not resolve to a commit: ${TAG_NAME}" >&2
+            exit 1
+          fi
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          if [[ "${SOURCE_SHA}" != "${TARGET_SHA}" ]]; then
+            echo "Checked-out SHA ${SOURCE_SHA} does not match target tag SHA ${TARGET_SHA}" >&2
+            exit 1
+          fi
+          if [[ -n "${EXPECTED_TARGET_SHA}" && "${TARGET_SHA}" != "${EXPECTED_TARGET_SHA}" ]]; then
+            echo "Tag target ${TARGET_SHA} does not match requested target SHA ${EXPECTED_TARGET_SHA}" >&2
+            exit 1
+          fi
+          if [[ -z "${EXPECTED_TARGET_SHA}" && "${EVENT_NAME}" == "push" && "${TARGET_SHA}" != "${WORKFLOW_SHA}" ]]; then
+            echo "Tag target ${TARGET_SHA} does not match workflow SHA ${WORKFLOW_SHA}" >&2
+            exit 1
+          fi
+
+          VERSION="${TAG_NAME#v}"
+          VERSION_FILE="$(tr -d '\r\n' < backend/cmd/server/VERSION)"
+          if [[ "${VERSION_FILE}" != "${VERSION}" ]]; then
+            echo "VERSION file ${VERSION_FILE} does not match release version ${VERSION}" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -64,26 +119,44 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=${{ env.VERSION }}
-            type=raw,value=latest
+            type=raw,value=${{ steps.source.outputs.version }}
             type=raw,value=sha-${{ steps.source.outputs.sha }}
           labels: |
             org.opencontainers.image.title=Sub2API Intent Classifier
             org.opencontainers.image.description=ONNX secondary-review inference service for Sub2API
             org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
-            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.version=${{ steps.source.outputs.version }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Resolve publish tags
+        id: tags
+        shell: bash
+        env:
+          BASE_TAGS: ${{ steps.metadata.outputs.tags }}
+          PROMOTE_LATEST: ${{ inputs.promote_latest }}
+        run: |
+          {
+            echo 'value<<EOF'
+            printf '%s\n' "${BASE_TAGS}"
+            if [[ "${PROMOTE_LATEST}" == "true" ]]; then
+              printf '%s\n' "${IMAGE_NAME}:latest"
+            fi
+            echo 'EOF'
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: ./services/intent-classifier
           file: ./services/intent-classifier/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ inputs.simple_release && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: true
-          tags: ${{ steps.metadata.outputs.tags }}
+          tags: ${{ steps.tags.outputs.value }}
           labels: ${{ steps.metadata.outputs.labels }}
+
           cache-from: type=gha,scope=intent-classifier
           cache-to: type=gha,mode=max,scope=intent-classifier
           provenance: false

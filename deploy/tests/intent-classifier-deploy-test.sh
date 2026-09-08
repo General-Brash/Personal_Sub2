@@ -29,7 +29,7 @@ for compose in \
     ' "${path}")
 
     [[ -n "${block}" ]] || fail "${compose} has no sub2api service"
-    assert_contains "${block}" 'image: ghcr.io/general-brash/personal_sub2:latest'
+    assert_contains "${block}" 'image: ghcr.io/general-brash/personal_sub2:${SUB2API_IMAGE_TAG:-latest}'
     if [[ "${block}" == *'weishaw/sub2api'* ]]; then
         fail "${compose} uses the official sub2api image"
     fi
@@ -48,7 +48,7 @@ for compose in \
     ' "${path}")
 
     [[ -n "${block}" ]] || fail "${compose} has no intent-classifier service"
-    assert_contains "${block}" 'ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.178-P1'
+    assert_contains "${block}" 'ghcr.io/general-brash/personal_sub2-intent-classifier:${SUB2API_IMAGE_TAG:-latest}'
     assert_contains "${block}" 'target: /models'
     assert_contains "${block}" 'read_only: true'
     assert_contains "${block}" 'intent_classifier_state:/state'
@@ -64,9 +64,9 @@ done
 
 grep -q '^INTENT_CLASSIFIER_MODEL_DIR=./intent-models$' "${DEPLOY_DIR}/.env.example" \
     || fail '.env.example is missing the model directory'
-grep -q '^INTENT_CLASSIFIER_IMAGE=ghcr.io/general-brash/personal_sub2-intent-classifier:v0.1.178-P1$' \
+grep -q '^INTENT_CLASSIFIER_IMAGE=$' \
     "${DEPLOY_DIR}/.env.example" \
-    || fail '.env.example is missing the versioned GHCR classifier image'
+    || fail '.env.example is missing the classifier image override slot'
 grep -q '^INTENT_CLASSIFIER_ADMIN_TOKEN=' "${DEPLOY_DIR}/.env.example" \
     || fail '.env.example is missing the admin token'
 grep -q '^INTENT_CLASSIFIER_INFERENCE_TIMEOUT_MS=250$' "${DEPLOY_DIR}/.env.example" \
@@ -96,15 +96,24 @@ for expected in \
     'packages: write' \
     'ghcr.io/general-brash/personal_sub2-intent-classifier' \
     'context: ./services/intent-classifier' \
-    'platforms: linux/amd64,linux/arm64' \
-    'type=raw,value=${{ env.VERSION }}' \
-    'type=raw,value=latest' \
+    "platforms: \${{ inputs.simple_release && 'linux/amd64' || 'linux/amd64,linux/arm64' }}" \
+    'type=raw,value=${{ steps.source.outputs.version }}' \
     'type=raw,value=sha-${{ steps.source.outputs.sha }}' \
     'provenance: false' \
     'sbom: false'; do
     grep -Fq -- "${expected}" "${workflow}" \
         || fail "classifier publish workflow is missing ${expected}"
 done
+
+# A classifier rerun must not silently roll a previous release back to latest.
+grep -Fq 'latest=false' "${workflow}" \
+    || fail 'classifier publish workflow must disable automatic latest tags'
+grep -Fq 'PROMOTE_LATEST: ${{ inputs.promote_latest }}' "${workflow}" \
+    || fail 'classifier publish workflow must use the explicit latest promotion input'
+grep -Fq 'if [[ "${PROMOTE_LATEST}" == "true" ]]; then' "${workflow}" \
+    || fail 'classifier publish workflow must guard the latest tag with explicit promotion'
+grep -Fq '${IMAGE_NAME}:latest' "${workflow}" \
+    || fail 'classifier publish workflow is missing the explicit latest promotion tag'
 
 if grep -Eq 'model\.onnx|intent-models|/models' "${workflow}"; then
     fail 'classifier publish workflow must not package model data'

@@ -97,13 +97,19 @@ export SUB2API_ENV_FILE=/absolute/path/to/sub2api.env
 ./apple-container.sh up
 ```
 
-Apple-specific image overrides are available:
+Apple image selection follows the shared normalized release tag by default:
 
 ```dotenv
-APPLE_CONTAINER_SUB2API_IMAGE=ghcr.io/general-brash/personal_sub2:latest
+SUB2API_IMAGE_TAG=latest
+APPLE_CONTAINER_SUB2API_IMAGE=
 APPLE_CONTAINER_POSTGRES_IMAGE=postgres:18-alpine
 APPLE_CONTAINER_REDIS_IMAGE=redis:8-alpine
 ```
+
+Leave `APPLE_CONTAINER_SUB2API_IMAGE` empty to resolve
+`ghcr.io/general-brash/personal_sub2:${SUB2API_IMAGE_TAG}`. Set it to an
+explicit tag or digest when the Apple deployment must be pinned independently.
+
 
 The normal `up` command recreates the application container, so application environment changes are applied immediately. Use `up --recreate` when changing PostgreSQL or Redis container images or Redis runtime configuration. Persistent data remains in named volumes.
 
@@ -175,7 +181,7 @@ To restore these backups into an existing stack, first ensure the image versions
 
 # Remove only the app container so a helper can mount its named volume.
 container delete sub2api-apple
-SUB2API_IMAGE=ghcr.io/general-brash/personal_sub2:latest # Match APPLE_CONTAINER_SUB2API_IMAGE in .env.
+SUB2API_IMAGE=ghcr.io/general-brash/personal_sub2:latest # Default resolved from SUB2API_IMAGE_TAG.
 container run --rm --name sub2api-apple-data-restore \
   --entrypoint /bin/sh \
   --volume sub2api-apple-data:/restore \

@@ -305,7 +305,7 @@ func TestPricingRequestToService_Defaults(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := pricingRequestToService([]channelModelPricingRequest{tt.req})
+			result := pricingRequestToService([]channelModelPricingRequest{tt.req}, true)
 			require.Len(t, result, 1)
 			switch tt.wantField {
 			case "BillingMode":
@@ -332,7 +332,7 @@ func TestPricingRequestToService_WithAllFields(t *testing.T) {
 		},
 	}
 
-	result := pricingRequestToService(reqs)
+	result := pricingRequestToService(reqs, true)
 	require.Len(t, result, 1)
 	r := result[0]
 	require.Equal(t, "openai", r.Platform)
@@ -373,7 +373,7 @@ func TestPricingRequestToService_WithIntervals(t *testing.T) {
 		},
 	}
 
-	result := pricingRequestToService(reqs)
+	result := pricingRequestToService(reqs, true)
 	require.Len(t, result, 1)
 	require.Len(t, result[0].Intervals, 2)
 
@@ -396,7 +396,7 @@ func TestPricingRequestToService_WithIntervals(t *testing.T) {
 }
 
 func TestPricingRequestToService_EmptySlice(t *testing.T) {
-	result := pricingRequestToService([]channelModelPricingRequest{})
+	result := pricingRequestToService([]channelModelPricingRequest{}, true)
 	require.NotNil(t, result)
 	require.Empty(t, result)
 }
@@ -410,7 +410,7 @@ func TestPricingRequestToService_NilPriceFields(t *testing.T) {
 		},
 	}
 
-	result := pricingRequestToService(reqs)
+	result := pricingRequestToService(reqs, true)
 	require.Len(t, result, 1)
 	r := result[0]
 	require.Nil(t, r.InputPrice)
@@ -433,13 +433,13 @@ func TestPricingRequestToService_TimePricing(t *testing.T) {
 		},
 	}
 
-	got := pricingRequestToService([]channelModelPricingRequest{req})
+	got := pricingRequestToService([]channelModelPricingRequest{req}, true)
 	require.Equal(t, "Asia/Shanghai", got[0].TimePricing.Timezone)
 	require.Equal(t, 2.0, got[0].TimePricing.Periods[0].Multiplier)
 }
 
 func TestPricingRequestToService_TimePricingNil(t *testing.T) {
-	got := pricingRequestToService([]channelModelPricingRequest{{Models: []string{"gpt-5"}}})
+	got := pricingRequestToService([]channelModelPricingRequest{{Models: []string{"gpt-5"}}}, true)
 	require.Nil(t, got[0].TimePricing)
 }
 
@@ -517,4 +517,22 @@ func TestSyncPricingModels_ValidPlatform_EmptyService(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 		require.NotNil(t, body.Data.Models, "models must not be null for platform=%s", platform)
 	}
+}
+
+func TestPricingRequestToService_ChannelMultipliersStayOutOfAccountStats(t *testing.T) {
+	fast, flex, max, cache1h := 2.0, 0.5, 1.75, 0.003
+	inputMultiplier := 1.25
+	req := channelModelPricingRequest{Models: []string{"gpt-6-astra"}, FastMultiplier: &fast, FlexMultiplier: &flex, MaxReasoningEffortMultiplier: &max, CacheWrite1hPrice: &cache1h, Intervals: []pricingIntervalRequest{{InputMultiplier: &inputMultiplier, CacheWrite1hPrice: &cache1h}}}
+	main := pricingRequestToService([]channelModelPricingRequest{req}, true)
+	require.Equal(t, &fast, main[0].FastMultiplier)
+	require.Equal(t, &flex, main[0].FlexMultiplier)
+	require.Equal(t, &max, main[0].MaxReasoningEffortMultiplier)
+	require.Equal(t, &inputMultiplier, main[0].Intervals[0].InputMultiplier)
+	stats := accountStatsPricingRuleRequestToService(accountStatsPricingRuleRequest{Pricing: []channelModelPricingRequest{req}})
+	require.Nil(t, stats.Pricing[0].FastMultiplier)
+	require.Nil(t, stats.Pricing[0].FlexMultiplier)
+	require.Nil(t, stats.Pricing[0].MaxReasoningEffortMultiplier)
+	require.Nil(t, stats.Pricing[0].Intervals[0].InputMultiplier)
+	require.Equal(t, &cache1h, stats.Pricing[0].CacheWrite1hPrice)
+	require.Equal(t, &cache1h, stats.Pricing[0].Intervals[0].CacheWrite1hPrice)
 }

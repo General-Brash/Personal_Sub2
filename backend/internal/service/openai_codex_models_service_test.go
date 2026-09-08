@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,138 @@ import (
 
 type codexModelsHTTPUpstreamStub struct {
 	do func(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error)
+}
+
+type codexModelsVisibilityAccountRepo struct {
+	AccountRepository
+	byGroup map[int64][]Account
+}
+
+func (r codexModelsVisibilityAccountRepo) ListSchedulableByGroupID(_ context.Context, groupID int64) ([]Account, error) {
+	accounts := r.byGroup[groupID]
+	return append([]Account(nil), accounts...), nil
+}
+
+func (r codexModelsVisibilityAccountRepo) ListModelAvailabilityCandidates(_ context.Context, groupID *int64, _ []string, _ bool) ([]Account, error) {
+	if groupID == nil {
+		return nil, nil
+	}
+	accounts := r.byGroup[*groupID]
+	return append([]Account(nil), accounts...), nil
+}
+
+type countingCodexModelsAccountRepo struct {
+	AccountRepository
+	accounts        []Account
+	err             error
+	availabilityErr error
+	groupID         *int64
+	platforms       []string
+	includeGrouped  bool
+	calls           atomic.Int32
+}
+
+func (r *countingCodexModelsAccountRepo) ListSchedulableByGroupID(_ context.Context, _ int64) ([]Account, error) {
+	r.calls.Add(1)
+	if r.err != nil {
+		return nil, r.err
+	}
+	return append([]Account(nil), r.accounts...), nil
+}
+
+func (r *countingCodexModelsAccountRepo) ListModelAvailabilityCandidates(_ context.Context, groupID *int64, platforms []string, includeGrouped bool) ([]Account, error) {
+	if groupID != nil {
+		value := *groupID
+		r.groupID = &value
+	}
+	r.platforms = append([]string(nil), platforms...)
+	r.includeGrouped = includeGrouped
+	if r.availabilityErr != nil {
+		return nil, r.availabilityErr
+	}
+	return append([]Account(nil), r.accounts...), nil
+}
+
+type splitCodexModelsAccountRepo struct {
+	AccountRepository
+	schedulable map[int64][]Account
+	catalog     map[int64][]Account
+	all         map[int64][]Account
+}
+
+func (r splitCodexModelsAccountRepo) ListSchedulableByGroupID(_ context.Context, groupID int64) ([]Account, error) {
+	return append([]Account(nil), r.schedulable[groupID]...), nil
+}
+
+func (r splitCodexModelsAccountRepo) ListByGroup(_ context.Context, groupID int64) ([]Account, error) {
+	accounts := r.all[groupID]
+	if accounts == nil {
+		accounts = r.catalog[groupID]
+	}
+	return append([]Account(nil), accounts...), nil
+}
+
+func (r splitCodexModelsAccountRepo) ListModelAvailabilityCandidates(_ context.Context, groupID *int64, _ []string, _ bool) ([]Account, error) {
+	if groupID == nil {
+		return nil, nil
+	}
+	return append([]Account(nil), r.catalog[*groupID]...), nil
+}
+
+func newCodexCatalogMappedAccount(
+	id int64,
+	target string,
+	displayName string,
+	levels []string,
+	modalities []string,
+	contextWindow int64,
+	schedulable bool,
+	extraMapping map[string]any,
+) Account {
+	reasoning := true
+	mapping := map[string]any{"my-coder": target}
+	for key, value := range extraMapping {
+		mapping[key] = value
+	}
+	account := Account{
+		ID:          id,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: schedulable,
+		Credentials: map[string]any{
+			"base_url":      fmt.Sprintf("https://provider-%d.example/v1", id),
+			"model_mapping": mapping,
+		},
+	}
+	models := map[string]UpstreamModelMetadata{
+		target: {
+			ID:                       target,
+			DisplayName:              displayName,
+			Description:              displayName + " upstream",
+			Reasoning:                &reasoning,
+			SupportedReasoningLevels: levels,
+			InputModalities:          modalities,
+			ContextWindow:            contextWindow,
+		},
+	}
+	for _, value := range extraMapping {
+		exclusive, _ := value.(string)
+		if exclusive == "" || exclusive == target {
+			continue
+		}
+		models[exclusive] = UpstreamModelMetadata{
+			ID:                       exclusive,
+			DisplayName:              "Exclusive Model",
+			Description:              "Only mapped on the unschedulable account",
+			Reasoning:                &reasoning,
+			SupportedReasoningLevels: []string{"high"},
+			InputModalities:          []string{"text", "image"},
+			ContextWindow:            1_000_000,
+		}
+	}
+	account.SetUpstreamModelMetadataSnapshot(UpstreamModelMetadataSnapshot{Models: models})
+	return account
 }
 
 type codexModelsBlockingBody struct {
@@ -53,6 +186,95 @@ func (s *codexModelsHTTPUpstreamStub) Do(req *http.Request, proxyURL string, acc
 
 func (s *codexModelsHTTPUpstreamStub) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, _ *tlsfingerprint.Profile) (*http.Response, error) {
 	return s.Do(req, proxyURL, accountID, accountConcurrency)
+}
+
+func decodeCodexManifestModels(t *testing.T, body []byte) []map[string]any {
+	t.Helper()
+
+	var envelope struct {
+		Models []map[string]any `json:"models"`
+	}
+	require.NoError(t, json.Unmarshal(body, &envelope))
+	return envelope.Models
+}
+
+func requireCompleteConfiguredCodexModel(t *testing.T, model map[string]any, slug string) {
+	t.Helper()
+
+	require.Equal(t, slug, model["slug"])
+	require.NotEmpty(t, model["display_name"])
+	require.NotEmpty(t, model["description"])
+	require.Equal(t, "unified_exec", model["shell_type"])
+	require.Equal(t, "list", model["visibility"])
+	require.Equal(t, true, model["supported_in_api"])
+	require.NotNil(t, model["priority"])
+	require.Equal(t, []any{}, model["additional_speed_tiers"])
+	require.IsType(t, []any{}, model["service_tiers"])
+	require.Contains(t, model, "default_service_tier")
+	require.Contains(t, model, "availability_nux")
+	require.Contains(t, model, "upgrade")
+	require.Contains(t, model, "default_verbosity")
+	require.Contains(t, model, "apply_patch_tool_type")
+	require.Contains(t, model, "auto_compact_token_limit")
+	require.Contains(t, model, "comp_hash")
+	require.Contains(t, model, "auto_review_model_override")
+	require.Contains(t, model, "model_specialty")
+	require.Contains(t, model, "tool_mode")
+	require.Contains(t, model, "multi_agent_version")
+	require.Equal(t, true, model["supports_reasoning_summary_parameter"])
+	require.Contains(t, model, "include_skills_usage_instructions")
+	require.Contains(t, model, "include_plugin_usage_instructions")
+	require.Contains(t, model, "include_apps_usage_instructions")
+	require.Contains(t, model, "supports_image_detail_original")
+	require.Contains(t, model, "node_repl_auto_review_required")
+	require.Contains(t, model, "node_repl_disabled")
+	require.Contains(t, model, "truncation_policy")
+	require.Contains(t, model, "supports_parallel_tool_calls")
+	require.Contains(t, model, "experimental_supported_tools")
+	modelMessages, ok := model["model_messages"].(map[string]any)
+	require.True(t, ok)
+	require.NotEmpty(t, modelMessages["instructions_template"])
+	for _, key := range []string{
+		"instructions_variables",
+		"approvals",
+		"collaboration_modes",
+		"auto_review",
+		"permissions",
+		"multi_agent",
+		"token_budget",
+		"guardian_v2",
+	} {
+		require.Contains(t, modelMessages, key)
+	}
+}
+
+func codexManifestModelSlugs(t *testing.T, body []byte) []string {
+	t.Helper()
+
+	models := decodeCodexManifestModels(t, body)
+	slugs := make([]string, 0, len(models))
+	for _, model := range models {
+		slug, ok := model["slug"].(string)
+		require.True(t, ok)
+		slugs = append(slugs, slug)
+	}
+	return slugs
+}
+
+func effortsFromManifestModel(t *testing.T, model map[string]any) []string {
+	t.Helper()
+
+	levels, ok := model["supported_reasoning_levels"].([]any)
+	require.True(t, ok)
+	efforts := make([]string, 0, len(levels))
+	for _, rawLevel := range levels {
+		level, ok := rawLevel.(map[string]any)
+		require.True(t, ok)
+		effort, ok := level["effort"].(string)
+		require.True(t, ok)
+		efforts = append(efforts, effort)
+	}
+	return efforts
 }
 
 func TestIsRetryableCodexModelsManifestTransportError(t *testing.T) {
@@ -354,11 +576,12 @@ func TestFetchCodexModelsManifestDefaultClientVersion(t *testing.T) {
 }
 
 func TestFetchCodexModelsManifestNotModified(t *testing.T) {
-	var gotIfNoneMatch string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotIfNoneMatch = r.Header.Get("If-None-Match")
+	manifestBody := `{"models":[{"slug":"gpt-5.5"}]}`
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
 		w.Header().Set("ETag", `W/"abc123"`)
-		w.WriteHeader(http.StatusNotModified)
+		_, _ = w.Write([]byte(manifestBody))
 	}))
 	defer server.Close()
 
@@ -367,15 +590,32 @@ func TestFetchCodexModelsManifestNotModified(t *testing.T) {
 	defer func() { chatgptCodexModelsURL = original }()
 
 	s := &OpenAIGatewayService{}
-	manifest, err := s.FetchCodexModelsManifest(context.Background(), newCodexModelsTestAccount(), "0.137.0", `W/"abc123"`)
+	account := newCodexModelsTestAccount()
+	first, err := s.FetchCodexModelsManifest(context.Background(), account, "0.137.0", "")
 	if err != nil {
 		t.Fatalf("FetchCodexModelsManifest returned error: %v", err)
 	}
-	if !manifest.NotModified {
-		t.Error("expected NotModified to be true")
+	if first.NotModified {
+		t.Fatal("cold fetch must return the manifest body")
 	}
-	if gotIfNoneMatch != `W/"abc123"` {
-		t.Errorf("if-none-match header: got %q", gotIfNoneMatch)
+	if first.ETag != `W/"abc123"` {
+		t.Errorf("etag not passed through: got %q", first.ETag)
+	}
+
+	// OAuth 路径接入缓存后，客户端 If-None-Match 与缓存内容 ETag 比较，不再透传上游：
+	// 新鲜期内命中缓存且匹配直接 304，零上游请求。
+	second, err := s.FetchCodexModelsManifest(context.Background(), account, "0.137.0", `W/"abc123"`)
+	if err != nil {
+		t.Fatalf("cached fetch returned error: %v", err)
+	}
+	if !second.NotModified {
+		t.Fatal("matching cached ETag must return NotModified")
+	}
+	if second.ETag != `W/"abc123"` {
+		t.Errorf("NotModified etag: got %q", second.ETag)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("upstream calls: got %d, want 1", got)
 	}
 }
 
@@ -471,6 +711,42 @@ func TestFetchCodexModelsManifestAPIKeyCustomUpstream(t *testing.T) {
 	}
 }
 
+// Scenario: a final client-visible body gets a strong ETag even when the
+// upstream omitted ETag; the same final ETag must support a local 304.
+func TestFetchCodexModelsManifestAPIKeyCompleteBodyWithoutUpstreamETagUsesFinalBodyETag(t *testing.T) {
+	completeBody, err := BuildCodexModelsManifest([]string{"custom-complete-model"})
+	require.NoError(t, err)
+
+	var calls atomic.Int32
+	upstream := &codexModelsHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+		calls.Add(1)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(string(completeBody))),
+		}, nil
+	}}
+	svc := newCodexModelsAPIKeyTestService(upstream)
+	svc.accountRepo = codexModelsVisibilityAccountRepo{}
+	account := newCodexModelsAPIKeyTestAccount("https://upstream.example/v1")
+	group := &Group{ID: 82, Platform: PlatformOpenAI}
+
+	first, err := svc.FetchCodexModelsManifest(context.Background(), account, "0.150.0", "")
+	require.NoError(t, err)
+	require.NoError(t, svc.CompleteAPIKeyCodexModelsManifestForClient(first, account))
+	require.NoError(t, svc.MergeGroupConfiguredCodexModels(context.Background(), group, first, ""))
+	require.Equal(t, codexModelsManifestBodyETag(first.Body), first.ETag)
+	require.NotEmpty(t, first.ETag)
+
+	second, err := svc.FetchCodexModelsManifest(context.Background(), account, "0.150.0", "")
+	require.NoError(t, err)
+	require.NoError(t, svc.CompleteAPIKeyCodexModelsManifestForClient(second, account))
+	require.NoError(t, svc.MergeGroupConfiguredCodexModels(context.Background(), group, second, first.ETag))
+	require.True(t, second.NotModified)
+	require.Empty(t, second.Body)
+	require.Equal(t, int32(1), calls.Load())
+}
+
 func TestFetchCodexModelsManifestAPIKeyConvertsStandardOpenAIModelList(t *testing.T) {
 	upstreamBody := `{"object":"list","data":[{"id":"gpt-5.6","object":"model"},{"id":"  ","object":"model"},{"id":"gpt-5.6-codex","object":"model"}]}`
 	upstream := &codexModelsHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
@@ -493,9 +769,12 @@ func TestFetchCodexModelsManifestAPIKeyConvertsStandardOpenAIModelList(t *testin
 	if err != nil {
 		t.Fatalf("FetchCodexModelsManifest returned error: %v", err)
 	}
-	if got, want := string(manifest.Body), `{"models":[{"slug":"gpt-5.6"},{"slug":"gpt-5.6-codex"}]}`; got != want {
-		t.Errorf("converted body: got %q, want %q", got, want)
-	}
+	models := decodeCodexManifestModels(t, manifest.Body)
+	require.Len(t, models, 2)
+	requireCompleteConfiguredCodexModel(t, models[0], "gpt-5.6")
+	requireCompleteConfiguredCodexModel(t, models[1], "gpt-5.6-codex")
+	require.Equal(t, []any{"text", "image"}, models[0]["input_modalities"])
+	require.Equal(t, []any{"text", "image"}, models[1]["input_modalities"])
 	require.Equal(t, codexModelsManifestBodyETag(manifest.Body), manifest.ETag)
 	require.Equal(t, `W/"openai-list"`, manifest.upstreamETag)
 }
@@ -525,7 +804,7 @@ func TestAdjustAPIKeyCodexModelsManifest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := adjustAPIKeyCodexModelsManifest([]byte(tt.body))
+			got, err := adjustAPIKeyCodexModelsManifest([]byte(tt.body), nil)
 			require.NoError(t, err)
 			require.Equal(t, tt.want, string(got))
 		})
@@ -572,16 +851,19 @@ func TestFetchCodexModelsManifestOAuthPreservesResponsesLite(t *testing.T) {
 }
 
 func TestConvertOpenAIModelListToCodexManifest(t *testing.T) {
+	t.Run("standard list uses complete descriptors", func(t *testing.T) {
+		converted := convertOpenAIModelListToCodexManifest([]byte(`{"object":"list","data":[{"id":"m-1"},{"id":"m-2"}]}`))
+		models := decodeCodexManifestModels(t, converted)
+		require.Len(t, models, 2)
+		requireCompleteConfiguredCodexModel(t, models[0], "m-1")
+		requireCompleteConfiguredCodexModel(t, models[1], "m-2")
+	})
+
 	tests := []struct {
 		name string
 		body string
 		want string
 	}{
-		{
-			name: "standard list",
-			body: `{"object":"list","data":[{"id":"m-1"},{"id":"m-2"}]}`,
-			want: `{"models":[{"slug":"m-1"},{"slug":"m-2"}]}`,
-		},
 		{
 			name: "codex manifest unchanged",
 			body: `{"models":[{"slug":"m-1"}]}`,
@@ -920,7 +1202,10 @@ func TestFetchCodexModelsManifestAPIKeyCacheBoundsEntriesAndBodySize(t *testing.
 	upstream := &codexModelsHTTPUpstreamStub{do: func(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
 		calls.Add(1)
 		body := `{"models":[]}`
-		if strings.Contains(req.URL.Host, "large") {
+		switch {
+		case strings.Contains(req.URL.Host, "large-source"):
+			body = `{"object":"list","data":[{"id":"model-a","padding":"` + strings.Repeat("x", 1<<20) + `"}]}`
+		case strings.Contains(req.URL.Host, "large"):
 			body = `{"models":[],"padding":"` + strings.Repeat("x", (1<<20)+1) + `"}`
 		}
 		return &http.Response{
@@ -944,26 +1229,30 @@ func TestFetchCodexModelsManifestAPIKeyCacheBoundsEntriesAndBodySize(t *testing.
 	large.ID = 3
 	fetch(large)
 	fetch(large)
-	if got := calls.Load(); got != 3 {
-		t.Fatalf("body-size bounded cache calls: got %d, want 3", got)
+	largeSource := newCodexModelsAPIKeyTestAccount("https://large-source.example")
+	largeSource.ID = 4
+	fetch(largeSource)
+	fetch(largeSource)
+	if got := calls.Load(); got != 5 {
+		t.Fatalf("body-size bounded cache calls: got %d, want 5", got)
 	}
 
-	for i := int64(10); i < 75; i++ {
+	for i := int64(10); i < 523; i++ {
 		account := newCodexModelsAPIKeyTestAccount("https://bounded.example")
 		account.ID = i
 		fetch(account)
 	}
 	last := newCodexModelsAPIKeyTestAccount("https://bounded.example")
-	last.ID = 74
+	last.ID = 522
 	fetch(last)
-	if got := calls.Load(); got != 68 {
-		t.Fatalf("most recent cache entry was not retained: calls=%d, want 68", got)
+	if got := calls.Load(); got != 518 {
+		t.Fatalf("most recent cache entry was not retained: calls=%d, want 518", got)
 	}
 	first := newCodexModelsAPIKeyTestAccount("https://bounded.example")
 	first.ID = 10
 	fetch(first)
-	if got := calls.Load(); got != 69 {
-		t.Errorf("oldest cache entry was not evicted: calls=%d, want 69", got)
+	if got := calls.Load(); got != 519 {
+		t.Errorf("oldest cache entry was not evicted: calls=%d, want 519", got)
 	}
 }
 
@@ -1416,7 +1705,7 @@ func TestFetchCodexModelsManifestAPIKeyUpstreamError(t *testing.T) {
 	}
 }
 
-func TestFetchCodexModelsManifestAPIKeyRejectsOfficialOpenAIBaseURL(t *testing.T) {
+func TestFetchCodexModelsManifestAPIKeyUsesOfficialOpenAIModelsEndpoint(t *testing.T) {
 	tests := []struct {
 		name    string
 		baseURL string
@@ -1428,23 +1717,32 @@ func TestFetchCodexModelsManifestAPIKeyRejectsOfficialOpenAIBaseURL(t *testing.T
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := newCodexModelsAPIKeyTestService(&codexModelsHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
-				t.Fatal("official OpenAI API key must not be used as a Codex manifest upstream")
-				return nil, nil
+			var gotURL string
+			s := newCodexModelsAPIKeyTestService(&codexModelsHTTPUpstreamStub{do: func(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+				gotURL = req.URL.String()
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(`{"object":"list","data":[{"id":"gpt-5.6-sol"}]}`)),
+				}, nil
 			}})
 
-			_, err := s.FetchCodexModelsManifest(
+			manifest, err := s.FetchCodexModelsManifest(
 				context.Background(),
 				newCodexModelsAPIKeyTestAccount(tt.baseURL),
 				"0.144.0",
 				"",
 			)
-			if err == nil {
-				t.Fatal("expected unsupported API key upstream error, got nil")
-			}
-			if infraerrors.Reason(err) != "OPENAI_CODEX_MODELS_API_KEY_UPSTREAM_UNSUPPORTED" {
-				t.Errorf("error reason: got %q", infraerrors.Reason(err))
-			}
+			require.NoError(t, err)
+			parsedURL, parseErr := url.Parse(gotURL)
+			require.NoError(t, parseErr)
+			require.Equal(t, "api.openai.com", strings.ToLower(parsedURL.Hostname()))
+			require.Equal(t, "/v1/models", parsedURL.Path)
+			require.Equal(t, "0.144.0", parsedURL.Query().Get("client_version"))
+			models := decodeCodexManifestModels(t, manifest.Body)
+			require.Len(t, models, 1)
+			requireCompleteConfiguredCodexModel(t, models[0], "gpt-5.6-sol")
+			require.Equal(t, []any{"text", "image"}, models[0]["input_modalities"])
 		})
 	}
 }

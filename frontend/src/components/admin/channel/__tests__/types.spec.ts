@@ -3,6 +3,8 @@ import {
   apiTimePricingToForm,
   createDefaultTimePricingForm,
   formTimePricingToAPI,
+  apiIntervalsToForm,
+  formIntervalsToAPI,
   validateIntervals,
   validateTimePricing,
   type IntervalFormEntry,
@@ -94,7 +96,7 @@ describe('validateIntervals', () => {
 describe('time pricing', () => {
   it('uses a disabled Shanghai default', () => {
     const form = createDefaultTimePricingForm()
-    expect(form).toEqual({ timezone: 'Asia/Shanghai', periods: [] })
+    expect(form).toEqual({ timezone: 'Asia/Shanghai', weekdays_only: false, periods: [] })
     expect(formTimePricingToAPI(form)).toBeNull()
   })
 
@@ -110,6 +112,7 @@ describe('time pricing', () => {
     })
     expect(formTimePricingToAPI(form)).toEqual({
       timezone: 'Asia/Shanghai',
+      weekdays_only: false,
       periods: [{ start_time: '09:00:00', end_time: '12:00:00', multiplier: 2 }],
     })
   })
@@ -152,5 +155,29 @@ describe('time pricing', () => {
     expect(validateTimePricing(form, t)).toContain('timezone')
     expect(() => formTimePricingToAPI(form)).not.toThrow()
     expect(formTimePricingToAPI(form)?.timezone).toBe('')
+  })
+})
+
+describe('cache write 1h pricing conversion', () => {
+  it('converts cache_write_1h_price between per-token API values and $/MTok form values', () => {
+    const form = apiIntervalsToForm([{
+      min_tokens: 0,
+      max_tokens: null,
+      tier_label: '',
+      input_price: null,
+      output_price: null,
+      cache_write_price: null,
+      cache_write_1h_price: 0.000012,
+      cache_read_price: null,
+      input_multiplier: null,
+      output_multiplier: null,
+      cache_write_multiplier: null,
+      cache_read_multiplier: null,
+      per_request_price: null,
+      sort_order: 0,
+    }])
+
+    expect(form[0].cache_write_1h_price).toBe(12)
+    expect(formIntervalsToAPI(form)[0].cache_write_1h_price).toBeCloseTo(0.000012)
   })
 })

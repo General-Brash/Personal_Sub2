@@ -348,6 +348,27 @@ func TestApplyOpenAIFastPolicyToBody_BlockReturnsTypedError(t *testing.T) {
 	require.Equal(t, string(body), string(updated)) // body not mutated on block
 }
 
+func TestApplyOpenAIFastPolicyToBody_GroupForceOverridesClientTierForCompositeSnapshot(t *testing.T) {
+	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	group := &Group{
+		ID:              1,
+		Platform:        PlatformComposite,
+		Status:          StatusActive,
+		Hydrated:        true,
+		ForceOpenAIFast: true,
+	}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+
+	updated, err := svc.applyOpenAIFastPolicyToBody(ctx, account, "gpt-5.5", []byte(`{"model":"gpt-5.5","service_tier":"flex"}`))
+	require.NoError(t, err)
+	require.Equal(t, OpenAIFastTierPriority, gjson.GetBytes(updated, "service_tier").String())
+
+	updated, err = svc.applyOpenAIFastPolicyToBody(ctx, account, "gpt-5.5", []byte(`{"model":"gpt-5.5"}`))
+	require.NoError(t, err)
+	require.Equal(t, OpenAIFastTierPriority, gjson.GetBytes(updated, "service_tier").String())
+}
+
 func TestSetOpenAIFastPolicySettings_Validation(t *testing.T) {
 	repo := &openAIFastPolicyRepoStub{values: map[string]string{}}
 	svc := NewSettingService(repo, &config.Config{})

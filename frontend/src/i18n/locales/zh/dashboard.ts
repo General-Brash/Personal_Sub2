@@ -139,6 +139,32 @@ export default {
       noGroupTitle: '请先分配分组',
       noGroupDescription:
         '此 API 密钥尚未分配分组，请先在密钥列表中点击分组列进行分配，然后才能查看使用配置。',
+      deepseek: {
+        description: '通过当前 DeepSeek 分组配置 Claude Code、Codex 或 OpenCode。',
+        codexDescription: '使用 API Key 配置 Codex，并通过当前 DeepSeek 分组发送请求。',
+        codexConfigTomlHint: '下载下方模型目录，将两个文件保存到 Codex 配置目录后重启 Codex。',
+        codexNote: '启动 Codex 前先导出 SUB2API_API_KEY。下载的目录只包含模型元数据，不包含 API Key。'
+      },
+      composite: {
+        description: '通过当前 Composite 路由分组配置受支持的客户端。',
+        codexDescription: '使用 API Key 和当前 Composite 分组的完整模型目录配置 Codex。',
+        codexConfigTomlHint: '下载下方模型目录，将两个文件保存到 Codex 配置目录后重启 Codex。',
+        codexNote: '启动 Codex 前先导出 SUB2API_API_KEY；分组会根据目录中选中的模型路由请求。'
+      },
+      routedCodex: {
+        description: '使用当前路由分组的完整模型目录配置 Codex。',
+        configTomlHint: '下载下方模型目录，将两个文件保存到 Codex 配置目录后重启 Codex。',
+        note: '启动 Codex 前先导出 SUB2API_API_KEY。下载的目录只包含模型元数据，不包含 API Key。'
+      },
+      codexModelCatalog: {
+        title: 'Codex 模型目录',
+        description: '使用当前 API 密钥拉取模型清单，并保存到 Codex 配置文件旁。',
+        fetch: '拉取目录',
+        retry: '重新拉取',
+        download: '下载 JSON',
+        modelsCount: '已加载 {count} 个模型',
+        errorDescription: '无法拉取模型目录。请检查密钥、分组和网关地址后重试。',
+      },
       openai: {
         description: '将以下配置文件添加到 Codex CLI 配置目录中。',
         authModeTitle: 'Codex 认证模式',
@@ -374,6 +400,7 @@ export default {
     cacheWrite: '写入',
     serviceTier: '服务档位',
     serviceTierPriority: 'Fast',
+serviceTierUltrafast: 'Ultrafast',
     serviceTierFlex: 'Flex',
     serviceTierStandard: 'Standard',
     rate: '倍率',

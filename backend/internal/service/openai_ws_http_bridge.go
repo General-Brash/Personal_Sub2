@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -100,7 +101,7 @@ func (c *openAIWSToolCallReplayCollector) AddEvent(eventType string, message []b
 }
 
 func (c *openAIWSToolCallReplayCollector) Items() []json.RawMessage {
-	return cloneOpenAIWSRawMessages(c.items)
+	return slices.Clone(c.items)
 }
 
 func (c *openAIWSToolCallReplayCollector) addItem(item gjson.Result) {
@@ -172,7 +173,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	if s == nil {
 		return nil, errors.New("service is nil")
 	}
-	if s.httpUpstream == nil {
+	if s.httpUpstream == nil && s.pluginManager == nil {
 		return nil, errors.New("openai http upstream is nil")
 	}
 	if account == nil {
@@ -238,8 +239,14 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	}
 
 	turnStart := time.Now()
-	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 	if err != nil {
+		if openAIPluginRequestWasSent(err) {
+			// The plugin transport explicitly reports that request bytes may have
+			// been sent. Do not fail over or retry this WS turn.
+			_ = writeClientMessage(buildOpenAIWSHTTPBridgeErrorEvent(http.StatusBadGateway, "Upstream request failed"))
+			return nil, fmt.Errorf("openai plugin request sent: %w", err)
+		}
 		if turn == 1 {
 			return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, true)
 		}
@@ -251,6 +258,10 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, openAIWSHTTPBridgeErrorBodyLimitBytes))
+		markOpenAICyberPolicyEvent(c, respBody, resp.StatusCode, nil)
+		if resp.StatusCode == http.StatusBadRequest && extractUpstreamErrorCode(respBody) == openAIWSFallbackReasonInvalidEncryptedContent {
+			s.markOpenAIWSInvalidEncryptedContentLineageFromPayload(c, body, "ingress_ws_http_bridge_invalid_encrypted_lineage_mark", account.ID, turn)
+		}
 		upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
 		if upstreamMsg == "" {
 			upstreamMsg = http.StatusText(resp.StatusCode)
@@ -300,6 +311,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			mappedModel = normalizeOpenAIModelForUpstream(account, account.GetMappedModel(originalModel))
 		}
 		needModelReplace = mappedModel != "" && mappedModel != originalModel
+		SetOpsUpstreamModel(c, mappedModel)
 		if needModelReplace {
 			mappedModelBytes = []byte(mappedModel)
 		}
@@ -314,6 +326,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			UpstreamModel:                 mappedModel,
 			UpstreamResponseModel:         responseModelObserver.Model(),
 			UpstreamResponseModelConflict: responseModelObserver.Conflict(),
+			UpstreamResponseServiceTier:   responseModelObserver.ServiceTier(),
 			ServiceTier:                   extractOpenAIServiceTierFromBody(body),
 			ReasoningEffort:               ApplyThinkingEnabledFallback(extractOpenAIReasoningEffortFromBody(body, mappedModel, originalModel), body, mappedModel),
 			Stream:                        reqStream,
@@ -387,8 +400,11 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 				firstTokenMs = &ms
 			}
 		}
-		if openAIWSEventShouldParseUsage(eventType) {
+		if openAIWSMessageShouldParseUsage(eventType, upstreamMessage) {
 			parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
+		}
+		if eventType == "error" || eventType == "response.failed" {
+			markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
 		}
 		imageCounter.AddSSEData(upstreamMessage)
 
@@ -410,6 +426,9 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 				errMessage = "upstream error event"
 			}
 			statusCode := openAIWSErrorHTTPStatusFromRaw(errCodeRaw, errTypeRaw)
+			if reason, _ := classifyOpenAIWSErrorEventFromRaw(errCodeRaw, errTypeRaw, errMessage); reason == openAIWSFallbackReasonInvalidEncryptedContent {
+				s.markOpenAIWSInvalidEncryptedContentLineageFromPayload(c, body, "ingress_ws_http_bridge_invalid_encrypted_lineage_mark", account.ID, turn)
+			}
 			shouldFailover := s.shouldFailoverOpenAIUpstreamResponse(statusCode, errMessage, upstreamMessage)
 			if account.Platform == PlatformGrok {
 				// SSE error events do not carry an HTTP status. The local status
@@ -500,6 +519,9 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	}
 	if err := scanner.Err(); err != nil {
 		streamErr := fmt.Errorf("read upstream http bridge stream: %w", err)
+		if openAIPluginRequestWasSent(streamErr) {
+			return resultWithUsage(), streamErr
+		}
 		if turn == 1 && !wroteDownstream {
 			return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, streamErr, true)
 		}

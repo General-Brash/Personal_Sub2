@@ -19,6 +19,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	validation "github.com/Wei-Shaw/sub2api/internal/repository/validation"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -42,10 +43,26 @@ var (
 
 	redisNamespaceSeq uint64
 
-	integrationSkipReason string
+	integrationSkipReason      string
+	integrationTargetConfig    validation.Config
+	integrationTargetConfigSet bool
 )
 
 func TestMain(m *testing.M) {
+	cfg, err := validation.LoadFromProcess()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "integration target rejected: %v\n", err)
+		os.Exit(2)
+	}
+	if cfg.Mode == validation.ModeDedicated {
+		if err := validation.RequireDBExecution(cfg, os.Getenv); err != nil {
+			fmt.Fprintf(os.Stderr, "integration execution rejected: %v\n", err)
+			os.Exit(2)
+		}
+		runDedicatedIntegration(m, cfg)
+		return
+	}
+	// The legacy container path is available only as an explicit CI mode.
 	ctx := context.Background()
 
 	if err := timezone.Init("UTC"); err != nil {
@@ -154,6 +171,48 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func runDedicatedIntegration(m *testing.M, cfg validation.Config) {
+	ctx := context.Background()
+	integrationTargetConfig = cfg
+	integrationTargetConfigSet = true
+	if err := validation.RequireFixtureReset(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "fixture reset permission rejected: %v\n", err)
+		os.Exit(2)
+	}
+	if err := timezone.Init("UTC"); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to init timezone: %v\n", err)
+		os.Exit(1)
+	}
+	dsn := strings.TrimSpace(os.Getenv(cfg.Database.DSNEnv))
+	var err error
+	integrationDB, err = openSQLWithRetry(ctx, dsn, 30*time.Second)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to open explicitly configured postgres target: %v\n", err)
+		os.Exit(1)
+	}
+	if cfg.AllowAutoMigrate {
+		if err := ApplyMigrations(ctx, integrationDB); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to apply db migrations: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	drv := entsql.OpenDB(dialect.Postgres, integrationDB)
+	integrationEntClient = dbent.NewClient(dbent.Driver(drv))
+	integrationRedis = redisclient.NewClient(&redisclient.Options{
+		Addr: fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
+		DB:   cfg.Redis.DB,
+	})
+	if err := integrationRedis.Ping(ctx).Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to ping explicitly configured redis target: %v\n", err)
+		os.Exit(1)
+	}
+	code := m.Run()
+	_ = integrationEntClient.Close()
+	_ = integrationRedis.Close()
+	_ = integrationDB.Close()
+	os.Exit(code)
+}
+
 func TestIntegrationEnvironment(t *testing.T) {
 	if integrationSkipReason != "" {
 		t.Skip(integrationSkipReason)
@@ -241,6 +300,9 @@ func testTx(t *testing.T) *sql.Tx {
 // 注意：此 client 的操作会真正写入数据库，测试结束后不会自动回滚。
 func testEntClient(t *testing.T) *dbent.Client {
 	t.Helper()
+	if integrationTargetConfigSet {
+		require.NoError(t, validation.RequireFixtureReset(integrationTargetConfig))
+	}
 	return integrationEntClient
 }
 
@@ -248,6 +310,9 @@ func testEntClient(t *testing.T) *dbent.Client {
 // 测试结束后会自动回滚，不会影响数据库状态。
 func testEntTx(t *testing.T) *dbent.Tx {
 	t.Helper()
+	if integrationTargetConfigSet {
+		require.NoError(t, validation.RequireFixtureReset(integrationTargetConfig))
+	}
 
 	tx, err := integrationEntClient.Tx(context.Background())
 	require.NoError(t, err, "begin ent tx")

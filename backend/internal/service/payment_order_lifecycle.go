@@ -27,7 +27,7 @@ const (
 	checkPaidResultAlreadyPaid = "already_paid"
 	checkPaidResultCancelled   = "cancelled"
 
-	pendingWxpayReconcileLimit = 20
+	pendingPaymentReconcileLimit = 20
 )
 
 type checkPaidOptions struct {
@@ -178,6 +178,10 @@ func (s *PaymentService) checkPaidWithOptions(ctx context.Context, o *dbent.Paym
 		slog.Warn("query upstream failed", "orderID", o.ID, "error", err)
 		return ""
 	}
+	if resp == nil {
+		slog.Warn("query upstream returned empty response", "orderID", o.ID, "queryRef", queryRef)
+		return ""
+	}
 	if resp.Status == payment.ProviderStatusPaid {
 		if !isValidProviderAmount(resp.Amount) {
 			s.writeAuditLog(ctx, o.ID, "PAYMENT_INVALID_AMOUNT", prov.ProviderKey(), map[string]any{
@@ -222,6 +226,10 @@ func (s *PaymentService) checkPaidWithOptions(ctx context.Context, o *dbent.Paym
 	return ""
 }
 
+func isPaidProviderResponse(resp *payment.QueryOrderResponse) bool {
+	return resp != nil && resp.Status == payment.ProviderStatusPaid && isValidProviderAmount(resp.Amount)
+}
+
 func requeryPaidOrderOnce(ctx context.Context, prov payment.Provider, queryRef string) (*payment.QueryOrderResponse, bool) {
 	if prov == nil || strings.TrimSpace(queryRef) == "" {
 		return nil, false
@@ -233,7 +241,7 @@ func requeryPaidOrderOnce(ctx context.Context, prov payment.Provider, queryRef s
 		slog.Warn("query upstream retry failed", "queryRef", queryRef, "error", err)
 		return nil, false
 	}
-	if resp == nil || resp.Status != payment.ProviderStatusPaid || !isValidProviderAmount(resp.Amount) {
+	if !isPaidProviderResponse(resp) {
 		return nil, false
 	}
 	return resp, true
@@ -316,9 +324,39 @@ func (s *PaymentService) VerifyOrderByOutTradeNo(ctx context.Context, outTradeNo
 	return o, nil
 }
 
-// ReconcilePendingWxpayOrders actively checks recent pending WeChat orders so
-// missed provider notifications do not wait until order expiry to fulfill.
-func (s *PaymentService) ReconcilePendingWxpayOrders(ctx context.Context) (int, error) {
+// ReconcilePendingPaymentOrders actively checks recent pending Alipay and WeChat
+// orders so missed provider notifications do not wait until order expiry to fulfill.
+func (s *PaymentService) reconcilePendingPaymentOrdersLoaded(ctx context.Context, orders []*dbent.PaymentOrder) int {
+	return reconcilePendingPaymentBatch(ctx, orders, s.reconcilePaid)
+}
+
+// reconcilePendingPaymentBatch keeps batch traversal independent from persistence.
+// The service supplies reconcilePaid, while unit tests can inject provider/repository
+// mocks to exercise batch compensation and duplicate-run races without a database.
+func reconcilePendingPaymentBatch(ctx context.Context, orders []*dbent.PaymentOrder, reconcile func(context.Context, *dbent.PaymentOrder) string) int {
+	recovered := 0
+	if reconcile == nil {
+		return recovered
+	}
+	for _, order := range orders {
+		if ctx != nil {
+			select {
+			case <-ctx.Done():
+				return recovered
+			default:
+			}
+		}
+		if order == nil {
+			continue
+		}
+		if reconcile(ctx, order) == checkPaidResultAlreadyPaid {
+			recovered++
+		}
+	}
+	return recovered
+}
+
+func (s *PaymentService) ReconcilePendingPaymentOrders(ctx context.Context) (int, error) {
 	now := time.Now()
 	orders, err := s.entClient.PaymentOrder.Query().
 		Where(
@@ -329,21 +367,20 @@ func (s *PaymentService) ReconcilePendingWxpayOrders(ctx context.Context) (int, 
 				paymentorder.PaymentTypeHasPrefix(payment.TypeWxpay+"_"),
 				paymentorder.ProviderKeyEQ(payment.TypeWxpay),
 				paymentorder.ProviderKeyHasPrefix(payment.TypeWxpay+"_"),
+				paymentorder.PaymentTypeEQ(payment.TypeAlipay),
+				paymentorder.PaymentTypeHasPrefix(payment.TypeAlipay+"_"),
+				paymentorder.ProviderKeyEQ(payment.TypeAlipay),
+				paymentorder.ProviderKeyHasPrefix(payment.TypeAlipay+"_"),
 			),
 		).
 		Order(dbent.Asc(paymentorder.FieldCreatedAt)).
-		Limit(pendingWxpayReconcileLimit).
+		Limit(pendingPaymentReconcileLimit).
 		All(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("query pending wxpay orders: %w", err)
+		return 0, fmt.Errorf("query pending payment orders: %w", err)
 	}
 
-	recovered := 0
-	for _, order := range orders {
-		if s.reconcilePaid(ctx, order) == checkPaidResultAlreadyPaid {
-			recovered++
-		}
-	}
+	recovered := s.reconcilePendingPaymentOrdersLoaded(ctx, orders)
 	return recovered, nil
 }
 

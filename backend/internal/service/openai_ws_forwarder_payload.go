@@ -9,11 +9,22 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unsafe"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
+
+// openAIWSPayloadStringView returns a zero-copy string view over an immutable
+// WebSocket payload. Callers must not mutate or reuse the backing bytes while
+// the returned string is being read.
+func openAIWSPayloadStringView(payload []byte) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	return unsafe.String(unsafe.SliceData(payload), len(payload))
+}
 
 func validateOpenAIWSBearerToken(account *Account, token string) error {
 	if account == nil {
@@ -450,7 +461,7 @@ func normalizeOpenAIWSJSONForCompare(raw []byte) ([]byte, error) {
 		return nil, errors.New("json is empty")
 	}
 	var decoded any
-	if err := json.Unmarshal(trimmed, &decoded); err != nil {
+	if err := decodeOpenAIJSONUseNumber(trimmed, &decoded); err != nil {
 		return nil, err
 	}
 	return json.Marshal(decoded)
@@ -469,7 +480,7 @@ func normalizeOpenAIWSPayloadWithoutInputAndPreviousResponseID(payload []byte) (
 		return nil, errors.New("payload is empty")
 	}
 	var decoded map[string]any
-	if err := json.Unmarshal(payload, &decoded); err != nil {
+	if err := decodeOpenAIJSONUseNumber(payload, &decoded); err != nil {
 		return nil, err
 	}
 	delete(decoded, "input")
@@ -492,26 +503,32 @@ func openAIWSExtractNormalizedInputSequence(payload []byte) ([]json.RawMessage, 
 	if len(payload) == 0 {
 		return nil, false, nil
 	}
-	inputValue := gjson.GetBytes(payload, "input")
+	inputValue := gjson.Get(openAIWSPayloadStringView(payload), "input")
 	if !inputValue.Exists() {
 		return nil, false, nil
 	}
 	if inputValue.Type == gjson.JSON {
-		raw := strings.TrimSpace(inputValue.Raw)
-		if strings.HasPrefix(raw, "[") {
-			var items []json.RawMessage
-			if err := json.Unmarshal([]byte(raw), &items); err != nil {
-				return nil, true, err
+		if inputValue.IsArray() {
+			// gjson 宽容解析；数组整体先做零分配合法性校验，避免把断裂
+			// JSON 塞进 replay 历史。
+			arrayRaw := openAIWSRawMessageFromResult(payload, inputValue)
+			if !json.Valid(arrayRaw) {
+				return nil, true, errors.New("input array json is invalid")
+			}
+			elems := inputValue.Array()
+			items := make([]json.RawMessage, 0, len(elems))
+			for _, elem := range elems {
+				items = append(items, openAIWSRawMessageFromResult(payload, elem))
 			}
 			return items, true, nil
 		}
-		return []json.RawMessage{json.RawMessage(raw)}, true, nil
+		return []json.RawMessage{openAIWSRawMessageFromResult(payload, inputValue)}, true, nil
 	}
 	if inputValue.Type == gjson.String {
 		encoded, _ := json.Marshal(inputValue.String())
 		return []json.RawMessage{encoded}, true, nil
 	}
-	return []json.RawMessage{json.RawMessage(inputValue.Raw)}, true, nil
+	return []json.RawMessage{openAIWSRawMessageFromResult(payload, inputValue)}, true, nil
 }
 
 func openAIWSInputIsPrefixExtended(previousPayload, currentPayload []byte) (bool, error) {
@@ -554,6 +571,10 @@ func openAIWSRawItemsHasPrefix(items []json.RawMessage, prefix []json.RawMessage
 		return false
 	}
 	for idx := range prefix {
+		// 快路径：客户端逐字节重发历史时直接比较，避免整轮历史的解码/再编码。
+		if bytes.Equal(bytes.TrimSpace(prefix[idx]), bytes.TrimSpace(items[idx])) {
+			continue
+		}
 		previousNormalized := normalizeOpenAIWSJSONForCompareOrRaw(prefix[idx])
 		currentNormalized := normalizeOpenAIWSJSONForCompareOrRaw(items[idx])
 		if !bytes.Equal(previousNormalized, currentNormalized) {
@@ -608,7 +629,7 @@ func openAIWSRawPayloadHasToolCallOutput(payload []byte) bool {
 	if len(payload) == 0 {
 		return false
 	}
-	input := gjson.GetBytes(payload, "input")
+	input := gjson.Get(openAIWSPayloadStringView(payload), "input")
 	if !input.Exists() {
 		return false
 	}
@@ -636,22 +657,14 @@ func buildOpenAIWSReplayInputSequence(
 	if currentErr != nil {
 		return nil, false, currentErr
 	}
-	if !hasPreviousResponseID {
-		return cloneOpenAIWSRawMessages(currentItems), currentExists, nil
-	}
-	if !previousFullInputExists {
-		return cloneOpenAIWSRawMessages(currentItems), currentExists, nil
-	}
-	if !currentExists || len(currentItems) == 0 {
-		return cloneOpenAIWSRawMessages(previousFullInput), true, nil
-	}
-	if openAIWSRawItemsHasPrefix(currentItems, previousFullInput) {
-		return cloneOpenAIWSRawMessages(currentItems), true, nil
-	}
-	merged := make([]json.RawMessage, 0, len(previousFullInput)+len(currentItems))
-	merged = append(merged, cloneOpenAIWSRawMessages(previousFullInput)...)
-	merged = append(merged, cloneOpenAIWSRawMessages(currentItems)...)
-	return merged, true, nil
+	items, exists := buildOpenAIWSReplayInputSequenceFromItems(
+		previousFullInput,
+		previousFullInputExists,
+		currentItems,
+		currentExists,
+		hasPreviousResponseID,
+	)
+	return items, exists, nil
 }
 
 func setOpenAIWSPayloadInputSequence(
@@ -761,4 +774,105 @@ func shouldKeepIngressPreviousResponseIDWithStrictState(
 		return false, "non_input_changed", nil
 	}
 	return true, "strict_incremental_ok", nil
+}
+
+func combineOpenAIWSReplayItems(history, delta []json.RawMessage) []json.RawMessage {
+	if len(delta) == 0 {
+		return history
+	}
+	combined := make([]json.RawMessage, 0, len(history)+len(delta))
+	combined = append(combined, history...)
+	return append(combined, delta...)
+}
+
+func openAIWSRawMessageFromResult(parent []byte, value gjson.Result) json.RawMessage {
+	idx := value.Index
+	if idx > 0 && idx+len(value.Raw) <= len(parent) && string(parent[idx:idx+len(value.Raw)]) == value.Raw {
+		return json.RawMessage(parent[idx : idx+len(value.Raw)])
+	}
+	return json.RawMessage(value.Raw)
+}
+
+func sanitizeOpenAIWSHistoricalReplayToolCalls(
+	previousItems []json.RawMessage,
+	currentItems []json.RawMessage,
+) []json.RawMessage {
+	if len(previousItems) == 0 {
+		return previousItems
+	}
+	outputCallIDs := make(map[string]struct{})
+	collectOutputCallIDs := func(items []json.RawMessage) {
+		for _, item := range items {
+			if !isCodexToolCallOutputItemType(gjson.GetBytes(item, "type").String()) {
+				continue
+			}
+			if callID := strings.TrimSpace(gjson.GetBytes(item, "call_id").String()); callID != "" {
+				outputCallIDs[callID] = struct{}{}
+			}
+		}
+	}
+	collectOutputCallIDs(previousItems)
+	collectOutputCallIDs(currentItems)
+
+	sanitized := make([]json.RawMessage, 0, len(previousItems))
+	for _, item := range previousItems {
+		if isCodexToolCallContextItemType(gjson.GetBytes(item, "type").String()) {
+			callID := strings.TrimSpace(gjson.GetBytes(item, "call_id").String())
+			if _, paired := outputCallIDs[callID]; !paired {
+				continue
+			}
+		}
+		sanitized = append(sanitized, item)
+	}
+	return sanitized
+}
+
+func buildOpenAIWSReplayInputSequenceFromItems(
+	previousFullInput []json.RawMessage,
+	previousFullInputExists bool,
+	currentItems []json.RawMessage,
+	currentExists bool,
+	hasPreviousResponseID bool,
+) ([]json.RawMessage, bool) {
+	if !hasPreviousResponseID || !previousFullInputExists {
+		return currentItems, currentExists
+	}
+	previousFullInput = sanitizeOpenAIWSHistoricalReplayToolCalls(previousFullInput, currentItems)
+	if !currentExists || len(currentItems) == 0 {
+		return previousFullInput, true
+	}
+	if openAIWSRawItemsHasPrefix(currentItems, previousFullInput) {
+		return currentItems, true
+	}
+	merged := make([]json.RawMessage, 0, len(previousFullInput)+len(currentItems))
+	merged = append(merged, previousFullInput...)
+	merged = append(merged, currentItems...)
+	return merged, true
+}
+
+func buildOpenAIWSCurrentTurnRetryPayload(
+	payload []byte,
+	fullInput []json.RawMessage,
+	fullInputExists bool,
+	originalModel string,
+) ([]byte, bool, error) {
+	if !fullInputExists {
+		return nil, false, nil
+	}
+	retryPayload, err := setOpenAIWSPayloadInputSequence(payload, fullInput, true)
+	if err != nil {
+		return nil, false, err
+	}
+	retryPayload = RemovePreviousResponseIDFromBody(retryPayload)
+	if model := strings.TrimSpace(originalModel); model != "" {
+		retryPayload, err = sjson.SetBytes(retryPayload, "model", model)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	coverage := AnalyzeToolCallOutputContextCoverageBytes(retryPayload)
+	if coverage.HasFunctionCallOutput && !coverage.ContextCoversAllCallIDs {
+		return nil, false, nil
+	}
+	return retryPayload, true, nil
 }

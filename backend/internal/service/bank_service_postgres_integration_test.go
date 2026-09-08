@@ -1,10 +1,13 @@
+//go:build integration
+
 package service
 
 import (
 	"context"
 	"database/sql"
-	"os"
-	"strings"
+	"fmt"
+
+	validation "github.com/Wei-Shaw/sub2api/internal/repository/validation"
 	"testing"
 	"time"
 
@@ -12,12 +15,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const bankServicePostgresTestEnv = "BANK_SERVICE_TEST_POSTGRES_DSN"
-
 func TestSettleUnusedAdvanceLockedPostgresQuery(t *testing.T) {
-	dsn := strings.TrimSpace(os.Getenv(bankServicePostgresTestEnv))
+	cfg, err := validation.LoadDedicatedIntegrationConfig()
+	if err != nil {
+		t.Fatal(fmt.Errorf("bank service integration target rejected: %w", err))
+	}
+	dsn := validation.DatabaseDSN(cfg)
 	if dsn == "" {
-		t.Skip(bankServicePostgresTestEnv + " is not set")
+		t.Fatal("dedicated validation config resolved an empty database DSN")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -9,14 +9,245 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
+
+var errOpenAIWSSessionPreempted = errors.New("openai ws session preempted by newer request")
+
+const (
+	openAIWSSessionPreemptOwnerTTL      = 2 * time.Hour
+	openAIWSSessionPreemptWatchInterval = 2 * time.Second
+	openAIWSSessionPreemptCachePrefix   = "wspreempt:"
+)
+
+// OpenAIWSSessionPreemptionCache is an optional GatewayCache capability. The
+// local registry remains authoritative within this process; implementations
+// that provide these operations also close the cross-process preemption gap.
+type OpenAIWSSessionPreemptionCache interface {
+	ClaimOpenAIResponsesSessionWindow(ctx context.Context, groupID int64, sessionHash string, owner []byte, ttl time.Duration) ([]byte, error)
+	CompareAndRefreshOpenAIResponsesSessionWindow(ctx context.Context, groupID int64, sessionHash string, expected []byte, ttl time.Duration) (bool, error)
+	CompareAndDeleteOpenAIResponsesSessionWindow(ctx context.Context, groupID int64, sessionHash string, expected []byte) (bool, error)
+}
+
+type openAIWSSessionPreemptKey struct {
+	groupID     int64
+	apiKeyID    int64
+	sessionHash string
+}
+
+type openAIWSSessionPreemptContextKey struct{}
+
+type openAIWSSessionPreemptEntry struct {
+	generation uint64
+	cancel     func()
+}
+
+type openAIWSSessionPreemptRegistry struct {
+	mu     sync.Mutex
+	next   uint64
+	active map[openAIWSSessionPreemptKey]openAIWSSessionPreemptEntry
+}
+
+// The registry is package-scoped so preemption works across gateway service
+// values without requiring a shared OpenAIGatewayService layout change.
+var openAIWSIngressSessionPreemptions openAIWSSessionPreemptRegistry
+
+func NewOpenAIWSSessionPreemptedError() error { return errOpenAIWSSessionPreempted }
+
+func newOpenAIWSSessionPreemptKey(groupID, apiKeyID int64, sessionHash string) (openAIWSSessionPreemptKey, bool) {
+	sessionHash = strings.TrimSpace(sessionHash)
+	if groupID <= 0 || apiKeyID <= 0 || sessionHash == "" {
+		return openAIWSSessionPreemptKey{}, false
+	}
+	return openAIWSSessionPreemptKey{groupID: groupID, apiKeyID: apiKeyID, sessionHash: sessionHash}, true
+}
+
+func openAIWSSessionPreemptCacheHash(apiKeyID int64, sessionHash string) string {
+	return fmt.Sprintf("%s%d:%s", openAIWSSessionPreemptCachePrefix, apiKeyID, strings.TrimSpace(sessionHash))
+}
+
+func (r *openAIWSSessionPreemptRegistry) Begin(key openAIWSSessionPreemptKey, cancel func()) (func(), bool) {
+	if r == nil || strings.TrimSpace(key.sessionHash) == "" {
+		return func() {}, false
+	}
+	r.mu.Lock()
+	if r.active == nil {
+		r.active = make(map[openAIWSSessionPreemptKey]openAIWSSessionPreemptEntry)
+	}
+	r.next++
+	generation := r.next
+	previous, hadPrevious := r.active[key]
+	r.active[key] = openAIWSSessionPreemptEntry{generation: generation, cancel: cancel}
+	r.mu.Unlock()
+	if hadPrevious && previous.cancel != nil {
+		previous.cancel()
+	}
+	return func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if current, ok := r.active[key]; ok && current.generation == generation {
+			delete(r.active, key)
+		}
+	}, hadPrevious
+}
+
+// BeginOpenAIWSIngressSessionPreemption keeps one logical inbound WS session
+// registered across account failover attempts. Nested forwarding calls reuse
+// the registration so cleanup of one attempt cannot create a preemption gap.
+func (s *OpenAIGatewayService) BeginOpenAIWSIngressSessionPreemption(ctx context.Context, c *gin.Context, account *Account, firstClientMessage []byte) (context.Context, func(), bool) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if armed, _ := ctx.Value(openAIWSSessionPreemptContextKey{}).(bool); armed {
+		return ctx, func() {}, true
+	}
+	if s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIWS.ModeRouterV2Enabled && account != nil &&
+		account.ResolveOpenAIResponsesWebSocketV2Mode(s.cfg.Gateway.OpenAIWS.IngressModeDefault) == OpenAIWSIngressModePassthrough {
+		return ctx, func() {}, false
+	}
+	groupID := getOpenAIGroupIDFromContext(c)
+	sessionHash := ""
+	if account != nil && account.Platform == PlatformOpenAI && account.Type == AccountTypeOAuth {
+		sessionHash = s.GenerateSessionHash(c, firstClientMessage)
+	}
+	preemptCtx, cleanup, armed, preemptedPrevious := s.beginOpenAIWSSessionPreemptContext(ctx, account, groupID, getAPIKeyIDFromContext(c), sessionHash, false)
+	if !armed {
+		return ctx, func() {}, false
+	}
+	if preemptedPrevious {
+		if stateStore := s.getOpenAIWSStateStore(); stateStore != nil {
+			stateStore.DeleteSessionTurnState(groupID, sessionHash)
+			stateStore.DeleteSessionConn(groupID, sessionHash)
+		}
+	}
+	return context.WithValue(preemptCtx, openAIWSSessionPreemptContextKey{}, true), cleanup, true
+}
+
+func (s *OpenAIGatewayService) beginOpenAIWSSessionPreemptContext(ctx context.Context, account *Account, groupID, apiKeyID int64, sessionHash string, httpIngressWSOneShot bool) (context.Context, func(), bool, bool) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if s == nil || account == nil || account.Platform != PlatformOpenAI || account.Type != AccountTypeOAuth || httpIngressWSOneShot {
+		return ctx, func() {}, false, false
+	}
+	key, ok := newOpenAIWSSessionPreemptKey(groupID, apiKeyID, sessionHash)
+	if !ok {
+		return ctx, func() {}, false, false
+	}
+	preemptCtx, cancel := context.WithCancelCause(ctx)
+	ownerToken := uuid.NewString()
+	var preemptOnce sync.Once
+	preempt := func() {
+		preemptOnce.Do(func() {
+			if stateStore := s.getOpenAIWSStateStore(); stateStore != nil {
+				stateStore.DeleteSessionTurnState(key.groupID, key.sessionHash)
+				stateStore.DeleteSessionConn(key.groupID, key.sessionHash)
+			}
+			cancel(errOpenAIWSSessionPreempted)
+		})
+	}
+	previousRemoteOwner, remoteClaimed := s.claimOpenAIWSSessionPreemptOwner(ctx, key, ownerToken)
+	preemptedPrevious := remoteClaimed && previousRemoteOwner != "" && previousRemoteOwner != ownerToken
+	cleanupLocal, hadLocalPrevious := openAIWSIngressSessionPreemptions.Begin(key, preempt)
+	preemptedPrevious = preemptedPrevious || hadLocalPrevious
+	stopWatch := func() {}
+	if remoteClaimed {
+		stopWatch = s.watchOpenAIWSSessionPreemptOwner(preemptCtx, key, ownerToken, preempt)
+	}
+	return preemptCtx, func() {
+		stopWatch()
+		cleanupLocal()
+		if remoteClaimed {
+			s.releaseOpenAIWSSessionPreemptOwner(context.Background(), key, ownerToken)
+		}
+		cancel(nil)
+	}, true, preemptedPrevious
+}
+
+func (s *OpenAIGatewayService) openAIWSSessionPreemptionCache() OpenAIWSSessionPreemptionCache {
+	if s == nil || s.cache == nil {
+		return nil
+	}
+	cache, _ := s.cache.(OpenAIWSSessionPreemptionCache)
+	return cache
+}
+
+func (s *OpenAIGatewayService) claimOpenAIWSSessionPreemptOwner(ctx context.Context, key openAIWSSessionPreemptKey, ownerToken string) (string, bool) {
+	cache := s.openAIWSSessionPreemptionCache()
+	if cache == nil || strings.TrimSpace(ownerToken) == "" {
+		return "", false
+	}
+	cacheCtx, cancel := context.WithTimeout(ctx, openAIWSStateStoreRedisTimeout)
+	defer cancel()
+	previous, err := cache.ClaimOpenAIResponsesSessionWindow(cacheCtx, key.groupID, openAIWSSessionPreemptCacheHash(key.apiKeyID, key.sessionHash), []byte(strings.TrimSpace(ownerToken)), openAIWSSessionPreemptOwnerTTL)
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(string(previous)), true
+}
+
+func (s *OpenAIGatewayService) releaseOpenAIWSSessionPreemptOwner(ctx context.Context, key openAIWSSessionPreemptKey, ownerToken string) {
+	cache := s.openAIWSSessionPreemptionCache()
+	if cache == nil || strings.TrimSpace(ownerToken) == "" {
+		return
+	}
+	cacheCtx, cancel := context.WithTimeout(ctx, openAIWSStateStoreRedisTimeout)
+	defer cancel()
+	_, _ = cache.CompareAndDeleteOpenAIResponsesSessionWindow(cacheCtx, key.groupID, openAIWSSessionPreemptCacheHash(key.apiKeyID, key.sessionHash), []byte(strings.TrimSpace(ownerToken)))
+}
+
+func (s *OpenAIGatewayService) watchOpenAIWSSessionPreemptOwner(ctx context.Context, key openAIWSSessionPreemptKey, ownerToken string, onLost func()) func() {
+	cache := s.openAIWSSessionPreemptionCache()
+	if cache == nil || onLost == nil || strings.TrimSpace(ownerToken) == "" {
+		return func() {}
+	}
+	stopCh := make(chan struct{})
+	var once sync.Once
+	go func() {
+		ticker := time.NewTicker(openAIWSSessionPreemptWatchInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopCh:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				cacheCtx, cancel := context.WithTimeout(context.Background(), openAIWSStateStoreRedisTimeout)
+				owned, err := cache.CompareAndRefreshOpenAIResponsesSessionWindow(cacheCtx, key.groupID, openAIWSSessionPreemptCacheHash(key.apiKeyID, key.sessionHash), []byte(strings.TrimSpace(ownerToken)), openAIWSSessionPreemptOwnerTTL)
+				cancel()
+				if err == nil && !owned {
+					onLost()
+					return
+				}
+			}
+		}
+	}()
+	return func() { once.Do(func() { close(stopCh) }) }
+}
+
+func isOpenAIWSSessionPreempted(ctx context.Context) bool {
+	return ctx != nil && errors.Is(context.Cause(ctx), errOpenAIWSSessionPreempted)
+}
+
+func IsOpenAIWSSessionPreemptedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, errOpenAIWSSessionPreempted) {
+		return true
+	}
+	var fallbackErr *openAIWSFallbackError
+	return errors.As(err, &fallbackErr) && fallbackErr != nil && strings.TrimPrefix(strings.TrimSpace(fallbackErr.Reason), "prewarm_") == "session_preempted"
+}
 
 func (s *OpenAIGatewayService) openAIWSIngressInterTurnIdleTimeout() time.Duration {
 	if s == nil || s.cfg == nil || s.cfg.Gateway.OpenAIWS.IngressInterTurnIdleTimeoutSeconds <= 0 {
@@ -48,7 +279,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	token string,
 	firstClientMessage []byte,
 	hooks *OpenAIWSIngressHooks,
-) error {
+) (returnErr error) {
 	if s == nil {
 		return errors.New("service is nil")
 	}
@@ -65,6 +296,18 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		return err
 	}
 
+	// Direct callers receive the same session-scoped preemption semantics as
+	// the handler. A handler-owned registration is detected and reused.
+	if preemptCtx, cleanupPreempt, armed := s.BeginOpenAIWSIngressSessionPreemption(ctx, c, account, firstClientMessage); armed {
+		ctx = preemptCtx
+		defer cleanupPreempt()
+		defer func() {
+			if isOpenAIWSSessionPreempted(ctx) {
+				returnErr = errOpenAIWSSessionPreempted
+			}
+		}()
+	}
+
 	// 预取一次 OpenAI Fast Policy settings，绑定到 ctx，让该 WS session
 	// 内所有帧的 evaluateOpenAIFastPolicy 调用复用同一份快照，避免每帧
 	// 进入 DB / settingRepo。Trade-off 见 withOpenAIFastPolicyContext 注释。
@@ -75,7 +318,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	}
 
 	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
-	forceHTTPBridge := account.Platform == PlatformGrok
+	forceHTTPBridge := s.shouldForceOpenAIWSHTTPBridge(account)
 	modeRouterV2Enabled := s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIWS.ModeRouterV2Enabled
 	ingressMode := OpenAIWSIngressModeCtxPool
 	if modeRouterV2Enabled && !forceHTTPBridge {
@@ -215,12 +458,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				nil,
 			)
 		}
-		if hooks != nil && (hooks.MaxReasoningEffort != "" || len(hooks.ReasoningEffortMappings) > 0) {
-			if capped, changed := ApplyOpenAIReasoningEffortPolicy(normalized, hooks.MaxReasoningEffort, hooks.ReasoningEffortMappings); changed {
-				normalized = capped
-			}
-		}
-
 		originalModel := strings.TrimSpace(values[1].String())
 		modelMissing := originalModel == ""
 		if originalModel == "" {
@@ -237,6 +474,15 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					nil,
 				)
 			}
+		}
+		if hooks != nil && hooks.CaptureRequestedReasoningEffort != nil {
+			hooks.CaptureRequestedReasoningEffort(turn, normalized, originalModel)
+		}
+		if capped, policyErr := applyOpenAIWSReasoningEffortPolicy(normalized, hooks); policyErr != nil {
+			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, policyErr.Error(), policyErr)
+		} else {
+			normalized = capped
 		}
 		promptCacheKey := strings.TrimSpace(values[2].String())
 		previousResponseID := strings.TrimSpace(values[3].String())
@@ -507,6 +753,18 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if turnState != "" && c != nil && c.Request != nil {
 				c.Request.Header.Set(openAIWSTurnStateHeader, turnState)
 			}
+			if c != nil && sessionHash != "" {
+				c.Set(openAIWSIngressSessionHashContextKey, sessionHash)
+			}
+			if invalidDigests := s.sessionInvalidEncryptedContentDigests(groupID, sessionHash); len(invalidDigests) > 0 {
+				if stripped, count := s.stripSessionInvalidEncryptedContentLogged(currentBridgePayload.payloadRaw, invalidDigests, "ingress_ws_http_bridge_invalid_encrypted_lineage_strip", account.ID, turn); count > 0 {
+					currentBridgePayload.payloadRaw = stripped
+					currentBridgePayload.payloadBytes = len(stripped)
+				}
+				if bridgeReplayInputExists {
+					bridgeReplayInput, _ = stripOpenAIInvalidEncryptedContentFromReplayItems(bridgeReplayInput, invalidDigests)
+				}
+			}
 			bridgePayloadRaw := currentBridgePayload.payloadRaw
 			bridgePayloadBytes := currentBridgePayload.payloadBytes
 			needsBridgeReplay := currentBridgePayload.previousResponseID != "" || openAIWSRawPayloadHasToolCallOutput(currentBridgePayload.payloadRaw)
@@ -576,10 +834,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if result == nil {
 				return errors.New("websocket http bridge turn result is nil")
 			}
-			bridgeReplayInput = cloneOpenAIWSRawMessages(turnReplayInput)
+			bridgeReplayInput = turnReplayInput
 			bridgeReplayInputExists = turnReplayInputExists
 			if result.wsReplayInputExists {
-				bridgeReplayInput = append(bridgeReplayInput, cloneOpenAIWSRawMessages(result.wsReplayInput)...)
+				bridgeReplayInput = combineOpenAIWSReplayItems(bridgeReplayInput, result.wsReplayInput)
 				bridgeReplayInputExists = true
 			}
 			if bridgeTurnState := strings.TrimSpace(result.ResponseHeaders.Get(openAIWSTurnStateHeader)); bridgeTurnState != "" {
@@ -875,12 +1133,31 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				}
 				lastEventType = eventType
 			}
+			if eventType == "error" || eventType == "response.failed" {
+				parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
+				if hit, code, msg := detectOpenAICyberPolicy(upstreamMessage); hit {
+					MarkOpsCyberPolicy(c, CyberPolicyMark{
+						Code:           code,
+						Message:        msg,
+						Body:           truncateString(string(upstreamMessage), 4096),
+						UpstreamStatus: http.StatusOK,
+						UpstreamInTok:  usage.InputTokens,
+						UpstreamOutTok: usage.OutputTokens,
+					})
+				}
+			}
 			if eventType == "error" {
 				canonicalModel := canonicalOpenAIAccountSchedulingModel(account, originalModel)
 				s.handleOpenAIWSErrorEventTransientFailure(ctx, account, canonicalModel, lease.HandshakeHeaders(), upstreamMessage)
 				errCodeRaw, errTypeRaw, errMsgRaw := parseOpenAIWSErrorEventFields(upstreamMessage)
 				s.persistOpenAIWSRateLimitSignal(ctx, account, lease.HandshakeHeaders(), upstreamMessage, errCodeRaw, errTypeRaw, errMsgRaw)
 				fallbackReason, _ := classifyOpenAIWSErrorEventFromRaw(errCodeRaw, errTypeRaw, errMsgRaw)
+				if fallbackReason == openAIWSFallbackReasonInvalidEncryptedContent {
+					if digests := collectOpenAIEncryptedContentDigestsRaw(payload); len(digests) > 0 {
+						s.markOpenAIWSInvalidEncryptedContentLineage(groupID, sessionHash, digests)
+						logOpenAIWSModeInfo("ingress_ws_invalid_encrypted_lineage_mark account_id=%d turn=%d digests=%d", account.ID, turn, len(digests))
+					}
+				}
 				errCode, errType, errMessage := summarizeOpenAIWSErrorEventFieldsFromRaw(errCodeRaw, errTypeRaw, errMsgRaw)
 				recoverablePrevNotFound := fallbackReason == openAIWSIngressStagePreviousResponseNotFound &&
 					turnPreviousResponseID != "" &&
@@ -963,19 +1240,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			imageCounter.AddSSEData(upstreamMessage)
 
-			if eventType == "response.failed" {
-				if hit, code, msg := detectOpenAICyberPolicy(upstreamMessage); hit {
-					MarkOpsCyberPolicy(c, CyberPolicyMark{
-						Code:           code,
-						Message:        msg,
-						Body:           truncateString(string(upstreamMessage), 4096),
-						UpstreamStatus: http.StatusOK,
-						UpstreamInTok:  usage.InputTokens,
-						UpstreamOutTok: usage.OutputTokens,
-					})
-				}
-			}
-
 			if !clientDisconnected {
 				if needModelReplace && len(mappedModelBytes) > 0 && openAIWSEventMayContainModel(eventType) && bytes.Contains(upstreamMessage, mappedModelBytes) {
 					upstreamMessage = replaceOpenAIWSMessageModel(upstreamMessage, mappedModel, originalModel)
@@ -986,7 +1250,13 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					}
 				}
 				replayCollector.AddEvent(eventType, upstreamMessage)
-				if err := writeClientMessage(upstreamMessage); err != nil {
+				clientMessage := upstreamMessage
+				if eventType == "error" || eventType == "response.failed" {
+					if rewritten, changed := sanitizeOpenAICapacityShedErrorCodeForClient(clientMessage); changed {
+						clientMessage = rewritten
+					}
+				}
+				if err := writeClientMessage(clientMessage); err != nil {
 					if isOpenAIWSClientDisconnectError(err) {
 						clientDisconnected = true
 						closeStatus, closeReason := summarizeOpenAIWSReadCloseError(err)
@@ -1267,6 +1537,15 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 		}
 		skipBeforeTurn = false
+		if invalidDigests := s.sessionInvalidEncryptedContentDigests(groupID, sessionHash); len(invalidDigests) > 0 {
+			if stripped, count := s.stripSessionInvalidEncryptedContentLogged(currentPayload, invalidDigests, "ingress_ws_invalid_encrypted_lineage_strip", account.ID, turn); count > 0 {
+				currentPayload = stripped
+				currentPayloadBytes = len(stripped)
+			}
+			if lastTurnReplayInputExists {
+				lastTurnReplayInput, _ = stripOpenAIInvalidEncryptedContentFromReplayItems(lastTurnReplayInput, invalidDigests)
+			}
+		}
 		currentPreviousResponseID := openAIWSPayloadStringFromRaw(currentPayload, "previous_response_id")
 		expectedPrev := strings.TrimSpace(lastTurnResponseID)
 		toolSignals := ToolContinuationSignals{
@@ -1594,16 +1873,18 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		responseID := strings.TrimSpace(result.RequestID)
 		lastTurnResponseID = responseID
-		lastTurnPayload = cloneOpenAIWSPayloadBytes(currentPayload)
-		lastTurnReplayInput = cloneOpenAIWSRawMessages(currentTurnReplayInput)
+		// currentPayload/currentTurnReplayInput are immutable after dispatch, so
+		// retained replay state shares bodies and only allocates new slice headers.
+		lastTurnReplayInput = currentTurnReplayInput
 		lastTurnReplayInputExists = currentTurnReplayInputExists
 		if result.wsReplayInputExists {
-			lastTurnReplayInput = append(lastTurnReplayInput, cloneOpenAIWSRawMessages(result.wsReplayInput)...)
+			lastTurnReplayInput = combineOpenAIWSReplayItems(lastTurnReplayInput, result.wsReplayInput)
 			lastTurnReplayInputExists = true
 		}
 		nextStrictState, strictStateErr := buildOpenAIWSIngressPreviousTurnStrictState(currentPayload)
 		if strictStateErr != nil {
 			lastTurnStrictState = nil
+			lastTurnPayload = currentPayload
 			logOpenAIWSModeInfo(
 				"ingress_ws_prev_response_strict_state_skip account_id=%d turn=%d conn_id=%s reason=build_error cause=%s",
 				account.ID,
@@ -1613,6 +1894,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			)
 		} else {
 			lastTurnStrictState = nextStrictState
+			lastTurnPayload = nil
 		}
 
 		if responseID != "" && stateStore != nil {

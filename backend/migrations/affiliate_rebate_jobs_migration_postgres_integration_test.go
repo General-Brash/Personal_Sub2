@@ -11,14 +11,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/migrations"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
 )
 
 const affiliateRebateJobsMigration = "184_affiliate_rebate_jobs.sql"
 
 func TestAffiliateRebateJobsMigration_Postgres18ConstraintsAndReplay(t *testing.T) {
-	testcontainers.SkipIfProviderIsNotHealthy(t)
-
 	ctx := context.Background()
 	db := newMigrationTestPostgres(t, ctx)
 	require.NoError(t, createAffiliateRebateJobsPrerequisites(ctx, db))

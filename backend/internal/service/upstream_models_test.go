@@ -40,6 +40,22 @@ func grokOAuthModelSyncTestAccount(baseURL string) *Account {
 	}
 }
 
+func TestGetUpstreamModelMetadataSnapshotRetainsValidEntriesWhenOneIsCorrupt(t *testing.T) {
+	account := &Account{Extra: map[string]any{
+		UpstreamModelMetadataExtraKey: map[string]any{
+			"source": "upstream", "synced_at": "2026-09-07T00:00:00Z",
+			"models": map[string]any{
+				"gpt-good": map[string]any{"id": "gpt-good", "reasoning": true, "input_modalities": []string{"text"}},
+				"gpt-bad":  "not-an-object",
+			},
+		},
+	}}
+	got := account.GetUpstreamModelMetadataSnapshot()
+	require.NotNil(t, got)
+	require.Contains(t, got.Models, "gpt-good")
+	require.NotContains(t, got.Models, "gpt-bad")
+}
+
 func TestBuildV1ModelsURL(t *testing.T) {
 	t.Parallel()
 

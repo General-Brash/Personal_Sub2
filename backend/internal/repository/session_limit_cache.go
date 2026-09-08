@@ -354,3 +354,10 @@ func (c *sessionLimitCache) GetWindowCostBatch(ctx context.Context, accountIDs [
 
 	return results, nil
 }
+
+func (c *sessionLimitCache) UnregisterSession(ctx context.Context, accountID int64, sessionUUID string) error {
+	if sessionUUID == "" {
+		return nil
+	}
+	return c.rdb.ZRem(ctx, sessionLimitKey(accountID), sessionUUID).Err()
+}

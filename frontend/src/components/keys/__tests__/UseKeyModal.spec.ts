@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
-const { copyToClipboardMock } = vi.hoisted(() => ({
-  copyToClipboardMock: vi.fn().mockResolvedValue(true)
+const { copyToClipboardMock, saveAsMock } = vi.hoisted(() => ({
+  copyToClipboardMock: vi.fn().mockResolvedValue(true),
+  saveAsMock: vi.fn()
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -18,9 +19,26 @@ vi.mock('@/composables/useClipboard', () => ({
   })
 }))
 
+vi.mock('file-saver', () => ({
+  saveAs: saveAsMock
+}))
+
 import UseKeyModal from '../UseKeyModal.vue'
 
+function readBlobAsText(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => resolve(String(reader.result || '')))
+    reader.addEventListener('error', () => reject(reader.error))
+    reader.readAsText(blob)
+  })
+}
+
 describe('UseKeyModal', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    saveAsMock.mockClear()
+  })
   it('renders Grok Build and OpenCode setup for Grok groups', async () => {
     const wrapper = mount(UseKeyModal, {
       props: {
@@ -594,4 +612,111 @@ describe('UseKeyModal', () => {
     expect(fable.options.thinking).toEqual({ type: 'adaptive' })
     expect(fable.options.thinking).not.toHaveProperty('budgetTokens')
   })
+
+  it('downloads a Composite Codex catalog and references it from config.toml', async () => {
+    const manifest = {
+      models: [
+        {
+          slug: 'claude-opus-4-8',
+          default_reasoning_level: 'medium',
+          supported_reasoning_levels: [{ effort: 'max', description: 'Maximum reasoning depth' }],
+          input_modalities: ['text'],
+          model_messages: { instructions_template: 'Use the routed model.' }
+        }
+      ]
+    }
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => manifest
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(UseKeyModal, {
+      props: {
+        show: true,
+        apiKey: 'sk-composite-test',
+        baseUrl: 'https://example.com/v1',
+        platform: 'composite'
+      },
+      global: {
+        stubs: {
+          BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' },
+          Icon: { template: '<span />' }
+        }
+      }
+    })
+
+    const codexTab = wrapper.findAll('button').find((button) =>
+      button.text().includes('keys.useKeyModal.cliTabs.codexCli')
+    )
+    expect(codexTab).toBeDefined()
+    await codexTab!.trigger('click')
+    await nextTick()
+
+    const beforeFetch = wrapper.findAll('pre code')
+      .map((code) => code.text())
+      .find((content) => content.includes('[model_providers.sub2api]'))
+    expect(beforeFetch).toContain('model_catalog_json = "~/.codex/codex-models.json"')
+
+    await wrapper.get('[data-testid="codex-model-catalog-fetch"]').trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/v1/models?client_version=0.147.0',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer sk-composite-test' })
+      })
+    )
+    const config = wrapper.findAll('pre code')
+      .map((code) => code.text())
+      .find((content) => content.includes('[model_providers.sub2api]'))
+    expect(config).toContain('model = "claude-opus-4-8"')
+    expect(config).toContain('review_model = "claude-opus-4-8"')
+
+    const downloadButton = wrapper.findAll('button').find((button) =>
+      button.text().includes('keys.useKeyModal.codexModelCatalog.download')
+    )
+    expect(downloadButton).toBeDefined()
+    await downloadButton!.trigger('click')
+    expect(saveAsMock).toHaveBeenCalledWith(expect.any(Blob), 'codex-models.json')
+    const downloadedBlob = saveAsMock.mock.calls[0]?.[0] as Blob
+    expect(JSON.parse(await readBlobAsText(downloadedBlob))).toEqual(manifest)
+  })
+
+  it.each(['anthropic', 'gemini', 'antigravity', 'kimi', 'zhipu'] as const)(
+    'offers Codex catalog configuration for the %s routed group',
+    async (platform) => {
+      const wrapper = mount(UseKeyModal, {
+        props: {
+          show: true,
+          apiKey: `sk-${platform}-test`,
+          baseUrl: 'https://example.com/v1',
+          platform
+        },
+        global: {
+          stubs: {
+            BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' },
+            Icon: { template: '<span />' }
+          }
+        }
+      })
+
+      const codexTab = wrapper.findAll('button').find((button) =>
+        button.text().includes('keys.useKeyModal.cliTabs.codexCli')
+      )
+      expect(codexTab).toBeDefined()
+      await codexTab!.trigger('click')
+      await nextTick()
+
+      expect(wrapper.find('[data-testid="codex-model-catalog"]').exists()).toBe(true)
+      const config = wrapper.findAll('pre code')
+        .map((code) => code.text())
+        .find((content) => content.includes('[model_providers.sub2api]'))
+      expect(config).toContain('model_catalog_json = "~/.codex/codex-models.json"')
+      expect(config).toContain('base_url = "https://example.com/v1"')
+      expect(config).toContain('wire_api = "responses"')
+    }
+  )
+
 })

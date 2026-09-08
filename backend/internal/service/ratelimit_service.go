@@ -25,6 +25,7 @@ type RateLimitService struct {
 	cfg                   *config.Config
 	geminiQuotaService    *GeminiQuotaService
 	tempUnschedCache      TempUnschedCache
+	openAIAPIKeyHealth    OpenAIAPIKeyHealthCache
 	timeoutCounterCache   TimeoutCounterCache
 	openAI403CounterCache OpenAI403CounterCache
 	settingService        *SettingService
@@ -99,6 +100,11 @@ func NewRateLimitService(accountRepo AccountRepository, usageRepo UsageLogReposi
 // SetTimeoutCounterCache 设置超时计数器缓存（可选依赖）
 func (s *RateLimitService) SetTimeoutCounterCache(cache TimeoutCounterCache) {
 	s.timeoutCounterCache = cache
+}
+
+// SetOpenAIAPIKeyHealthCache injects the optional cross-instance API-key health counter.
+func (s *RateLimitService) SetOpenAIAPIKeyHealthCache(cache OpenAIAPIKeyHealthCache) {
+	s.openAIAPIKeyHealth = cache
 }
 
 // SetOpenAI403CounterCache 设置 OpenAI 403 连续失败计数器（可选依赖）

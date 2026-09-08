@@ -38,6 +38,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	}
 	responseModelObserver := &upstreamResponseModelObserver{}
 
+	SetOpsUpstreamModel(c, mappedModel)
 	wsURL, err := s.buildOpenAIResponsesWSURL(account)
 	if err != nil {
 		return nil, wrapOpenAIWSFallback("build_ws_url", err)
@@ -573,22 +574,16 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 				}
 			}
 		}
-		if openAIWSEventShouldParseUsage(eventType) {
+		// Error events may carry usage even though they are not terminal
+		// response events; capture it before the cyber mark and terminal/error
+		// handling so the boundary remains identical for both failure shapes.
+		if eventType == "error" || openAIWSEventShouldParseUsage(eventType) {
 			parseOpenAIWSResponseUsageFromCompletedEvent(message, usage)
 		}
 		imageCounter.AddSSEData(message)
 
-		if eventType == "response.failed" {
-			if hit, code, msg := detectOpenAICyberPolicy(message); hit {
-				MarkOpsCyberPolicy(c, CyberPolicyMark{
-					Code:           code,
-					Message:        msg,
-					Body:           truncateString(string(message), 4096),
-					UpstreamStatus: http.StatusOK,
-					UpstreamInTok:  usage.InputTokens,
-					UpstreamOutTok: usage.OutputTokens,
-				})
-			}
+		if eventType == "error" || eventType == "response.failed" {
+			markOpenAICyberPolicyEvent(c, message, http.StatusOK, usage)
 		}
 
 		if eventType == "error" {
@@ -769,6 +764,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		UpstreamModel:                 mappedModel,
 		UpstreamResponseModel:         responseModelObserver.Model(),
 		UpstreamResponseModelConflict: responseModelObserver.Conflict(),
+		UpstreamResponseServiceTier:   responseModelObserver.ServiceTier(),
 		ImageCount:                    imageCounter.Count(),
 		ImageOutputSizes:              imageCounter.Sizes(),
 		ServiceTier:                   extractOpenAIServiceTier(reqBody),

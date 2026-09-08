@@ -79,3 +79,12 @@ func sanitizeOpenAIResponsesInputItemIDs(body []byte) ([]byte, bool, error) {
 	}
 	return sanitized, true, nil
 }
+
+func shouldStripOpenAIResponsesNonPairCallID(itemType string) bool {
+	switch strings.TrimSpace(itemType) {
+	case "message", "reasoning", "image_generation_call":
+		return true
+	default:
+		return false
+	}
+}

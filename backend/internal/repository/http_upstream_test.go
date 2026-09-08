@@ -1,7 +1,10 @@
 package repository
 
 import (
+	"bufio"
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -106,6 +109,795 @@ func TestTLSFingerprintHTTPSProxyFallsBackWithoutBypassingProxy(t *testing.T) {
 	resolved, err := transport.Proxy(req)
 	require.NoError(t, err)
 	require.Equal(t, "https://user:pass@proxy.example:8443", resolved.String())
+}
+
+func TestHTTPUpstreamGeneralPrivateHostPolicyRemainsConfigDriven(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Security.URLAllowlist.Enabled = true
+	cfg.Security.URLAllowlist.AllowPrivateHosts = true
+	upstream, ok := NewHTTPUpstream(cfg).(*httpUpstreamService)
+	require.True(t, ok)
+	var lookups atomic.Int64
+	upstream.lookupIP = func(context.Context, string) ([]net.IP, error) {
+		lookups.Add(1)
+		return []net.IP{net.ParseIP("127.0.0.1")}, nil
+	}
+	req, err := http.NewRequest(http.MethodGet, "http://internal.example.test/resource", nil)
+	require.NoError(t, err)
+
+	require.NoError(t, upstream.validateRequestHost(req))
+	require.Zero(t, lookups.Load(), "general upstreams must keep AllowPrivateHosts behavior unless public-host-only is set")
+
+	publicReq := req.WithContext(service.WithHTTPUpstreamPublicHostsOnly(req.Context()))
+	require.Error(t, upstream.validateRequestHost(publicReq))
+	require.Equal(t, int64(1), lookups.Load())
+}
+
+func TestHTTPUpstreamDoPublicHostsOnlyUsesMockResolver(t *testing.T) {
+	var calls atomic.Int64
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(target.Close)
+
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "127.0.0.1", host)
+		return []net.IP{net.ParseIP("127.0.0.1")}, nil
+	}
+	req, err := http.NewRequestWithContext(
+		service.WithHTTPUpstreamPublicHostsOnly(t.Context()),
+		http.MethodGet,
+		target.URL,
+		nil,
+	)
+	require.NoError(t, err)
+
+	resp, err := upstream.Do(req, "", 1, 1)
+	require.Error(t, err)
+	require.Nil(t, resp)
+	require.Contains(t, err.Error(), "not allowed")
+	require.Zero(t, calls.Load(), "private destination must be rejected before connecting")
+}
+
+func TestHTTPUpstreamPublicHostsOnlyTransportRevalidatesEachHop(t *testing.T) {
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		switch host {
+		case "cdn.example.com":
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		case "127.0.0.1":
+			return []net.IP{net.ParseIP("127.0.0.1")}, nil
+		default:
+			return nil, fmt.Errorf("unexpected host %s", host)
+		}
+	}
+
+	var calls atomic.Int64
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "ok")
+	}))
+	t.Cleanup(target.Close)
+	targetURL, err := url.Parse(target.URL)
+	require.NoError(t, err)
+
+	var dialedAddress string
+	base := &http.Transport{
+		DisableKeepAlives: true,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			dialedAddress = address
+			return (&net.Dialer{}).DialContext(ctx, network, targetURL.Host)
+		},
+	}
+	ctx := service.WithHTTPUpstreamPublicHostsOnly(t.Context())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://cdn.example.com:"+targetURL.Port()+"/a.png", nil)
+	require.NoError(t, err)
+	client := upstream.httpClientForUpstreamRequest(&http.Client{Transport: base}, req)
+	require.NotNil(t, client.CheckRedirect)
+	require.IsType(t, &publicHostsOnlyTransport{}, client.Transport)
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, int64(1), calls.Load())
+	require.Equal(t, net.JoinHostPort("93.184.216.34", targetURL.Port()), dialedAddress)
+
+	privateReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1/a.png", nil)
+	require.NoError(t, err)
+	_, err = client.Transport.RoundTrip(privateReq)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not allowed")
+	require.Equal(t, int64(1), calls.Load(), "private hop must not reach the base transport")
+	require.Error(t, client.CheckRedirect(privateReq, []*http.Request{req}))
+}
+
+func TestHTTPUpstreamPublicHostsOnlyRedirectRejectsPrivateHopBeforeSecondRoundTrip(t *testing.T) {
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		switch host {
+		case "cdn.example.test":
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		case "private.example.test":
+			return []net.IP{net.ParseIP("127.0.0.1")}, nil
+		default:
+			return nil, fmt.Errorf("unexpected host %s", host)
+		}
+	}
+
+	var calls atomic.Int64
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		http.Redirect(w, r, "http://private.example.test/image.png", http.StatusFound)
+	}))
+	t.Cleanup(target.Close)
+	targetURL, err := url.Parse(target.URL)
+	require.NoError(t, err)
+	base := &http.Transport{
+		DisableKeepAlives: true,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			require.Equal(t, net.JoinHostPort("93.184.216.34", targetURL.Port()), address)
+			return (&net.Dialer{}).DialContext(ctx, network, targetURL.Host)
+		},
+	}
+	req, err := http.NewRequestWithContext(
+		service.WithHTTPUpstreamPublicHostsOnly(t.Context()),
+		http.MethodGet,
+		"http://cdn.example.test:"+targetURL.Port()+"/image.png",
+		nil,
+	)
+	require.NoError(t, err)
+	client := upstream.httpClientForUpstreamRequest(&http.Client{Transport: base}, req)
+
+	resp, err := client.Do(req)
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, http.StatusFound, resp.StatusCode)
+	require.NoError(t, resp.Body.Close())
+	require.Contains(t, err.Error(), "not allowed")
+	require.Equal(t, int64(1), calls.Load(), "private redirect must not reach a second RoundTrip")
+}
+
+func TestHTTPUpstreamPublicHostsOnlyRoundTripBindsCheckedIP(t *testing.T) {
+	var receivedHost string
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHost = r.Host
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(target.Close)
+	targetURL, err := url.Parse(target.URL)
+	require.NoError(t, err)
+
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	var lookups atomic.Int64
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "cdn.example.test", host)
+		lookups.Add(1)
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	var dialedAddress string
+	base := &http.Transport{
+		DisableKeepAlives: true,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			dialedAddress = address
+			return (&net.Dialer{}).DialContext(ctx, network, targetURL.Host)
+		},
+	}
+	req, err := http.NewRequestWithContext(
+		service.WithHTTPUpstreamPublicHostsOnly(t.Context()),
+		http.MethodGet,
+		"http://cdn.example.test:"+targetURL.Port()+"/image.png",
+		nil,
+	)
+	require.NoError(t, err)
+	client := upstream.httpClientForUpstreamRequest(&http.Client{Transport: base}, req)
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, net.JoinHostPort("93.184.216.34", targetURL.Port()), dialedAddress)
+	require.Equal(t, "cdn.example.test:"+targetURL.Port(), receivedHost)
+	require.Equal(t, int64(1), lookups.Load(), "the actual RoundTrip must use the controlled resolver")
+}
+
+func TestHTTPUpstreamPublicHostsOnlyRejectsHTTPSProxyFailClosed(t *testing.T) {
+	proxyURL, err := url.Parse("https://proxy.example.test:8443")
+	require.NoError(t, err)
+	transport := &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+	req, err := http.NewRequest(http.MethodGet, "https://cdn.example.test/image.png", nil)
+	require.NoError(t, err)
+
+	_, _, err = bindPublicHostRoundTrip(req, transport, net.ParseIP("93.184.216.34"))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "HTTPS proxy")
+}
+
+func TestHTTPUpstreamPublicHostsOnlyRoundTripRejectsRebinding(t *testing.T) {
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+
+	var lookups atomic.Int64
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "cdn.example.test", host)
+		if lookups.Add(1) == 1 {
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		}
+		return []net.IP{net.ParseIP("127.0.0.1")}, nil
+	}
+	var dials atomic.Int64
+	base := &http.Transport{
+		DisableKeepAlives: true,
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
+			dials.Add(1)
+			return nil, errors.New("dial must not run after rebinding")
+		},
+	}
+	req, err := http.NewRequestWithContext(
+		service.WithHTTPUpstreamPublicHostsOnly(t.Context()),
+		http.MethodGet,
+		"http://cdn.example.test/image.png",
+		nil,
+	)
+	require.NoError(t, err)
+	require.NoError(t, upstream.validatePublicRequestHost(req), "initial parse must accept the public answer")
+	client := upstream.httpClientForUpstreamRequest(&http.Client{Transport: base}, req)
+
+	resp, err := client.Do(req)
+	require.Error(t, err)
+	require.Nil(t, resp)
+	require.Contains(t, err.Error(), "not allowed")
+	require.Equal(t, int64(2), lookups.Load(), "RoundTrip must resolve again after the initial check")
+	require.Zero(t, dials.Load(), "private rebound address must be rejected before the socket dial")
+}
+
+func TestIsPublicResolvedIPRejectsNonPublicAddressClasses(t *testing.T) {
+	for _, raw := range []string{
+		"127.0.0.1", "10.0.0.1", "172.16.0.1", "192.168.0.1",
+		"169.254.1.1", "0.0.0.0", "::1", "fc00::1", "fe80::1", "::",
+		"::ffff:127.0.0.1", "::ffff:10.0.0.1", "224.0.0.1", "255.255.255.255",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			require.False(t, isPublicResolvedIP(net.ParseIP(raw)))
+		})
+	}
+	require.True(t, isPublicResolvedIP(net.ParseIP("93.184.216.34")))
+}
+
+func TestHTTPUpstreamPublicHostsOnlyResponseCloseReleasesBoundTransport(t *testing.T) {
+	var closed atomic.Int64
+	body := &closeTrackingReadCloser{Reader: strings.NewReader("ok"), closed: &closed}
+	wrapped := &closeIdleTransportBody{ReadCloser: body, transport: &http.Transport{}}
+	require.NoError(t, wrapped.Close())
+	require.NoError(t, wrapped.Close())
+	require.Equal(t, int64(2), closed.Load(), "the caller's body Close contract is preserved")
+
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "ok")
+	}))
+	t.Cleanup(target.Close)
+	targetURL, err := url.Parse(target.URL)
+	require.NoError(t, err)
+	transport := &publicHostsOnlyTransport{
+		base: &http.Transport{
+			DisableKeepAlives: true,
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				require.Equal(t, net.JoinHostPort("93.184.216.34", targetURL.Port()), address)
+				return (&net.Dialer{}).DialContext(ctx, network, targetURL.Host)
+			},
+		},
+		resolve: func(context.Context, string) ([]net.IP, error) {
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		},
+	}
+	req, err := http.NewRequest(http.MethodGet, "http://cdn.example.test:"+targetURL.Port()+"/image.png", nil)
+	require.NoError(t, err)
+	resp, err := transport.RoundTrip(req)
+	require.NoError(t, err)
+	require.IsType(t, &closeIdleTransportBody{}, resp.Body)
+	require.NoError(t, resp.Body.Close())
+}
+
+type closeTrackingReadCloser struct {
+	io.Reader
+	closed *atomic.Int64
+}
+
+func (b *closeTrackingReadCloser) Close() error {
+	b.closed.Add(1)
+	return nil
+}
+
+func TestHTTPUpstreamPublicHostsOnlyRejectsCustomRoundTripper(t *testing.T) {
+	var calls atomic.Int64
+	transport := &publicHostsOnlyTransport{
+		base: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			calls.Add(1)
+			return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
+		}),
+		resolve: func(context.Context, string) ([]net.IP, error) {
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		},
+	}
+	req, err := http.NewRequest(http.MethodGet, "http://cdn.example.test/image.png", nil)
+	require.NoError(t, err)
+	resp, err := transport.RoundTrip(req)
+	require.Error(t, err)
+	require.Nil(t, resp)
+	require.Contains(t, err.Error(), "*http.Transport")
+	require.Zero(t, calls.Load(), "a custom RoundTripper must not run after only a resolver check")
+}
+
+func TestHTTPUpstreamPublicHostsOnlyPreservesHostAndSNI(t *testing.T) {
+	var receivedHost, receivedSNI string
+	target := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHost = r.Host
+		if r.TLS != nil {
+			receivedSNI = r.TLS.ServerName
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	target.StartTLS()
+	t.Cleanup(target.Close)
+	targetURL, err := url.Parse(target.URL)
+	require.NoError(t, err)
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "cdn.example.test", host)
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	base := &http.Transport{
+		DisableKeepAlives: true,
+		TLSClientConfig:   &tls.Config{InsecureSkipVerify: true, ServerName: "wrong.example"}, // #nosec G402 -- local httptest certificate
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			require.Equal(t, net.JoinHostPort("93.184.216.34", targetURL.Port()), address)
+			return (&net.Dialer{}).DialContext(ctx, network, targetURL.Host)
+		},
+	}
+	req, err := http.NewRequestWithContext(service.WithHTTPUpstreamPublicHostsOnly(t.Context()), http.MethodGet, "https://cdn.example.test:"+targetURL.Port()+"/image.png", nil)
+	require.NoError(t, err)
+	client := upstream.httpClientForUpstreamRequest(&http.Client{Transport: base}, req)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, "cdn.example.test:"+targetURL.Port(), receivedHost)
+	require.Equal(t, "cdn.example.test", receivedSNI)
+}
+
+func TestHTTPUpstreamPublicHostsOnlyUsesHTTPProxyWithCheckedTarget(t *testing.T) {
+	proxyURL, received := startRawTestHTTPProxy(t)
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "cdn.example.test", host)
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	req, err := http.NewRequestWithContext(service.WithHTTPUpstreamPublicHostsOnly(t.Context()), http.MethodGet, "http://cdn.example.test:18080/image%2Fproxy.png?sig=abc", nil)
+	require.NoError(t, err)
+	resp, err := upstream.Do(req, proxyURL, 1001, 1)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	select {
+	case got := <-received:
+		require.Equal(t, "GET http://93.184.216.34:18080/image%2Fproxy.png?sig=abc HTTP/1.1", got.requestLine)
+		require.Equal(t, "cdn.example.test:18080", got.header.Get("Host"))
+	case <-time.After(time.Second):
+		t.Fatal("HTTP proxy did not receive the checked request")
+	}
+}
+
+func TestHTTPUpstreamPublicHostsOnlyHTTPRequestScopedProxyRouteIsFrozen(t *testing.T) {
+	proxyAURL, proxyARequests := startRawTestHTTPProxy(t)
+	proxyBURL, proxyBRequests := startRawTestHTTPProxy(t)
+	parsedA, err := url.Parse(proxyAURL)
+	require.NoError(t, err)
+	parsedB, err := url.Parse(proxyBURL)
+	require.NoError(t, err)
+	var proxyLookups atomic.Int64
+	transport := &publicHostsOnlyTransport{
+		base: &http.Transport{Proxy: func(*http.Request) (*url.URL, error) {
+			if proxyLookups.Add(1) == 1 {
+				return parsedA, nil
+			}
+			return parsedB, nil
+		}},
+		resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil },
+	}
+	req, err := http.NewRequest(http.MethodGet, "http://cdn.example.test:18080/image.png", nil)
+	require.NoError(t, err)
+	resp, err := transport.RoundTrip(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	select {
+	case got := <-proxyARequests:
+		require.Equal(t, "GET http://93.184.216.34:18080/image.png HTTP/1.1", got.requestLine)
+		require.Equal(t, "cdn.example.test:18080", got.header.Get("Host"))
+	case <-time.After(time.Second):
+		t.Fatal("frozen HTTP proxy route did not receive the request")
+	}
+	require.Equal(t, int64(1), proxyLookups.Load())
+	select {
+	case got := <-proxyBRequests:
+		t.Fatalf("later proxy received %q", got.requestLine)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestHTTPUpstreamPublicHostsOnlyUsesHTTPProxyConnectWithCheckedTargetAndPreservesHostSNI(t *testing.T) {
+	type observed struct{ host, sni string }
+	targetRequests := make(chan observed, 1)
+	target := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetRequests <- observed{r.Host, r.TLS.ServerName}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	target.StartTLS()
+	t.Cleanup(target.Close)
+	targetURL, err := url.Parse(target.URL)
+	require.NoError(t, err)
+	connectTargets := make(chan string, 1)
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodConnect {
+			http.Error(w, "CONNECT required", http.StatusMethodNotAllowed)
+			return
+		}
+		connectTargets <- r.Host
+		h, ok := w.(http.Hijacker)
+		if !ok {
+			http.Error(w, "hijacking unavailable", http.StatusInternalServerError)
+			return
+		}
+		clientConn, _, err := h.Hijack()
+		if err != nil {
+			return
+		}
+		defer clientConn.Close()
+		targetConn, err := net.Dial("tcp", targetURL.Host)
+		if err != nil {
+			return
+		}
+		defer targetConn.Close()
+		if _, err := io.WriteString(clientConn, "HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
+			return
+		}
+		go func() { _, _ = io.Copy(targetConn, clientConn); _ = targetConn.Close() }()
+		_, _ = io.Copy(clientConn, targetConn)
+	}))
+	t.Cleanup(proxy.Close)
+	proxyParsed, err := url.Parse(proxy.URL)
+	require.NoError(t, err)
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "cdn.example.test", host)
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	base := &http.Transport{Proxy: http.ProxyURL(proxyParsed), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} // #nosec G402 -- local httptest certificate
+	req, err := http.NewRequestWithContext(service.WithHTTPUpstreamPublicHostsOnly(t.Context()), http.MethodGet, "https://cdn.example.test:"+targetURL.Port()+"/image.png", nil)
+	require.NoError(t, err)
+	resp, err := upstream.httpClientForUpstreamRequest(&http.Client{Transport: base}, req).Do(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	select {
+	case got := <-connectTargets:
+		require.Equal(t, net.JoinHostPort("93.184.216.34", targetURL.Port()), got)
+	case <-time.After(time.Second):
+		t.Fatal("HTTP CONNECT proxy did not receive checked target")
+	}
+	select {
+	case got := <-targetRequests:
+		require.Equal(t, "cdn.example.test:"+targetURL.Port(), got.host)
+		require.Equal(t, "cdn.example.test", got.sni)
+	case <-time.After(time.Second):
+		t.Fatal("TLS target did not receive proxied request")
+	}
+}
+
+func TestHTTPUpstreamPublicHostsOnlyUsesSOCKSProxyWithCheckedTarget(t *testing.T) {
+	var receivedHost string
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHost = r.Host
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(target.Close)
+	targetURL, err := url.Parse(target.URL)
+	require.NoError(t, err)
+	proxyURL, proxyCalls, requestedTargets := startMappedTestSOCKS5Proxy(t, targetURL.Host)
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "cdn.example.test", host)
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	req, err := http.NewRequestWithContext(service.WithHTTPUpstreamPublicHostsOnly(t.Context()), http.MethodGet, "http://cdn.example.test:"+targetURL.Port()+"/image.png", nil)
+	require.NoError(t, err)
+	resp, err := upstream.Do(req, proxyURL, 1002, 1)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, int64(1), proxyCalls.Load())
+	select {
+	case got := <-requestedTargets:
+		require.Equal(t, net.JoinHostPort("93.184.216.34", targetURL.Port()), got)
+	case <-time.After(time.Second):
+		t.Fatal("SOCKS proxy did not receive checked target")
+	}
+	require.Equal(t, "cdn.example.test:"+targetURL.Port(), receivedHost)
+}
+
+func TestHTTPUpstreamPublicHostsOnlyUsesSOCKSProxyHTTPSWithCheckedTargetAndPreservesHostSNI(t *testing.T) {
+	type observed struct{ host, sni string }
+	targetRequests := make(chan observed, 1)
+	target := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetRequests <- observed{r.Host, r.TLS.ServerName}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	target.StartTLS()
+	t.Cleanup(target.Close)
+	targetURL, err := url.Parse(target.URL)
+	require.NoError(t, err)
+	proxyURL, proxyCalls, requestedTargets := startMappedTestSOCKS5Proxy(t, targetURL.Host)
+	parsedProxy, err := url.Parse(proxyURL)
+	require.NoError(t, err)
+	base, err := buildUpstreamTransport(defaultPoolSettings(nil), parsedProxy, upstreamProtocolModeDefault)
+	require.NoError(t, err)
+	base.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // #nosec G402 -- local httptest certificate
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "cdn.example.test", host)
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	req, err := http.NewRequestWithContext(service.WithHTTPUpstreamPublicHostsOnly(t.Context()), http.MethodGet, "https://cdn.example.test:"+targetURL.Port()+"/image.png", nil)
+	require.NoError(t, err)
+	resp, err := upstream.httpClientForUpstreamRequest(&http.Client{Transport: base}, req).Do(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, int64(1), proxyCalls.Load())
+	select {
+	case got := <-requestedTargets:
+		require.Equal(t, net.JoinHostPort("93.184.216.34", targetURL.Port()), got)
+	case <-time.After(time.Second):
+		t.Fatal("SOCKS proxy did not receive checked HTTPS target")
+	}
+	select {
+	case got := <-targetRequests:
+		require.Equal(t, "cdn.example.test:"+targetURL.Port(), got.host)
+		require.Equal(t, "cdn.example.test", got.sni)
+	case <-time.After(time.Second):
+		t.Fatal("TLS target did not receive SOCKS request")
+	}
+}
+
+func TestHTTPUpstreamPublicHostsOnlyRejectsHTTPSProxyBeforeDial(t *testing.T) {
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "cdn.example.test", host)
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	req, err := http.NewRequestWithContext(service.WithHTTPUpstreamPublicHostsOnly(t.Context()), http.MethodGet, "http://cdn.example.test/image.png", nil)
+	require.NoError(t, err)
+	resp, err := upstream.Do(req, "https://proxy.example.test:8443", 1003, 1)
+	require.Error(t, err)
+	require.Nil(t, resp)
+	require.Contains(t, err.Error(), "HTTPS proxy")
+}
+
+func TestHTTPUpstreamPublicHostsOnlyRejectsEmptyOrMixedDNSAnswers(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		ips  []net.IP
+	}{{"empty", nil}, {"mixed", []net.IP{net.ParseIP("93.184.216.34"), net.ParseIP("10.0.0.1")}}} {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls atomic.Int64
+			tr := &publicHostsOnlyTransport{base: &http.Transport{DisableKeepAlives: true, DialContext: func(context.Context, string, string) (net.Conn, error) {
+				calls.Add(1)
+				return nil, errors.New("dial must not run")
+			}}, resolve: func(context.Context, string) ([]net.IP, error) { return tt.ips, nil }}
+			req, err := http.NewRequest(http.MethodGet, "http://cdn.example.test/image.png", nil)
+			require.NoError(t, err)
+			resp, err := tr.RoundTrip(req)
+			require.Error(t, err)
+			require.Nil(t, resp)
+			require.Zero(t, calls.Load())
+		})
+	}
+}
+
+func TestHTTPUpstreamPublicHostsOnlyTakesPrecedenceOverDisabledRedirects(t *testing.T) {
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		if host == "private.example.test" {
+			return []net.IP{net.ParseIP("127.0.0.1")}, nil
+		}
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	ctx := service.WithHTTPUpstreamPublicHostsOnly(service.WithHTTPUpstreamRedirectsDisabled(t.Context()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://cdn.example.test/image.png", nil)
+	require.NoError(t, err)
+	client := upstream.httpClientForUpstreamRequest(&http.Client{Transport: &http.Transport{}}, req)
+	require.IsType(t, &publicHostsOnlyTransport{}, client.Transport)
+	redirectReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://private.example.test/image.png", nil)
+	require.NoError(t, err)
+	require.Error(t, client.CheckRedirect(redirectReq, []*http.Request{req}))
+}
+
+func TestHTTPUpstreamPublicHostsOnlyRejectsCustomTLSDialer(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "https://cdn.example.test/image.png", nil)
+	require.NoError(t, err)
+	tr := &http.Transport{DialTLSContext: func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("dial must not run") }}
+	_, _, err = bindPublicHostRoundTrip(req, tr, net.ParseIP("93.184.216.34"))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "custom TLS dialer")
+}
+
+func TestHTTPUpstreamDoWithTLSPublicHostsOnlyRejectsCustomTLSPath(t *testing.T) {
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
+	var lookups atomic.Int64
+	upstream.lookupIP = func(_ context.Context, host string) ([]net.IP, error) {
+		require.Equal(t, "cdn.example.test", host)
+		lookups.Add(1)
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	}
+	req, err := http.NewRequestWithContext(service.WithHTTPUpstreamPublicHostsOnly(t.Context()), http.MethodGet, "https://cdn.example.test/image.png", nil)
+	require.NoError(t, err)
+	resp, err := upstream.DoWithTLS(req, "", 1004, 1, &tlsfingerprint.Profile{Name: "test"})
+	require.Error(t, err)
+	require.Nil(t, resp)
+	require.Contains(t, err.Error(), "custom TLS dialer")
+	require.Equal(t, int64(2), lookups.Load())
+	require.Len(t, upstream.clients, 1)
+	for _, entry := range upstream.clients {
+		require.Zero(t, atomic.LoadInt64(&entry.inFlight))
+	}
+}
+
+type rawTestHTTPProxyRequest struct {
+	requestLine string
+	header      http.Header
+}
+
+func startRawTestHTTPProxy(t *testing.T) (string, <-chan rawTestHTTPProxyRequest) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	requests := make(chan rawTestHTTPProxyRequest, 4)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go serveRawTestHTTPProxyConn(conn, requests)
+		}
+	}()
+	return "http://" + listener.Addr().String(), requests
+}
+func serveRawTestHTTPProxyConn(conn net.Conn, requests chan<- rawTestHTTPProxyRequest) {
+	defer conn.Close()
+	r := bufio.NewReader(conn)
+	requestLine, err := r.ReadString('\n')
+	if err != nil {
+		return
+	}
+	header := make(http.Header)
+	line := requestLine
+	for {
+		line, err = r.ReadString('\n')
+		if err != nil {
+			return
+		}
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			break
+		}
+		name, value, ok := strings.Cut(line, ":")
+		if !ok {
+			return
+		}
+		header.Add(strings.TrimSpace(name), strings.TrimSpace(value))
+	}
+	requests <- rawTestHTTPProxyRequest{strings.TrimRight(requestLine, "\r\n"), header}
+	_, _ = io.WriteString(conn, "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+}
+
+func startMappedTestSOCKS5Proxy(t *testing.T, targetAddr string) (string, *atomic.Int64, <-chan string) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	calls := &atomic.Int64{}
+	requestedTargets := make(chan string, 1)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			calls.Add(1)
+			go serveMappedTestSOCKS5Conn(conn, targetAddr, requestedTargets)
+		}
+	}()
+	return "socks5h://" + listener.Addr().String(), calls, requestedTargets
+}
+
+func serveMappedTestSOCKS5Conn(client net.Conn, targetAddr string, requestedTargets chan<- string) {
+	defer client.Close()
+	header := make([]byte, 2)
+	if _, err := io.ReadFull(client, header); err != nil || header[0] != 5 {
+		return
+	}
+	methods := make([]byte, int(header[1]))
+	if _, err := io.ReadFull(client, methods); err != nil {
+		return
+	}
+	if _, err := client.Write([]byte{5, 0}); err != nil {
+		return
+	}
+	request := make([]byte, 4)
+	if _, err := io.ReadFull(client, request); err != nil || request[0] != 5 || request[1] != 1 {
+		return
+	}
+	var host string
+	switch request[3] {
+	case 1:
+		address := make([]byte, net.IPv4len)
+		if _, err := io.ReadFull(client, address); err != nil {
+			return
+		}
+		host = net.IP(address).String()
+	case 3:
+		length := make([]byte, 1)
+		if _, err := io.ReadFull(client, length); err != nil {
+			return
+		}
+		address := make([]byte, int(length[0]))
+		if _, err := io.ReadFull(client, address); err != nil {
+			return
+		}
+		host = string(address)
+	case 4:
+		address := make([]byte, net.IPv6len)
+		if _, err := io.ReadFull(client, address); err != nil {
+			return
+		}
+		host = net.IP(address).String()
+	default:
+		return
+	}
+	portBytes := make([]byte, 2)
+	if _, err := io.ReadFull(client, portBytes); err != nil {
+		return
+	}
+	requestedTargets <- net.JoinHostPort(host, fmt.Sprintf("%d", binary.BigEndian.Uint16(portBytes)))
+	target, err := net.Dial("tcp", targetAddr)
+	if err != nil {
+		_, _ = client.Write([]byte{5, 1, 0, 1, 0, 0, 0, 0, 0, 0})
+		return
+	}
+	defer target.Close()
+	if _, err := client.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil {
+		return
+	}
+	go func() { _, _ = io.Copy(target, client); _ = target.Close() }()
+	_, _ = io.Copy(client, target)
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 func startTestSOCKS5Proxy(t *testing.T) (string, *atomic.Int64) {

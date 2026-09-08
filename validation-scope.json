@@ -1,0 +1,47 @@
+{
+  "run_date": "2026-09-07",
+  "owner": "validation",
+  "phase": "A0-A7",
+  "database_execution": "forbidden",
+  "allowed_write_domain": [
+    "validation-scope.json",
+    "backend/internal/repository/migrations_runner*.go",
+    "backend/internal/repository/integration_harness_test.go",
+    "backend/internal/repository/fixtures_integration_test.go",
+    "backend/internal/repository/validation_harness_test.go",
+    "backend/scripts/validation-code-only.ps1",
+    "backend/migrations/232_add_usage_log_upstream_request_id.sql",
+    "backend/migrations/233_add_usage_log_upstream_request_id_index_notx.sql",
+    "backend/migrations/234_channel_max_reasoning_effort_multiplier.sql",
+    "backend/migrations/234_group_codex_models_manifest_config.sql",
+    "reports/validation.md"
+  ],
+  "entry_classes": {
+    "CODE_ONLY": [
+      "repository migration checksum/execution-mode tests",
+      "four official SQL contract checks",
+      "SQLmock migration runner tests",
+      "pure target-gate tests"
+    ],
+    "DB_REQUIRED": [
+      "all //go:build integration repository tests",
+      "all tests using integrationDB, testEntClient, testRedis, ApplyMigrations, or cleanup SQL"
+    ],
+    "APP_REQUIRED": [
+      "server startup/automatic migration, Compose, Redis-backed application flows"
+    ],
+    "EXTERNAL_AUTH_REQUIRED": [
+      "real upstream OAuth/payment/provider callbacks and external services"
+    ]
+  },
+  "dangerous_entrypoints": [
+    "go test ./...",
+    "go test -tags integration ...",
+    "go test ./internal/repository without a narrow -run",
+    "docker/testcontainers/Compose",
+    "server startup or automatic migration",
+    "real DB/Redis/payment/upstream calls"
+  ],
+  "database_tests": "compile-only; never run in this task",
+  "historical_sql": "unchanged"
+}

@@ -1,4 +1,4 @@
-FROM golang:1.26.6-alpine
+FROM golang:1.27.0-alpine
 
 WORKDIR /app
 
@@ -16,6 +16,7 @@ COPY . .
 
 # 构建应用
 RUN VERSION_VALUE="$(./scripts/resolve-version.sh)" && \
+    VERSION_VALUE="${VERSION_VALUE#v}" && \
     go build -ldflags="-s -w -X main.Version=${VERSION_VALUE}" -o main ./cmd/server/
 
 # 暴露端口

@@ -282,7 +282,7 @@ func TestCalculateCost_OpenAIGPT54LongContextMarkerRequiresActualCostIncrease(t 
 	require.False(t, cost.LongContextBillingApplied)
 }
 
-func TestCalculateCost_OpenAIGPT55ProUsesGPT55PricingPolicy(t *testing.T) {
+func TestCalculateCost_OpenAIGPT55ProUsesIndependentApprovedPricingPolicy(t *testing.T) {
 	svc := newTestBillingService()
 
 	tokens := UsageTokens{
@@ -293,8 +293,8 @@ func TestCalculateCost_OpenAIGPT55ProUsesGPT55PricingPolicy(t *testing.T) {
 	cost, err := svc.CalculateCost("gpt-5.5-pro", tokens, 1.0)
 	require.NoError(t, err)
 
-	expectedInput := float64(tokens.InputTokens) * 2.5e-6 * 2.0
-	expectedOutput := float64(tokens.OutputTokens) * 15e-6 * 1.5
+	expectedInput := float64(tokens.InputTokens) * 30e-6 * 2.0
+	expectedOutput := float64(tokens.OutputTokens) * 180e-6 * 1.5
 	require.InDelta(t, expectedInput, cost.InputCost, 1e-10)
 	require.InDelta(t, expectedOutput, cost.OutputCost, 1e-10)
 	require.InDelta(t, expectedInput+expectedOutput, cost.TotalCost, 1e-10)
@@ -1657,6 +1657,32 @@ func TestGetModelPricingWithChannel_CacheWritePriceAffects5mAnd1h(t *testing.T) 
 	require.InDelta(t, 7e-6, pricing.CacheCreationPricePerToken, 1e-12)
 	require.InDelta(t, 7e-6, pricing.CacheCreation5mPrice, 1e-12)
 	require.InDelta(t, 7e-6, pricing.CacheCreation1hPrice, 1e-12)
+}
+
+func TestGetModelPricingWithChannel_CacheWriteTTLPricesCanDiffer(t *testing.T) {
+	svc := newTestBillingService()
+
+	pricing, err := svc.GetModelPricingWithChannel("claude-fable-5-1", &ChannelModelPricing{
+		CacheWritePrice:   testPtrFloat64(13e-6),
+		CacheWrite1hPrice: testPtrFloat64(21e-6),
+	})
+	require.NoError(t, err)
+	require.True(t, pricing.SupportsCacheBreakdown)
+	require.InDelta(t, 13e-6, pricing.CacheCreationPricePerToken, 1e-12)
+	require.InDelta(t, 13e-6, pricing.CacheCreation5mPrice, 1e-12)
+	require.InDelta(t, 21e-6, pricing.CacheCreation1hPrice, 1e-12)
+}
+
+func TestGetModelPricing_Fable51FallbackPricing(t *testing.T) {
+	svc := newTestBillingService()
+
+	pricing, err := svc.GetModelPricing("claude-fable-5-1")
+	require.NoError(t, err)
+	require.InDelta(t, 10e-6, pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 50e-6, pricing.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 12.5e-6, pricing.CacheCreation5mPrice, 1e-12)
+	require.InDelta(t, 20e-6, pricing.CacheCreation1hPrice, 1e-12)
+	require.InDelta(t, 0.25e-6, pricing.CacheReadPricePerToken, 1e-12)
 }
 
 func TestGetModelPricingWithChannel_CacheReadPriceAffectsPriority(t *testing.T) {

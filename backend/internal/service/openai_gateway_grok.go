@@ -157,6 +157,8 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 			kind = "failover"
 		}
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			ProxyID:            opsUpstreamProxyID(account),
+			ProxyName:          opsUpstreamProxyName(account),
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,
@@ -230,6 +232,7 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 	reasoningEffort := extractOpenAIReasoningEffortFromBody(patchedBody, originalModel)
 	result := &OpenAIForwardResult{
 		RequestID:       firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id")),
+		UpstreamHeaders: resp.Header.Clone(),
 		ResponseID:      responseID,
 		Usage:           *usage,
 		Model:           originalModel,
@@ -627,6 +630,13 @@ func normalizeGrokReasoningEffortValue(raw string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// GrokSupportsXHighReasoningEffort reports whether the model advertises and
+// forwards the xhigh reasoning effort (Grok 4.6 and its undated alias).
+func GrokSupportsXHighReasoningEffort(model string) bool {
+	model = strings.ToLower(xai.StripGrokProviderPrefix(strings.TrimSpace(model)))
+	return model == "grok-4.6" || model == "grok-4.6-latest"
 }
 
 func grokSupportsReasoningEffort(model string) bool {
@@ -1086,6 +1096,8 @@ func (s *OpenAIGatewayService) describeGrokComposerImage(
 			kind = "failover"
 		}
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			ProxyID:            opsUpstreamProxyID(account),
+			ProxyName:          opsUpstreamProxyName(account),
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,

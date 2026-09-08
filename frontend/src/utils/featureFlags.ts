@@ -169,6 +169,11 @@ export const FeatureFlags = {
     mode: 'opt-in',
     label: 'Risk Control',
   }),
+  pluginManagement: defineFlag({
+    key: 'plugin_management_enabled',
+    mode: 'opt-out',
+    label: 'Plugin Management',
+  }),
   affiliate: defineFlag({
     key: 'affiliate_enabled',
     mode: 'opt-in',

@@ -1173,3 +1173,208 @@ func TestRelay_OnTurnComplete_RealOpenAIStream_FirstTokenMs(t *testing.T) {
 	require.NotNil(t, result.FirstTokenMs)
 	require.Greater(t, *result.FirstTokenMs, 0)
 }
+
+// Migrated from sub2api-0.2.1 kernel coverage.
+
+func TestRelay_JoinsUpstreamReaderBeforeReturning(t *testing.T) {
+	t.Parallel()
+
+	clientConn := &closeSpyFrameConn{}
+	upstreamConn := newCancelJoinProbeFrameConn()
+	ctx, cancel := context.WithCancel(context.Background())
+	resultCh := make(chan *RelayExit, 1)
+
+	go func() {
+		_, relayExit := Relay(
+			ctx,
+			clientConn,
+			upstreamConn,
+			[]byte(`{"type":"response.create","model":"gpt-4o","input":[]}`),
+			RelayOptions{},
+		)
+		resultCh <- relayExit
+	}()
+
+	select {
+	case <-upstreamConn.readStarted:
+	case <-time.After(time.Second):
+		t.Fatal("upstream reader did not start")
+	}
+	cancel()
+	select {
+	case <-upstreamConn.readCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("upstream reader did not observe relay cancellation")
+	}
+	select {
+	case <-resultCh:
+		t.Fatal("Relay returned before the upstream reader exited")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(upstreamConn.allowReturn)
+	select {
+	case relayExit := <-resultCh:
+		require.NotNil(t, relayExit)
+		require.ErrorIs(t, relayExit.Err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("Relay did not return after the upstream reader exited")
+	}
+	select {
+	case <-upstreamConn.readReturned:
+	default:
+		t.Fatal("Relay returned before the upstream reader completion signal")
+	}
+	require.Zero(t, clientConn.CloseCalls(), "错误路径不应提前关闭客户端连接")
+}
+
+func TestRelay_OnTurnComplete_AuxiliaryFrameDoesNotSettleBareErrorBeforeFailed(t *testing.T) {
+	t.Parallel()
+
+	clientConn := newPassthroughTestFrameConn(nil, false)
+	upstreamConn := newPassthroughTestFrameConn([]passthroughTestFrame{
+		{msgType: coderws.MessageText, payload: []byte(`{"type":"error","error":{"code":"server_error","message":"failed"}}`)},
+		{msgType: coderws.MessageText, payload: []byte(`{"type":"rate_limits.updated","rate_limits":[{"name":"requests","remaining":1}]}`)},
+		{msgType: coderws.MessageText, payload: []byte(`{"type":"response.failed","response":{"id":"resp_authoritative","usage":{"input_tokens":7,"output_tokens":2},"error":{"code":"server_error","message":"failed"}}}`)},
+	}, true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	turns := make([]RelayTurnResult, 0, 1)
+	result, relayExit := Relay(ctx, clientConn, upstreamConn, []byte(`{"type":"response.create","model":"gpt-5.6-sol","input":[]}`), RelayOptions{
+		OnTurnComplete: func(turn RelayTurnResult) { turns = append(turns, turn) },
+	})
+
+	require.Nil(t, relayExit)
+	require.Len(t, turns, 1)
+	require.Equal(t, "response.failed", turns[0].TerminalEventType)
+	require.Equal(t, "resp_authoritative", turns[0].RequestID)
+	require.Equal(t, Usage{InputTokens: 7, OutputTokens: 2}, turns[0].Usage)
+	require.Equal(t, turns[0].Usage, result.Usage)
+}
+
+func TestRelay_OnTurnComplete_BareErrorWithoutIDBeforeLaterCompleted(t *testing.T) {
+	t.Parallel()
+
+	clientConn := newPassthroughTestFrameConn(nil, false)
+	upstreamConn := newPassthroughTestFrameConn([]passthroughTestFrame{
+		{
+			msgType: coderws.MessageText,
+			payload: []byte(`{"type":"error","usage":{"input_tokens":5,"output_tokens":1},"error":{"message":"first turn failed"}}`),
+		},
+		{
+			msgType: coderws.MessageText,
+			payload: []byte(`{"type":"response.completed","response":{"id":"resp_next","usage":{"input_tokens":3,"output_tokens":2}}}`),
+		},
+	}, true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	turns := make([]RelayTurnResult, 0, 2)
+	result, relayExit := Relay(
+		ctx,
+		clientConn,
+		upstreamConn,
+		[]byte(`{"type":"response.create","model":"gpt-5.6-sol","input":[]}`),
+		RelayOptions{OnTurnComplete: func(turn RelayTurnResult) { turns = append(turns, turn) }},
+	)
+
+	require.Nil(t, relayExit)
+	require.Len(t, turns, 2)
+	require.Equal(t, "error", turns[0].TerminalEventType)
+	require.Empty(t, turns[0].RequestID)
+	require.Equal(t, Usage{InputTokens: 5, OutputTokens: 1}, turns[0].Usage)
+	require.Equal(t, "response.completed", turns[1].TerminalEventType)
+	require.Equal(t, "resp_next", turns[1].RequestID)
+	require.Equal(t, Usage{InputTokens: 3, OutputTokens: 2}, turns[1].Usage)
+	require.Equal(t, Usage{InputTokens: 8, OutputTokens: 3}, result.Usage)
+}
+
+func TestRelay_UpstreamNormalCloseBeforeTerminalIsFailure(t *testing.T) {
+	t.Parallel()
+
+	clientConn := newPassthroughTestFrameConn(nil, false)
+	upstreamConn := &eofReplacementFrameConn{
+		FrameConn: newPassthroughTestFrameConn([]passthroughTestFrame{
+			{
+				msgType: coderws.MessageText,
+				payload: []byte(`{"type":"response.created","response":{"id":"resp_incomplete","status":"in_progress"}}`),
+			},
+			{
+				msgType: coderws.MessageText,
+				payload: []byte(`{"type":"response.in_progress","response":{"id":"resp_incomplete","status":"in_progress"}}`),
+			},
+		}, true),
+		err: coderws.CloseError{Code: coderws.StatusNormalClosure},
+	}
+
+	firstPayload := []byte(`{"type":"response.create","model":"gpt-5.6-sol","input":[]}`)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	result, relayExit := Relay(ctx, clientConn, upstreamConn, firstPayload, RelayOptions{})
+	require.NotNil(t, relayExit)
+	require.Equal(t, "read_upstream", relayExit.Stage)
+	require.False(t, relayExit.Graceful)
+	require.True(t, relayExit.WroteDownstream)
+	require.ErrorContains(t, relayExit.Err, "upstream websocket closed before terminal event")
+	require.Empty(t, result.TerminalEventType)
+	require.Len(t, clientConn.Writes(), 2)
+}
+
+// Migrated helper fixtures from sub2api-0.2.1 kernel coverage.
+
+type eofReplacementFrameConn struct {
+	FrameConn
+	err error
+}
+
+type cancelJoinProbeFrameConn struct {
+	readStarted  chan struct{}
+	readCanceled chan struct{}
+	allowReturn  chan struct{}
+	readReturned chan struct{}
+	startOnce    sync.Once
+	cancelOnce   sync.Once
+	returnOnce   sync.Once
+}
+
+func newCancelJoinProbeFrameConn() *cancelJoinProbeFrameConn {
+	return &cancelJoinProbeFrameConn{
+		readStarted:  make(chan struct{}),
+		readCanceled: make(chan struct{}),
+		allowReturn:  make(chan struct{}),
+		readReturned: make(chan struct{}),
+	}
+}
+
+func (c *eofReplacementFrameConn) ReadFrame(ctx context.Context) (coderws.MessageType, []byte, error) {
+	msgType, payload, err := c.FrameConn.ReadFrame(ctx)
+	if errors.Is(err, io.EOF) {
+		return msgType, payload, c.err
+	}
+	return msgType, payload, err
+}
+
+func (c *cancelJoinProbeFrameConn) ReadFrame(ctx context.Context) (coderws.MessageType, []byte, error) {
+	c.startOnce.Do(func() { close(c.readStarted) })
+	<-ctx.Done()
+	c.cancelOnce.Do(func() { close(c.readCanceled) })
+	<-c.allowReturn
+	c.returnOnce.Do(func() { close(c.readReturned) })
+	return coderws.MessageText, nil, ctx.Err()
+}
+
+func (c *cancelJoinProbeFrameConn) WriteFrame(ctx context.Context, _ coderws.MessageType, _ []byte) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
+func (c *cancelJoinProbeFrameConn) Close() error { return nil }

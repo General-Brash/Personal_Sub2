@@ -80,6 +80,12 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		h.responsesErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Model is not supported by composite groups")
 		return
 	}
+	if cappedBody, changed, policyErr := applyOpenAIReasoningEffortPolicyForRequest(c, apiKey, body); policyErr != nil {
+		respondOpenAIReasoningEffortPolicyError(c, policyErr, h.responsesErrorResponse)
+		return
+	} else if changed {
+		body = cappedBody
+	}
 	reqStream, ok := parseOpenAICompatibleStream(body)
 	if !ok {
 		h.responsesErrorResponse(c, http.StatusBadRequest, "invalid_request_error", invalidStreamFieldTypeMessage)
@@ -343,6 +349,8 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			return
 		}
 
+		stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
+
 		// 6. Record usage
 		userAgent := c.GetHeader("User-Agent")
 		clientIP := ip.GetClientIP(c)
@@ -354,21 +362,22 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		sessionID := service.ExtractClientSessionID(c)
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
-				Result:             result,
-				QuotaPlatform:      quotaPlatform,
-				APIKey:             apiKey,
-				User:               apiKey.User,
-				Account:            account,
-				Subscription:       subscription,
-				PricingAt:          pricingAt,
-				InboundEndpoint:    inboundEndpoint,
-				UpstreamEndpoint:   upstreamEndpoint,
-				UserAgent:          userAgent,
-				IPAddress:          clientIP,
-				RequestPayloadHash: requestPayloadHash,
-				APIKeyService:      h.apiKeyService,
-				SessionID:          sessionID,
-				ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
+				Result:                   result,
+				RequestedReasoningEffort: result.RequestedReasoningEffort,
+				QuotaPlatform:            quotaPlatform,
+				APIKey:                   apiKey,
+				User:                     apiKey.User,
+				Account:                  account,
+				Subscription:             subscription,
+				PricingAt:                pricingAt,
+				InboundEndpoint:          inboundEndpoint,
+				UpstreamEndpoint:         upstreamEndpoint,
+				UserAgent:                userAgent,
+				IPAddress:                clientIP,
+				RequestPayloadHash:       requestPayloadHash,
+				APIKeyService:            h.apiKeyService,
+				SessionID:                sessionID,
+				ChannelUsageFields:       clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
 			}); err != nil {
 				reqLog.Error("gateway.responses.record_usage_failed",
 					zap.Int64("account_id", account.ID),
@@ -410,6 +419,10 @@ func (h *GatewayHandler) handleResponsesFailoverExhausted(c *gin.Context, lastEr
 	if lastErr != nil && service.IsOpenAISilentRefusalErrorBody(lastErr.ResponseBody) {
 		service.SetOpsUpstreamError(c, statusCode, service.OpenAISilentRefusalClientMessage(), "")
 		h.responsesErrorResponse(c, http.StatusBadGateway, "upstream_error", service.OpenAISilentRefusalClientMessage())
+		return
+	}
+	if statusCode == http.StatusTooManyRequests {
+		h.responsesErrorResponse(c, http.StatusTooManyRequests, "rate_limit_error", "All available accounts are currently rate-limited. Please retry later.")
 		return
 	}
 	h.responsesErrorResponse(c, statusCode, "server_error", "All available accounts exhausted")

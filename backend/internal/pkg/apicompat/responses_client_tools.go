@@ -27,6 +27,13 @@ func AdaptResponsesClientTools(req map[string]any) (ResponsesClientToolMapping, 
 	if !ok || len(tools) == 0 {
 		return ResponsesClientToolMapping{}, false, nil
 	}
+	discovered, err := promoteResponsesToolSearchDiscoveries(req)
+	if err != nil {
+		return ResponsesClientToolMapping{}, false, err
+	}
+	if discovered {
+		tools, _ = req["tools"].([]any)
+	}
 
 	adapter := ResponsesClientToolMapping{CustomTools: make(map[string]bool)}
 	functionNames := make(map[string]bool)

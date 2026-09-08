@@ -144,6 +144,8 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 		SortOrder:                       source.SortOrder,
 		AllowMessagesDispatch:           source.AllowMessagesDispatch,
 		AllowLive:                       source.AllowLive,
+		ForceOpenAIFast:                 source.ForceOpenAIFast,
+		FreeOpenAIFast:                  source.FreeOpenAIFast,
 		RequireOAuthOnly:                source.RequireOAuthOnly,
 		RequirePrivacySet:               source.RequirePrivacySet,
 		DefaultMappedModel:              source.DefaultMappedModel,
@@ -152,9 +154,13 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 			Enabled: source.ModelsListConfig.Enabled,
 			Models:  append([]string(nil), source.ModelsListConfig.Models...),
 		},
-		RPMLimit:                source.RPMLimit,
-		MaxReasoningEffort:      source.MaxReasoningEffort,
-		ReasoningEffortMappings: append([]ReasoningEffortMapping(nil), source.ReasoningEffortMappings...),
+		// Pinned manifest IDs refer to source-group accounts; reset them on copy
+		// so the duplicate never inherits stale membership bindings.
+		CodexModelsManifestConfig:   GroupCodexModelsManifestConfig{},
+		RPMLimit:                    source.RPMLimit,
+		MaxReasoningEffort:          source.MaxReasoningEffort,
+		MaxReasoningEffortOverLimit: source.MaxReasoningEffortOverLimit,
+		ReasoningEffortMappings:     append([]ReasoningEffortMapping(nil), source.ReasoningEffortMappings...),
 	}
 }
 

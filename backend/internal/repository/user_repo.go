@@ -157,6 +157,7 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 		SetNillableLastLoginAt(userIn.LastLoginAt).
 		SetNillableLastActiveAt(userIn.LastActiveAt).
 		SetRpmLimit(userIn.RPMLimit).
+		SetRestrictPublicGroups(userIn.RestrictPublicGroups).
 		Save(txCtx)
 	if err != nil {
 		return translatePersistenceError(err, nil, service.ErrEmailExists)
@@ -384,11 +385,13 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 	if fields.LastActiveAt && userIn.LastActiveAt != nil {
 		updateOp = updateOp.SetLastActiveAt(*userIn.LastActiveAt)
 	}
+	if fields.RestrictPublicGroups {
+		updateOp = updateOp.SetRestrictPublicGroups(userIn.RestrictPublicGroups)
+	}
 	updated, err := updateOp.Save(txCtx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, service.ErrEmailExists)
 	}
-
 	if fields.AllowedGroups {
 		if err := r.syncUserAllowedGroupsWithClient(txCtx, txClient, updated.ID, userIn.AllowedGroups); err != nil {
 			return err

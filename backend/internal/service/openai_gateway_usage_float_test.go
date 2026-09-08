@@ -20,7 +20,7 @@ func TestOpenAIGatewayUsageTokenCostUsesLegacyFloatMultiplier(t *testing.T) {
 	require.NoError(t, err)
 
 	longContextEnabled := false
-	got, err := svc.calculateOpenAIRecordUsageTokenCost(context.Background(), &APIKey{}, "gpt-5.1", multiplier, time.Time{}, tokens, "", &longContextEnabled)
+	got, err := svc.calculateOpenAIRecordUsageTokenCost(context.Background(), &APIKey{}, "gpt-5.1", multiplier, time.Time{}, tokens, "", "", &longContextEnabled)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
@@ -32,7 +32,7 @@ func TestOpenAIGatewayUsageImageCostUsesLegacyFloatMultiplier(t *testing.T) {
 	multiplier := 1.0 / 3.0
 	svc := &OpenAIGatewayService{billingService: NewBillingService(&config.Config{}, nil)}
 
-	got, err := svc.calculateOpenAIImageCost(
+	got := svc.calculateOpenAIImageCost(
 		context.Background(),
 		"gpt-image-1",
 		&APIKey{Group: &Group{ImagePrice1K: &unitPrice}},
@@ -40,7 +40,7 @@ func TestOpenAIGatewayUsageImageCostUsesLegacyFloatMultiplier(t *testing.T) {
 		multiplier,
 	)
 
-	require.NoError(t, err)
+	require.NotNil(t, got)
 	require.InDelta(t, 0.3, got.TotalCost, 1e-12)
 	require.InDelta(t, 0.1, got.ActualCost, 1e-12)
 }
@@ -52,7 +52,7 @@ func TestOpenAIGatewayUsageVideoCostUsesLegacyFloatMultiplier(t *testing.T) {
 	multiplier := 1.0 / 3.0
 	svc := &OpenAIGatewayService{billingService: NewBillingService(&config.Config{}, nil)}
 
-	got, err := svc.calculateOpenAIVideoCost(
+	got := svc.calculateOpenAIVideoCost(
 		context.Background(),
 		"grok-imagine-video",
 		&APIKey{Group: &Group{VideoPrice480P: &unitPrice}},
@@ -60,7 +60,7 @@ func TestOpenAIGatewayUsageVideoCostUsesLegacyFloatMultiplier(t *testing.T) {
 		multiplier,
 	)
 
-	require.NoError(t, err)
+	require.NotNil(t, got)
 	require.InDelta(t, 0.5, got.TotalCost, 1e-12)
 	require.InDelta(t, 1.0/6.0, got.ActualCost, 1e-12)
 }
@@ -84,6 +84,16 @@ func TestOpenAIUsageDefaultRateMultiplierUsesLegacyFloatConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 	require.InDelta(t, 1.1, usageRepo.lastLog.RateMultiplier, 1e-12)
+}
+
+func TestGroupBillsOpenAIFastAtStandardUsesPriorityOnly(t *testing.T) {
+	apiKey := &APIKey{Group: &Group{Platform: PlatformComposite, FreeOpenAIFast: true}}
+	openAIAccount := &Account{Platform: PlatformOpenAI}
+
+	require.True(t, groupBillsOpenAIFastAtStandard(apiKey, openAIAccount, "priority"))
+	require.True(t, groupBillsOpenAIFastAtStandard(apiKey, openAIAccount, "fast"))
+	require.False(t, groupBillsOpenAIFastAtStandard(apiKey, openAIAccount, "default"))
+	require.False(t, groupBillsOpenAIFastAtStandard(apiKey, &Account{Platform: PlatformGrok}, "priority"))
 }
 
 func TestOpenAIUsageBillingRoundsFloatAtLedgerBoundary(t *testing.T) {

@@ -1,9 +1,9 @@
+//go:build integration
+
 package securityaudit
 
 import (
 	"context"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -12,10 +12,7 @@ import (
 )
 
 func TestRedisPayloadStoreRoundTripTTLNamespaceAndDelete(t *testing.T) {
-	address := strings.TrimSpace(os.Getenv(promptAuditRedisTestEnv))
-	if address == "" {
-		t.Skip(promptAuditRedisTestEnv + " is not set")
-	}
+	address := promptAuditRedisAddress()
 	client := redis.NewClient(&redis.Options{Addr: address})
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
 	store := NewRedisPayloadStore(client)
@@ -38,10 +35,7 @@ func TestRedisPayloadStoreRoundTripTTLNamespaceAndDelete(t *testing.T) {
 }
 
 func TestPromptRuntimeAggregatesConfigWorkersQueueRedisEndpointsAndGuardMetrics(t *testing.T) {
-	address := strings.TrimSpace(os.Getenv(promptAuditRedisTestEnv))
-	if address == "" {
-		t.Skip(promptAuditRedisTestEnv + " is not set")
-	}
+	address := promptAuditRedisAddress()
 	db := openPromptAuditIntegrationDB(t)
 	client := redis.NewClient(&redis.Options{Addr: address})
 	t.Cleanup(func() { require.NoError(t, client.Close()) })

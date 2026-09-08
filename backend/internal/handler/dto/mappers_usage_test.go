@@ -8,6 +8,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Personal keeps administrative request/billing policy out of public DTOs.
+func TestUserAndGroupResponseDTOsKeepGatewayPoliciesAdminOnly(t *testing.T) {
+	t.Parallel()
+	userSource := &service.User{ID: 1, RestrictPublicGroups: true}
+	require.True(t, UserFromServiceAdmin(userSource).RestrictPublicGroups)
+	publicUser, err := json.Marshal(UserFromServiceShallow(userSource))
+	require.NoError(t, err)
+	require.NotContains(t, string(publicUser), "restrict_public_groups")
+	groupSource := &service.Group{ID: 2, ForceOpenAIFast: true, FreeOpenAIFast: true, MaxReasoningEffortOverLimit: service.ReasoningEffortOverLimitDeny}
+	group := GroupFromServiceAdmin(groupSource)
+	require.True(t, group.ForceOpenAIFast)
+	require.True(t, group.FreeOpenAIFast)
+	publicGroup := GroupFromServiceShallow(groupSource)
+	require.Equal(t, service.ReasoningEffortOverLimitDeny, publicGroup.MaxReasoningEffortOverLimit)
+	publicJSON, err := json.Marshal(publicGroup)
+	require.NoError(t, err)
+	require.NotContains(t, string(publicJSON), "force_openai_fast")
+	require.NotContains(t, string(publicJSON), "free_openai_fast")
+}
+
 func TestUsageLogFromService_IncludesOpenAIWSMode(t *testing.T) {
 	t.Parallel()
 
@@ -104,6 +124,33 @@ func TestUsageLogFromService_IncludesServiceTierForUserAndAdmin(t *testing.T) {
 	require.Equal(t, upstreamEndpoint, *adminDTO.UpstreamEndpoint)
 	require.NotNil(t, adminDTO.AccountRateMultiplier)
 	require.InDelta(t, 1.5, *adminDTO.AccountRateMultiplier, 1e-12)
+}
+
+func TestUsageLogFromService_IncludesRequestedReasoningAndNativeCompaction(t *testing.T) {
+	t.Parallel()
+
+	requested := "max"
+	effective := "xhigh"
+	log := &service.UsageLog{
+		RequestID:                "req_usage_audit",
+		Model:                    "gpt-5-codex",
+		ReasoningEffort:          &effective,
+		RequestedReasoningEffort: &requested,
+		NativeCompactionV2:       true,
+	}
+
+	userDTO := UsageLogFromService(log)
+	adminDTO := UsageLogFromServiceAdmin(log)
+	for _, got := range []*UsageLog{userDTO, &adminDTO.UsageLog} {
+		require.NotNil(t, got.ReasoningEffort)
+		require.Equal(t, requested, *got.ReasoningEffort)
+		require.True(t, got.NativeCompactionV2)
+	}
+	require.NotNil(t, adminDTO.UpstreamReasoningEffort)
+	require.Equal(t, effective, *adminDTO.UpstreamReasoningEffort)
+	publicJSON, err := json.Marshal(userDTO)
+	require.NoError(t, err)
+	require.NotContains(t, string(publicJSON), "upstream_reasoning_effort")
 }
 
 func TestUsageLogFromService_UsesRequestedModelAndKeepsUpstreamAdminOnly(t *testing.T) {

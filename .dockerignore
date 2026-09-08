@@ -51,6 +51,8 @@ coverage/
 .env.*
 !.env.example
 
+/plugins/
+
 # Local config
 config.yaml
 config.local.yaml

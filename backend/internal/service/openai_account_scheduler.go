@@ -2310,6 +2310,27 @@ func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResult(accountID int64
 	scheduler.ReportResult(accountID, success, firstTokenMs)
 }
 
+// ReportOpenAIAccountScheduleResultForAccount is the single account-aware
+// scheduler-result entry point. It observes the opt-in OpenAI pool API-key
+// health breaker only when the caller supplies the selected account and the
+// attributable upstream error, then delegates the scheduler/recovery work to
+// the legacy ID-based path exactly once.
+func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResultForAccount(account *Account, model string, success bool, firstTokenMs *int, observedErr error) bool {
+	if s == nil || account == nil {
+		return false
+	}
+	healthTripped := false
+	if s.rateLimitService != nil {
+		if success {
+			s.rateLimitService.ObserveOpenAIAPIKeyHealthSuccess(context.Background(), account)
+		} else if observedErr != nil {
+			healthTripped = s.rateLimitService.ObserveOpenAIAPIKeyHealthFailure(context.Background(), account, observedErr)
+		}
+	}
+	s.ReportOpenAIAccountScheduleResult(account.ID, model, success, firstTokenMs)
+	return healthTripped
+}
+
 func (s *OpenAIGatewayService) RecordOpenAIAccountSwitch() {
 	scheduler := s.getOpenAIAccountScheduler(context.Background())
 	if scheduler == nil {

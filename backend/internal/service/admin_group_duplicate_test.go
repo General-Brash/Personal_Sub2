@@ -213,6 +213,7 @@ func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing
 	require.Equal(t, source.ModelRouting, duplicate.ModelRouting)
 	require.Equal(t, source.MessagesDispatchModelConfig, duplicate.MessagesDispatchModelConfig)
 	require.Equal(t, source.ModelsListConfig, duplicate.ModelsListConfig)
+	require.Equal(t, GroupCodexModelsManifestConfig{}, duplicate.CodexModelsManifestConfig, "duplicate must not inherit source-group pinned account IDs")
 	require.Equal(t, source.RPMLimit, duplicate.RPMLimit)
 	require.Equal(t, source.MaxReasoningEffort, duplicate.MaxReasoningEffort)
 	require.Equal(t, source.ReasoningEffortMappings, duplicate.ReasoningEffortMappings)

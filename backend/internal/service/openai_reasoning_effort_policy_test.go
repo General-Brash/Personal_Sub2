@@ -17,7 +17,7 @@ func TestNormalizeMaxReasoningEffort(t *testing.T) {
 		{name: "empty", in: "", want: ""},
 		{name: "separator", in: "x-high", want: "xhigh"},
 		{name: "max is distinct", in: "max", want: "max"},
-		{name: "none is unsupported", in: "none", want: ""},
+		{name: "none is unsupported as ceiling", in: "none", want: ""},
 		{name: "invalid", in: "banana", want: ""},
 	}
 	for _, tt := range tests {
@@ -42,6 +42,16 @@ func TestNormalizeReasoningEffortMappings(t *testing.T) {
 		}
 	})
 
+	t.Run("allows none only as a source for OpenAI routes", func(t *testing.T) {
+		for _, platform := range []string{PlatformOpenAI, PlatformComposite} {
+			got, err := NormalizeReasoningEffortMappings(platform, []ReasoningEffortMapping{{From: " NONE ", To: "low"}})
+			require.NoError(t, err)
+			require.Equal(t, []ReasoningEffortMapping{{From: "none", To: "low"}}, got)
+		}
+		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{{From: "low", To: "none"}})
+		require.ErrorContains(t, err, "empty or unknown")
+	})
+
 	t.Run("rejects empty values", func(t *testing.T) {
 		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{{From: "max"}})
 		require.ErrorContains(t, err, "empty or unknown")
@@ -61,10 +71,7 @@ func TestNormalizeReasoningEffortMappings(t *testing.T) {
 			require.ErrorContains(t, err, "only supported for platforms \"openai\" and \"composite\"")
 		}
 
-		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{{From: "none", To: "low"}})
-		require.ErrorContains(t, err, "empty or unknown")
-
-		_, err = NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{{From: "ultra", To: "high"}})
+		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{{From: "ultra", To: "high"}})
 		require.ErrorContains(t, err, "empty or unknown")
 	})
 }
@@ -99,6 +106,43 @@ func TestOpenAIReasoningEffortPolicyContext(t *testing.T) {
 	got, changed := ApplyOpenAIReasoningEffortPolicyFromContext(ctx, body)
 	require.True(t, changed)
 	require.Equal(t, "medium", gjson.GetBytes(got, "reasoning.effort").String())
+}
+
+func TestApplyOpenAIReasoningEffortPolicyWithOverLimit(t *testing.T) {
+	body := []byte(`{"reasoning":{"effort":"high"}}`)
+
+	downgraded, changed, err := ApplyOpenAIReasoningEffortPolicyWithOverLimit(
+		body,
+		"medium",
+		nil,
+		ReasoningEffortOverLimitDowngrade,
+	)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, "medium", gjson.GetBytes(downgraded, "reasoning.effort").String())
+
+	denied, changed, err := ApplyOpenAIReasoningEffortPolicyWithOverLimit(
+		body,
+		"medium",
+		nil,
+		ReasoningEffortOverLimitDeny,
+	)
+	var overLimitErr *ReasoningEffortOverLimitError
+	require.ErrorAs(t, err, &overLimitErr)
+	require.Equal(t, "high", overLimitErr.Requested)
+	require.Equal(t, "medium", overLimitErr.Max)
+	require.False(t, changed)
+	require.Equal(t, body, denied)
+
+	ctx := WithOpenAIReasoningEffortPolicy(context.Background(), "medium", nil, ReasoningEffortOverLimitDeny)
+	_, _, err = ApplyOpenAIReasoningEffortPolicyFromContextWithOverLimit(ctx, body)
+	require.ErrorAs(t, err, &overLimitErr)
+
+	_, err = applyOpenAIWSReasoningEffortPolicy(body, &OpenAIWSIngressHooks{
+		MaxReasoningEffort:          "medium",
+		MaxReasoningEffortOverLimit: ReasoningEffortOverLimitDeny,
+	})
+	require.ErrorAs(t, err, &overLimitErr)
 }
 
 func TestApplyOpenAIReasoningEffortPolicy(t *testing.T) {

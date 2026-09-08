@@ -61,6 +61,10 @@ func (s *OpenAIGatewayService) forwardAnthropicViaNativeAnthropicEndpoint(
 	// 与 Anthropic 平台 passthrough 相同的 pre-filter：剥离空文本块与上游
 	// 无法接受的 web-search 历史块（GLM/Kimi/DeepSeek 对 server_tool_use 400）。
 	body = StripEmptyTextBlocks(body)
+	if normalized, changed := NormalizeGLM53AnthropicThinking(body, upstreamModel); changed {
+		body = normalized
+	}
+
 	body = FilterWebSearchHistoryBlocks(body, upstreamModel)
 
 	logger.LegacyPrintf("service.gateway", "[CN Anthropic 直通] account=%d(%s) platform=%s model=%s upstream=%s stream=%v",
@@ -76,7 +80,7 @@ func (s *OpenAIGatewayService) forwardAnthropicViaNativeAnthropicEndpoint(
 	}
 
 	proxyURL := ""
-	if account.Proxy != nil {
+	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
 
@@ -233,6 +237,7 @@ func (s *OpenAIGatewayService) handleNativeAnthropicBufferedResponse(
 
 	return &OpenAIForwardResult{
 		RequestID:        resp.Header.Get("x-request-id"),
+		UpstreamHeaders:  resp.Header,
 		Usage:            claudeUsageToOpenAIUsage(usage),
 		Model:            originalModel,
 		BillingModel:     billingModel,
@@ -503,6 +508,7 @@ func (s *OpenAIGatewayService) nativeAnthropicStreamResult(
 	}
 	return &OpenAIForwardResult{
 		RequestID:        resp.Header.Get("x-request-id"),
+		UpstreamHeaders:  resp.Header,
 		Usage:            claudeUsageToOpenAIUsage(usage),
 		Model:            originalModel,
 		BillingModel:     billingModel,

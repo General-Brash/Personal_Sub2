@@ -91,6 +91,13 @@ func classifyOpenAITransportError(err error) openAITransportErrorClass {
 	return openAITransportErrorClass{}
 }
 
+// classifyUpstreamTransportError is shared by the non-OpenAI gateway paths.
+// Keep the same durable network/proxy classification without coupling their
+// forwarding code to OpenAI-specific eviction behavior.
+func classifyUpstreamTransportError(err error) openAITransportErrorClass {
+	return classifyOpenAITransportError(err)
+}
+
 // handleOpenAIUpstreamTransportError handles a transport-level upstream failure
 // (Do/DoWithTLS returned a non-HTTP error: proxy/DNS/TCP/TLS). It:
 //  1. records the failure in Ops error logs (status 0, kind=request_error);
@@ -109,6 +116,8 @@ func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Co
 	safeErr := sanitizeUpstreamErrorMessage(err.Error())
 	setOpsUpstreamError(c, 0, safeErr, "")
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		ProxyID:            opsUpstreamProxyID(account),
+		ProxyName:          opsUpstreamProxyName(account),
 		Platform:           account.Platform,
 		AccountID:          account.ID,
 		AccountName:        account.Name,

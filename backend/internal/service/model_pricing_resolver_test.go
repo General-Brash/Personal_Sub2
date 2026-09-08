@@ -261,9 +261,12 @@ func TestResolve_WithChannelOverride_TokenFlat(t *testing.T) {
 	require.Equal(t, "channel", resolved.Source)
 	require.NotNil(t, resolved.BasePricing)
 	require.InDelta(t, 10e-6, resolved.BasePricing.InputPricePerToken, 1e-12)
-	require.InDelta(t, 10e-6, resolved.BasePricing.InputPricePerTokenPriority, 1e-12)
+	require.Zero(t, resolved.BasePricing.InputPricePerTokenPriority, "without a catalog tier the configured/default Fast multiplier must remain active")
 	require.InDelta(t, 50e-6, resolved.BasePricing.OutputPricePerToken, 1e-12)
-	require.InDelta(t, 50e-6, resolved.BasePricing.OutputPricePerTokenPriority, 1e-12)
+	require.Zero(t, resolved.BasePricing.OutputPricePerTokenPriority)
+	fast := r.billingService.computeTokenBreakdown(resolved.BasePricing, UsageTokens{InputTokens: 1_000_000, OutputTokens: 1_000_000}, 1, "fast", false)
+	require.InDelta(t, 20, fast.InputCost, 1e-12)
+	require.InDelta(t, 100, fast.OutputCost, 1e-12)
 }
 
 func TestResolve_WithChannelOverride_TokenPartialOverride(t *testing.T) {

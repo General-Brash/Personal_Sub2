@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Resolve image version
         id: version
@@ -56,13 +56,16 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+          # The main-branch publisher owns only the non-release edge channel.
+          # Formal version tags and latest are owned by the release workflow.
           tags: |
-            type=raw,value=latest
-            type=raw,value=${{ steps.version.outputs.value }}
+            type=raw,value=edge
             type=sha,prefix=sha-,format=long
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ steps.version.outputs.value }}
+            org.opencontainers.image.version=edge
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       - name: Build and push image
