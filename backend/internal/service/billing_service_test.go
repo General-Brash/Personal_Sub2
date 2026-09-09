@@ -215,7 +215,7 @@ func TestGetModelPricing_OpenAICompactAliasesFallback(t *testing.T) {
 		cacheRead   float64
 		longContext int
 	}{
-		{model: "gpt5.5", inputPrice: 2.5e-6, outputPrice: 15e-6, cacheRead: 0.25e-6, longContext: 272000},
+		{model: "gpt5.5", inputPrice: 5e-6, outputPrice: 30e-6, cacheRead: 0.5e-6, longContext: 272000},
 		{model: "openai/gpt5.4", inputPrice: 2.5e-6, outputPrice: 15e-6, cacheRead: 0.25e-6, longContext: 272000},
 		{model: "gpt5.4-mini", inputPrice: 7.5e-7, outputPrice: 4.5e-6, cacheRead: 7.5e-8, longContext: 0},
 		{model: "gpt5.3codexspark", inputPrice: 1.5e-6, outputPrice: 12e-6, cacheRead: 0.15e-6, longContext: 0},
@@ -1594,9 +1594,10 @@ func TestGetModelPricingWithChannel_OverrideInputPriceOnly(t *testing.T) {
 	pricing, err := svc.GetModelPricingWithChannel("claude-sonnet-4", chPricing)
 	require.NoError(t, err)
 
-	// InputPrice overridden (both normal and priority)
+	// InputPrice overridden. claude-sonnet-4 has no catalog priority price, so
+	// the priority slot is zeroed and serviceTierCostMultiplier owns the surcharge.
 	require.InDelta(t, 99e-6, pricing.InputPricePerToken, 1e-12)
-	require.InDelta(t, 99e-6, pricing.InputPricePerTokenPriority, 1e-12)
+	require.Zero(t, pricing.InputPricePerTokenPriority)
 
 	// OutputPrice unchanged (claude-sonnet-4 fallback = 15e-6)
 	require.InDelta(t, 15e-6, pricing.OutputPricePerToken, 1e-12)
@@ -1611,9 +1612,9 @@ func TestGetModelPricingWithChannel_OverrideOutputPriceOnly(t *testing.T) {
 	pricing, err := svc.GetModelPricingWithChannel("claude-sonnet-4", chPricing)
 	require.NoError(t, err)
 
-	// OutputPrice overridden
+	// OutputPrice overridden; no catalog priority price to scale, so the slot is zeroed.
 	require.InDelta(t, 88e-6, pricing.OutputPricePerToken, 1e-12)
-	require.InDelta(t, 88e-6, pricing.OutputPricePerTokenPriority, 1e-12)
+	require.Zero(t, pricing.OutputPricePerTokenPriority)
 
 	// InputPrice unchanged (claude-sonnet-4 fallback = 3e-6)
 	require.InDelta(t, 3e-6, pricing.InputPricePerToken, 1e-12)
@@ -1633,15 +1634,18 @@ func TestGetModelPricingWithChannel_OverrideAllFields(t *testing.T) {
 	require.NoError(t, err)
 
 	require.InDelta(t, 10e-6, pricing.InputPricePerToken, 1e-12)
-	require.InDelta(t, 10e-6, pricing.InputPricePerTokenPriority, 1e-12)
 	require.InDelta(t, 20e-6, pricing.OutputPricePerToken, 1e-12)
-	require.InDelta(t, 20e-6, pricing.OutputPricePerTokenPriority, 1e-12)
 	require.InDelta(t, 5e-6, pricing.CacheCreationPricePerToken, 1e-12)
 	require.InDelta(t, 5e-6, pricing.CacheCreation5mPrice, 1e-12)
 	require.InDelta(t, 5e-6, pricing.CacheCreation1hPrice, 1e-12)
 	require.InDelta(t, 1e-6, pricing.CacheReadPricePerToken, 1e-12)
-	require.InDelta(t, 1e-6, pricing.CacheReadPricePerTokenPriority, 1e-12)
 	require.InDelta(t, 50e-6, pricing.ImageOutputPricePerToken, 1e-12)
+
+	// claude-sonnet-4 carries no catalog Fast/Priority tier, so every priority
+	// slot stays zero and computeTokenBreakdown falls back to the 2x default.
+	require.Zero(t, pricing.InputPricePerTokenPriority)
+	require.Zero(t, pricing.OutputPricePerTokenPriority)
+	require.Zero(t, pricing.CacheReadPricePerTokenPriority)
 }
 
 func TestGetModelPricingWithChannel_CacheWritePriceAffects5mAnd1h(t *testing.T) {
@@ -1694,11 +1698,13 @@ func TestGetModelPricingWithChannel_CacheReadPriceAffectsPriority(t *testing.T) 
 	pricing, err := svc.GetModelPricingWithChannel("claude-sonnet-4", chPricing)
 	require.NoError(t, err)
 
-	// CacheReadPrice should set both normal and priority
+	// CacheReadPrice sets the standard slot; the priority slot is zeroed because
+	// claude-sonnet-4 has no catalog tier ratio to preserve.
 	require.InDelta(t, 2e-6, pricing.CacheReadPricePerToken, 1e-12)
-	require.InDelta(t, 2e-6, pricing.CacheReadPricePerTokenPriority, 1e-12)
+	require.Zero(t, pricing.CacheReadPricePerTokenPriority)
 }
 
+// 目录带 tier 价时，渠道覆盖必须按目录比例换算 priority 价，而不是归零。
 func TestGetModelPricingWithChannel_UnknownModelReturnsError(t *testing.T) {
 	svc := newTestBillingService()
 

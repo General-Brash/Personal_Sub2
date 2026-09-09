@@ -57,7 +57,7 @@ func TestBuildUpstreamTransport_OpenAIH2_NegotiatesHTTP2(t *testing.T) {
 
 	response, err := (&http.Client{Transport: tr}).Get(server.URL)
 	require.NoError(t, err)
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	require.Equal(t, http.StatusNoContent, response.StatusCode)
 	require.Equal(t, "HTTP/2.0", response.Proto)
 	require.Equal(t, "HTTP/2.0", <-upstreamProtocol)

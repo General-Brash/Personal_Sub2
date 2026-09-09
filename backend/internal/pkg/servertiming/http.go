@@ -53,10 +53,10 @@ func Do(client *http.Client, req *http.Request) (*http.Response, error) {
 		client = http.DefaultClient
 	}
 	if req == nil || !Active(req.Context()) {
-		return client.Do(req)
+		return client.Do(req) // #nosec G704 -- transparent instrumentation; the caller owns URL validation and its policy-enforcing transport.
 	}
 	startedAt := time.Now()
-	response, err := client.Do(req)
+	response, err := client.Do(req) // #nosec G704 -- preserve the caller-provided URL policy and transport without widening destinations.
 	RecordDependency(req.Context(), dependencyModule(req), startedAt, time.Now())
 	return response, err
 }

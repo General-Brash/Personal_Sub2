@@ -1437,15 +1437,16 @@ func TestOpenAIResponsesWebSocket_PassthroughTracksModelPerTurn(t *testing.T) {
 		"each turn must be billed with its own channel-mapped model")
 }
 
-func TestOpenAIResponsesWebSocket_UnchangedChannelTargetOutsideAccountMappingKeysRemainsValid(t *testing.T) {
+func TestOpenAIResponsesWebSocket_ChannelMappedTargetSelectsAccountWithoutRequestedAlias(t *testing.T) {
 	got := runOpenAIResponsesWebSocketUsageLogCase(t, openAIResponsesWSUsageLogCase{
 		firstPayload:  `{"type":"response.create","model":"public-alias","stream":false}`,
 		secondPayload: `{"type":"response.create","stream":false}`,
 		channelMapping: map[string]string{
 			"public-alias": "gpt-5.6-sol",
 		},
+		// Eligibility is checked against the channel target, not the public alias.
 		accountModelMapping: map[string]any{
-			"public-alias": "gpt-5.6-terra",
+			"gpt-5.6-sol": "gpt-5.6-sol",
 		},
 	})
 

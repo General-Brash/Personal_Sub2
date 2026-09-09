@@ -934,6 +934,7 @@ func TestOpenAIWSReplaySequenceSharesBodiesAndOwnsHeaders(t *testing.T) {
 
 	// Appending to the merged header must not consume capacity in a predecessor.
 	combined = append(combined, json.RawMessage(`{"type":"input_text","text":"later"}`))
+	require.Len(t, combined, 3)
 	require.Len(t, history, 1)
 	require.Equal(t, "hello", gjson.GetBytes(history[0], "text").String())
 }

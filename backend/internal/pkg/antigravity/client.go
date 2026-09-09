@@ -255,8 +255,6 @@ const (
 	proxyTLSHandshakeTimeout = 5 * time.Second
 	// clientTimeout 整体请求超时（含连接、发送、等待响应、读取 body）
 	clientTimeout = 10 * time.Second
-	// fetchAvailableModelsBodyLimit limits model-list responses to avoid unbounded memory use.
-	fetchAvailableModelsBodyLimit int64 = 8 << 20
 )
 
 func NewClient(proxyURL string) (*Client, error) {

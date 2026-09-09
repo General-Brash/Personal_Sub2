@@ -117,7 +117,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 ) (*OpenAIForwardResult, error) {
 	upstreamPassthroughModel := ""
 	if isOpenAIResponsesCompactPath(c) {
-		compactMappedModel := resolveOpenAICompactForwardModel(account, reqModel)
+		compactMappedModel := s.resolveOpenAICompactFallbackModel(account, reqModel)
 		if compactMappedModel != "" && compactMappedModel != reqModel {
 			nextBody, setErr := sjson.SetBytes(body, "model", compactMappedModel)
 			if setErr != nil {
@@ -303,6 +303,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	}
 
 	agentTaskRecoveryTried := false
+	compactModelFallbackRetried := false
 	var resp *http.Response
 	for {
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
@@ -320,112 +321,145 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			// a failover so the handler switches to a healthy account.
 			return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, true)
 		}
-		if resp.StatusCode < 400 {
-			break
-		}
+		if resp.StatusCode >= 400 {
 
-		// Peek only to identify an invalid task. Restore the body so the existing
-		// passthrough error handling sees the same response after recovery fails.
-		probeBody := s.readUpstreamErrorBody(resp)
-		_ = resp.Body.Close()
-		resp.Body = io.NopCloser(bytes.NewReader(probeBody))
-		if !agentTaskRecoveryTried && s.isAgentIdentityAccount(ctx, account) && isAgentIdentityTaskInvalidHTTPResponse(resp.StatusCode, probeBody) {
-			agentTaskRecoveryTried = true
-			expectedTaskID := account.GetCredential("task_id")
-			if recoveryErr := s.recoverAgentIdentityTask(ctx, account, expectedTaskID); recoveryErr != nil {
-				return nil, fmt.Errorf("agent identity task recovery failed: %w", recoveryErr)
+			// Peek only to identify an invalid task. Restore the body so the existing
+			// passthrough error handling sees the same response after recovery fails.
+			probeBody := s.readUpstreamErrorBody(resp)
+			_ = resp.Body.Close()
+			resp.Body = io.NopCloser(bytes.NewReader(probeBody))
+			if !agentTaskRecoveryTried && s.isAgentIdentityAccount(ctx, account) && isAgentIdentityTaskInvalidHTTPResponse(resp.StatusCode, probeBody) {
+				agentTaskRecoveryTried = true
+				expectedTaskID := account.GetCredential("task_id")
+				if recoveryErr := s.recoverAgentIdentityTask(ctx, account, expectedTaskID); recoveryErr != nil {
+					return nil, fmt.Errorf("agent identity task recovery failed: %w", recoveryErr)
+				}
+				continue
 			}
-			continue
+
+			// 透传模式默认保持原样代理；容量错误以及 API-key 上游的瞬时
+			// 5xx 应先触发多账号 failover，且此时尚未写入下游响应。
+			// probeBody 已在上方任务探测时读取过一次，直接复用避免重复读取。
+
+			upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(probeBody)))
+			if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
+				c, account, reqModel, body, resp.StatusCode, upstreamMsg, probeBody, compactModelFallbackRetried,
+			); retry {
+				s.appendOpenAICompactFallbackRetryOps(c, account, resp, probeBody, upstreamMsg, true)
+				body = retryBody
+				upstreamPassthroughModel = fallbackModel
+				compactModelFallbackRetried = true
+				SetOpsUpstreamModel(c, fallbackModel)
+				continue
+			}
+			if shouldFailoverOpenAIPassthroughResponse(account, resp.StatusCode, probeBody) {
+				return nil, s.handleFailoverErrorResponsePassthrough(ctx, resp, c, account, body, probeBody)
+			}
+			return nil, s.handleErrorResponsePassthrough(ctx, resp, c, account, body, probeBody)
+		}
+		defer func(body io.Closer) { _ = body.Close() }(resp.Body)
+		if mapping, ok := openAIResponsesClientToolMapping(c); ok && isEventStreamResponse(resp.Header) {
+			maxLineSize := defaultMaxLineSize
+			if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
+				maxLineSize = s.cfg.Gateway.MaxLineSize
+			}
+			resp.Body = newGrokResponsesClientToolStreamBody(resp.Body, mapping, maxLineSize)
 		}
 
-		// 透传模式默认保持原样代理；容量错误以及 API-key 上游的瞬时
-		// 5xx 应先触发多账号 failover，且此时尚未写入下游响应。
-		// probeBody 已在上方任务探测时读取过一次，直接复用避免重复读取。
-		if shouldFailoverOpenAIPassthroughResponse(account, resp.StatusCode, probeBody) {
-			return nil, s.handleFailoverErrorResponsePassthrough(ctx, resp, c, account, body, probeBody)
+		serviceTier := extractOpenAIServiceTierFromBody(body)
+
+		// x-codex-turn-state 溯源：下游回传由 writeOpenAIPassthroughResponseHeaders
+		// 在各 handler 的写头点强制放行，铸造账号在此统一记录，供出站守卫剥离
+		// failover 换号后的跨账号回带（openai_codex_turn_state.go）。
+		if extractOpenAICodexTurnState(resp.Header) != "" {
+			s.noteOpenAICodexTurnStateProvenance(c, account)
 		}
-		return nil, s.handleErrorResponsePassthrough(ctx, resp, c, account, body, probeBody)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if mapping, ok := openAIResponsesClientToolMapping(c); ok && isEventStreamResponse(resp.Header) {
-		maxLineSize := defaultMaxLineSize
-		if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
-			maxLineSize = s.cfg.Gateway.MaxLineSize
+
+		var usage *OpenAIUsage
+		var firstTokenMs *int
+		responseID := ""
+		imageCount := 0
+		var imageOutputSizes []string
+		if reqStream {
+			result, err := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime, reqModel, upstreamPassthroughModel)
+			if err != nil {
+				if retryBody, fallbackModel, retry := s.applyOpenAIPassthroughCompactFallbackFromSignal(
+					c, account, reqModel, body, err, compactModelFallbackRetried, resp,
+				); retry {
+					body = retryBody
+					upstreamPassthroughModel = fallbackModel
+					compactModelFallbackRetried = true
+					continue
+				}
+				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
+					return s.handleOpenAICompactFallbackError(ctx, c, account, resp, signal, body, reqModel, upstreamPassthroughModel, true)
+				}
+				return nil, err
+			}
+			usage = result.usage
+			firstTokenMs = result.firstTokenMs
+			responseID = strings.TrimSpace(result.responseID)
+			imageCount = result.imageCount
+			imageOutputSizes = result.imageOutputSizes
+		} else {
+			result, err := s.handleNonStreamingResponsePassthrough(ctx, resp, c, reqModel, upstreamPassthroughModel)
+			if err != nil {
+				if retryBody, fallbackModel, retry := s.applyOpenAIPassthroughCompactFallbackFromSignal(
+					c, account, reqModel, body, err, compactModelFallbackRetried, resp,
+				); retry {
+					body = retryBody
+					upstreamPassthroughModel = fallbackModel
+					compactModelFallbackRetried = true
+					continue
+				}
+				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
+					return s.handleOpenAICompactFallbackError(ctx, c, account, resp, signal, body, reqModel, upstreamPassthroughModel, true)
+				}
+				return nil, err
+			}
+			usage = result.usage
+			responseID = strings.TrimSpace(result.responseID)
+			imageCount = result.imageCount
+			imageOutputSizes = result.imageOutputSizes
 		}
-		resp.Body = newGrokResponsesClientToolStreamBody(resp.Body, mapping, maxLineSize)
-	}
+		s.bindHTTPResponseAccount(ctx, c, account, responseID)
 
-	serviceTier := extractOpenAIServiceTierFromBody(body)
-
-	// x-codex-turn-state 溯源：下游回传由 writeOpenAIPassthroughResponseHeaders
-	// 在各 handler 的写头点强制放行，铸造账号在此统一记录，供出站守卫剥离
-	// failover 换号后的跨账号回带（openai_codex_turn_state.go）。
-	if extractOpenAICodexTurnState(resp.Header) != "" {
-		s.noteOpenAICodexTurnStateProvenance(c, account)
-	}
-
-	var usage *OpenAIUsage
-	var firstTokenMs *int
-	responseID := ""
-	imageCount := 0
-	var imageOutputSizes []string
-	if reqStream {
-		result, err := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime, reqModel, upstreamPassthroughModel)
-		if err != nil {
-			return nil, err
+		// 排除 spark 影子:其 codex_* 仅由 QueryUsage(/wham/usage bengalfox)更新(外审第7轮 P1)。
+		if !account.IsShadow() {
+			if snapshot := ParseCodexRateLimitHeaders(resp.Header); snapshot != nil {
+				s.updateCodexUsageSnapshot(ctx, account.ID, snapshot)
+			}
 		}
-		usage = result.usage
-		firstTokenMs = result.firstTokenMs
-		responseID = strings.TrimSpace(result.responseID)
-		imageCount = result.imageCount
-		imageOutputSizes = result.imageOutputSizes
-	} else {
-		result, err := s.handleNonStreamingResponsePassthrough(ctx, resp, c, reqModel, upstreamPassthroughModel)
-		if err != nil {
-			return nil, err
+
+		if usage == nil {
+			usage = &OpenAIUsage{}
 		}
-		usage = result.usage
-		responseID = strings.TrimSpace(result.responseID)
-		imageCount = result.imageCount
-		imageOutputSizes = result.imageOutputSizes
-	}
-	s.bindHTTPResponseAccount(ctx, c, account, responseID)
 
-	// 排除 spark 影子:其 codex_* 仅由 QueryUsage(/wham/usage bengalfox)更新(外审第7轮 P1)。
-	if !account.IsShadow() {
-		if snapshot := ParseCodexRateLimitHeaders(resp.Header); snapshot != nil {
-			s.updateCodexUsageSnapshot(ctx, account.ID, snapshot)
+		forwardResult := &OpenAIForwardResult{
+			RequestID:                     resp.Header.Get("x-request-id"),
+			UpstreamHeaders:               resp.Header.Clone(),
+			ResponseID:                    responseID,
+			Usage:                         *usage,
+			Model:                         reqModel,
+			UpstreamModel:                 upstreamPassthroughModel,
+			UpstreamResponseModel:         observedUpstreamResponseModel(c),
+			UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+			ServiceTier:                   serviceTier,
+			ReasoningEffort:               reasoningEffort,
+			Stream:                        reqStream,
+			OpenAIWSMode:                  false,
+			Duration:                      time.Since(startTime),
+			FirstTokenMs:                  firstTokenMs,
 		}
+		if imageCount > 0 {
+			forwardResult.ImageCount = imageCount
+			forwardResult.ImageSize = imageSizeTier
+			forwardResult.ImageInputSize = imageInputSize
+			forwardResult.ImageOutputSizes = imageOutputSizes
+			forwardResult.BillingModel = imageBillingModel
+		}
+		return forwardResult, nil
 	}
-
-	if usage == nil {
-		usage = &OpenAIUsage{}
-	}
-
-	forwardResult := &OpenAIForwardResult{
-		RequestID:                     resp.Header.Get("x-request-id"),
-		UpstreamHeaders:               resp.Header.Clone(),
-		ResponseID:                    responseID,
-		Usage:                         *usage,
-		Model:                         reqModel,
-		UpstreamModel:                 upstreamPassthroughModel,
-		UpstreamResponseModel:         observedUpstreamResponseModel(c),
-		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
-		ServiceTier:                   serviceTier,
-		ReasoningEffort:               reasoningEffort,
-		Stream:                        reqStream,
-		OpenAIWSMode:                  false,
-		Duration:                      time.Since(startTime),
-		FirstTokenMs:                  firstTokenMs,
-	}
-	if imageCount > 0 {
-		forwardResult.ImageCount = imageCount
-		forwardResult.ImageSize = imageSizeTier
-		forwardResult.ImageInputSize = imageInputSize
-		forwardResult.ImageOutputSizes = imageOutputSizes
-		forwardResult.BillingModel = imageBillingModel
-	}
-	return forwardResult, nil
 }
 
 func logOpenAIPassthroughInstructionsRejected(
@@ -596,6 +630,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 
 	// 账号级请求头覆写（仅 openai api_key 账号启用时生效；OAuth 路径 no-op）
 	account.ApplyHeaderOverrides(req.Header)
+	applyOpenCodeSessionHeader(c, account, targetURL, req.Header)
 	// x-codex-beta-features：按真实 Codex 的会话级行为补注（在账号级覆写之后，
 	// 保证不被覆盖丢失）。
 	applyOpenAICodexBetaFeatures(c, account, req.Header)
@@ -1469,7 +1504,11 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 						UpstreamOutTok: usage.OutputTokens,
 					})
 				}
+
 				if !openAIStreamClientOutputStarted(c, clientOutputStarted) {
+					if compactErr := newOpenAICompactFallbackSignal(c, dataBytes, failedMessage); compactErr != nil {
+						return resultWithUsage(), compactErr
+					}
 					if status, errType, errMsg, matched := applyOpenAIStreamFailedErrorPassthroughRule(c, account.Platform, dataBytes, failedMessage); matched {
 						// 命中透传规则也要记录 ops 上游错误事件（对齐 CC/Messages 与
 						// antigravity 先例），否则透传命中的 failed 在监控中不可见。
@@ -1724,6 +1763,9 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 			msg := extractOpenAISSEErrorMessage(terminalPayload)
 			if msg == "" {
 				msg = "Upstream compact response failed"
+			}
+			if compactErr := newOpenAICompactFallbackSignal(c, terminalPayload, msg); compactErr != nil {
+				return nil, compactErr
 			}
 			return nil, s.writeOpenAINonStreamingProtocolError(resp, c, msg)
 		}

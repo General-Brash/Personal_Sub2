@@ -559,12 +559,12 @@ func TestHTTPUpstreamPublicHostsOnlyUsesHTTPProxyConnectWithCheckedTargetAndPres
 		if err != nil {
 			return
 		}
-		defer clientConn.Close()
+		defer func() { _ = clientConn.Close() }()
 		targetConn, err := net.Dial("tcp", targetURL.Host)
 		if err != nil {
 			return
 		}
-		defer targetConn.Close()
+		defer func() { _ = targetConn.Close() }()
 		if _, err := io.WriteString(clientConn, "HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
 			return
 		}
@@ -785,16 +785,15 @@ func startRawTestHTTPProxy(t *testing.T) (string, <-chan rawTestHTTPProxyRequest
 	return "http://" + listener.Addr().String(), requests
 }
 func serveRawTestHTTPProxyConn(conn net.Conn, requests chan<- rawTestHTTPProxyRequest) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	r := bufio.NewReader(conn)
 	requestLine, err := r.ReadString('\n')
 	if err != nil {
 		return
 	}
 	header := make(http.Header)
-	line := requestLine
 	for {
-		line, err = r.ReadString('\n')
+		line, err := r.ReadString('\n')
 		if err != nil {
 			return
 		}
@@ -833,7 +832,7 @@ func startMappedTestSOCKS5Proxy(t *testing.T, targetAddr string) (string, *atomi
 }
 
 func serveMappedTestSOCKS5Conn(client net.Conn, targetAddr string, requestedTargets chan<- string) {
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(client, header); err != nil || header[0] != 5 {
 		return
@@ -886,7 +885,7 @@ func serveMappedTestSOCKS5Conn(client net.Conn, targetAddr string, requestedTarg
 		_, _ = client.Write([]byte{5, 1, 0, 1, 0, 0, 0, 0, 0, 0})
 		return
 	}
-	defer target.Close()
+	defer func() { _ = target.Close() }()
 	if _, err := client.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil {
 		return
 	}

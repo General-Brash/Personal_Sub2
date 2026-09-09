@@ -67,6 +67,10 @@ func (s *OpenAIGatewayService) forwardAnthropicViaNativeAnthropicEndpoint(
 
 	body = FilterWebSearchHistoryBlocks(body, upstreamModel)
 
+	// Preserve the effective native Anthropic effort in usage/billing results.
+	requestedEffort := NormalizeClaudeOutputEffort(gjson.GetBytes(body, "output_config.effort").String())
+	reasoningEffort := ApplyThinkingEnabledFallback(requestedEffort, body, billingModel)
+
 	logger.LegacyPrintf("service.gateway", "[CN Anthropic 直通] account=%d(%s) platform=%s model=%s upstream=%s stream=%v",
 		account.ID, account.Name, account.Platform, originalModel, upstreamModel, clientStream)
 
@@ -107,10 +111,16 @@ func (s *OpenAIGatewayService) forwardAnthropicViaNativeAnthropicEndpoint(
 		return s.handleAnthropicErrorResponse(resp, c, account, billingModel)
 	}
 
+	var result *OpenAIForwardResult
 	if clientStream {
-		return s.handleNativeAnthropicStreamingResponse(ctx, resp, c, account, originalModel, billingModel, upstreamModel, startTime)
+		result, err = s.handleNativeAnthropicStreamingResponse(ctx, resp, c, account, originalModel, billingModel, upstreamModel, startTime)
+	} else {
+		result, err = s.handleNativeAnthropicBufferedResponse(ctx, resp, c, account, originalModel, billingModel, upstreamModel, startTime)
 	}
-	return s.handleNativeAnthropicBufferedResponse(ctx, resp, c, account, originalModel, billingModel, upstreamModel, startTime)
+	if result != nil {
+		result.ReasoningEffort = reasoningEffort
+	}
+	return result, err
 }
 
 // nativeAnthropicTargetURL 组装国产供应商原生 Anthropic messages 端点。

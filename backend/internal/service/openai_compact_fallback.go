@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -27,7 +28,8 @@ func (e *openAICompactFallbackSignal) Error() string {
 
 func asOpenAICompactFallbackSignal(err error) (*openAICompactFallbackSignal, bool) {
 	var signal *openAICompactFallbackSignal
-	return signal, errors.As(err, &signal) && signal != nil
+	ok := errors.As(err, &signal)
+	return signal, ok && signal != nil
 }
 
 func isExplicitOpenAICompactContext(c *gin.Context) bool {
@@ -37,6 +39,9 @@ func isExplicitOpenAICompactContext(c *gin.Context) bool {
 func newOpenAICompactFallbackSignal(c *gin.Context, payload []byte, message string) error {
 	if !isExplicitOpenAICompactContext(c) ||
 		!isOpenAICompactModelFailure(http.StatusBadRequest, message, payload) {
+		return nil
+	}
+	if hit, _, _ := detectOpenAICyberPolicy(payload); hit {
 		return nil
 	}
 	return &openAICompactFallbackSignal{
@@ -296,4 +301,30 @@ func (s *OpenAIGatewayService) applyOpenAIPassthroughCompactFallbackFromSignal(
 		accountName, fromModel, fallbackModel, extractUpstreamErrorCode(signal.payload),
 	)
 	return retryBody, fallbackModel, true
+}
+
+// handleOpenAICompactFallbackError restores the ordinary error path once the
+// single compact-model retry is exhausted, preserving proxy attribution and
+// the account's existing failover/passthrough policy.
+func (s *OpenAIGatewayService) handleOpenAICompactFallbackError(
+	ctx context.Context, c *gin.Context, account *Account, resp *http.Response,
+	signal *openAICompactFallbackSignal, body []byte, billingModel, upstreamModel string,
+	passthrough bool,
+) (*OpenAIForwardResult, error) {
+	compactResp, compactBody := openAICompactFallbackErrorResponse(resp, signal)
+	if passthrough {
+		if shouldFailoverOpenAIPassthroughResponse(account, compactResp.StatusCode, compactBody) {
+			return nil, s.handleFailoverErrorResponsePassthrough(ctx, compactResp, c, account, body, compactBody)
+		}
+		return nil, s.handleErrorResponsePassthrough(ctx, compactResp, c, account, body, compactBody)
+	}
+	if s.shouldFailoverOpenAIUpstreamResponse(compactResp.StatusCode, signal.message, compactBody) {
+		s.recordOpenAIStreamUpstreamError(c, account, false, compactResp.Header.Get("x-request-id"), "failover", compactBody, signal.message)
+		shouldDisable := s.handleFailoverSideEffects(ctx, compactResp, account, compactBody, upstreamModel)
+		return nil, newOpenAIUpstreamFailoverError(
+			compactResp.StatusCode, compactResp.Header, compactBody, signal.message,
+			!shouldDisable && account.IsPoolMode() && (account.IsPoolModeRetryableStatus(compactResp.StatusCode) || isOpenAITransientProcessingError(compactResp.StatusCode, signal.message, compactBody)),
+		)
+	}
+	return s.handleErrorResponse(ctx, compactResp, c, account, body, billingModel)
 }

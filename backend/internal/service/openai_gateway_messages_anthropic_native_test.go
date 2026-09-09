@@ -94,7 +94,7 @@ func TestNativeAnthropicPassthroughRecordsOutputConfigEffort(t *testing.T) {
 	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
 
 	result, err := svc.ForwardAsAnthropic(context.Background(),
-		nativeAnthropicTestContext("/v1/messages", body), nativeAnthropicTestAccount(), body, "", "")
+		adaptiveProtocolTestContext("/v1/messages", body), nativeAnthropicTestAccount(), body, "", "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.ReasoningEffort)
@@ -111,7 +111,7 @@ func TestNativeAnthropicPassthroughThinkingEnabledFallback(t *testing.T) {
 	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
 
 	result, err := svc.ForwardAsAnthropic(context.Background(),
-		nativeAnthropicTestContext("/v1/messages", body), nativeAnthropicTestAccount(), body, "", "")
+		adaptiveProtocolTestContext("/v1/messages", body), nativeAnthropicTestAccount(), body, "", "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.ReasoningEffort)
@@ -127,7 +127,7 @@ func TestNativeAnthropicPassthroughStreamRecordsEffort(t *testing.T) {
 	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
 
 	result, err := svc.ForwardAsAnthropic(context.Background(),
-		nativeAnthropicTestContext("/v1/messages", body), nativeAnthropicTestAccount(), body, "", "")
+		adaptiveProtocolTestContext("/v1/messages", body), nativeAnthropicTestAccount(), body, "", "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.ReasoningEffort)
@@ -143,7 +143,7 @@ func TestNativeAnthropicPassthroughNoEffortStaysNil(t *testing.T) {
 	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
 
 	result, err := svc.ForwardAsAnthropic(context.Background(),
-		nativeAnthropicTestContext("/v1/messages", body), nativeAnthropicTestAccount(), body, "", "")
+		adaptiveProtocolTestContext("/v1/messages", body), nativeAnthropicTestAccount(), body, "", "")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Nil(t, result.ReasoningEffort)
@@ -185,7 +185,7 @@ func TestNativeAnthropicPassthroughNormalizesGLM53Thinking(t *testing.T) {
 			svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
 
 			_, err := svc.ForwardAsAnthropic(context.Background(),
-				nativeAnthropicTestContext("/v1/messages", body), nativeAnthropicGLMTestAccount(), body, "", "")
+				adaptiveProtocolTestContext("/v1/messages", body), nativeAnthropicGLMTestAccount(), body, "", "")
 			require.NoError(t, err)
 			require.Equal(t, "enabled", gjson.GetBytes(upstream.lastBody, "thinking.type").String())
 			require.Equal(t, tt.wantEffort, gjson.GetBytes(upstream.lastBody, "output_config.effort").String())
@@ -209,14 +209,14 @@ func TestNativeAnthropicPassthroughLeavesOtherThinkingUntouched(t *testing.T) {
 			upstream := &httpUpstreamRecorder{resp: nativeAnthropicBufferedResponse()}
 			svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
 			_, err := svc.ForwardAsAnthropic(context.Background(),
-				nativeAnthropicTestContext("/v1/messages", body), nativeAnthropicGLMTestAccount(), body, "", "")
+				adaptiveProtocolTestContext("/v1/messages", body), nativeAnthropicGLMTestAccount(), body, "", "")
 			require.NoError(t, err)
 			require.JSONEq(t, tt.body, string(upstream.lastBody))
 		})
 	}
 }
 
-func nativeAnthropicTestContext(path string, body []byte) *gin.Context {
+func adaptiveProtocolTestContext(path string, body []byte) *gin.Context {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")

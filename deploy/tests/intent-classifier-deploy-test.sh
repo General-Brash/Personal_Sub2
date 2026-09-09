@@ -90,7 +90,7 @@ done
 workflow="${REPO_DIR}/.github/workflows/publish-intent-classifier-ghcr.yml"
 [[ -f "${workflow}" ]] || fail 'classifier publish workflow is missing'
 for expected in \
-    "- 'v*'" \
+    'workflow_call:' \
     'workflow_dispatch:' \
     'contents: read' \
     'packages: write' \
@@ -103,6 +103,20 @@ for expected in \
     'sbom: false'; do
     grep -Fq -- "${expected}" "${workflow}" \
         || fail "classifier publish workflow is missing ${expected}"
+done
+
+# The release workflow owns tag pushes so the classifier is published once,
+# only after the same source has passed CI and security gates.
+if grep -Eq '^  push:' "${workflow}"; then
+    fail 'classifier must not publish independently on a tag push'
+fi
+release_workflow="${REPO_DIR}/.github/workflows/release.yml"
+for expected in \
+    "- 'v*'" \
+    'needs: [resolve-target, backend-ci, security-scan]' \
+    'uses: ./.github/workflows/publish-intent-classifier-ghcr.yml'; do
+    grep -Fq -- "${expected}" "${release_workflow}" \
+        || fail "release workflow is missing classifier gate ${expected}"
 done
 
 # A classifier rerun must not silently roll a previous release back to latest.

@@ -81,26 +81,6 @@ func integrationSnapshot(seed string) PromptSnapshot {
 	}
 }
 
-func integrationResult(decision EventDecision) *NormalizedResult {
-	result := &NormalizedResult{
-		Decision: decision, RiskLevel: RiskLow, Action: ActionAllow, Safety: "Safe",
-		Categories: []string{}, MatchedScanners: []string{}, ScannerScores: map[string]float64{},
-		ScannerEvidence: map[string]string{}, ScannerBackend: "qwen3guard-openai",
-		ScannerVersion: "test", GuardEndpointID: "guard-1", PolicyID: "priority",
-		PolicyVersion: 1, ChunkTotal: 1, LatencyMS: 2,
-	}
-	if decision != EventPass {
-		result.RiskLevel = RiskCritical
-		result.Action = ActionBlock
-		result.Safety = "Unsafe"
-		result.Categories = []string{"pii"}
-		result.MatchedScanners = []string{"pii"}
-		result.ScannerScores["pii"] = 1
-		result.ScannerEvidence["pii"] = "redacted evidence"
-	}
-	return result
-}
-
 func TestPromptAuditMigrationSchemaAndLeakageGate(t *testing.T) {
 	db := openPromptAuditIntegrationDB(t)
 	ctx := context.Background()

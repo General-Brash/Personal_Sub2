@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -42,16 +43,6 @@ func TestNormalizeReasoningEffortMappings(t *testing.T) {
 		}
 	})
 
-	t.Run("allows none only as a source for OpenAI routes", func(t *testing.T) {
-		for _, platform := range []string{PlatformOpenAI, PlatformComposite} {
-			got, err := NormalizeReasoningEffortMappings(platform, []ReasoningEffortMapping{{From: " NONE ", To: "low"}})
-			require.NoError(t, err)
-			require.Equal(t, []ReasoningEffortMapping{{From: "none", To: "low"}}, got)
-		}
-		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{{From: "low", To: "none"}})
-		require.ErrorContains(t, err, "empty or unknown")
-	})
-
 	t.Run("rejects empty values", func(t *testing.T) {
 		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{{From: "max"}})
 		require.ErrorContains(t, err, "empty or unknown")
@@ -65,14 +56,96 @@ func TestNormalizeReasoningEffortMappings(t *testing.T) {
 		require.ErrorContains(t, err, "duplicate")
 	})
 
+	t.Run("allows same source across different model scopes", func(t *testing.T) {
+		got, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{
+			{From: "max", To: "low", MatchType: "prefix", Model: " gpt "},
+			{From: "max", To: "medium", MatchType: "exact", Model: "GPT-5.4"},
+			{From: "max", To: "high"},
+		})
+		require.NoError(t, err)
+		require.Equal(t, []ReasoningEffortMapping{
+			{From: "max", To: "low", MatchType: domain.ReasoningEffortMatchPrefix, Model: "gpt"},
+			{From: "max", To: "medium", MatchType: domain.ReasoningEffortMatchExact, Model: "GPT-5.4"},
+			{From: "max", To: "high"},
+		}, got)
+	})
+
+	t.Run("defaults missing match type to exact when model is set", func(t *testing.T) {
+		got, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{
+			{From: "max", To: "low", Model: "gpt-5.4"},
+		})
+		require.NoError(t, err)
+		require.Equal(t, []ReasoningEffortMapping{
+			{From: "max", To: "low", MatchType: domain.ReasoningEffortMatchExact, Model: "gpt-5.4"},
+		}, got)
+	})
+
+	t.Run("empty type and model collapse to a global mapping", func(t *testing.T) {
+		got, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{
+			{From: "max", To: "low", MatchType: "prefix"},
+			{From: "high", To: "low", MatchType: "suffix"},
+		})
+		require.NoError(t, err)
+		require.Equal(t, []ReasoningEffortMapping{
+			{From: "max", To: "low"},
+			{From: "high", To: "low"},
+		}, got)
+	})
+
+	t.Run("canonicalizes suffix match", func(t *testing.T) {
+		got, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{
+			{From: "max", To: "low", MatchType: " SUFFIX ", Model: " mini "},
+		})
+		require.NoError(t, err)
+		require.Equal(t, []ReasoningEffortMapping{
+			{From: "max", To: "low", MatchType: domain.ReasoningEffortMatchSuffix, Model: "mini"},
+		}, got)
+	})
+
+	t.Run("rejects invalid match type", func(t *testing.T) {
+		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{
+			{From: "max", To: "low", MatchType: "wildcard", Model: "gpt"},
+		})
+		require.ErrorContains(t, err, "invalid match_type")
+	})
+
+	t.Run("rejects duplicate source within the same model scope", func(t *testing.T) {
+		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{
+			{From: "max", To: "low", MatchType: "prefix", Model: "gpt"},
+			{From: "MAX", To: "high", MatchType: "PREFIX", Model: " GPT "},
+		})
+		require.ErrorContains(t, err, "duplicate")
+		require.ErrorContains(t, err, "gpt")
+	})
+
 	t.Run("rejects mappings for non OpenAI platforms", func(t *testing.T) {
-		for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformAntigravity, PlatformGrok} {
+		for _, platform := range []string{PlatformGemini, PlatformAntigravity, PlatformGrok} {
 			_, err := NormalizeReasoningEffortMappings(platform, []ReasoningEffortMapping{{From: "low", To: "high"}})
-			require.ErrorContains(t, err, "only supported for platforms \"openai\" and \"composite\"")
+			require.ErrorContains(t, err, "only supported for platforms")
 		}
 
 		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{{From: "ultra", To: "high"}})
 		require.ErrorContains(t, err, "empty or unknown")
+	})
+
+	t.Run("allows none only as a source for OpenAI routes", func(t *testing.T) {
+		for _, platform := range []string{PlatformOpenAI, PlatformComposite} {
+			got, err := NormalizeReasoningEffortMappings(platform, []ReasoningEffortMapping{{From: " NONE ", To: "low"}})
+			require.NoError(t, err)
+			require.Equal(t, []ReasoningEffortMapping{{From: "none", To: "low"}}, got)
+		}
+
+		_, err := NormalizeReasoningEffortMappings(PlatformOpenAI, []ReasoningEffortMapping{{From: "low", To: "none"}})
+		require.ErrorContains(t, err, "empty or unknown")
+	})
+
+	t.Run("supports Anthropic values except minimal", func(t *testing.T) {
+		got, err := NormalizeReasoningEffortMappings(PlatformAnthropic, []ReasoningEffortMapping{{From: " MAX ", To: " x-high "}})
+		require.NoError(t, err)
+		require.Equal(t, []ReasoningEffortMapping{{From: "max", To: "xhigh"}}, got)
+
+		_, err = NormalizeReasoningEffortMappings(PlatformAnthropic, []ReasoningEffortMapping{{From: "minimal", To: "low"}})
+		require.ErrorContains(t, err, "not supported for platform \"anthropic\"")
 	})
 }
 
@@ -84,9 +157,15 @@ func TestNormalizeMaxReasoningEffortForPlatform(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "max", value)
 
-	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformAntigravity, PlatformGrok} {
+	value, err = normalizeMaxReasoningEffortForPlatform(PlatformAnthropic, "xhigh")
+	require.NoError(t, err)
+	require.Equal(t, "xhigh", value)
+	_, err = normalizeMaxReasoningEffortForPlatform(PlatformAnthropic, "minimal")
+	require.ErrorContains(t, err, "not supported")
+
+	for _, platform := range []string{PlatformGemini, PlatformAntigravity, PlatformGrok} {
 		_, err = normalizeMaxReasoningEffortForPlatform(platform, "low")
-		require.ErrorContains(t, err, "only supported for platforms \"openai\" and \"composite\"")
+		require.ErrorContains(t, err, "only supported for platforms")
 	}
 
 	_, err = normalizeMaxReasoningEffortForPlatform(PlatformOpenAI, "none")

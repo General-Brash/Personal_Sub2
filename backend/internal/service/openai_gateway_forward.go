@@ -319,7 +319,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	isCompactRequest := compactPath
 	compactMapped := false
 	if isCompactRequest {
-		compactMappedModel := resolveOpenAICompactForwardModel(account, billingModel)
+		compactMappedModel := s.resolveOpenAICompactFallbackModel(account, originalModel)
 		if compactMappedModel != "" && compactMappedModel != billingModel {
 			compactMapped = true
 			upstreamModel = compactMappedModel
@@ -897,6 +897,26 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		firstOutputTimeout = s.openAIFirstOutputTimeout(reasoningEffortValue)
 	}
 
+	compactModelFallbackRetried := false
+	retryCompactFallback := func(resp *http.Response, payload []byte, message string, statusCode int) bool {
+		retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
+			c, account, originalModel, body, statusCode, message, payload, compactModelFallbackRetried,
+		)
+		if !retry {
+			return false
+		}
+		s.appendOpenAICompactFallbackRetryOps(c, account, resp, payload, message, false)
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+		body = retryBody
+		requestView = newOpenAIRequestView(body)
+		reqBody = nil
+		upstreamModel = fallbackModel
+		compactModelFallbackRetried = true
+		SetOpsUpstreamModel(c, fallbackModel)
+		return true
+	}
 	httpInvalidEncryptedContentRetryTried := false
 	agentTaskRecoveryTried := false
 	rejectedFieldRetryState := newOpenAIResponsesRejectedFieldRetryState(body)
@@ -1009,6 +1029,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Retrying non-WSv2 request after %s (account: %s)", reason, account.Name)
 				continue
 			}
+
+			if retryCompactFallback(resp, respBody, upstreamMsg, resp.StatusCode) {
+				continue
+			}
 			if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody) {
 				upstreamDetail := ""
 				if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
@@ -1058,6 +1082,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		if reqStream {
 			streamResult, err := s.handleStreamingResponseWithReasoning(ctx, resp, c, account, startTime, originalModel, upstreamModel, reasoningEffortValue)
 			if err != nil {
+				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
+					if retryCompactFallback(resp, signal.payload, signal.message, http.StatusBadRequest) {
+						continue
+					}
+					return s.handleOpenAICompactFallbackError(ctx, c, account, resp, signal, body, billingModel, upstreamModel, false)
+				}
 				return nil, err
 			}
 			usage = streamResult.usage
@@ -1069,6 +1099,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		} else {
 			nonStreamResult, err := s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, upstreamModel)
 			if err != nil {
+				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
+					if retryCompactFallback(resp, signal.payload, signal.message, http.StatusBadRequest) {
+						continue
+					}
+					return s.handleOpenAICompactFallbackError(ctx, c, account, resp, signal, body, billingModel, upstreamModel, false)
+				}
 				return nil, err
 			}
 			usage = nonStreamResult.usage
@@ -1264,6 +1300,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 
 	// 账号级请求头覆写（仅 openai api_key 账号启用时生效；OAuth 路径 no-op）
 	account.ApplyHeaderOverrides(req.Header)
+	applyOpenCodeSessionHeader(c, account, targetURL, req.Header)
 	// x-codex-beta-features：按真实 Codex 的会话级行为补注（在账号级覆写之后，
 	// 保证不被覆盖丢失）。
 	applyOpenAICodexBetaFeatures(c, account, req.Header)

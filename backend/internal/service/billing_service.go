@@ -1585,7 +1585,8 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 	isGPT56 := isOpenAIGPT56Model(normalized)
 	usesLegacyLongContextPricing := usesOpenAILegacyLongContextPricing(normalized)
 	needsDefaultMax := pricing.MaxReasoningEffortMultiplier == nil && isClaudeFable51Model(model)
-	if !isGPT56 && !usesLegacyLongContextPricing && !needsDefaultMax {
+	fastRatio := openAIModelFastPricingRatio(normalized)
+	if !isGPT56 && !usesLegacyLongContextPricing && !needsDefaultMax && fastRatio <= 0 {
 		return pricing
 	}
 	// A non-positive threshold normally means the legacy model-specific policy
@@ -1597,7 +1598,7 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 		(pricing.LongContextInputThreshold <= 0 || pricing.LongContextInputMultiplier <= 0 || pricing.LongContextOutputMultiplier <= 0)
 	needsCacheCreationPolicy := isGPT56 && !pricing.CacheCreationPriceExplicit && (pricing.CacheCreationPricePerToken <= 0 ||
 		(pricing.InputPricePerTokenPriority > 0 && pricing.CacheCreationPricePerTokenPriority <= 0))
-	if !needsLongContextPolicy && !needsCacheCreationPolicy && !needsDefaultMax {
+	if !needsLongContextPolicy && !needsCacheCreationPolicy && !needsDefaultMax && fastRatio <= 0 {
 		return pricing
 	}
 	cloned := *pricing
@@ -1623,7 +1624,40 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 			cloned.LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
 		}
 	}
+	if fastRatio > 0 {
+		enforceOpenAIFastPricingRatio(&cloned, fastRatio)
+	}
 	return &cloned
+}
+
+// openAIModelFastPricingRatio returns the enforced Fast/priority ratio for
+// OpenAI models whose catalog priority prices may still carry an older value.
+func openAIModelFastPricingRatio(normalized string) float64 {
+	switch normalized {
+	case "gpt-5.4", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra":
+		return 2.0
+	case "gpt-5.5":
+		return 2.5
+	default:
+		if isOpenAIGPT6AstraModel(normalized) {
+			return 2.0
+		}
+		return 0
+	}
+}
+
+func enforceOpenAIFastPricingRatio(pricing *ModelPricing, ratio float64) {
+	if pricing == nil || ratio <= 0 {
+		return
+	}
+	pricing.InputPricePerTokenPriority = pricing.InputPricePerToken * ratio
+	pricing.OutputPricePerTokenPriority = pricing.OutputPricePerToken * ratio
+	if pricing.CacheReadPricePerToken > 0 {
+		pricing.CacheReadPricePerTokenPriority = pricing.CacheReadPricePerToken * ratio
+	}
+	if pricing.CacheCreationPricePerToken > 0 {
+		pricing.CacheCreationPricePerTokenPriority = pricing.CacheCreationPricePerToken * ratio
+	}
 }
 
 func (s *BillingService) shouldApplySessionLongContextPricing(tokens UsageTokens, pricing *ModelPricing) bool {

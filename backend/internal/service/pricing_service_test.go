@@ -434,7 +434,7 @@ func TestGetModelPricing_Gpt54UsesStaticFallbackWhenRemoteMissing(t *testing.T) 
 	got := svc.GetModelPricing("gpt-5.4")
 	require.NotNil(t, got)
 	require.InDelta(t, 2.5e-6, got.InputCostPerToken, 1e-12)
-	require.InDelta(t, 1.5e-5, got.OutputCostPerToken, 1e-12)
+	require.InDelta(t, 15e-6, got.OutputCostPerToken, 1e-12)
 	require.InDelta(t, 2.5e-7, got.CacheReadInputTokenCost, 1e-12)
 	require.Equal(t, 272000, got.LongContextInputTokenThreshold)
 	require.InDelta(t, 2.0, got.LongContextInputCostMultiplier, 1e-12)
@@ -450,8 +450,8 @@ func TestGetModelPricing_OpenAICompactAliasUsesStaticFallback(t *testing.T) {
 
 	got := svc.GetModelPricing("openai/gpt5.5")
 	require.NotNil(t, got)
-	require.InDelta(t, 2.5e-6, got.InputCostPerToken, 1e-12)
-	require.InDelta(t, 1.5e-5, got.OutputCostPerToken, 1e-12)
+	require.InDelta(t, 5e-6, got.InputCostPerToken, 1e-12)
+	require.InDelta(t, 30e-6, got.OutputCostPerToken, 1e-12)
 }
 
 func TestPricingService_Gemini36FlashThinkingTiersUseBasePricing(t *testing.T) {

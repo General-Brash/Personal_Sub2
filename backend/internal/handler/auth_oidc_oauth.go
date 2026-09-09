@@ -1144,10 +1144,19 @@ func (k oidcJWK) publicKey() (any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("decode ec y: %w", err)
 		}
-		if !curve.IsOnCurve(x, y) {
+		coordinateSize := (curve.Params().BitSize + 7) / 8
+		if x.BitLen() > curve.Params().BitSize || y.BitLen() > curve.Params().BitSize {
 			return nil, errors.New("ec point is not on curve")
 		}
-		return &ecdsa.PublicKey{Curve: curve, X: x, Y: y}, nil
+		encoded := make([]byte, 1+2*coordinateSize)
+		encoded[0] = 4 // SEC 1 uncompressed point.
+		x.FillBytes(encoded[1 : 1+coordinateSize])
+		y.FillBytes(encoded[1+coordinateSize:])
+		key, err := ecdsa.ParseUncompressedPublicKey(curve, encoded)
+		if err != nil {
+			return nil, errors.New("ec point is not on curve")
+		}
+		return key, nil
 	default:
 		return nil, fmt.Errorf("unsupported jwk kty: %s", k.Kty)
 	}

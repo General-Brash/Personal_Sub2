@@ -421,12 +421,6 @@ func intervalToModelPricingWithBase(iv *PricingInterval, base *ModelPricing, chP
 	return pricing
 }
 
-// intervalToModelPricing 保留 Personal 的旧调用约定；新的解析路径使用
-// intervalToModelPricingWithBase 以支持官方 multiplier 语义。
-func intervalToModelPricing(iv *PricingInterval, supportsCacheBreakdown bool, chPricing *ChannelModelPricing) *ModelPricing {
-	return intervalToModelPricingWithBase(iv, &ModelPricing{SupportsCacheBreakdown: supportsCacheBreakdown}, chPricing)
-}
-
 // GetRequestTierPrice 根据层级标签获取按次价格
 func (r *ModelPricingResolver) GetRequestTierPrice(resolved *ResolvedPricing, tierLabel string) float64 {
 	price, _ := r.FindRequestTierPrice(resolved, tierLabel)

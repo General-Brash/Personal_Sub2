@@ -22,7 +22,11 @@ func TestAdaptResponsesClientToolsPromotesDiscoveredFunctionTools(t *testing.T) 
 	require.True(t, changed)
 	require.True(t, mapping.ToolSearch)
 	require.Len(t, req["tools"], 2)
-	require.Equal(t, "lookup_weather", req["tools"].([]any)[1].(map[string]any)["name"])
+	tools, ok := req["tools"].([]any)
+	require.True(t, ok)
+	tool, ok := tools[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "lookup_weather", tool["name"])
 }
 
 func TestAdaptResponsesClientToolsRejectsConflictingDiscovery(t *testing.T) {
