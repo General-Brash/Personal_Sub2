@@ -741,6 +741,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if capturedSessionModel != "" && capturedSessionModel != strings.TrimSpace(gjson.GetBytes(firstClientMessage, "model").String()) {
 		firstClientMessage = s.ReplaceModelInBody(firstClientMessage, capturedSessionModel)
 	}
+	if normalized, changed, normalizeErr := normalizeOpenAIResponsesWebSocketCompatibilityBody(firstClientMessage, account, isOpenAIResponsesLiteWebSocketPayload(firstClientMessage)); normalizeErr != nil {
+		return fmt.Errorf("normalize first websocket response.create: %w", normalizeErr)
+	} else if changed {
+		firstClientMessage = normalized
+	}
 	usageMeta := newOpenAIWSPassthroughUsageMeta(initialRequestModel, firstClientMessage)
 	updatedFirst, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, capturedSessionModel, firstClientMessage)
 	if policyErr != nil {
@@ -1034,6 +1039,13 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			}
 			if isResponseCreate && model != "" && model != strings.TrimSpace(gjson.GetBytes(payload, "model").String()) {
 				payload = s.ReplaceModelInBody(payload, model)
+			}
+			if isResponseCreate {
+				if normalized, changed, normalizeErr := normalizeOpenAIResponsesWebSocketCompatibilityBody(payload, account, isOpenAIResponsesLiteWebSocketPayload(payload)); normalizeErr != nil {
+					return payload, nil, fmt.Errorf("normalize websocket response.create: %w", normalizeErr)
+				} else if changed {
+					payload = normalized
+				}
 			}
 			out, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, model, payload)
 			// 多轮 passthrough usage：仅在成功（non-block / non-err）

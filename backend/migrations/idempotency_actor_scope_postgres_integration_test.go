@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"sort"
 	"strings"
 	"testing"
@@ -69,6 +70,24 @@ func newMigrationTestPostgres(t *testing.T, ctx context.Context) *sql.DB {
 	t.Helper()
 	dsn := validation.DatabaseDSN(migrationValidationConfig)
 	require.NotEmpty(t, dsn)
+	if migrationValidationConfig.Mode == validation.ModeCIContainer {
+		admin, err := sql.Open("postgres", dsn)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, admin.Close()) })
+		database := fmt.Sprintf("sub2api_migration_%d", time.Now().UnixNano())
+		_, err = admin.ExecContext(ctx, "CREATE DATABASE "+pq.QuoteIdentifier(database))
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_, err := admin.ExecContext(cleanupCtx, "DROP DATABASE "+pq.QuoteIdentifier(database)+" WITH (FORCE)")
+			require.NoError(t, err)
+		})
+		endpoint, err := url.Parse(dsn)
+		require.NoError(t, err)
+		endpoint.Path = "/" + database
+		dsn = endpoint.String()
+	}
 	db, err := sql.Open("postgres", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })

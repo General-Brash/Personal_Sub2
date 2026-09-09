@@ -183,6 +183,14 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		}
 	}
 
+	if account != nil && account.IsOpenAI() {
+		responsesLite := isOpenAIResponsesLiteHeader(c.GetHeader(responsesLiteHeader)) || isOpenAIResponsesLiteWebSocketPayload(body)
+		if normalized, changed, normalizeErr := normalizeOpenAIResponsesWebSocketCompatibilityBody(body, account, responsesLite); normalizeErr != nil {
+			return nil, fmt.Errorf("normalize passthrough Responses compatibility: %w", normalizeErr)
+		} else if changed {
+			body = normalized
+		}
+	}
 	if account != nil && account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey &&
 		!isOpenAIResponsesCompactPath(c) && needsOpenAIResponsesClientToolAdaptation(body) {
 		adaptedBody, mapping, adaptErr := adaptOpenAIResponsesClientTools(body)

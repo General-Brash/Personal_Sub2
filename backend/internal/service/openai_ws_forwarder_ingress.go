@@ -484,6 +484,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		} else {
 			normalized = capped
 		}
+		if next, changed, compatibilityErr := normalizeOpenAIResponsesWebSocketCompatibilityBody(normalized, account, isOpenAIResponsesLiteWebSocketPayload(normalized)); compatibilityErr != nil {
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", compatibilityErr)
+		} else if changed {
+			normalized = next
+		}
 		promptCacheKey := strings.TrimSpace(values[2].String())
 		previousResponseID := strings.TrimSpace(values[3].String())
 		previousResponseIDKind := ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
@@ -1472,11 +1477,17 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			)
 			return false
 		}
-		updatedWithInput, setInputErr := setOpenAIWSPayloadInputSequence(
-			updatedPayload,
-			currentTurnReplayInput,
-			currentTurnReplayInputExists,
-		)
+		updatedWithInput := updatedPayload
+		var setInputErr error
+		if currentTurnReplayInputExists {
+			var retrySafe bool
+			// This is a same-account retry: keep its resolved wire model while
+			// restoring full input and validating tool-result coverage.
+			updatedWithInput, retrySafe, setInputErr = buildOpenAIWSCurrentTurnRetryPayload(updatedPayload, currentTurnReplayInput, true, "")
+			if setInputErr == nil && !retrySafe {
+				setInputErr = errors.New("current-turn retry lacks complete tool-call context")
+			}
+		}
 		if setInputErr != nil {
 			logOpenAIWSModeInfo(
 				"ingress_ws_prev_response_recovery_skip account_id=%d turn=%d conn_id=%s reason=set_full_input_error cause=%s",

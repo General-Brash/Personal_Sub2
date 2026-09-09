@@ -65,7 +65,7 @@ func (s *OpenAIGatewayService) shouldBridgeOpenAIWSHTTP(account *Account, payloa
 	return threshold > 0 && int64(payloadBytes) >= threshold
 }
 
-func prepareOpenAIWSHTTPBridgeBody(payload []byte) ([]byte, error) {
+func prepareOpenAIWSHTTPBridgeBody(payload []byte, accounts ...*Account) ([]byte, error) {
 	var body map[string]any
 	if err := json.Unmarshal(payload, &body); err != nil {
 		return nil, err
@@ -76,6 +76,9 @@ func prepareOpenAIWSHTTPBridgeBody(payload []byte) ([]byte, error) {
 	delete(body, "type")
 	delete(body, "generate")
 	delete(body, "previous_response_id")
+	if len(accounts) > 0 {
+		deleteOpenAIResponsesNoneReasoningEffortFromObject(accounts[0], body)
+	}
 	body["stream"] = true
 	return json.Marshal(body)
 }
@@ -184,13 +187,13 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	}
 	responseModelObserver := &upstreamResponseModelObserver{}
 
-	body, err := prepareOpenAIWSHTTPBridgeBody(payload)
+	body, err := prepareOpenAIWSHTTPBridgeBody(payload, account)
 	if err != nil {
 		return nil, fmt.Errorf("prepare http bridge body: %w", err)
 	}
 	var clientToolMapping apicompat.ResponsesClientToolMapping
 	if account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey {
-		body, clientToolMapping, err = adaptResponsesClientToolsForFunctionUpstream(body, "OpenAI WS HTTP bridge")
+		body, clientToolMapping, err = adaptOpenAIWSHTTPBridgeClientTools(c, account.ID, body)
 		if err != nil {
 			return nil, fmt.Errorf("adapt OpenAI WS HTTP bridge client tools: %w", err)
 		}

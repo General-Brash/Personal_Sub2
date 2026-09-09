@@ -177,7 +177,9 @@ func TestServerTimingConnectorRecordsDriverCallsWithoutRowLifetime(t *testing.T)
 	}
 
 	// Application work between row reads must remain app time.
+	gapStartedAt := time.Now()
 	time.Sleep(30 * time.Millisecond)
+	appGapMS := float64(time.Since(gapStartedAt)) / float64(time.Millisecond)
 	if err := rows.Next(values); err != io.EOF {
 		t.Fatalf("rows.Next() = %v, want EOF", err)
 	}
@@ -192,8 +194,11 @@ func TestServerTimingConnectorRecordsDriverCallsWithoutRowLifetime(t *testing.T)
 	if strings.Contains(header, "sensitive") {
 		t.Fatalf("SQL text leaked into header: %q", header)
 	}
-	if app, db := metricDuration(t, header, "app"), metricDuration(t, header, "db"); app <= db {
-		t.Fatalf("row processing gap was counted as DB time: app=%.1fms db=%.1fms header=%q", app, db, header)
+	// Driver sleeps can exceed the app gap under CPU contention. Compare the
+	// measured gap against app time, not against unrelated driver latency.
+	// Header durations are rounded to one decimal place.
+	if app := metricDuration(t, header, "app"); app+0.1 < appGapMS {
+		t.Fatalf("row processing gap was counted as DB time: app=%.1fms gap=%.1fms header=%q", app, appGapMS, header)
 	}
 }
 

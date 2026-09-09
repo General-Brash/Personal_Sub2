@@ -1,3 +1,5 @@
+//go:build unit
+
 package antigravity
 
 // Production callers supply an explicit response limit; legacy fixtures use 8 MiB.

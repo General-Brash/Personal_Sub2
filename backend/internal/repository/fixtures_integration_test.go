@@ -92,7 +92,8 @@ func mustCreateGroup(t *testing.T, client *dbent.Client, g *service.Group) *serv
 		SetIsExclusive(g.IsExclusive).
 		SetProfitControlEnabled(g.ProfitControlEnabled).
 		SetProfitMinMargin(g.ProfitMinMargin).
-		SetProfitSafetyBuffer(g.ProfitSafetyBuffer)
+		SetProfitSafetyBuffer(g.ProfitSafetyBuffer).
+		SetCodexModelsManifestConfig(g.CodexModelsManifestConfig)
 	if g.Description != "" {
 		create.SetDescription(g.Description)
 	}

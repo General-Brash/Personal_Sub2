@@ -1178,13 +1178,16 @@ func normalizeOpenAIResponsesWebSocketCompatibilityBody(body []byte, account *Ac
 			changed = true
 		}
 	}
-	// Keep this last: earlier compatibility passes may filter or rebuild input.
-	// Remote compaction v2 requires one trigger as the final input item.
-	if triggerBody, triggerChanged, err := NormalizeCompactionTriggerInputOrder(normalized); err != nil {
-		return body, false, fmt.Errorf("normalize websocket compaction trigger order: %w", err)
-	} else if triggerChanged {
-		normalized = triggerBody
-		changed = true
+	// Move an explicitly requested native-v2 trigger last, even if a prior
+	// compatibility pass rebuilt input. Never turn ordinary traffic into a
+	// compaction request merely by normalizing its payload.
+	if HasCompactionTriggerInInput(body) {
+		if triggerBody, triggerChanged, err := NormalizeCompactionTriggerInputOrder(normalized); err != nil {
+			return body, false, fmt.Errorf("normalize websocket compaction trigger order: %w", err)
+		} else if triggerChanged {
+			normalized = triggerBody
+			changed = true
+		}
 	}
 	return normalized, changed, nil
 }

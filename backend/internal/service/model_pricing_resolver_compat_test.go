@@ -1,3 +1,5 @@
+//go:build unit
+
 package service
 
 // Legacy pure-data fixture adapter; production uses intervalToModelPricingWithBase.

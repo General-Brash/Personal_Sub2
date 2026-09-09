@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	validation "github.com/Wei-Shaw/sub2api/internal/repository/validation"
+	"github.com/Wei-Shaw/sub2api/internal/testutil/integrationenv"
 	"testing"
 	"time"
 
@@ -16,10 +17,11 @@ import (
 )
 
 func TestSettleUnusedAdvanceLockedPostgresQuery(t *testing.T) {
-	cfg, err := validation.LoadDedicatedIntegrationConfig()
+	cfg, cleanup, err := integrationenv.Load(context.Background(), false)
 	if err != nil {
 		t.Fatal(fmt.Errorf("bank service integration target rejected: %w", err))
 	}
+	t.Cleanup(func() { require.NoError(t, cleanup()) })
 	dsn := validation.DatabaseDSN(cfg)
 	if dsn == "" {
 		t.Fatal("dedicated validation config resolved an empty database DSN")
