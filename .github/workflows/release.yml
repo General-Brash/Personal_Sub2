@@ -294,6 +294,11 @@ jobs:
             exit 1
           fi
 
+      - name: Remove release verification metadata
+        run: |
+          rm -rf -- .release-metadata
+          test ! -e .release-metadata
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
