@@ -119,12 +119,14 @@ type ResponsesEventToChatState struct {
 	ID                     string
 	Model                  string
 	Created                int64
+	ServiceTier            string // upstream tier observed on response events; echoed on chunks
 	SentRole               bool
 	SawToolCall            bool
 	SawText                bool
 	Finalized              bool        // true after finish chunk has been emitted
 	NextToolCallIndex      int         // next sequential tool_call index to assign
 	OutputIndexToToolIndex map[int]int // Responses output_index → Chat tool_calls index
+	OutputIndexToArguments map[int]string
 	IncludeUsage           bool
 	Usage                  *ChatUsage
 }
@@ -135,6 +137,7 @@ func NewResponsesEventToChatState() *ResponsesEventToChatState {
 		ID:                     generateChatCmplID(),
 		Created:                time.Now().Unix(),
 		OutputIndexToToolIndex: make(map[int]int),
+		OutputIndexToArguments: make(map[int]string),
 	}
 }
 
@@ -153,6 +156,8 @@ func ResponsesEventToChatChunks(evt *ResponsesStreamEvent, state *ResponsesEvent
 		// 均按 OutputIndex 累加到对应工具调用。
 		"response.custom_tool_call_input.delta":
 		return resToChatHandleFuncArgsDelta(evt, state)
+	case "response.function_call_arguments.done", "response.custom_tool_call_input.done":
+		return resToChatHandleFuncArgsDone(evt, state)
 	case "response.reasoning_summary_text.delta",
 		// 原始推理文本增量（真实 Codex 客户端消费的 reasoning_text.delta），
 		// 与 reasoning summary 一样映射为 reasoning_content。
@@ -188,12 +193,13 @@ func FinalizeResponsesChatStream(state *ResponsesEventToChatState) []ChatComplet
 
 	if state.IncludeUsage && state.Usage != nil {
 		chunks = append(chunks, ChatCompletionsChunk{
-			ID:      state.ID,
-			Object:  "chat.completion.chunk",
-			Created: state.Created,
-			Model:   state.Model,
-			Choices: []ChatChunkChoice{},
-			Usage:   state.Usage,
+			ID:          state.ID,
+			Object:      "chat.completion.chunk",
+			Created:     state.Created,
+			Model:       state.Model,
+			ServiceTier: state.ServiceTier,
+			Choices:     []ChatChunkChoice{},
+			Usage:       state.Usage,
 		})
 	}
 
@@ -218,6 +224,9 @@ func resToChatHandleCreated(evt *ResponsesStreamEvent, state *ResponsesEventToCh
 		}
 		if state.Model == "" && evt.Response.Model != "" {
 			state.Model = evt.Response.Model
+		}
+		if evt.Response.ServiceTier != "" {
+			state.ServiceTier = evt.Response.ServiceTier
 		}
 	}
 	// Emit the role chunk.
@@ -272,12 +281,46 @@ func resToChatHandleFuncArgsDelta(evt *ResponsesStreamEvent, state *ResponsesEve
 	if !ok {
 		return nil
 	}
+	if state.OutputIndexToArguments == nil {
+		state.OutputIndexToArguments = make(map[int]string)
+	}
+	state.OutputIndexToArguments[evt.OutputIndex] += evt.Delta
 
 	return []ChatCompletionsChunk{makeChatDeltaChunk(state, ChatDelta{
 		ToolCalls: []ChatToolCall{{
 			Index: &idx,
 			Function: ChatFunctionCall{
 				Arguments: evt.Delta,
+			},
+		}},
+	})}
+}
+
+func resToChatHandleFuncArgsDone(evt *ResponsesStreamEvent, state *ResponsesEventToChatState) []ChatCompletionsChunk {
+	idx, ok := state.OutputIndexToToolIndex[evt.OutputIndex]
+	if !ok {
+		return nil
+	}
+
+	completed := evt.Arguments
+	if evt.Type == "response.custom_tool_call_input.done" {
+		completed = evt.Input
+	}
+	current := state.OutputIndexToArguments[evt.OutputIndex]
+	if completed == "" || !strings.HasPrefix(completed, current) || completed == current {
+		return nil
+	}
+
+	remainder := completed[len(current):]
+	if state.OutputIndexToArguments == nil {
+		state.OutputIndexToArguments = make(map[int]string)
+	}
+	state.OutputIndexToArguments[evt.OutputIndex] = completed
+	return []ChatCompletionsChunk{makeChatDeltaChunk(state, ChatDelta{
+		ToolCalls: []ChatToolCall{{
+			Index: &idx,
+			Function: ChatFunctionCall{
+				Arguments: remainder,
 			},
 		}},
 	})}
@@ -301,6 +344,9 @@ func resToChatHandleCompleted(evt *ResponsesStreamEvent, state *ResponsesEventTo
 	if evt.Response != nil {
 		if evt.Response.Usage != nil {
 			state.Usage = chatUsageFromResponsesUsage(evt.Response.Usage)
+		}
+		if evt.Response.ServiceTier != "" {
+			state.ServiceTier = evt.Response.ServiceTier
 		}
 
 		switch evt.Response.Status {
@@ -327,12 +373,13 @@ func resToChatHandleCompleted(evt *ResponsesStreamEvent, state *ResponsesEventTo
 
 	if state.IncludeUsage && state.Usage != nil {
 		chunks = append(chunks, ChatCompletionsChunk{
-			ID:      state.ID,
-			Object:  "chat.completion.chunk",
-			Created: state.Created,
-			Model:   state.Model,
-			Choices: []ChatChunkChoice{},
-			Usage:   state.Usage,
+			ID:          state.ID,
+			Object:      "chat.completion.chunk",
+			Created:     state.Created,
+			Model:       state.Model,
+			ServiceTier: state.ServiceTier,
+			Choices:     []ChatChunkChoice{},
+			Usage:       state.Usage,
 		})
 	}
 
@@ -402,10 +449,11 @@ func completionDetailsFromResponses(src *ResponsesOutputTokensDetails) *ChatToke
 
 func makeChatDeltaChunk(state *ResponsesEventToChatState, delta ChatDelta) ChatCompletionsChunk {
 	return ChatCompletionsChunk{
-		ID:      state.ID,
-		Object:  "chat.completion.chunk",
-		Created: state.Created,
-		Model:   state.Model,
+		ID:          state.ID,
+		Object:      "chat.completion.chunk",
+		Created:     state.Created,
+		Model:       state.Model,
+		ServiceTier: state.ServiceTier,
 		Choices: []ChatChunkChoice{{
 			Index:        0,
 			Delta:        delta,
@@ -417,10 +465,11 @@ func makeChatDeltaChunk(state *ResponsesEventToChatState, delta ChatDelta) ChatC
 func makeChatFinishChunk(state *ResponsesEventToChatState, finishReason string) ChatCompletionsChunk {
 	empty := ""
 	return ChatCompletionsChunk{
-		ID:      state.ID,
-		Object:  "chat.completion.chunk",
-		Created: state.Created,
-		Model:   state.Model,
+		ID:          state.ID,
+		Object:      "chat.completion.chunk",
+		Created:     state.Created,
+		Model:       state.Model,
+		ServiceTier: state.ServiceTier,
 		Choices: []ChatChunkChoice{{
 			Index:        0,
 			Delta:        ChatDelta{Content: &empty},
@@ -442,9 +491,10 @@ func generateChatCmplID() string {
 // ---------------------------------------------------------------------------
 
 type bufferedFuncCall struct {
-	CallID string
-	Name   string
-	Args   strings.Builder
+	OutputIndex int
+	CallID      string
+	Name        string
+	Args        strings.Builder
 }
 
 // BufferedResponseAccumulator collects content from Responses SSE delta events
@@ -478,14 +528,26 @@ func (a *BufferedResponseAccumulator) ProcessEvent(event *ResponsesStreamEvent) 
 			idx := len(a.funcCalls)
 			a.outputIndexToFuncIdx[event.OutputIndex] = idx
 			a.funcCalls = append(a.funcCalls, bufferedFuncCall{
-				CallID: event.Item.CallID,
-				Name:   event.Item.Name,
+				OutputIndex: event.OutputIndex,
+				CallID:      event.Item.CallID,
+				Name:        event.Item.Name,
 			})
 		}
 	case "response.function_call_arguments.delta", "response.custom_tool_call_input.delta":
 		if event.Delta != "" {
 			if idx, ok := a.outputIndexToFuncIdx[event.OutputIndex]; ok {
 				_, _ = a.funcCalls[idx].Args.WriteString(event.Delta)
+			}
+		}
+	case "response.function_call_arguments.done", "response.custom_tool_call_input.done":
+		completed := event.Arguments
+		if event.Type == "response.custom_tool_call_input.done" {
+			completed = event.Input
+		}
+		if completed != "" {
+			if idx, ok := a.outputIndexToFuncIdx[event.OutputIndex]; ok {
+				a.funcCalls[idx].Args.Reset()
+				_, _ = a.funcCalls[idx].Args.WriteString(completed)
 			}
 		}
 	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
@@ -539,15 +601,40 @@ func (a *BufferedResponseAccumulator) BuildOutput() []ResponsesOutput {
 	return out
 }
 
-// SupplementResponseOutput fills resp.Output from accumulated delta content
-// when the terminal event delivered an empty output array. If resp.Output is
-// already populated, this is a no-op (preserves backward compatibility).
+// SupplementResponseOutput fills resp.Output from accumulated stream content
+// when the terminal event delivered an empty output array. It also fills empty
+// function-call arguments from authoritative argument-done events.
 func (a *BufferedResponseAccumulator) SupplementResponseOutput(resp *ResponsesResponse) {
-	if resp == nil || len(resp.Output) > 0 {
+	if resp == nil {
 		return
 	}
-	if !a.HasContent() {
+	if len(resp.Output) == 0 {
+		if a.HasContent() {
+			resp.Output = a.BuildOutput()
+		}
 		return
 	}
-	resp.Output = a.BuildOutput()
+
+	for outputIndex := range resp.Output {
+		item := &resp.Output[outputIndex]
+		if item.Type != "function_call" || item.Arguments != "" {
+			continue
+		}
+		for funcIndex := range a.funcCalls {
+			call := &a.funcCalls[funcIndex]
+			// A supplied call ID is authoritative, even when output items were
+			// reordered. Only ID-less terminal items may fall back to position.
+			if item.CallID != "" {
+				if item.CallID != call.CallID {
+					continue
+				}
+			} else if call.OutputIndex != outputIndex {
+				continue
+			}
+			if call.Args.Len() > 0 {
+				item.Arguments = call.Args.String()
+			}
+			break
+		}
+	}
 }
