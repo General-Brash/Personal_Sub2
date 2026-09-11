@@ -80,9 +80,10 @@ const (
 	// 静默掐断会成为“死连接”（两端都以为存活），请求落上去会挂到 TCP 重传超时
 	// （分钟级）。Go 的 http2.Transport 默认 ReadIdleTimeout=0（不发健康 PING），
 	// 无法检测。启用主动 PING 探测：连接空闲 ReadIdleTimeout 后发 PING，PingTimeout
-	// 内无响应即判定死连接并关闭，从源头避免请求挂在死连接上。
-	openAIHTTP2ReadIdleTimeout = 15 * time.Second
-	openAIHTTP2PingTimeout     = 15 * time.Second
+	// 内无响应即判定死连接并关闭，从源头避免请求挂在死连接上。参数对齐官方 10s/5s：
+	// 空闲 10s 后发 PING，5s 内无 ACK 即判定失活；对高延迟链路更积极，后续按授权冒烟评估。
+	openAIHTTP2ReadIdleTimeout = 10 * time.Second
+	openAIHTTP2PingTimeout     = 5 * time.Second
 
 	// The Grok CLI proxy rejects requests that do not identify a supported
 	// client version. Host/env/version pins live in package xai so service,

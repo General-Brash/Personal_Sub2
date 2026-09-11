@@ -101,6 +101,45 @@ describe('ModelWhitelistSelector', () => {
     expect(copyToClipboard).not.toHaveBeenCalled()
   })
 
+  it('selects and clears GPT Image 2.5 Flare/Sunburst with exact model IDs', async () => {
+    const wrapper = mountSelector()
+    await wrapper.get('div.cursor-pointer').trigger('click')
+
+    await findModelRow(wrapper, 'gpt-image-2.5-flare').get('[data-testid="select-model"]').trigger('click')
+    await wrapper.setProps({ modelValue: ['gpt-image-2.5-flare'] })
+    await findModelRow(wrapper, 'gpt-image-2.5-sunburst').get('[data-testid="select-model"]').trigger('click')
+    await wrapper.setProps({ modelValue: ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'] })
+
+    expect(wrapper.emitted('update:modelValue')).toEqual([
+      [['gpt-image-2.5-flare']],
+      [['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst']]
+    ])
+    expect(copyToClipboard).not.toHaveBeenCalled()
+
+    const clearButton = wrapper
+      .findAll('button')
+      .find(button => button.text() === 'admin.accounts.clearAllModels')
+    expect(clearButton).toBeDefined()
+    await clearButton!.trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([[]])
+  })
+
+  it('keeps copy behavior distinct for Image 2.5 options', async () => {
+    const wrapper = mountSelector()
+    await wrapper.get('div.cursor-pointer').trigger('click')
+
+    const row = findModelRow(wrapper, 'gpt-image-2.5-sunburst')
+    const copyButton = row.get('[data-testid="copy-model-id"]')
+    expect(copyButton.attributes('aria-label')).toBe('复制 gpt-image-2.5-sunburst')
+
+    await copyButton.trigger('click')
+    await flushPromises()
+
+    expect(copyToClipboard).toHaveBeenCalledWith('gpt-image-2.5-sunburst')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
   it('warns when model IDs sync but capability metadata is incomplete', async () => {
     syncUpstreamModels.mockResolvedValue({
       models: ['x-preview-f-free'],

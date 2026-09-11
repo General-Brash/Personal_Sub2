@@ -19,6 +19,35 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gpt-6-astra')
   })
 
+  it('openai 模型列表包含 Image 2.5 Flare/Sunburst 精确主 ID', () => {
+    const models = getModelsByPlatform('openai')
+
+    expect(models).toContain('gpt-image-2.5-flare')
+    expect(models).toContain('gpt-image-2.5-sunburst')
+  })
+
+  it('openai 模型列表不暴露 Image 2.5 泛称或日期快照选项', () => {
+    const models = getModelsByPlatform('openai')
+
+    expect(models).not.toContain('gpt-image-2.5')
+    expect(models).not.toContain('gpt-image-2.5-2026-09-08')
+    expect(models).not.toContain('gpt-image-2.5-flare-2026-09-08')
+    expect(models).not.toContain('gpt-image-2.5-sunburst-2026-09-08')
+  })
+
+  it('Image 2.5 主 ID 可经 whitelist 精确映射原样提交', () => {
+    const mapping = buildModelMappingObject(
+      'whitelist',
+      ['gpt-image-2.5-flare', 'gpt-image-1'],
+      []
+    )
+
+    expect(mapping).toEqual({
+      'gpt-image-2.5-flare': 'gpt-image-2.5-flare',
+      'gpt-image-1': 'gpt-image-1'
+    })
+  })
+
   it('openai 预设映射包含 GPT-6 别名和 Astra', () => {
     expect(getPresetMappingsByPlatform('openai')).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'GPT-6', from: 'gpt-6', to: 'gpt-6' }),

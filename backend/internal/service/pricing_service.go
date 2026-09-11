@@ -30,7 +30,24 @@ var (
 	// aboveTierPricePattern matches LiteLLM long-context absolute-price fields.
 	aboveTierPricePattern = regexp.MustCompile(`^(input|output)_cost_per_token_above_(\d+)k_tokens$`)
 	// cacheTierPricePattern is used only for data-quality warnings; cache items follow the input ladder.
-	cacheTierPricePattern      = regexp.MustCompile(`^(cache_(?:creation|read)_input_token_cost)(_above_1hr)?_above_\d+k_tokens((?:_[a-z]+)?)$`)
+	cacheTierPricePattern = regexp.MustCompile(`^(cache_(?:creation|read)_input_token_cost)(_above_1hr)?_above_\d+k_tokens((?:_[a-z]+)?)$`)
+	// GPT Image 2.5 token rates copied from the supplied 2026-09-08 reference snapshot.
+	// Only the four exact IDs below use this card; unrelated model fallbacks are unchanged.
+	// Presence flags preserve the reference JSON's explicit zero text-output price
+	// through Personal's fail-closed token-pricing preflight.
+	openAIGPTImage25FallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:              5e-06,
+		InputCostPerTokenPresent:       true,
+		OutputCostPerTokenPresent:      true,
+		CacheReadInputTokenCost:        1.25e-06,
+		InputCostPerImageToken:         8e-06,
+		InputCostPerImageTokenPresent:  true,
+		OutputCostPerImageToken:        3e-05,
+		OutputCostPerImageTokenPresent: true,
+		LiteLLMProvider:                "openai",
+		Mode:                           "image_generation",
+		SupportsPromptCaching:          true,
+	}
 	openAIGPT54FallbackPricing = &LiteLLMModelPricing{
 		InputCostPerToken:               2.5e-06, // $2.5 per MTok
 		OutputCostPerToken:              1.5e-05, // $15 per MTok
@@ -1537,6 +1554,13 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		return openAIGPT54FallbackPricing
 	}
 
+	// Remote price mirrors can lag new releases. Never bill GPT Image 2.5
+	// using the older image model's rates when its entry is absent.
+	for _, imageModel := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
+		if model == imageModel || model == imageModel+"-2026-09-08" {
+			return openAIGPTImage25FallbackPricing
+		}
+	}
 	if isOpenAIImageGenerationModel(model) {
 		for _, candidate := range []string{"gpt-image-2", "gpt-image-1.5", "gpt-image-1"} {
 			if pricing, ok := s.pricingData[candidate]; ok {

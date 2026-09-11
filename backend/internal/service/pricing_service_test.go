@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -718,4 +719,254 @@ func TestListModelNamesByProvider_EmptyCatalog(t *testing.T) {
 	got := svc.ListModelNamesByProvider("openai")
 	require.NotNil(t, got)
 	require.Empty(t, got)
+}
+
+// ---------------------------------------------------------------------------
+// GPT Image 2.5 dedicated fallback (2026-09-08)
+// ---------------------------------------------------------------------------
+
+func TestPricingService_Image25ExactIDsUseDedicatedFallback(t *testing.T) {
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-2":   {InputCostPerToken: 111},
+			"gpt-image-1.5": {InputCostPerToken: 222},
+			"gpt-image-1":   {InputCostPerToken: 333},
+		},
+	}
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{name: "flare", model: "gpt-image-2.5-flare"},
+		{name: "sunburst", model: "gpt-image-2.5-sunburst"},
+		{name: "flare date snapshot", model: "gpt-image-2.5-flare-2026-09-08"},
+		{name: "sunburst date snapshot", model: "gpt-image-2.5-sunburst-2026-09-08"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := svc.GetModelPricing(tt.model)
+			require.Same(t, openAIGPTImage25FallbackPricing, got)
+			require.InDelta(t, 5e-06, got.InputCostPerToken, 1e-12)
+			require.InDelta(t, 1.25e-06, got.CacheReadInputTokenCost, 1e-12)
+			require.InDelta(t, 8e-06, got.InputCostPerImageToken, 1e-12)
+			require.InDelta(t, 3e-05, got.OutputCostPerImageToken, 1e-12)
+			require.Equal(t, "openai", got.LiteLLMProvider)
+			require.Equal(t, "image_generation", got.Mode)
+			require.True(t, got.SupportsPromptCaching)
+		})
+	}
+}
+
+func TestPricingService_Image25ExactCatalogEntriesWinOverFallback(t *testing.T) {
+	flare := &LiteLLMModelPricing{InputCostPerToken: 1e-6, OutputCostPerImageToken: 9e-6}
+	sunburst := &LiteLLMModelPricing{InputCostPerToken: 2e-6, OutputCostPerImageToken: 8e-6}
+	flareDate := &LiteLLMModelPricing{InputCostPerToken: 3e-6, OutputCostPerImageToken: 7e-6}
+	sunburstDate := &LiteLLMModelPricing{InputCostPerToken: 4e-6, OutputCostPerImageToken: 6e-6}
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-2.5-flare":               flare,
+			"gpt-image-2.5-sunburst":            sunburst,
+			"gpt-image-2.5-flare-2026-09-08":    flareDate,
+			"gpt-image-2.5-sunburst-2026-09-08": sunburstDate,
+		},
+	}
+	tests := []struct {
+		name  string
+		model string
+		want  *LiteLLMModelPricing
+	}{
+		{name: "flare", model: "gpt-image-2.5-flare", want: flare},
+		{name: "sunburst", model: "gpt-image-2.5-sunburst", want: sunburst},
+		{name: "flare date snapshot", model: "gpt-image-2.5-flare-2026-09-08", want: flareDate},
+		{name: "sunburst date snapshot", model: "gpt-image-2.5-sunburst-2026-09-08", want: sunburstDate},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := svc.GetModelPricing(tt.model)
+			require.Same(t, tt.want, got)
+		})
+	}
+}
+
+func TestPricingService_Image25DateSnapshotMissingUsesDedicatedFallbackBeforeOldImages(t *testing.T) {
+	flare := &LiteLLMModelPricing{InputCostPerToken: 1e-6}
+	sunburst := &LiteLLMModelPricing{InputCostPerToken: 2e-6}
+	oldImage := &LiteLLMModelPricing{InputCostPerToken: 111}
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-2.5-flare":    flare,
+			"gpt-image-2.5-sunburst": sunburst,
+			"gpt-image-2":            oldImage,
+		},
+	}
+	tests := []struct {
+		model string
+	}{
+		{"gpt-image-2.5-flare-2026-09-08"},
+		{"gpt-image-2.5-sunburst-2026-09-08"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			got := svc.GetModelPricing(tt.model)
+			// 日期快照缺精确条目时必须使用 2.5 专用回退；绝不掉到 Image2/1.5/1，
+			// 也不得仅仅因为主 ID 存在就被当作同一价格卡。
+			require.Same(t, openAIGPTImage25FallbackPricing, got)
+			require.NotSame(t, oldImage, got)
+			require.NotSame(t, flare, got)
+			require.NotSame(t, sunburst, got)
+		})
+	}
+}
+
+func TestPricingService_Image25MissingEntryUsesDedicatedFallbackNotOldImages(t *testing.T) {
+	image2 := &LiteLLMModelPricing{InputCostPerToken: 111}
+	image15 := &LiteLLMModelPricing{InputCostPerToken: 222}
+	image1 := &LiteLLMModelPricing{InputCostPerToken: 333}
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-2":   image2,
+			"gpt-image-1.5": image15,
+			"gpt-image-1":   image1,
+		},
+	}
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{name: "flare", model: "gpt-image-2.5-flare"},
+		{name: "sunburst", model: "gpt-image-2.5-sunburst"},
+		{name: "flare date snapshot", model: "gpt-image-2.5-flare-2026-09-08"},
+		{name: "sunburst date snapshot", model: "gpt-image-2.5-sunburst-2026-09-08"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := svc.GetModelPricing(tt.model)
+			require.Same(t, openAIGPTImage25FallbackPricing, got)
+		})
+	}
+}
+
+func TestPricingService_Image25UnknownNeighborNotCaptured(t *testing.T) {
+	image2 := &LiteLLMModelPricing{InputCostPerToken: 111}
+	image15 := &LiteLLMModelPricing{InputCostPerToken: 222}
+	image1 := &LiteLLMModelPricing{InputCostPerToken: 333}
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-2":   image2,
+			"gpt-image-1.5": image15,
+			"gpt-image-1":   image1,
+		},
+	}
+	tests := []struct {
+		model    string
+		wantSame *LiteLLMModelPricing
+	}{
+		{model: "gpt-image-2.5-foo", wantSame: image2},
+		{model: "gpt-image-2.5-flare-2026-09-09", wantSame: image2},
+		{model: "gpt-image-2.5-2026-09-08", wantSame: image2},
+		{model: "gpt-image-2.5", wantSame: image2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			got := svc.GetModelPricing(tt.model)
+			require.Same(t, tt.wantSame, got)
+		})
+	}
+}
+
+func TestPricingService_Image25ExplicitOverrideAndHotReloadPreservePriority(t *testing.T) {
+	svc := newHotReloadPricingService(t,
+		`{`+
+			hotReloadModelJSON("gpt-image-2.5-flare", 6e-6, 12e-6)+`,`+
+			hotReloadModelJSON("gpt-image-2.5-flare-2026-09-08", 8e-6, 16e-6)+`,`+
+			hotReloadModelJSON("gpt-image-2.5-sunburst", 7e-6, 14e-6)+`,`+
+			hotReloadModelJSON("gpt-image-2.5-sunburst-2026-09-08", 10e-6, 20e-6)+`}`,
+		`{
+			"gpt-image-2.5-flare": {"input_cost_per_token": 9e-06},
+			"gpt-image-2.5-sunburst-2026-09-08": {"input_cost_per_token": 1.1e-05}
+		}`)
+
+	for _, tc := range []struct {
+		model         string
+		input, output float64
+	}{
+		{"gpt-image-2.5-flare", 9e-6, 12e-6},
+		{"gpt-image-2.5-flare-2026-09-08", 8e-6, 16e-6},
+		{"gpt-image-2.5-sunburst", 7e-6, 14e-6},
+		{"gpt-image-2.5-sunburst-2026-09-08", 11e-6, 20e-6},
+	} {
+		t.Run(tc.model, func(t *testing.T) {
+			pricing := svc.GetModelPricing(tc.model)
+			require.NotSame(t, openAIGPTImage25FallbackPricing, pricing)
+			require.InDelta(t, tc.input, pricing.InputCostPerToken, 1e-12)
+			require.InDelta(t, tc.output, pricing.OutputCostPerToken, 1e-12, "partial overrides must preserve the other catalog fields")
+		})
+	}
+
+	// A real fallback-file price change must rebuild the snapshot without
+	// displacing the explicit override on the other Image 2.5 model.
+	require.NoError(t, os.WriteFile(svc.cfg.Pricing.FallbackFile, []byte(`{`+
+		hotReloadModelJSON("gpt-image-2.5-flare", 6e-6, 12e-6)+`,`+
+		hotReloadModelJSON("gpt-image-2.5-sunburst", 13e-6, 14e-6)+`}`), 0644))
+	svc.reloadIfCustomFilesChanged()
+	require.InDelta(t, 9e-6, svc.GetModelPricing("gpt-image-2.5-flare").InputCostPerToken, 1e-12)
+	require.InDelta(t, 13e-6, svc.GetModelPricing("gpt-image-2.5-sunburst").InputCostPerToken, 1e-12)
+}
+
+func TestPricingService_Image25FallbackPreservesExplicitZeroForTokenBilling(t *testing.T) {
+	catalog := &PricingService{pricingData: map[string]*LiteLLMModelPricing{}}
+	billing := &BillingService{pricingService: catalog}
+	for _, model := range []string{
+		"gpt-image-2.5-flare", "gpt-image-2.5-sunburst",
+		"gpt-image-2.5-flare-2026-09-08", "gpt-image-2.5-sunburst-2026-09-08",
+	} {
+		t.Run(model, func(t *testing.T) {
+			pricing, err := billing.GetModelPricing(model)
+			require.NoError(t, err)
+			require.True(t, pricing.InputPricePresent)
+			require.True(t, pricing.OutputPricePresent)
+			require.Zero(t, pricing.OutputPricePerToken, "the reference has an explicit zero text-output rate")
+			require.InDelta(t, 8e-6, pricing.ImageInputPricePerToken, 1e-12)
+			require.InDelta(t, 30e-6, pricing.ImageOutputPricePerToken, 1e-12)
+			require.True(t, pricing.ImageOutputPriceExplicit)
+			require.NoError(t, billing.PreflightTokenPricing(context.Background(), model, nil, nil))
+		})
+	}
+}
+
+func TestPricingService_Image25ExistingImageOverridesRemainAuthoritative(t *testing.T) {
+	catalog := &PricingService{pricingData: map[string]*LiteLLMModelPricing{}}
+	billing := &BillingService{pricingService: catalog}
+	for _, model := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
+		t.Run(model, func(t *testing.T) {
+			// A per-image-token rate is not an invented per-image price. Without
+			// a configured per-image price, the existing image preflight stays closed.
+			require.Error(t, billing.PreflightImagePricing(context.Background(), model, ImageBillingSize1K, nil, nil, nil))
+			for _, unitPrice := range []float64{0, 0.12} {
+				group := &ImagePriceConfig{Price1K: &unitPrice}
+				require.NoError(t, billing.PreflightImagePricing(context.Background(), model, ImageBillingSize1K, nil, group, nil))
+				cost, err := billing.CalculateImageCostChecked(model, ImageBillingSize1K, 2, group, 1.5)
+				require.NoError(t, err)
+				require.InDelta(t, unitPrice*2, cost.TotalCost, 1e-12)
+				require.InDelta(t, unitPrice*3, cost.ActualCost, 1e-12)
+				require.Equal(t, string(BillingModeImage), cost.BillingMode)
+			}
+
+			imageOutputPrice := 40e-6
+			channel := &ChannelModelPricing{ImageOutputPrice: &imageOutputPrice}
+			pricing, err := billing.GetModelPricingWithChannel(model, channel)
+			require.NoError(t, err)
+			require.Equal(t, imageOutputPrice, pricing.ImageOutputPricePerToken)
+			require.True(t, pricing.ImageOutputPriceExplicit)
+
+			// Existing channel semantics intentionally use explicit zero when
+			// the channel leaves its image-output price unset.
+			channel.ImageOutputPrice = nil
+			pricing, err = billing.GetModelPricingWithChannel(model, channel)
+			require.NoError(t, err)
+			require.Zero(t, pricing.ImageOutputPricePerToken)
+			require.True(t, pricing.ImageOutputPriceExplicit)
+			require.Equal(t, 30e-6, catalog.GetModelPricing(model).OutputCostPerImageToken, "overrides must not mutate the shared fallback card")
+		})
+	}
 }

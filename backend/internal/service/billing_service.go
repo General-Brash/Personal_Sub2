@@ -849,9 +849,19 @@ func (s *BillingService) initFallbackPricing() {
 	}
 }
 
+// defaultPricingBaseModelKey applies only the exact default billing alias.
+// Keep request models and explicit group/channel/account overrides unchanged.
+// Callers pass the model name after their existing normalization.
+func defaultPricingBaseModelKey(model string) string {
+	if model == "deepseek-v4.1-flash" {
+		return "deepseek-v4-flash"
+	}
+	return model
+}
+
 // getFallbackPricing 根据模型系列获取回退价格
 func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
-	modelLower := strings.ToLower(model)
+	modelLower := defaultPricingBaseModelKey(strings.ToLower(model))
 
 	// 按模型系列匹配
 	if strings.Contains(modelLower, "fable-5-1") || strings.Contains(modelLower, "fable-5.1") ||
@@ -1125,6 +1135,9 @@ func (s *BillingService) HasIdentifiedTokenPricing(model string) bool {
 	if model == "" {
 		return false
 	}
+	// 精确默认计价别名：识别门禁与基础查价使用同一个 key，保证动态/回退一致；
+	// 仍只放行精确 V4.1 Flash，未知 DeepSeek 继续拒绝。
+	model = defaultPricingBaseModelKey(model)
 	if s.pricingService != nil {
 		// 仅有图片价的条目不能用于 token 计费，口径与 GetModelPricing 保持一致。
 		if pricing := s.pricingService.GetIdentifiedModelPricing(model); pricing != nil && !pricing.TokenPricingAbsent {
@@ -1140,9 +1153,12 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	// 标准化模型名称（转小写）
 	model = strings.ToLower(model)
 
+	// Alias only the lookup key; logs and model-specific policies retain the request model.
+	pricingModel := defaultPricingBaseModelKey(model)
+
 	// 1. 优先从动态价格服务获取
 	if s.pricingService != nil {
-		litellmPricing := s.pricingService.GetModelPricing(model)
+		litellmPricing := s.pricingService.GetModelPricing(pricingModel)
 		// 仅有图片价、无 token 价的条目（如 LiteLLM 的 imagen 类模型）不能用于
 		// token 计费：直接返回会把 token 流量按 $0 计费。跳过后走 fallback，
 		// 无 fallback 则 fail-closed（ErrModelPricingUnavailable）。
@@ -1184,7 +1200,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	}
 
 	// 2. 使用硬编码回退价格
-	fallback := s.getFallbackPricing(model)
+	fallback := s.getFallbackPricing(pricingModel)
 	if fallback != nil {
 		// 按模型名去重:每个模型每进程最多打一条 warn,避免热路径每请求刷屏（issue #3394）。
 		// model 在函数入口已 ToLower,故 GLM-5.2 / glm-5.2 视为同一条目。

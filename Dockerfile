@@ -111,7 +111,7 @@ FROM ${ALPINE_IMAGE}
 # Labels
 LABEL maintainer="General-Brash <github.com/General-Brash>"
 LABEL org.opencontainers.image.title="Personal_Sub2"
-LABEL org.opencontainers.image.description="Personal_Sub2 - Personal AI API Gateway (official v0.2.1-P1 integration)"
+LABEL org.opencontainers.image.description="Personal_Sub2 - Personal AI API Gateway (official v0.2.1-P2 integration)"
 LABEL org.opencontainers.image.source="https://github.com/General-Brash/Personal_Sub2"
 LABEL org.opencontainers.image.documentation="https://github.com/General-Brash/Personal_Sub2#readme"
 LABEL org.opencontainers.image.url="https://github.com/General-Brash/Personal_Sub2"
