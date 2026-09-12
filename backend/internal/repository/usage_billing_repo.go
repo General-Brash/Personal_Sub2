@@ -9,6 +9,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/shopspring/decimal"
 )
 
 type usageBillingRepository struct {
@@ -189,6 +190,14 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 	if result == nil {
 		result = &service.BatchImageBalanceHoldResult{}
 	}
+	if operation == batchImageHoldOperationCapture && result.Applied && cmd.DynamicRateSnapshot != nil {
+		groupID := cmd.DynamicRateSnapshot.GroupID
+		dynamicCmd := &service.UsageBillingCommand{RequestID: cmd.RequestID, APIKeyID: cmd.APIKeyID, UserID: cmd.UserID, BalanceCost: cmd.ActualAmount, DynamicRateSnapshot: cmd.DynamicRateSnapshot, UsageLog: &service.UsageLog{GroupID: &groupID}}
+		actual := decimal.NewFromFloat(result.TemporaryCapturedAmount).Add(decimal.NewFromFloat(result.PermanentCapturedAmount))
+		if err := incrementDynamicRateUsage(ctx, tx, dynamicCmd, actual); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -203,6 +212,7 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		}
 	}
 
+	dynamicWalletDelta := decimal.Zero
 	if cmd.BalanceCost > 0 {
 		reference, err := temporaryCreditReferenceForUsageBilling(cmd)
 		if err != nil {
@@ -219,6 +229,14 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 			return err
 		}
 		result.PermanentBalanceDeduction = &permanentBalanceCost
+		temporaryBalanceCost := cmd.BalanceCost - permanentBalanceCost
+		if temporaryBalanceCost < 0 {
+			temporaryBalanceCost = 0
+		}
+		// The dynamic wallet counter records the actual split charge: FEFO
+		// temporary-credit consumption plus permanent-balance deduction. It
+		// never infers this from Cost.ActualCost or from account cost.
+		dynamicWalletDelta = decimal.NewFromFloat(temporaryBalanceCost + permanentBalanceCost)
 		if permanentBalanceCost > 0 {
 			newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, permanentBalanceCost)
 			if err != nil {
@@ -249,6 +267,10 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 			return err
 		}
 		result.QuotaState = quotaState
+	}
+
+	if err := incrementDynamicRateUsage(ctx, tx, cmd, dynamicWalletDelta); err != nil {
+		return err
 	}
 
 	return nil

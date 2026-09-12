@@ -115,6 +115,17 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 	setOpsEndpointContext(c, "", int16(service.RequestTypeSync))
 
 	if endpoint.IsGenerationRequest() {
+		mode := service.DynamicRateModeImage
+		if isGrokVideoCreateEndpoint(endpoint) {
+			mode = service.DynamicRateModeVideo
+		}
+		ctx, err := h.gatewayService.FreezeDynamicRatePricing(c.Request.Context(), apiKey, subject.UserID, mode, requestStart)
+		if err != nil {
+			h.errorResponse(c, http.StatusServiceUnavailable, "billing_error", "media dynamic pricing is not supported for this request")
+			return
+		}
+		c.Request = c.Request.WithContext(ctx)
+
 		if !service.GroupAllowsImageGeneration(apiKey.Group) {
 			h.errorResponse(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
 			return

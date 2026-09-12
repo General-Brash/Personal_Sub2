@@ -16,8 +16,9 @@ func NewJWTAuthMiddleware(
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+	permissionServices ...*service.AdminPermissionService,
 ) JWTAuthMiddleware {
-	return JWTAuthMiddleware(jwtAuth(authService, userService, userService, settingService, auditService))
+	return JWTAuthMiddleware(jwtAuth(authService, userService, userService, settingService, auditService, permissionServices...))
 }
 
 type jwtUserReader interface {
@@ -35,6 +36,7 @@ func jwtAuth(
 	activityToucher userActivityToucher,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+	permissionServices ...*service.AdminPermissionService,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 从Authorization header中提取token
@@ -100,6 +102,11 @@ func jwtAuth(
 		c.Set(string(ContextKeyUserRole), user.Role)
 		c.Set(ContextKeyAuthEmail, user.Email)
 		c.Set(ContextKeySessionID, claims.SessionID)
+		if user.IsAdmin() && len(permissionServices) > 0 {
+			if !attachJWTAdminPrincipal(c, firstAdminPermissionService(permissionServices), user) {
+				return
+			}
+		}
 		if activityToucher != nil {
 			activityToucher.TouchLastActiveForUser(c.Request.Context(), user)
 		}

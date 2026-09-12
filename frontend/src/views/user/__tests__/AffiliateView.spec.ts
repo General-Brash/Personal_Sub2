@@ -15,6 +15,15 @@ vi.mock('@/api/user', () => ({
   },
 }))
 
+vi.mock('@/api/invitation', () => {
+  const invitationAPI = {
+    getMyInvitations: vi.fn().mockRejectedValue({ response: { status: 403, data: { code: 'PLAYER_INVITATION_DISABLED' } } }),
+    createMyInvitationReservation: vi.fn(),
+    cancelMyInvitationReservation: vi.fn(),
+  }
+  return { default: invitationAPI, invitationAPI, ...invitationAPI }
+})
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError: vi.fn(),

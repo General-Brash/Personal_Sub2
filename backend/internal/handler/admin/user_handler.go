@@ -27,6 +27,7 @@ type UserWithConcurrency struct {
 
 // UserHandler handles admin user management
 type UserHandler struct {
+	entitlements          *service.EntitlementService
 	adminService          service.AdminService
 	concurrencyService    *service.ConcurrencyService
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository // T13 admin quota view
@@ -63,7 +64,7 @@ type CreateUserRequest struct {
 	Password             string   `json:"password" binding:"required,min=6"`
 	Username             string   `json:"username"`
 	Notes                string   `json:"notes"`
-	Role                 string   `json:"role" binding:"omitempty,oneof=admin user"`
+	Role                 string   `json:"role" binding:"omitempty,oneof=admin user super_admin"`
 	Balance              *float64 `json:"balance"`
 	Concurrency          int      `json:"concurrency"`
 	RPMLimit             int      `json:"rpm_limit"`
@@ -78,7 +79,7 @@ type UpdateUserRequest struct {
 	Password             string   `json:"password" binding:"omitempty,min=6"`
 	Username             *string  `json:"username"`
 	Notes                *string  `json:"notes"`
-	Role                 string   `json:"role" binding:"omitempty,oneof=admin user"`
+	Role                 string   `json:"role" binding:"omitempty,oneof=admin user super_admin"`
 	Balance              *float64 `json:"balance"`
 	Concurrency          *int     `json:"concurrency"`
 	RPMLimit             *int     `json:"rpm_limit"`
@@ -157,6 +158,20 @@ func (h *UserHandler) List(c *gin.Context) {
 		return
 	}
 
+	if h.entitlements != nil && len(users) > 0 {
+		ids := make([]int64, len(users))
+		for i := range users {
+			ids[i] = users[i].ID
+		}
+		tiers, err := h.entitlements.ResolveTierNames(c.Request.Context(), ids)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		for i := range users {
+			users[i].EntitlementTier = tiers[users[i].ID]
+		}
+	}
 	// Batch get current concurrency (nil map if unavailable)
 	var loadInfo map[int64]*service.UserLoadInfo
 	if len(users) > 0 && h.concurrencyService != nil {
@@ -279,7 +294,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 	}
 
 	// 创建管理员账号属权限敏感操作：需最近完成 step-up 2FA 验证。
-	if req.Role == service.RoleAdmin {
+	if req.Role == service.RoleAdmin || req.Role == service.RoleSuperAdmin {
 		if !middleware.EnforceStepUp(c, h.totpService, h.userService, h.settingService) {
 			return
 		}
@@ -330,13 +345,13 @@ func (h *UserHandler) Update(c *gin.Context) {
 
 	// 把普通用户提升为管理员属权限敏感操作：需最近完成 step-up 2FA 验证。
 	// 目标已是管理员时（前端编辑表单总是携带 role）不触发，避免日常编辑被打断。
-	if req.Role == service.RoleAdmin {
+	if req.Role == service.RoleAdmin || req.Role == service.RoleSuperAdmin {
 		target, err := h.adminService.GetUser(c.Request.Context(), userID)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return
 		}
-		if target.Role != service.RoleAdmin {
+		if !target.IsAdmin() {
 			if !middleware.EnforceStepUp(c, h.totpService, h.userService, h.settingService) {
 				return
 			}
@@ -974,3 +989,5 @@ func (h *UserHandler) ResetUserPlatformQuotaWindow(c *gin.Context) {
 	}
 	response.Success(c, map[string]any{"platform_quotas": out})
 }
+
+func (h *UserHandler) SetEntitlementService(svc *service.EntitlementService) { h.entitlements = svc }

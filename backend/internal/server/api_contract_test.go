@@ -44,6 +44,7 @@ func TestAPIContracts(t *testing.T) {
 			method:     http.MethodGet,
 			path:       "/api/v1/auth/me",
 			wantStatus: http.StatusOK,
+			// effective_entitlements is intentionally absent when no entitlement service is wired.
 			wantJSON: `{
 				"code": 0,
 				"message": "success",
@@ -209,6 +210,10 @@ func TestAPIContracts(t *testing.T) {
 							"bind_start_path": "/api/v1/auth/oauth/dingtalk/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
 						}
 					},
+					"entitlement_tier": "standard",
+					"permission_mode": "disabled",
+					"permission_version": 0,
+					"permissions": [],
 					"run_mode": "standard"
 				}
 			}`,

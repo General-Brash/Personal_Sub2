@@ -35,6 +35,22 @@ type bankAmountRequest struct {
 	Amount string `json:"amount"`
 }
 
+type bankExchangeRequest struct {
+	Amount        string                                 `json:"amount"`
+	PolicyVersion int64                                  `json:"policy_version,omitempty"`
+	Quote         *service.BankExchangeQuoteConfirmation `json:"quote,omitempty"`
+}
+
+type bankExchangeConfirmedService interface {
+	ExchangeAtomicConfirmed(
+		ctx context.Context,
+		userID int64,
+		permanentAmount float64,
+		confirmation service.BankExchangeConfirmation,
+		claim *service.IdempotencyAtomicClaim,
+	) (*service.BankExchangeResult, error)
+}
+
 type bankRepayRequest struct {
 	Source string `json:"source"`
 	Amount string `json:"amount"`
@@ -95,8 +111,37 @@ func (h *BankHandler) Advance(c *gin.Context) {
 
 // Exchange handles POST /api/v1/bank/exchange.
 func (h *BankHandler) Exchange(c *gin.Context) {
-	h.executeAmountMutation(c, "user.bank.exchange", func(ctx context.Context, userID int64, amount float64, claim *service.IdempotencyAtomicClaim) (any, error) {
-		return h.service.ExchangeAtomic(ctx, userID, amount, claim)
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	if strings.TrimSpace(c.GetHeader("Idempotency-Key")) == "" {
+		response.ErrorFrom(c, service.ErrIdempotencyKeyRequired)
+		return
+	}
+	req, err := decodeBankExchangeRequest(c)
+	if err != nil {
+		response.ErrorFrom(c, service.ErrBankExchangeExpiryPolicyInvalid)
+		return
+	}
+	amount, err := service.ParseStrictPositiveLedgerAmount(req.Amount)
+	if err != nil {
+		response.ErrorFrom(c, service.ErrBankAmountInvalid)
+		return
+	}
+	confirmation := service.BankExchangeConfirmation{
+		PolicyVersion: req.PolicyVersion,
+		Quote:         req.Quote,
+	}
+	executeUserAtomicIdempotentJSON(c, "user.bank.exchange", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context, claim *service.IdempotencyAtomicClaim) (any, error) {
+		if confirmedService, ok := h.service.(bankExchangeConfirmedService); ok {
+			return confirmedService.ExchangeAtomicConfirmed(ctx, subject.UserID, amount, confirmation, claim)
+		}
+		if req.PolicyVersion != 0 || req.Quote != nil {
+			return nil, service.ErrBankExchangeExpiryPolicyVersionRequired
+		}
+		return h.service.ExchangeAtomic(ctx, subject.UserID, amount, claim)
 	})
 }
 
@@ -179,6 +224,29 @@ func decodeBankAmountRequest(c *gin.Context) (bankAmountRequest, error) {
 	}
 	if strings.TrimSpace(req.Amount) == "" {
 		return bankAmountRequest{}, errors.New("amount is required")
+	}
+	return req, nil
+}
+
+func decodeBankExchangeRequest(c *gin.Context) (bankExchangeRequest, error) {
+	if c == nil || c.Request == nil || c.Request.Body == nil {
+		return bankExchangeRequest{}, errors.New("request body is required")
+	}
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	var req bankExchangeRequest
+	if err := decoder.Decode(&req); err != nil {
+		return bankExchangeRequest{}, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return bankExchangeRequest{}, errors.New("request body must contain one object")
+		}
+		return bankExchangeRequest{}, err
+	}
+	if strings.TrimSpace(req.Amount) == "" {
+		return bankExchangeRequest{}, errors.New("amount is required")
 	}
 	return req, nil
 }

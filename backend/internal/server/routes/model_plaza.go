@@ -26,5 +26,6 @@ func RegisterModelPlazaRoutes(
 	plaza.Use(middleware.BackendModeUserGuard(settingService))
 	{
 		plaza.GET("", h.ModelPlaza.Get)
+		plaza.GET("/v2", h.ModelPlaza.GetV2)
 	}
 }

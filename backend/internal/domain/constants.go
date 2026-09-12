@@ -12,8 +12,9 @@ const (
 
 // Role constants
 const (
-	RoleAdmin = "admin"
-	RoleUser  = "user"
+	RoleUser       = "user"
+	RoleAdmin      = "admin"
+	RoleSuperAdmin = "super_admin"
 )
 
 // Platform constants
@@ -88,6 +89,12 @@ const (
 	SubscriptionStatusActive    = "active"
 	SubscriptionStatusExpired   = "expired"
 	SubscriptionStatusSuspended = "suspended"
+)
+
+// User entitlement axis is independent from the management-role axis.
+const (
+	EntitlementTierStandard = "standard"
+	EntitlementTierPremium  = "premium"
 )
 
 // AntigravityGemini31ProAgentModel is the upstream route for Gemini 3.1 Pro High.

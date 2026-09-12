@@ -18,8 +18,10 @@ import (
 )
 
 // ProvideTemporaryCreditService wires the expiring-credit ledger service.
-func ProvideTemporaryCreditService(repo TemporaryCreditRepository, availableCreditInvalidator AvailableCreditInvalidator) *TemporaryCreditService {
-	return NewTemporaryCreditServiceWithAvailableCreditInvalidator(repo, availableCreditInvalidator)
+func ProvideTemporaryCreditService(repo TemporaryCreditRepository, availableCreditInvalidator AvailableCreditInvalidator, settings *SettingService) *TemporaryCreditService {
+	svc := NewTemporaryCreditServiceWithAvailableCreditInvalidator(repo, availableCreditInvalidator)
+	svc.SetSourceExpiryPolicy(settings)
+	return svc
 }
 
 func ProvideMallService(db *sql.DB, temporaryCredit *TemporaryCreditService, subscription *SubscriptionService, authCacheInvalidator APIKeyAuthCacheInvalidator) *MallService {
@@ -114,6 +116,7 @@ func ProvideAuthService(
 	defaultSubAssigner DefaultSubscriptionAssigner,
 	affiliateService *AffiliateService,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	playerInvitationService *PlayerInvitationService,
 ) *AuthService {
 	svc := NewAuthService(
 		entClient,
@@ -130,6 +133,7 @@ func ProvideAuthService(
 		affiliateService,
 		userPlatformQuotaRepo,
 	)
+	svc.SetPlayerInvitationService(playerInvitationService)
 	svc.SetTencentCaptchaService(tencentCaptchaService)
 	svc.SetAliyunCaptchaService(aliyunCaptchaService)
 	return svc
@@ -837,18 +841,23 @@ func ProvideAPIKeyService(
 	billingCacheService *BillingCacheService,
 	permanentBalanceChecker PermanentBalanceEligibilityChecker,
 	concurrencyService *ConcurrencyService,
+	entitlements *EntitlementService,
 ) *APIKeyService {
 	svc := NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, cache, cfg)
 	svc.SetRateLimitCacheInvalidator(billingCacheService)
 	svc.SetAvailableCreditEligibilityChecker(billingCacheService)
 	svc.SetPermanentBalanceEligibilityChecker(permanentBalanceChecker)
 	svc.SetConcurrencyService(concurrencyService)
+	svc.SetEntitlementResolver(entitlements)
 	return svc
 }
 
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
+	ProvideAdminPermissionService,
+	NewEntitlementService,
+	ProvidePlayerInvitationService,
 	ProvideAuthService,
 	NewPasskeyService,
 	NewUserService,
@@ -856,7 +865,7 @@ var ProviderSet = wire.NewSet(
 	ProvideBankService,
 	wire.Bind(new(PermanentBalanceEligibilityChecker), new(*BankService)),
 	NewAdminTemporaryCreditService,
-	NewCheckinService,
+	NewCheckinServiceV2,
 	wire.Bind(new(DailyCheckinPolicyProvider), new(*SettingService)),
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
@@ -880,7 +889,7 @@ var ProviderSet = wire.NewSet(
 	ProvideImageStorageSettingService,
 	ProvideImageTaskService,
 	ProvideBatchImageModelPricingResolver,
-	NewBatchImagePublicService,
+	ProvideBatchImagePublicService,
 	NewBatchImageDownloadService,
 	ProvideBatchImageCleanupService,
 	ProvideBatchImageWorkerRuntime,
@@ -1097,4 +1106,10 @@ func ProvideOpenAIQuotaAutoResetService(
 	)
 	service.Start()
 	return service
+}
+
+func ProvideBatchImagePublicService(repo BatchImageRepository, accounts AccountRepository, groups GroupRepository, rates UserGroupRateRepository, queue BatchImageQueue, pricing *BatchImageModelPricingResolver, billing UsageBillingRepository, auth APIKeyAuthCacheInvalidator, cfg *config.Config, entitlements *EntitlementService) *BatchImagePublicService {
+	svc := NewBatchImagePublicService(repo, accounts, groups, rates, queue, pricing, billing, auth, cfg)
+	svc.Entitlements = entitlements
+	return svc
 }

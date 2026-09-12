@@ -36,13 +36,14 @@ func buildBatchImageHoldCommand(job *BatchImageJob, requestID string, actualAmou
 		holdAmount = *job.HoldAmount
 	}
 	cmd := &BatchImageBalanceHoldCommand{
-		RequestID:          requestID,
-		APIKeyID:           *job.APIKeyID,
-		UserID:             job.UserID,
-		BatchID:            job.BatchID,
-		HoldAmount:         holdAmount,
-		ActualAmount:       actualAmount,
-		RequestPayloadHash: strings.TrimSpace(payloadHash),
+		DynamicRateSnapshot: job.DynamicRateSnapshot,
+		RequestID:           requestID,
+		APIKeyID:            *job.APIKeyID,
+		UserID:              job.UserID,
+		BatchID:             job.BatchID,
+		HoldAmount:          holdAmount,
+		ActualAmount:        actualAmount,
+		RequestPayloadHash:  strings.TrimSpace(payloadHash),
 	}
 	if err := cmd.Normalize(); err != nil {
 		return nil, err

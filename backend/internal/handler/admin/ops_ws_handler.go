@@ -478,6 +478,9 @@ func handleQPSWebSocket(parentCtx context.Context, conn *websocket.Conn) {
 	defer pingTicker.Stop()
 
 	writeWithTimeout := func(messageType int, data []byte) error {
+		if err := service.RecheckAdminStream(ctx); err != nil {
+			return err
+		}
 		if err := conn.SetWriteDeadline(time.Now().Add(qpsWSWriteTimeout)); err != nil {
 			return err
 		}

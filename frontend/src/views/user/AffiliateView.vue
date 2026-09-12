@@ -44,6 +44,66 @@
           </div>
         </div>
 
+        <div v-if="invitationSummary" class="card p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white">玩家邀请名额</h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+                名额独立于累计邀请人数。确认生成会预留一次，新账号注册成功后才消费。
+              </p>
+            </div>
+            <button
+              class="btn btn-primary btn-sm"
+              :disabled="invitationSubmitting || invitationSummary.available < 1"
+              @click="showInvitationConfirm = true"
+            >
+              {{ invitationSubmitting ? '生成中…' : '使用一次邀请机会' }}
+            </button>
+          </div>
+
+          <div class="mt-4 grid grid-cols-3 gap-3 text-center">
+            <div class="rounded-xl bg-gray-50 p-3 dark:bg-dark-900">
+              <p class="text-xs text-gray-500 dark:text-dark-400">可用</p>
+              <p class="mt-1 text-xl font-semibold text-emerald-600 dark:text-emerald-400">{{ invitationSummary.available }}</p>
+            </div>
+            <div class="rounded-xl bg-gray-50 p-3 dark:bg-dark-900">
+              <p class="text-xs text-gray-500 dark:text-dark-400">预留</p>
+              <p class="mt-1 text-xl font-semibold text-amber-600 dark:text-amber-400">{{ invitationSummary.reserved }}</p>
+            </div>
+            <div class="rounded-xl bg-gray-50 p-3 dark:bg-dark-900">
+              <p class="text-xs text-gray-500 dark:text-dark-400">已成功</p>
+              <p class="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{{ invitationSummary.consumed }}</p>
+            </div>
+          </div>
+
+          <div v-if="invitationCredential" class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/20">
+            <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">一次性邀请链接（仅展示本次）</p>
+            <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <code class="min-w-0 flex-1 break-all text-xs text-emerald-900 dark:text-emerald-100">{{ invitationLink }}</code>
+              <button class="btn btn-secondary btn-sm" @click="copyInvitationLink">复制</button>
+            </div>
+          </div>
+
+          <div v-if="invitationReservations.length > 0" class="mt-4 space-y-2">
+            <div
+              v-for="reservation in invitationReservations"
+              :key="reservation.id"
+              class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-dark-700"
+            >
+              <span class="text-gray-600 dark:text-gray-300">
+                #{{ reservation.id }} · {{ reservation.status }} · {{ formatDateTime(reservation.expires_at) }}
+              </span>
+              <button
+                v-if="reservation.status === 'reserved'"
+                class="text-red-600 hover:text-red-700 dark:text-red-400"
+                @click="cancelInvitation(reservation.id)"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="card p-6">
           <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.title') }}</h3>
           <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('affiliate.description') }}</p>
@@ -136,6 +196,13 @@
         </div>
       </template>
     </div>
+    <BaseDialog :show="showInvitationConfirm" title="使用一次邀请机会" @close="showInvitationConfirm = false">
+      <p class="text-sm leading-6 text-gray-700 dark:text-gray-200">确认后将预留一次机会并生成一次性注册链接。新用户注册成功才消耗；取消或过期会释放预留。链接仅本次生成后显示，请妥善保存。</p>
+      <div class="mt-5 flex justify-end gap-3">
+        <button type="button" class="btn btn-secondary" @click="showInvitationConfirm = false">取消</button>
+        <button type="button" class="btn btn-primary" :disabled="invitationSubmitting" @click="createInvitation">确认预留</button>
+      </div>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -144,7 +211,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import userAPI from '@/api/user'
+import invitationAPI, { type PlayerInvitationCredential, type PlayerInvitationReservation, type PlayerInvitationSummary } from '@/api/invitation'
 import type { UserAffiliateDetail } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -160,6 +229,12 @@ const { copyToClipboard } = useClipboard()
 const loading = ref(true)
 const transferring = ref(false)
 const detail = ref<UserAffiliateDetail | null>(null)
+const invitationSummary = ref<PlayerInvitationSummary | null>(null)
+const invitationReservations = ref<PlayerInvitationReservation[]>([])
+const invitationCredential = ref<PlayerInvitationCredential | null>(null)
+const invitationSubmitting = ref(false)
+const showInvitationConfirm = ref(false)
+let invitationRequestKey: string | null = null
 
 const inviteLink = computed(() => {
   if (!detail.value) return ''
@@ -169,6 +244,13 @@ const inviteLink = computed(() => {
 
 // Rebate rate is a percentage in the range [0, 100]; backend already clamps it.
 // We trim trailing zeros (e.g. 20.00 → "20", 12.50 → "12.5") for a cleaner UI.
+const invitationLink = computed(() => {
+  if (!invitationCredential.value || !detail.value) return ''
+  const token = encodeURIComponent(invitationCredential.value.token)
+  const aff = encodeURIComponent(detail.value.aff_code)
+  if (typeof window === 'undefined') return `/register?invite=${token}&aff=${aff}`
+  return `${window.location.origin}/register?invite=${token}&aff=${aff}`
+})
 const formattedRebateRate = computed(() => {
   const v = detail.value?.effective_rebate_rate_percent ?? 0
   const rounded = Math.round(v * 100) / 100
@@ -204,6 +286,55 @@ async function copyInviteLink(): Promise<void> {
   await copyToClipboard(inviteLink.value, t('affiliate.linkCopied'))
 }
 
+async function loadInvitationState(): Promise<void> {
+  try {
+    const state = await invitationAPI.getMyInvitations()
+    invitationSummary.value = state.summary
+    invitationReservations.value = state.reservations
+  } catch {
+    invitationSummary.value = null
+    invitationReservations.value = []
+  }
+}
+
+async function createInvitation(): Promise<void> {
+  if (invitationSubmitting.value || !invitationSummary.value || invitationSummary.value.available < 1) return
+  invitationSubmitting.value = true
+  try {
+    const storageKey = `player-invitation-request:${detail.value?.user_id}`
+    if (!invitationRequestKey) {
+      try { invitationRequestKey = sessionStorage.getItem(storageKey) } catch { /* optional cache */ }
+      invitationRequestKey ||= crypto.randomUUID()
+      try { sessionStorage.setItem(storageKey, invitationRequestKey) } catch { /* optional cache */ }
+    }
+    invitationCredential.value = await invitationAPI.createMyInvitationReservation(invitationRequestKey)
+    invitationRequestKey = null
+    showInvitationConfirm.value = false
+    try { sessionStorage.removeItem(storageKey) } catch { /* optional cache */ }
+    await loadInvitationState()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, '生成邀请链接失败'))
+  } finally {
+    invitationSubmitting.value = false
+  }
+}
+
+async function cancelInvitation(id: number): Promise<void> {
+  try {
+    await invitationAPI.cancelMyInvitationReservation(id)
+    if (invitationCredential.value?.reservation.id === id) {
+      invitationCredential.value = null
+    }
+    await loadInvitationState()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, '取消邀请失败'))
+  }
+}
+
+async function copyInvitationLink(): Promise<void> {
+  if (!invitationLink.value) return
+  await copyToClipboard(invitationLink.value, '一次性邀请链接已复制')
+}
 async function transferQuota(): Promise<void> {
   if (!detail.value || detail.value.aff_quota <= 0 || transferring.value) return
   transferring.value = true
@@ -223,5 +354,6 @@ async function transferQuota(): Promise<void> {
 
 onMounted(() => {
   void loadAffiliateDetail()
+  void loadInvitationState()
 })
 </script>

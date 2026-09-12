@@ -431,6 +431,13 @@
                 }}</span>
               </button>
               <button
+                @click="handleDynamicRate(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-pink-600 dark:hover:bg-dark-700 dark:hover:text-pink-400"
+              >
+                <Icon name="sparkles" size="sm" />
+                <span class="text-xs">动态倍率</span>
+              </button>
+              <button
                 @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
@@ -4554,6 +4561,14 @@
       @success="loadGroups"
     />
 
+    <!-- Group Dynamic Rate Policy Modal -->
+    <DynamicRatePolicyModal
+      :show="showDynamicRateModal"
+      :group="dynamicRateGroup"
+      @close="showDynamicRateModal = false"
+      @success="loadGroups"
+    />
+
     <!-- Group RPM Overrides Modal -->
     <GroupRPMOverridesModal
       :show="showRPMOverridesModal"
@@ -4597,6 +4612,7 @@ import Select from "@/components/common/Select.vue";
 import PlatformIcon from "@/components/common/PlatformIcon.vue";
 import Icon from "@/components/icons/Icon.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
+import DynamicRatePolicyModal from "@/components/admin/DynamicRatePolicyModal.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
@@ -5137,6 +5153,8 @@ const sortSubmitting = ref(false);
 const editingGroup = ref<AdminGroup | null>(null);
 const deletingGroup = ref<AdminGroup | null>(null);
 const duplicatingGroupIds = reactive(new Set<number>());
+const showDynamicRateModal = ref(false);
+const dynamicRateGroup = ref<AdminGroup | null>(null);
 const showRateMultipliersModal = ref(false);
 const rateMultipliersGroup = ref<AdminGroup | null>(null);
 const showRPMOverridesModal = ref(false);
@@ -6641,6 +6659,11 @@ const removeEditMessagesDispatchMapping = (row: MessagesDispatchMappingRow) => {
   if (index !== -1) {
     editForm.exact_model_mappings.splice(index, 1);
   }
+};
+
+const handleDynamicRate = (group: AdminGroup) => {
+  dynamicRateGroup.value = group;
+  showDynamicRateModal.value = true;
 };
 
 const handleRateMultipliers = (group: AdminGroup) => {

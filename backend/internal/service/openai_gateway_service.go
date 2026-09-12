@@ -425,6 +425,7 @@ type OpenAIGatewayService struct {
 	rateLimitService      *RateLimitService
 	billingCacheService   *BillingCacheService
 	userGroupRateResolver *userGroupRateResolver
+	dynamicRateResolver   *dynamicRateResolver
 	httpUpstream          HTTPUpstream
 	deferredService       *DeferredService
 	openAITokenProvider   *OpenAITokenProvider
@@ -544,6 +545,9 @@ func NewOpenAIGatewayService(
 		responseHeaderFilter:  compileResponseHeaderFilter(cfg),
 		codexSnapshotThrottle: newAccountWriteThrottle(openAICodexSnapshotPersistMinInterval),
 		openaiModelTransient:  newOpenAIAccountModelTransientState(openAIModelTransientDefaultMax),
+	}
+	if dynamicRepo, ok := usageBillingRepo.(DynamicRateRepository); ok {
+		svc.dynamicRateResolver = newDynamicRateResolver(dynamicRepo)
 	}
 	if rateLimitService != nil {
 		rateLimitService.SetAccountRuntimeBlocker(svc)

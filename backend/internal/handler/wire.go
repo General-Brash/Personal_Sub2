@@ -15,6 +15,7 @@ func ProvideAdminHandlers(
 	userHandler *admin.UserHandler,
 	temporaryCreditHandler *admin.TemporaryCreditHandler,
 	bankHandler *admin.BankHandler,
+	bankExchangeExpiryHandler *admin.BankExchangeExpiryHandler,
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
 	announcementHandler *admin.AnnouncementHandler,
@@ -60,6 +61,7 @@ func ProvideAdminHandlers(
 		User:                   userHandler,
 		TemporaryCredit:        temporaryCreditHandler,
 		Bank:                   bankHandler,
+		BankExchangeExpiry:     bankExchangeExpiryHandler,
 		Group:                  groupHandler,
 		Account:                accountHandler,
 		Announcement:           announcementHandler,
@@ -115,7 +117,9 @@ func ProvideGatewayHandler(
 	cfg *config.Config,
 	settingService *service.SettingService,
 	coordinator *securityaudit.Coordinator,
+	entitlements *service.EntitlementService,
 ) *GatewayHandler {
+	gatewayService.SetPremiumRateResolver(entitlements)
 	h := NewGatewayHandler(gatewayService, openAIGatewayService, geminiCompatService, antigravityGatewayService,
 		userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool,
 		errorPassthroughService, contentModerationService, userMsgQueueService, cfg, settingService)
@@ -136,7 +140,9 @@ func ProvideOpenAIGatewayHandler(
 	grokQuotaService *service.GrokQuotaService,
 	cfg *config.Config,
 	coordinator *securityaudit.Coordinator,
+	entitlements *service.EntitlementService,
 ) *OpenAIGatewayHandler {
+	gatewayService.SetPremiumRateResolver(entitlements)
 	gatewayService.SetPluginManager(pluginManager)
 	h := NewOpenAIGatewayHandler(gatewayService, concurrencyService, billingCacheService, apiKeyService,
 		usageRecordWorkerPool, errorPassthroughService, contentModerationService, opsService, cfg)
@@ -182,6 +188,10 @@ func ProvideBankHandler(bankService *service.BankService) *BankHandler {
 	return NewBankHandler(bankService)
 }
 
+func ProvideAdminBankExchangeExpiryHandler(bankService *service.BankService) *admin.BankExchangeExpiryHandler {
+	return admin.NewBankExchangeExpiryHandler(bankService)
+}
+
 func ProvideAdminBankHandler(bankService *service.BankService) *admin.BankHandler {
 	return admin.NewBankHandler(bankService)
 }
@@ -223,34 +233,47 @@ func ProvideHandlers(
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
 	checkinHandler *CheckinHandler,
+	checkinAdminHandler *CheckinAdminHandler,
 	bankHandler *BankHandler,
+	invitationHandler *InvitationHandler,
+	featureManagementHandler *FeatureManagementHandler,
+	dynamicRateHandler *DynamicRateHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
+	authHandler.featurePermissions = featureManagementHandler.permissions
+	adminHandlers.Plugin.SetAdminPermissionService(featureManagementHandler.permissions)
+	adminHandlers.User.SetEntitlementService(featureManagementHandler.entitlements)
+	authHandler.featureEntitlements = featureManagementHandler.entitlements
+
 	return &Handlers{
-		Auth:             authHandler,
-		User:             userHandler,
-		APIKey:           apiKeyHandler,
-		Usage:            usageHandler,
-		Redeem:           redeemHandler,
-		Subscription:     subscriptionHandler,
-		Announcement:     announcementHandler,
-		ChannelMonitor:   channelMonitorUserHandler,
-		ChannelMonitorV2: channelMonitorV2Handler,
-		Admin:            adminHandlers,
-		Gateway:          gatewayHandler,
-		OpenAIGateway:    openaiGatewayHandler,
-		Setting:          settingHandler,
-		Totp:             totpHandler,
-		Passkey:          passkeyHandler,
-		Payment:          paymentHandler,
-		PaymentWebhook:   paymentWebhookHandler,
-		AvailableChannel: availableChannelHandler,
-		ModelPlaza:       modelPlazaHandler,
-		AsyncImage:       asyncImageHandler,
-		BatchImage:       batchImageHandler,
-		Checkin:          checkinHandler,
-		Bank:             bankHandler,
+		Auth:              authHandler,
+		User:              userHandler,
+		APIKey:            apiKeyHandler,
+		Usage:             usageHandler,
+		Redeem:            redeemHandler,
+		Subscription:      subscriptionHandler,
+		Announcement:      announcementHandler,
+		ChannelMonitor:    channelMonitorUserHandler,
+		ChannelMonitorV2:  channelMonitorV2Handler,
+		Admin:             adminHandlers,
+		Gateway:           gatewayHandler,
+		OpenAIGateway:     openaiGatewayHandler,
+		Setting:           settingHandler,
+		Totp:              totpHandler,
+		Passkey:           passkeyHandler,
+		Payment:           paymentHandler,
+		PaymentWebhook:    paymentWebhookHandler,
+		AvailableChannel:  availableChannelHandler,
+		ModelPlaza:        modelPlazaHandler,
+		AsyncImage:        asyncImageHandler,
+		BatchImage:        batchImageHandler,
+		Checkin:           checkinHandler,
+		CheckinAdmin:      checkinAdminHandler,
+		Bank:              bankHandler,
+		Invitation:        invitationHandler,
+		FeatureManagement: featureManagementHandler,
+		DynamicRate:       dynamicRateHandler,
 	}
 }
 
@@ -274,17 +297,22 @@ var ProviderSet = wire.NewSet(
 	ProvidePaymentHandler,
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
-	NewModelPlazaHandler,
+	ProvideModelPlazaHandler,
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
 	ProvideCheckinHandler,
+	ProvideCheckinAdminHandler,
 	ProvideBankHandler,
+	NewInvitationHandler,
+	NewFeatureManagementHandler,
+	ProvideDynamicRateHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
 	admin.NewUserHandler,
 	ProvideAdminTemporaryCreditHandler,
 	ProvideAdminBankHandler,
+	ProvideAdminBankExchangeExpiryHandler,
 	admin.NewGroupHandler,
 	admin.ProvideAccountHandler,
 	admin.NewAnnouncementHandler,
@@ -324,3 +352,18 @@ var ProviderSet = wire.NewSet(
 	ProvideAdminHandlers,
 	ProvideHandlers,
 )
+
+func ProvideDynamicRateHandler(gateway *service.GatewayService, keys *service.APIKeyService) *DynamicRateHandler {
+	h := NewDynamicRateHandler(gateway)
+	h.keys = keys
+	return h
+}
+
+func ProvideModelPlazaHandler(channels *service.ChannelService, keys *service.APIKeyService, settings *service.SettingService, groups *service.GroupService, accounts *service.AccountService, routes service.CompositeModelRouteRepository, pricing *service.ModelPricingResolver, users *service.UserService, entitlements *service.EntitlementService, gateway *service.GatewayService) *ModelPlazaHandler {
+	source := service.NewRuntimeModelCatalogSource(groups, accounts)
+	source.SetCompositeRouteSource(routes)
+	h := NewModelPlazaHandler(channels, keys, settings)
+	h.SetModelPlazaV2(true, service.NewModelCatalogService(source), service.NewModelAvailabilityResolver(), service.NewPriceQuoteService(pricing, gateway), &service.ModelFeatureAccess{Users: users, Groups: groups, Entitlements: entitlements})
+	h.entitlements = entitlements
+	return h
+}

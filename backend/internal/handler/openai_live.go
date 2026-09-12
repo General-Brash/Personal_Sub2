@@ -24,6 +24,10 @@ func (h *OpenAIGatewayHandler) Live(c *gin.Context) {
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 		return
 	}
+	if err := h.gatewayService.RequireDynamicRateAdmission(c.Request.Context(), apiKey, "live"); err != nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "billing_error", "Live cannot bypass dynamic rate billing")
+		return
+	}
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")

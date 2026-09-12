@@ -47,6 +47,49 @@
         />
       </div>
 
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label for="daily-checkin-refresh-time" class="input-label">刷新时间（Asia/Shanghai）</label>
+          <input id="daily-checkin-refresh-time" v-model="form.refresh_time" data-testid="checkin-refresh-time" type="time" step="60" required class="input" />
+        </div>
+        <div>
+          <label for="daily-checkin-auto-fee" class="input-label">自动签到手续费（bps）</label>
+          <input id="daily-checkin-auto-fee" v-model.number="form.auto_fee_bps" data-testid="checkin-auto-fee-bps" type="number" min="0" max="10000" step="1" required class="input" />
+        </div>
+      </div>
+
+      <div class="grid gap-4 rounded-lg border border-gray-200 p-4 sm:grid-cols-2 dark:border-dark-600">
+        <div class="space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">普通博弈</span>
+            <Toggle v-model="form.normal.enabled" data-testid="checkin-normal-enabled" aria-label="普通博弈" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="input-label">最小倍率 bps<input v-model.number="form.normal.min_bps" data-testid="checkin-normal-min-bps" type="number" min="1" :max="form.normal.max_bps" step="1" required class="input mt-1" /></label>
+            <label class="input-label">最大倍率 bps<input v-model.number="form.normal.max_bps" data-testid="checkin-normal-max-bps" type="number" :min="form.normal.min_bps" max="1000000" step="1" required class="input mt-1" /></label>
+          </div>
+        </div>
+        <div class="space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">超级博弈</span>
+            <Toggle v-model="form.super.enabled" data-testid="checkin-super-enabled" aria-label="超级博弈" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="input-label">最小倍率 bps<input v-model.number="form.super.min_bps" data-testid="checkin-super-min-bps" type="number" min="1" :max="form.super.max_bps" step="1" required class="input mt-1" /></label>
+            <label class="input-label">最大倍率 bps<input v-model.number="form.super.max_bps" data-testid="checkin-super-max-bps" type="number" :min="form.super.min_bps" max="1000000" step="1" required class="input mt-1" /></label>
+          </div>
+          <label class="input-label">永久成本<input v-model="form.super.cost" data-testid="checkin-super-cost" type="text" inputmode="decimal" required class="input mt-1 font-mono" @blur="form.super.cost = formatEditableAmount(form.super.cost)" /></label>
+        </div>
+        <div class="flex items-center justify-between gap-3 sm:col-span-2">
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">随机功能已完成合规复核</span>
+          <Toggle v-model="form.reviewed" data-testid="checkin-reviewed" aria-label="随机功能已完成合规复核" />
+        </div>
+      </div>
+
+      <p data-testid="checkin-policy-effective-preview" class="rounded-lg bg-gray-50 p-3 text-sm text-gray-600 dark:bg-dark-800 dark:text-gray-300">
+        {{ effectivePreview }}
+      </p>
+
       <div class="max-w-xs">
         <label for="daily-checkin-max-reward-day" class="input-label">
           {{ t('checkin.admin.maxRewardDay') }}
@@ -136,8 +179,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { adminAPI } from '@/api/admin'
-import type { CheckinSettings } from '@/api/admin/settings'
+import { getCheckinSettingsV2, updateCheckinSettingsV2, type CheckinAdminSettings } from '@/api/checkin'
 import { useAppStore } from '@/stores/app'
 import Icon from '@/components/icons/Icon.vue'
 import Toggle from '@/components/common/Toggle.vue'
@@ -154,9 +196,7 @@ const props = withDefaults(defineProps<{
   showHeader: true,
 })
 
-type CheckinSettingsForm = Omit<CheckinSettings, 'reward_tiers'> & {
-  reward_tiers: Array<{ day: number; amount: string; permanent_amount: string }>
-}
+type CheckinSettingsForm = CheckinAdminSettings
 
 const loading = ref(true)
 const saving = ref(false)
@@ -169,6 +209,23 @@ const form = reactive<CheckinSettingsForm>({
     amount: '1.00',
     permanent_amount: '0.00',
   })),
+  version: '',
+  refresh_time: '00:00',
+  auto_fee_bps: 500,
+  reviewed: false,
+  normal: { enabled: false, min_bps: 10000, max_bps: 10000 },
+  super: { enabled: false, min_bps: 10000, max_bps: 10000, cost: '0.00000000' },
+  pending_refresh: null,
+  next_reset_at: null,
+})
+
+const effectivePreview = computed(() => {
+  if (form.pending_refresh) {
+    return `刷新时间将在 ${formatDateTime(form.pending_refresh.effective_at)} 对新周期生效`
+  }
+  return form.next_reset_at
+    ? `当前规则持续至 ${formatDateTime(form.next_reset_at)}，届时按刷新时间切换`
+    : '刷新时间变更会在当前周期结束后的下一边界生效'
 })
 
 const visibleRewardTiers = computed(() => {
@@ -195,7 +252,7 @@ watch(
   { flush: 'sync' },
 )
 
-function applySettings(settings: CheckinSettings) {
+function applySettings(settings: CheckinAdminSettings) {
   form.enabled = settings.enabled
   form.max_reward_day = settings.max_reward_day
   form.reward_tiers = settings.reward_tiers.map((tier) => ({
@@ -203,6 +260,21 @@ function applySettings(settings: CheckinSettings) {
     amount: formatEditableAmount(tier.amount),
     permanent_amount: formatEditableAmount(tier.permanent_amount || '0.00000000'),
   }))
+  form.version = settings.version
+  form.refresh_time = settings.refresh_time || '00:00'
+  form.auto_fee_bps = settings.auto_fee_bps ?? 0
+  form.reviewed = Boolean(settings.reviewed)
+  const normal = settings.normal ?? { enabled: false, min_bps: 10000, max_bps: 10000 }
+  const superMode = settings.super ?? { enabled: false, min_bps: 10000, max_bps: 10000, cost: '0.00000000' }
+  form.normal = { enabled: Boolean(normal.enabled), min_bps: normal.min_bps ?? 10000, max_bps: normal.max_bps ?? 10000 }
+  form.super = { ...superMode, enabled: Boolean(superMode.enabled), min_bps: superMode.min_bps ?? 10000, max_bps: superMode.max_bps ?? 10000, cost: formatEditableAmount(superMode.cost || '0.00000000') }
+  form.pending_refresh = settings.pending_refresh ?? null
+  form.next_reset_at = settings.next_reset_at ?? null
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
 /** Keep a readable two-place default without rounding away sub-cent precision. */
@@ -237,7 +309,7 @@ async function loadSettings() {
   loading.value = true
   loadError.value = false
   try {
-    applySettings(await adminAPI.settings.getCheckinSettings())
+    applySettings(await getCheckinSettingsV2())
   } catch (error) {
     console.error('Failed to load daily check-in settings:', error)
     loadError.value = true
@@ -251,6 +323,18 @@ async function saveSettings() {
 
   if (!isValidMaxRewardDay(form.max_reward_day)) {
     appStore.showError(t('checkin.admin.invalidMaxRewardDay'))
+    return
+  }
+  if (
+    !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(form.refresh_time) ||
+    !Number.isInteger(form.auto_fee_bps) || form.auto_fee_bps < 0 || form.auto_fee_bps > 10000 ||
+    !Number.isInteger(form.normal.min_bps) || !Number.isInteger(form.normal.max_bps) ||
+    form.normal.min_bps < 1 || form.normal.min_bps > form.normal.max_bps || form.normal.max_bps > 1000000 ||
+    !Number.isInteger(form.super.min_bps) || !Number.isInteger(form.super.max_bps) ||
+    form.super.min_bps < 1 || form.super.min_bps > form.super.max_bps || form.super.max_bps > 1000000 ||
+    !isValidNonNegativeAmount(form.super.cost) || (form.super.enabled && !isValidPositiveAmount(form.super.cost))
+  ) {
+    appStore.showError(t('checkin.admin.invalidRewardAmount'))
     return
   }
   const rewardTiers = form.reward_tiers.slice(0, form.max_reward_day)
@@ -269,7 +353,7 @@ async function saveSettings() {
 
   saving.value = true
   try {
-    const saved = await adminAPI.settings.updateCheckinSettings({
+    const saved = await updateCheckinSettingsV2({
       enabled: form.enabled,
       max_reward_day: form.max_reward_day,
       reward_tiers: rewardTiers.map((tier) => ({
@@ -277,6 +361,13 @@ async function saveSettings() {
         amount: tier.amount,
         permanent_amount: tier.permanent_amount,
       })),
+      version: form.version,
+      expected_version: form.version,
+      refresh_time: form.refresh_time,
+      auto_fee_bps: form.auto_fee_bps,
+      reviewed: form.reviewed,
+      normal: { ...form.normal },
+      super: { ...form.super },
     })
     applySettings(saved)
     appStore.showSuccess(t('checkin.admin.settingsSaved'))

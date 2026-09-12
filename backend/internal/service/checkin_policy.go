@@ -82,6 +82,22 @@ func NextCheckinStreak(lastCheckinDate *string, lastStreakDay int, currentDate t
 	return 1
 }
 
+// NextCheckinStreakFromPeriod treats the exact shared boundary as continuity.
+// Comparing local dates is wrong when a refresh-time transition creates two
+// different periods on the same Beijing calendar date.
+func NextCheckinStreakFromPeriod(lastPeriodEnd *time.Time, lastStreakDay int, currentStart time.Time) int {
+	if lastPeriodEnd == nil {
+		return 1
+	}
+	if lastPeriodEnd.UTC().Equal(currentStart.UTC()) {
+		if lastStreakDay > 0 {
+			return lastStreakDay + 1
+		}
+		return 2
+	}
+	return 1
+}
+
 func (p DailyCheckinPolicy) Validate() error {
 	if p.MaxRewardDay < 1 || p.MaxRewardDay > dailyCheckinMaxRewardDay {
 		return ErrDailyCheckinPolicyInvalid

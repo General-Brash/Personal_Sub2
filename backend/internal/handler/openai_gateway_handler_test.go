@@ -1785,6 +1785,61 @@ type openAIResponsesWSUsageLogResult struct {
 	clientEvents         [][]byte
 }
 
+type openAIWSAPIKeyRevalidationRepoStub struct {
+	service.APIKeyRepository
+	apiKey *service.APIKey
+}
+
+func (s *openAIWSAPIKeyRevalidationRepoStub) GetByID(_ context.Context, id int64) (*service.APIKey, error) {
+	if s.apiKey == nil || s.apiKey.ID != id {
+		return nil, service.ErrAPIKeyNotFound
+	}
+	apiKey := *s.apiKey
+	return &apiKey, nil
+}
+
+type openAIWSAPIKeyEntitlementResolverStub struct {
+	snapshot *service.EntitlementSnapshot
+}
+
+func (s *openAIWSAPIKeyEntitlementResolverStub) Resolve(context.Context, int64) (*service.EntitlementSnapshot, error) {
+	return s.snapshot, nil
+}
+
+func newOpenAIWSAPIKeyRevalidationService(t *testing.T, apiKey *service.APIKey, cfg *config.Config) *service.APIKeyService {
+	t.Helper()
+	require.NotNil(t, apiKey)
+	require.NotNil(t, apiKey.User)
+
+	svc := service.NewAPIKeyService(
+		&openAIWSAPIKeyRevalidationRepoStub{apiKey: apiKey},
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		cfg,
+	)
+	tier := apiKey.User.EntitlementTier
+	if tier == "" {
+		tier = service.EntitlementTierStandard
+	}
+	version := apiKey.User.EntitlementVersion
+	if version == 0 {
+		version = 1
+	}
+	svc.SetEntitlementResolver(&openAIWSAPIKeyEntitlementResolverStub{
+		snapshot: &service.EntitlementSnapshot{
+			UserID:        apiKey.User.ID,
+			Tier:          tier,
+			TierEnabled:   true,
+			Version:       version,
+			AllowedGroups: append([]int64(nil), apiKey.User.AllowedGroups...),
+		},
+	})
+	return svc
+}
+
 type openAIWSUsageHandlerAccountRepoStub struct {
 	service.AccountRepository
 	account service.Account
@@ -2836,18 +2891,26 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 			return true, nil
 		},
 	}
+	apiKey := &service.APIKey{
+		ID:      1801,
+		UserID:  1701,
+		Status:  service.StatusAPIKeyActive,
+		GroupID: &groupID,
+		User: &service.User{
+			ID:            1701,
+			Status:        service.StatusActive,
+			AllowedGroups: []int64{groupID},
+		},
+		Group: &service.Group{ID: groupID, Platform: service.PlatformOpenAI, Status: service.StatusActive},
+	}
+
 	h := &OpenAIGatewayHandler{
 		gatewayService:      gatewaySvc,
 		billingCacheService: billingCacheSvc,
-		apiKeyService:       &service.APIKeyService{},
+		apiKeyService:       newOpenAIWSAPIKeyRevalidationService(t, apiKey, cfg),
 		concurrencyHelper:   NewConcurrencyHelper(service.NewConcurrencyService(cache), SSEPingFormatNone, time.Second),
 	}
 
-	apiKey := &service.APIKey{
-		ID:      1801,
-		GroupID: &groupID,
-		User:    &service.User{ID: 1701, Status: service.StatusActive},
-	}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyAPIKey), apiKey)

@@ -116,7 +116,13 @@ func (h *OpenAIGatewayHandler) AlphaSearch(c *gin.Context) {
 
 	// 分组利润控制：alpha search 文本入口请求级装门并固定 pricingAt
 	//（记录路径经 service.OpenAIPricingAtFromContext 从请求 ctx 回读）。
-	asPricingCtx, _ := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
+	asPricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
+	asPricingCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(asPricingCtx, apiKey, subject.UserID, service.DynamicRateModeText, pricingAt)
+	if dynamicRateErr != nil {
+		reqLog.Warn("openai_alpha_search.dynamic_rate_admission_failed", zap.Error(dynamicRateErr))
+		h.errorResponse(c, http.StatusServiceUnavailable, "billing_error", "dynamic rate pricing unavailable")
+		return
+	}
 	c.Request = c.Request.WithContext(asPricingCtx)
 
 	for {

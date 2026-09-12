@@ -93,8 +93,38 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   const isAdmin = computed(() => {
-    return user.value?.role === 'admin'
+    return user.value?.role === 'admin' || user.value?.role === 'super_admin'
   })
+
+  function canAdmin(permission: string): boolean {
+    if (!isAdmin.value) return false
+    if (user.value?.permission_mode !== 'enforce') return true
+    return user.value?.permissions?.includes(permission) === true
+  }
+
+  function canAccessAdminPath(path: string): boolean {
+    if (!path.startsWith('/admin')) return true
+    if (!isAdmin.value) return false
+    if (user.value?.permission_mode !== 'enforce') return true
+    const rules: Array<[string, string[]]> = [
+      ['/admin/dashboard', ['ops.read']], ['/admin/users', ['users.read']],
+      ['/admin/groups', ['groups.read']], ['/admin/accounts', ['accounts.catalog.read']],
+      ['/admin/channels', ['channels.catalog.read', 'models.pricing.manage']],
+      ['/admin/subscriptions', ['users.read', 'mall.orders.read']],
+      ['/admin/affiliates', ['affiliates.read', 'invites.read']],
+      ['/admin/bank', ['bank.ledger.read']], ['/admin/orders/shelves', ['mall.products.read']],
+      ['/admin/orders/plans', ['mall.products.read']], ['/admin/orders', ['mall.orders.read']],
+      ['/admin/finance', ['mall.orders.read', 'audit.read']], ['/admin/usage', ['ops.read']],
+      ['/admin/audit-logs', ['audit.read']], ['/admin/ops', ['ops.read']],
+      ['/admin/plugins', ['plugins.execute']], ['/admin/settings', ['system.settings.manage']],
+      ['/admin/proxies', ['channels.credentials.read']], ['/admin/announcements', ['system.settings.manage']],
+      ['/admin/redeem', ['users.balance.adjust']], ['/admin/promo-codes', ['users.balance.adjust']],
+      ['/admin/risk-control', ['audit.read']], ['/admin/prompt-audit', ['audit.read']],
+      ['/admin/secondary-review', ['audit.read']],
+    ]
+    const match = rules.find(([prefix]) => path === prefix || path.startsWith(prefix + '/'))
+    return match?.[1].some(canAdmin) === true
+  }
 
   const isSimpleMode = computed(() => runMode.value === 'simple')
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
@@ -498,6 +528,8 @@ export const useAuthStore = defineStore('auth', () => {
     // Computed
     isAuthenticated,
     isAdmin,
+    canAdmin,
+    canAccessAdminPath,
     isSimpleMode,
     hasPendingAuthSession,
 

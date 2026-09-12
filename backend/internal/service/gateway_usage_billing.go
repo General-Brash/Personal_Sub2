@@ -346,6 +346,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	}
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
+	if cmd != nil {
+		cmd.DynamicRateSnapshot = DynamicRatePricingSnapshotFromContext(ctx)
+	}
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
 		postUsageBilling(ctx, p, deps)
 		return false, nil
@@ -817,23 +820,40 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
 
-	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
+	// 获取静态基倍率（优先级：用户专属覆盖 > premium/等级 > 分组默认 > 系统默认）。
 	multiplier := 1.0
 	if s.cfg != nil {
 		multiplier = s.cfg.Default.RateMultiplier
 	}
 	if apiKey.GroupID != nil && apiKey.Group != nil {
-		groupDefault := apiKey.Group.RateMultiplier
-		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
+		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, apiKey.Group.RateMultiplier)
 	}
-	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
-	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
+	baseMultiplier := multiplier
+
+	// 高峰因子和动态因子各只应用一次；动态倍率必须在请求接纳时冻结。
 	pricingAt := input.PricingAt
+	if !input.PricingAt.IsZero() {
+		ctx = WithDynamicRateAdmissionTime(ctx, input.PricingAt)
+	}
 	if pricingAt.IsZero() {
 		pricingAt = timezone.Now()
 	}
-	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, pricingAt)
-
+	peakFactor := 1.0
+	if apiKey != nil && apiKey.Group != nil {
+		peakFactor = apiKey.Group.PeakMultiplierAt(pricingAt)
+	}
+	multiplier = baseMultiplier * peakFactor
+	imageMultiplier := resolveImageRateMultiplier(apiKey, baseMultiplier)
+	if user != nil && apiKey != nil && apiKey.GroupID != nil {
+		dynamicSnapshot, dynamicErr := s.resolveDynamicRateForBilling(ctx, user.ID, *apiKey.GroupID, DynamicRateModeForGatewayResult(result))
+		if dynamicErr != nil {
+			return dynamicErr
+		}
+		if dynamicSnapshot != nil {
+			ctx = WithDynamicRatePricingSnapshot(ctx, dynamicSnapshot)
+			multiplier, imageMultiplier, _, _ = applyDynamicRateMultipliers(dynamicSnapshot, baseMultiplier, peakFactor, imageMultiplier, 0, 0)
+		}
+	}
 	// 确定计费模型
 	concreteBillingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 	billingModel := concreteBillingModel

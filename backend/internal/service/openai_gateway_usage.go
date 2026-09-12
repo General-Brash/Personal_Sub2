@@ -198,6 +198,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	// Get rate multiplier
+	// Static base multiplier: user override > premium/entitlement > group > system default.
 	multiplier := 1.0
 	if s.cfg != nil {
 		multiplier = s.cfg.Default.RateMultiplier
@@ -205,14 +206,29 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if apiKey.GroupID != nil && apiKey.Group != nil {
 		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, apiKey.Group.RateMultiplier)
 	}
-	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。
-	// 高峰因子按请求级 PricingAt 现算（与利润门 D 同源同刻，跨峰谷请求不中途
-	// 变价）；未装配 PricingAt 的路径回退记录时刻，保持既有行为。不并入上面的
-	// Resolve，以免污染 user:group 倍率缓存。
 	baseMultiplier := multiplier
 	pricingAt := openAIUsagePricingAt(input)
-	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, baseMultiplier, pricingAt)
+	if !input.PricingAt.IsZero() {
+		ctx = WithDynamicRateAdmissionTime(ctx, input.PricingAt)
+	}
+	peakFactor := 1.0
+	if apiKey != nil && apiKey.Group != nil {
+		peakFactor = apiKey.Group.PeakMultiplierAt(pricingAt)
+	}
+	multiplier = baseMultiplier * peakFactor
+	imageMultiplier := resolveImageRateMultiplier(apiKey, baseMultiplier)
 	videoMultiplier := resolveVideoRateMultiplier(apiKey, baseMultiplier)
+	webSearchMultiplier := baseMultiplier
+	if user != nil && apiKey != nil && apiKey.GroupID != nil {
+		dynamicSnapshot, dynamicErr := s.resolveDynamicRateForBilling(ctx, user.ID, *apiKey.GroupID, DynamicRateModeForOpenAIResult(result))
+		if dynamicErr != nil {
+			return dynamicErr
+		}
+		if dynamicSnapshot != nil {
+			ctx = WithDynamicRatePricingSnapshot(ctx, dynamicSnapshot)
+			multiplier, imageMultiplier, videoMultiplier, webSearchMultiplier = applyDynamicRateMultipliers(dynamicSnapshot, baseMultiplier, peakFactor, imageMultiplier, videoMultiplier, webSearchMultiplier)
+		}
+	}
 
 	var cost *CostBreakdown
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
@@ -247,7 +263,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		multiplier,
 		imageMultiplier,
 		videoMultiplier,
-		baseMultiplier,
+		webSearchMultiplier,
 		tokens,
 		serviceTier,
 		optionalStringValue(result.ReasoningEffort),

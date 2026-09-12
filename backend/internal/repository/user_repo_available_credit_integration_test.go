@@ -58,8 +58,14 @@ WHERE grant_row.user_id = $1`,
 
 	_, err := integrationDB.ExecContext(ctx, `
 WITH checkin AS (
-	INSERT INTO daily_checkins (user_id, checkin_date, streak_day, reward_day, reward_amount)
-	VALUES ($1, CURRENT_DATE, 1, 1, 1.25)
+	INSERT INTO daily_checkins
+		(user_id, checkin_date, streak_day, reward_day, reward_amount,
+		 business_period_key, period_start_at, period_end_at, base_reward_amount)
+	VALUES ($1, CURRENT_DATE, 1, 1, 1.25,
+			'checkin:' || EXTRACT(EPOCH FROM (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Shanghai'))::bigint::text,
+			CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Shanghai',
+			(CURRENT_DATE + 1)::timestamp AT TIME ZONE 'Asia/Shanghai',
+			1.25)
 	RETURNING id
 ), mall_purchase AS (
 	INSERT INTO mall_purchases

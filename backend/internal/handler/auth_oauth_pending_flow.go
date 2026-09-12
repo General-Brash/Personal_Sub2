@@ -232,6 +232,22 @@ func redirectToFrontendCallback(c *gin.Context, frontendCallback string) {
 }
 
 func (h *AuthHandler) createOAuthPendingSession(c *gin.Context, payload oauthPendingSessionPayload) error {
+	invitation := validatedOAuthInvitation(c)
+	if payload.UpstreamIdentityClaims == nil {
+		payload.UpstreamIdentityClaims = map[string]any{}
+	}
+	delete(payload.UpstreamIdentityClaims, oauthInvitationClaim)
+	delete(payload.UpstreamIdentityClaims, oauthAffiliateClaim)
+	delete(payload.UpstreamIdentityClaims, oauthEncryptedInvitationClaim)
+	delete(payload.UpstreamIdentityClaims, legacyPendingOAuthAffiliateClaim)
+	if invitation.Invitation != "" || invitation.Affiliate != "" {
+		protected, err := h.protectPendingInvitation(invitation)
+		if err != nil {
+			return err
+		}
+		payload.UpstreamIdentityClaims[oauthEncryptedInvitationClaim] = protected
+	}
+
 	svc, err := h.pendingIdentityService()
 	if err != nil {
 		return err
@@ -1727,6 +1743,11 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 		return
 	}
 
+	if err := h.mergePendingInvitationClaims(session.UpstreamIdentityClaims, &req.InvitationCode, &req.AffCode); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
 	client := h.entClient()
 	if client == nil {
 		response.ErrorFrom(c, infraerrors.ServiceUnavailable("PENDING_AUTH_NOT_READY", "pending auth service is not ready"))
@@ -1766,12 +1787,13 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 		return
 	}
 
-	tokenPair, user, err := h.authService.RegisterOAuthEmailAccount(
+	tokenPair, user, err := h.authService.RegisterOAuthEmailAccountWithPlayerInvitation(
 		c.Request.Context(),
 		email,
 		req.Password,
 		strings.TrimSpace(req.VerifyCode),
 		strings.TrimSpace(req.InvitationCode),
+		strings.TrimSpace(req.AffCode),
 		strings.TrimSpace(session.ProviderType),
 	)
 	if err != nil {
@@ -1797,7 +1819,7 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 		if user == nil || user.ID <= 0 {
 			return false
 		}
-		if rollbackErr := h.authService.RollbackOAuthEmailAccountCreation(
+		if rollbackErr := h.authService.RollbackOAuthEmailAccountCreationWithSources(
 			c.Request.Context(),
 			user.ID,
 			strings.TrimSpace(req.InvitationCode),
@@ -1841,7 +1863,7 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 		return
 	}
 
-	if err := h.authService.FinalizeOAuthEmailAccount(
+	if err := h.authService.FinalizeOAuthEmailAccountWithSources(
 		txCtx,
 		user,
 		strings.TrimSpace(req.InvitationCode),

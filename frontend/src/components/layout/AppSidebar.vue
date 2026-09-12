@@ -776,6 +776,17 @@ const customMenuItemsForAdmin = computed(() => {
     .sort((a, b) => a.sort_order - b.sort_order)
 })
 
+function applyAdminPermissions(items: NavItem[]): NavItem[] {
+  if (authStore.user?.permission_mode !== 'enforce') return items
+  return items.flatMap((item) => {
+    if (item.children) {
+      const children = applyAdminPermissions(item.children)
+      return children.length ? [{ ...item, children }] : []
+    }
+    return authStore.canAccessAdminPath(item.path) ? [item] : []
+  })
+}
+
 // Admin navigation items
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
@@ -858,14 +869,14 @@ const adminNavItems = computed((): NavItem[] => {
     for (const cm of customMenuItemsForAdmin.value) {
       filtered.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
     }
-    return filtered
+    return applyAdminPermissions(filtered)
   }
 
   visible.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   for (const cm of customMenuItemsForAdmin.value) {
     visible.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
   }
-  return visible
+  return applyAdminPermissions(visible)
 })
 
 function toggleSidebar() {

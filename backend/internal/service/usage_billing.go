@@ -44,6 +44,10 @@ type UsageBillingCommand struct {
 	APIKeyQuotaCost     float64
 	APIKeyRateLimitCost float64
 	AccountQuotaCost    float64
+
+	// DynamicRateSnapshot is frozen at request admission and committed in the same
+	// transaction as the dedup claim, wallet effect and usage counter increment.
+	DynamicRateSnapshot *DynamicRatePricingSnapshot
 }
 
 func (c *UsageBillingCommand) Normalize() error {
@@ -144,6 +148,9 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
 	}
+	if c.DynamicRateSnapshot != nil {
+		raw += "|" + c.DynamicRateSnapshot.PricingSnapshotID
+	}
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
@@ -203,15 +210,16 @@ func permanentBalanceNotificationInputs(result *UsageBillingApplyResult, fallbac
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.
 type BatchImageBalanceHoldCommand struct {
-	RequestID          string
-	APIKeyID           int64
-	RequestFingerprint string
-	RequestPayloadHash string
-	UserID             int64
-	GroupID            *int64
-	BatchID            string
-	HoldAmount         float64
-	ActualAmount       float64
+	DynamicRateSnapshot *DynamicRatePricingSnapshot
+	RequestID           string
+	APIKeyID            int64
+	RequestFingerprint  string
+	RequestPayloadHash  string
+	UserID              int64
+	GroupID             *int64
+	BatchID             string
+	HoldAmount          float64
+	ActualAmount        float64
 
 	legacyFingerprintHoldAmount   float64
 	legacyFingerprintActualAmount float64
@@ -261,6 +269,9 @@ func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) stri
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
 	}
+	if c.DynamicRateSnapshot != nil {
+		raw += "|" + c.DynamicRateSnapshot.PricingSnapshotID
+	}
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
@@ -275,6 +286,9 @@ func MatchesBatchImageBalanceHoldFingerprint(existing string, c *BatchImageBalan
 	existing = strings.TrimSpace(existing)
 	if existing == strings.TrimSpace(c.RequestFingerprint) {
 		return true
+	}
+	if c.DynamicRateSnapshot != nil {
+		return false
 	}
 	legacyHoldAmount := c.HoldAmount
 	legacyActualAmount := c.ActualAmount

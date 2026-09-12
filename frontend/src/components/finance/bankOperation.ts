@@ -3,6 +3,7 @@ import type { FinanceTranslate } from './financialDisplay'
 const bankOperationKeys: Record<string, string> = {
   advance: 'bank.operations.advance',
   exchange: 'bank.operations.exchange',
+  exchange_expiry_refund: 'bank.operations.exchangeExpiryRefund',
   debt_offset: 'bank.operations.debtOffset',
   permanent_settlement: 'bank.operations.permanentSettlement',
   unused_advance_repayment: 'bank.operations.unusedAdvanceRepayment',

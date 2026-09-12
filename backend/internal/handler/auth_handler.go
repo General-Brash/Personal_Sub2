@@ -19,6 +19,8 @@ import (
 
 // AuthHandler handles authentication-related requests
 type AuthHandler struct {
+	featurePermissions   *service.AdminPermissionService
+	featureEntitlements  *service.EntitlementService
 	cfg                  *config.Config
 	authService          *service.AuthService
 	userService          *service.UserService
@@ -448,6 +450,7 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 
 	type UserResponse struct {
 		userProfileResponse
+		featureProfile
 		RunMode string `json:"run_mode"`
 	}
 
@@ -458,9 +461,15 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 
 	profile := userProfileResponseFromService(user, identities)
 	profile.TemporaryCreditAvailable = &temporaryCreditAvailable
+	features, err := buildFeatureProfile(c.Request.Context(), user, h.featurePermissions, h.featureEntitlements)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
 	response.Success(c, UserResponse{
 		userProfileResponse: profile,
+		featureProfile:      features,
 		RunMode:             runMode,
 	})
 }
@@ -705,7 +714,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	// Backend mode: block non-admin token refresh
-	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && result.UserRole != "admin" {
+	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && result.UserRole != service.RoleAdmin && result.UserRole != service.RoleSuperAdmin {
 		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
 		return
 	}

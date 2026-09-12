@@ -22,15 +22,23 @@ INSERT INTO affiliate_rebate_jobs (
     base_amount,
     status,
     next_retry_at,
+    inviter_user_id,
+    relation_effective_at,
+    event_occurred_at,
+    policy_snapshot,
     created_at,
     updated_at
 )
-VALUES ($1, $2, $3, $4, 'pending', NOW(), NOW(), NOW())
+VALUES ($1, $2, $3, $4, 'pending', NOW(), $5, $6, $7, $8, NOW(), NOW())
 ON CONFLICT (source_redeem_code_id) DO NOTHING`,
 		input.InviteeUserID,
 		input.SourceRedeemCodeID,
 		input.SourceKind,
 		normalizeAffiliateLedgerAmount(input.BaseAmount),
+		input.InviterUserID,
+		input.RelationEffectiveAt,
+		input.EventOccurredAt,
+		nullableInvitationJSON(input.PolicySnapshot),
 	)
 	if err != nil {
 		return fmt.Errorf("enqueue affiliate rebate job: %w", err)

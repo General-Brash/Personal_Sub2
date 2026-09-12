@@ -814,9 +814,10 @@ func (m *PluginManager) Test(ctx context.Context, id int64) (*pluginv1.TestConfi
 }
 
 type pluginUIAssetClaims struct {
-	Version  int   `json:"version"`
-	PluginID int64 `json:"plugin_id"`
-	Expires  int64 `json:"expires"`
+	Principal *AdminPrincipal `json:"principal,omitempty"`
+	Version   int             `json:"version"`
+	PluginID  int64           `json:"plugin_id"`
+	Expires   int64           `json:"expires"`
 }
 
 // CreateUIAssetToken 创建可跨实例校验的短时能力令牌，令牌不包含管理员凭据。
@@ -828,7 +829,13 @@ func (m *PluginManager) CreateUIAssetToken(ctx context.Context, id int64, ttl ti
 		return "", time.Time{}, err
 	}
 	expires := time.Now().Add(ttl)
-	raw, err := json.Marshal(pluginUIAssetClaims{Version: 1, PluginID: id, Expires: expires.Unix()})
+	principal, _ := AdminPrincipalFromContext(ctx)
+	if AdminPermissionModeFromEnv() == AdminPermissionModeEnforce {
+		if principal == nil || AuthorizeAdminRequest(ctx, "plugins.execute", map[string]any{"plugin_id": id, "plugins_ids": id, "id": id}) != nil {
+			return "", time.Time{}, ErrAdminPermissionDenied
+		}
+	}
+	raw, err := json.Marshal(pluginUIAssetClaims{Version: 1, PluginID: id, Expires: expires.Unix(), Principal: principal})
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -841,38 +848,43 @@ func (m *PluginManager) CreateUIAssetToken(ctx context.Context, id int64, ttl ti
 }
 
 func (m *PluginManager) ResolveUIAssetToken(token string) (int64, error) {
+	id, _, err := m.ResolveUIAssetTokenWithPrincipal(token)
+	return id, err
+}
+
+func (m *PluginManager) ResolveUIAssetTokenWithPrincipal(token string) (int64, *AdminPrincipal, error) {
 	if len(token) == 0 || len(token) > 4096 {
-		return 0, errors.New("插件 UI 会话无效")
+		return 0, nil, errors.New("插件 UI 会话无效")
 	}
 	encrypted, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {
-		return 0, errors.New("插件 UI 会话无效")
+		return 0, nil, errors.New("插件 UI 会话无效")
 	}
 	plaintext, err := m.encryptor.Decrypt(string(encrypted))
 	if err != nil {
-		return 0, errors.New("插件 UI 会话无效")
+		return 0, nil, errors.New("插件 UI 会话无效")
 	}
 	plaintext, ok := strings.CutPrefix(plaintext, pluginUITokenPrefix)
 	if !ok {
-		return 0, errors.New("插件 UI 会话无效")
+		return 0, nil, errors.New("插件 UI 会话无效")
 	}
 	var claims pluginUIAssetClaims
 	decoder := json.NewDecoder(strings.NewReader(plaintext))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&claims); err != nil || claims.Version != 1 || claims.PluginID <= 0 {
-		return 0, errors.New("插件 UI 会话无效")
+		return 0, nil, errors.New("插件 UI 会话无效")
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return 0, errors.New("插件 UI 会话无效")
+		return 0, nil, errors.New("插件 UI 会话无效")
 	}
 	now := time.Now().Unix()
 	if now >= claims.Expires {
-		return 0, errors.New("插件 UI 会话已过期")
+		return 0, nil, errors.New("插件 UI 会话已过期")
 	}
 	if claims.Expires > now+int64(time.Hour/time.Second) {
-		return 0, errors.New("插件 UI 会话无效")
+		return 0, nil, errors.New("插件 UI 会话无效")
 	}
-	return claims.PluginID, nil
+	return claims.PluginID, claims.Principal, nil
 }
 
 func (m *PluginManager) ReadUIAsset(ctx context.Context, id int64, relative string) ([]byte, string, error) {

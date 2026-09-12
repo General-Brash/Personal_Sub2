@@ -221,6 +221,16 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	setOpsRequestContext(c, modelName, stream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(stream, false)))
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
+	dynamicRateMode := service.DynamicRateModeText
+	if service.IsGeminiImageGenerationModel(modelName) {
+		dynamicRateMode = service.DynamicRateModeImage
+	}
+	pricingCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(pricingCtx, apiKey, authSubject.UserID, dynamicRateMode, pricingAt)
+	if dynamicRateErr != nil {
+		reqLog.Warn("gemini.dynamic_rate_admission_failed", zap.Error(dynamicRateErr))
+		googleError(c, http.StatusServiceUnavailable, "dynamic rate pricing unavailable")
+		return
+	}
 	c.Request = c.Request.WithContext(pricingCtx)
 
 	if decision := h.checkSecurityAudit(c, reqLog, apiKey, authSubject, service.ContentModerationProtocolGemini, modelName, body); decision != nil && !decision.AllowNextStage {

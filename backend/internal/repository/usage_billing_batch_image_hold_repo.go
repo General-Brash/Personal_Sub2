@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -21,12 +22,13 @@ const (
 )
 
 type batchImageBillingJobSnapshot struct {
-	UserID     int64
-	APIKeyID   int64
-	GroupID    *int64
-	HoldAmount float64
-	ActualCost *float64
-	CreatedAt  time.Time
+	DynamicRateSnapshot *service.DynamicRatePricingSnapshot
+	UserID              int64
+	APIKeyID            int64
+	GroupID             *int64
+	HoldAmount          float64
+	ActualCost          *float64
+	CreatedAt           time.Time
 }
 
 type batchImageCreditHoldRecord struct {
@@ -101,6 +103,15 @@ func (r *usageBillingRepository) applyBatchImageCreditHoldOperation(
 		return nil, service.ErrUsageBillingRequestConflict
 	}
 	cmd.GroupID = cloneBatchImageGroupID(job.GroupID)
+	if (cmd.DynamicRateSnapshot == nil) != (job.DynamicRateSnapshot == nil) {
+		return nil, service.ErrDynamicRateSnapshotMismatch
+	}
+	if job.DynamicRateSnapshot != nil {
+		if cmd.DynamicRateSnapshot.PricingSnapshotID != job.DynamicRateSnapshot.PricingSnapshotID {
+			return nil, service.ErrDynamicRateSnapshotMismatch
+		}
+		cmd.DynamicRateSnapshot = job.DynamicRateSnapshot
+	}
 
 	dedup, err := loadBatchImageHoldDedupState(ctx, tx, cmd.BatchID, cmd.APIKeyID)
 	if err != nil {
@@ -158,12 +169,13 @@ func lockBatchImageBillingJob(ctx context.Context, tx *sql.Tx, batchID string) (
 		actualCost   sql.NullFloat64
 		apiKeyUserID int64
 		groupID      sql.NullInt64
+		dynamicJSON  []byte
 	)
 	err := tx.QueryRowContext(ctx, `
-SELECT user_id, api_key_id, COALESCE(hold_amount, estimated_cost, 0), actual_cost, created_at
+SELECT user_id, api_key_id, COALESCE(hold_amount, estimated_cost, 0), actual_cost, created_at, dynamic_rate_snapshot
 FROM batch_image_jobs
 WHERE batch_id = $1
-FOR UPDATE`, batchID).Scan(&job.UserID, &apiKeyID, &job.HoldAmount, &actualCost, &job.CreatedAt)
+FOR UPDATE`, batchID).Scan(&job.UserID, &apiKeyID, &job.HoldAmount, &actualCost, &job.CreatedAt, &dynamicJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrBatchImageJobNotFound
 	}
@@ -200,6 +212,16 @@ WHERE id = $1`, job.APIKeyID).Scan(&apiKeyUserID, &groupID)
 	}
 	if groupID.Valid {
 		job.GroupID = &groupID.Int64
+	}
+	if len(dynamicJSON) > 0 && string(dynamicJSON) != "null" {
+		if err := json.Unmarshal(dynamicJSON, &job.DynamicRateSnapshot); err != nil {
+			return nil, err
+		}
+		if job.DynamicRateSnapshot.UserID != job.UserID {
+			return nil, service.ErrDynamicRateSnapshotMismatch
+		}
+		group := job.DynamicRateSnapshot.GroupID
+		job.GroupID = &group
 	}
 	return &job, nil
 }

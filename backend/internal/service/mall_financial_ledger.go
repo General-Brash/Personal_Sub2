@@ -689,10 +689,11 @@ WHERE po.status = 'COMPLETED'
   AND (po.currency_product_id IS NOT NULL OR (po.order_type = 'subscription' AND po.plan_id IS NOT NULL))` + userFilterPayment + paymentTimeFilter + `
 UNION ALL
 SELECT bl.id, bl.user_id, COALESCE(NULLIF(u.username, ''), u.email), u.email,
-       'bank', CASE WHEN bl.operation IN ('permanent_settlement', 'unused_advance_repayment') THEN 'settlement' ELSE 'bank' END,
+       'bank', CASE WHEN bl.operation IN ('exchange_expiry_refund', 'permanent_settlement', 'unused_advance_repayment') THEN 'settlement' ELSE 'bank' END,
 	       bl.operation,
 	       ''::text, 'credit'::text,
        CASE
+           WHEN bl.operation = 'exchange_expiry_refund' THEN GREATEST(bl.permanent_delta, 0)
            WHEN bl.operation IN ('exchange', 'early_repay_permanent', 'permanent_settlement') THEN GREATEST(-bl.permanent_delta, 0)
            WHEN bl.operation IN ('early_repay_temporary', 'debt_offset', 'unused_advance_repayment') THEN GREATEST(-bl.temporary_delta, 0)
            ELSE 0

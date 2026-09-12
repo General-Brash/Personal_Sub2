@@ -5,6 +5,11 @@
         <div>
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('checkin.title') }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('checkin.description') }}</p>
+          <p v-if="status" data-test="checkin-period-state" class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            下次刷新：{{ status.next_reset_at ? formatExpiry(status.next_reset_at) : '北京时间 00:00' }}
+            · 自动手续费：{{ (status.auto_fee_bps ?? 500) / 100 }}%
+            · 当前模式：{{ status.mode ?? 'direct' }}
+          </p>
         </div>
         <div
           v-if="authStore.isAdmin || status?.enabled"
@@ -22,6 +27,16 @@
           </button>
           <button
             v-if="status?.enabled"
+            data-test="checkin-auto-toggle"
+            type="button"
+            class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-700"
+            :disabled="preferenceSaving"
+            @click="handleToggleAuto"
+          >
+            {{ status.auto_enabled ? '关闭自动' : '开启自动' }}
+          </button>
+          <button
+            v-if="status?.enabled"
             data-test="check-in-button"
             type="button"
             class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -33,6 +48,24 @@
           </button>
         </div>
       </div>
+
+      <CheckinModeDialog
+        :show="showModeDialog"
+        :base-reward="status?.next_reward_amount ?? '0.00000000'"
+        :permanent-reward="status?.next_permanent_reward_amount ?? '0.00000000'"
+        :permanent-balance="status?.permanent_balance ?? '0.00000000'"
+        :normal="normalPolicy"
+        :super-mode="superPolicy"
+        :can-afford-super="canAffordSuper"
+        @select="handleModeSelect"
+        @close="showModeDialog = false"
+      />
+      <CheckinConsentDialog
+        :show="showConsentDialog"
+        :fee-bps="status?.auto_fee_bps ?? 500"
+        @confirm="confirmAutoPreference"
+        @close="showConsentDialog = false"
+      />
 
       <BaseDialog
         :show="showCheckinSettings"
@@ -309,8 +342,19 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import CheckinSettingsCard from '@/components/admin/settings/CheckinSettingsCard.vue'
+import CheckinModeDialog from '@/components/checkin/CheckinModeDialog.vue'
+import CheckinConsentDialog from '@/components/checkin/CheckinConsentDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { checkIn, getCheckinStatus, type CheckinCalendarEntry, type CheckinResult, type CheckinStatus } from '@/api/checkin'
+import {
+  checkIn,
+  checkInMode,
+  getCheckinStatus,
+  updateCheckinPreference,
+  type CheckinCalendarEntry,
+  type CheckinMode,
+  type CheckinResult,
+  type CheckinStatus,
+} from '@/api/checkin'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { formatDecimalAmount } from '@/utils/format'
@@ -335,6 +379,9 @@ const loading = ref(true)
 const loadFailed = ref(false)
 const submitting = ref(false)
 const showCheckinSettings = ref(false)
+const showModeDialog = ref(false)
+const showConsentDialog = ref(false)
+const preferenceSaving = ref(false)
 const currentMonth = ref(getBeijingDate().slice(0, 7))
 const rewardGuideRef = ref<HTMLElement | null>(null)
 const rewardGuideHovered = ref(false)
@@ -347,11 +394,24 @@ const checkInButtonLabel = computed(() => {
   if (submitting.value) return t('checkin.checkingIn')
   if (!status.value?.enabled) return t('checkin.disabled')
   if (status.value.today_checked_in) return t('checkin.checkedIn')
+  if (status.value.auto_enabled) return '自动签到已开启'
   return t('checkin.checkIn')
 })
 const temporaryCreditText = computed(() => status.value ? formatCredit(status.value.temporary_credit_available) : '')
 const rewardTiers = computed(() => status.value?.reward_tiers ?? [])
 const rewardTierCapDay = computed(() => rewardTiers.value[rewardTiers.value.length - 1]?.day ?? 0)
+const normalPolicy = computed(() => ({
+  enabled: Boolean(status.value?.normal_enabled),
+  min_bps: status.value?.normal_min_bps ?? 10000,
+  max_bps: status.value?.normal_max_bps ?? 10000,
+}))
+const superPolicy = computed(() => ({
+  enabled: Boolean(status.value?.super_enabled),
+  min_bps: status.value?.super_min_bps ?? 10000,
+  max_bps: status.value?.super_max_bps ?? 10000,
+  cost: status.value?.super_cost ?? '0.00000000',
+}))
+const canAffordSuper = computed(() => Boolean(status.value?.can_afford_super))
 const rewardGuideVisible = computed(
   () => rewardGuideHovered.value || rewardGuideFocused.value || rewardGuidePinned.value,
 )
@@ -433,20 +493,91 @@ function handleDocumentPointerDown(event: PointerEvent) {
 
 async function handleCheckIn() {
   if (!canCheckIn.value) return
+  if (status.value?.auto_enabled) {
+    appStore.showError('自动签到已开启，不支持手动改为普通或超级博弈')
+    return
+  }
+  // Keep the pre-v2 API/tests on the legacy empty-body direct request. New
+  // server responses always include business_period_id and use the dialog.
+  if (!status.value?.business_period_id) {
+    submitting.value = true
+    try {
+      const result = await checkIn(getOrCreateIdempotencyKey('direct'))
+      applyCheckinResult(result)
+      lastCheckinResult.value = result
+      appStore.showSuccess(t(result.already_checked_in ? 'checkin.alreadyCheckedIn' : 'checkin.checkInSucceeded'))
+      await Promise.all([loadStatus(), refreshUserSilently()])
+    } catch (error) {
+      console.error('Failed to complete daily check-in:', error)
+      appStore.showError(t('checkin.failedToCheckIn'))
+    } finally {
+      submitting.value = false
+    }
+    return
+  }
+  showModeDialog.value = true
+}
 
+async function handleModeSelect(mode: Exclude<CheckinMode, 'direct-auto'>) {
+  if (!canCheckIn.value) return
   submitting.value = true
   try {
-    const result = await checkIn(getOrCreateIdempotencyKey())
+    const result = await checkInMode(getOrCreateIdempotencyKey(mode), mode, status.value?.policy_version)
+    showModeDialog.value = false
     applyCheckinResult(result)
     lastCheckinResult.value = result
     appStore.showSuccess(t(result.already_checked_in ? 'checkin.alreadyCheckedIn' : 'checkin.checkInSucceeded'))
     await Promise.all([loadStatus(), refreshUserSilently()])
   } catch (error) {
-    console.error('Failed to complete daily check-in:', error)
+    console.error('Failed to complete selected daily check-in:', error)
     appStore.showError(t('checkin.failedToCheckIn'))
   } finally {
     submitting.value = false
   }
+}
+
+async function handleToggleAuto() {
+  if (!status.value?.enabled || preferenceSaving.value) return
+  if (status.value.auto_enabled) {
+    preferenceSaving.value = true
+    try {
+      const preference = await updateCheckinPreference(false, false)
+      status.value = { ...status.value, auto_enabled: preference.auto_enabled, consent_valid: preference.consent_valid }
+      appStore.showSuccess('自动签到已关闭')
+    } catch (error) {
+      console.error('Failed to disable automatic check-in:', error)
+      appStore.showError('关闭自动签到失败')
+    } finally {
+      preferenceSaving.value = false
+    }
+    return
+  }
+  showConsentDialog.value = true
+}
+
+async function confirmAutoPreference() {
+  if (preferenceSaving.value) return
+  preferenceSaving.value = true
+  try {
+    const preference = await updateCheckinPreference(true, true, status.value?.policy_version, status.value?.auto_fee_bps)
+    status.value = status.value
+      ? { ...status.value, auto_enabled: preference.auto_enabled, consent_valid: preference.consent_valid }
+      : status.value
+    showConsentDialog.value = false
+    appStore.showSuccess('自动签到已开启')
+  } catch (error) {
+    console.error('Failed to enable automatic check-in:', error)
+    appStore.showError('开启自动签到失败')
+  } finally {
+    preferenceSaving.value = false
+  }
+}
+
+function handleExternalCheckin(event: Event) {
+  const result = (event as CustomEvent<CheckinResult>).detail
+  if (!result) return
+  applyCheckinResult(result)
+  lastCheckinResult.value = result
 }
 
 async function refreshUserSilently(): Promise<void> {
@@ -458,6 +589,11 @@ async function refreshUserSilently(): Promise<void> {
 }
 
 function applyCheckinResult(result: CheckinResult) {
+  if (typeof BroadcastChannel !== 'undefined' && authStore.user?.id) {
+    const channel = new BroadcastChannel(`personal-checkin:${authStore.user.id}`)
+    channel.postMessage({ period: result.business_period_id }); channel.close()
+  }
+
   if (!status.value) return
 
   const updatedCalendar = result.checkin_date.startsWith(currentMonth.value)
@@ -477,21 +613,24 @@ function applyCheckinResult(result: CheckinResult) {
     ...status.value,
     today_checked_in: true,
     current_streak_day: result.streak_day,
+    mode: result.mode,
     calendar: updatedCalendar,
   }
 }
 
-function getOrCreateIdempotencyKey(): string {
+function getOrCreateIdempotencyKey(mode: CheckinMode = 'direct'): string {
   const businessDate = getBeijingDate()
   const storedDate = localStorage.getItem(idempotencyDateStorage)
+  const storedMode = localStorage.getItem(`${idempotencyKeyStorage}-mode`)
   const storedKey = localStorage.getItem(idempotencyKeyStorage)
-  if (storedDate === businessDate && storedKey) return storedKey
+  if (storedDate === businessDate && storedMode === mode && storedKey) return storedKey
 
   const randomPart = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  const key = `check-in-${businessDate}-${randomPart}`
+  const key = `check-in-${businessDate}-${mode}-${randomPart}`
   localStorage.setItem(idempotencyDateStorage, businessDate)
+  localStorage.setItem(`${idempotencyKeyStorage}-mode`, mode)
   localStorage.setItem(idempotencyKeyStorage, key)
   return key
 }
@@ -537,10 +676,12 @@ function formatExpiry(value: string | null): string {
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
+  window.addEventListener('personal-checkin-completed', handleExternalCheckin)
   void loadStatus()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  window.removeEventListener('personal-checkin-completed', handleExternalCheckin)
 })
 </script>

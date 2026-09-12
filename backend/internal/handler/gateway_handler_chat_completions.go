@@ -94,6 +94,12 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	setOpsRequestContext(c, reqModel, reqStream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
+	pricingCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(pricingCtx, apiKey, subject.UserID, service.DynamicRateModeText, pricingAt)
+	if dynamicRateErr != nil {
+		reqLog.Warn("gateway.cc.dynamic_rate_admission_failed", zap.Error(dynamicRateErr))
+		h.chatCompletionsErrorResponse(c, http.StatusServiceUnavailable, "billing_error", "dynamic rate pricing unavailable")
+		return
+	}
 	c.Request = c.Request.WithContext(pricingCtx)
 
 	// 解析渠道级模型映射

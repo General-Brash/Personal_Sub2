@@ -25,8 +25,9 @@ type MallBalanceSummary struct {
 }
 
 type MallPurchaseRequest struct {
-	ProductType MallProductType `json:"product_type"`
-	ProductID   int64           `json:"product_id"`
+	ProductType          MallProductType `json:"product_type"`
+	ProductID            int64           `json:"product_id"`
+	ExpectedQuoteVersion string          `json:"expected_quote_version,omitempty"`
 }
 
 type MallPurchaseResult struct {
@@ -41,6 +42,8 @@ type MallPurchaseResult struct {
 	SubscriptionExpiresAt    *time.Time               `json:"subscription_expires_at,omitempty"`
 	PermanentBalance         string                   `json:"permanent_balance"`
 	TemporaryCreditAvailable string                   `json:"temporary_credit_available"`
+	QuoteVersion             string                   `json:"quote_version,omitempty"`
+	PricedAt                 *time.Time               `json:"priced_at,omitempty"`
 }
 
 type mallCurrencyProduct struct {
@@ -51,11 +54,13 @@ type mallCurrencyProduct struct {
 	purchaseLimitUnit          string
 	purchaseLimitMode          string
 	purchaseLimitWindowSize    int
+	updatedAt                  time.Time
 }
 
 type mallSubscriptionPlan struct {
 	id, groupID             int64
 	name                    string
+	currency                string
 	price, dailyAmount      float64
 	validityDays            int
 	dailyLimit, totalLimit  int
@@ -64,6 +69,7 @@ type mallSubscriptionPlan struct {
 	purchaseLimitUnit       string
 	purchaseLimitMode       string
 	purchaseLimitWindowSize int
+	updatedAt               time.Time
 }
 
 // MallService owns immediate internal-credit purchases. It intentionally uses
@@ -126,6 +132,7 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 	}
 
 	result := &MallPurchaseResult{ProductType: req.ProductType, ProductID: req.ProductID}
+	quoteVersion := ""
 	permanentChanged := false
 	temporaryChanged := false
 	var subscriptionGroupID int64
@@ -136,6 +143,10 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 		if err != nil {
 			return nil, err
 		}
+		if err := validateMallExpectedQuoteVersion(req.ExpectedQuoteVersion, mallCurrencyProductQuoteVersion(product)); err != nil {
+			return nil, err
+		}
+		quoteVersion = mallCurrencyProductQuoteVersion(product)
 		purchaseID, err := insertMallCurrencyPurchase(ctx, tx, userID, claim.recordID, product, balanceBefore)
 		if err != nil {
 			return nil, err
@@ -184,6 +195,10 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 		if err != nil {
 			return nil, err
 		}
+		if err := validateMallExpectedQuoteVersion(req.ExpectedQuoteVersion, mallSubscriptionPlanQuoteVersion(plan)); err != nil {
+			return nil, err
+		}
+		quoteVersion = mallSubscriptionPlanQuoteVersion(plan)
 		purchaseID, err := insertMallSubscriptionPurchase(ctx, tx, userID, claim.recordID, plan, balanceBefore)
 		if err != nil {
 			return nil, err
@@ -235,6 +250,8 @@ func (s *MallService) PurchaseAtomic(ctx context.Context, userID int64, req Mall
 	}
 	result.PermanentBalance = summary.PermanentBalance
 	result.TemporaryCreditAvailable = summary.TemporaryCreditAvailable
+	result.QuoteVersion = quoteVersion
+	result.PricedAt = &now
 	if _, err := tx.ExecContext(ctx, `
 UPDATE mall_purchases
 SET permanent_balance_after = $1, temporary_balance_after = $2
@@ -270,15 +287,15 @@ FOR UPDATE`, userID).Scan(&now, &balance); err != nil {
 	return now, balance, nil
 }
 
-func loadMallCurrencyProduct(ctx context.Context, tx *sql.Tx, productID int64) (*mallCurrencyProduct, error) {
+func loadMallCurrencyProduct(ctx context.Context, q mallQuerier, productID int64) (*mallCurrencyProduct, error) {
 	var product mallCurrencyProduct
 	var priceRaw, creditedRaw, paymentTypeRaw, creditedTypeRaw string
-	if err := tx.QueryRowContext(ctx, `
+	if err := q.QueryRowContext(ctx, `
 	SELECT id, name, payment_price::text, payment_credit_type, credited_type, credited_amount::text,
-       daily_purchase_limit, total_purchase_limit, purchase_limit_unit, purchase_limit_mode, purchase_limit_window_size
+       daily_purchase_limit, total_purchase_limit, purchase_limit_unit, purchase_limit_mode, purchase_limit_window_size, updated_at
 FROM currency_products
 WHERE id = $1 AND is_active = TRUE AND for_sale = TRUE
-	FOR SHARE`, productID).Scan(&product.id, &product.name, &priceRaw, &paymentTypeRaw, &creditedTypeRaw, &creditedRaw, &product.dailyLimit, &product.totalLimit, &product.purchaseLimitUnit, &product.purchaseLimitMode, &product.purchaseLimitWindowSize); err != nil {
+	FOR SHARE`, productID).Scan(&product.id, &product.name, &priceRaw, &paymentTypeRaw, &creditedTypeRaw, &creditedRaw, &product.dailyLimit, &product.totalLimit, &product.purchaseLimitUnit, &product.purchaseLimitMode, &product.purchaseLimitWindowSize, &product.updatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrMallProductNotAvailable
 		}
@@ -300,17 +317,17 @@ WHERE id = $1 AND is_active = TRUE AND for_sale = TRUE
 	return &product, nil
 }
 
-func loadMallSubscriptionPlan(ctx context.Context, tx *sql.Tx, planID int64) (*mallSubscriptionPlan, error) {
+func loadMallSubscriptionPlan(ctx context.Context, q mallQuerier, planID int64) (*mallSubscriptionPlan, error) {
 	var plan mallSubscriptionPlan
 	var priceRaw, dailyRaw, paymentTypeRaw, benefitTypeRaw, validityUnit string
-	if err := tx.QueryRowContext(ctx, `
-	SELECT id, name, group_id, price::text, payment_credit_type, benefit_type,
+	if err := q.QueryRowContext(ctx, `
+	SELECT id, name, group_id, price::text, payment_credit_type, benefit_type, currency,
        daily_temporary_credit_amount::text, validity_days, validity_unit,
-       daily_purchase_limit, total_purchase_limit, purchase_limit_unit, purchase_limit_mode, purchase_limit_window_size
+       daily_purchase_limit, total_purchase_limit, purchase_limit_unit, purchase_limit_mode, purchase_limit_window_size, updated_at
 FROM subscription_plans
 WHERE id = $1 AND for_sale = TRUE
-	FOR SHARE`, planID).Scan(&plan.id, &plan.name, &plan.groupID, &priceRaw, &paymentTypeRaw, &benefitTypeRaw, &dailyRaw,
-		&plan.validityDays, &validityUnit, &plan.dailyLimit, &plan.totalLimit, &plan.purchaseLimitUnit, &plan.purchaseLimitMode, &plan.purchaseLimitWindowSize); err != nil {
+	FOR SHARE`, planID).Scan(&plan.id, &plan.name, &plan.groupID, &priceRaw, &paymentTypeRaw, &benefitTypeRaw, &plan.currency, &dailyRaw,
+		&plan.validityDays, &validityUnit, &plan.dailyLimit, &plan.totalLimit, &plan.purchaseLimitUnit, &plan.purchaseLimitMode, &plan.purchaseLimitWindowSize, &plan.updatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrMallProductNotAvailable
 		}

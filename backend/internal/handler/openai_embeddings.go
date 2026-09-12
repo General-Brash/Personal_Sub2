@@ -120,6 +120,12 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 
 	// 分组利润控制：embeddings 文本入口请求级装门并固定 pricingAt。
 	embPricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
+	embPricingCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(embPricingCtx, apiKey, subject.UserID, service.DynamicRateModeText, pricingAt)
+	if dynamicRateErr != nil {
+		reqLog.Warn("openai_embeddings.dynamic_rate_admission_failed", zap.Error(dynamicRateErr))
+		h.errorResponse(c, http.StatusServiceUnavailable, "billing_error", "dynamic rate pricing unavailable")
+		return
+	}
 	c.Request = c.Request.WithContext(embPricingCtx)
 
 	for {

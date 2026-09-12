@@ -30,11 +30,19 @@ func RegisterUserRoutes(
 		{
 			user.GET("/check-in", h.Checkin.GetStatus)
 			user.POST("/check-in", h.Checkin.CheckIn)
+			user.GET("/check-in/preference", h.Checkin.GetPreference)
+			user.PUT("/check-in/preference", h.Checkin.UpdatePreference)
+			user.POST("/check-in/auto", h.Checkin.AutoCheckIn)
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
 			user.GET("/aff", h.User.GetAffiliate)
 			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)
+			if h.Invitation != nil {
+				user.GET("/invitations", h.Invitation.ListMyInvitations)
+				user.POST("/invitations/reservations", h.Invitation.CreateMyInvitationReservation)
+				user.POST("/invitations/reservations/:id/cancel", h.Invitation.CancelMyInvitationReservation)
+			}
 			user.POST("/account-bindings/email/send-code", h.User.SendEmailBindingCode)
 			user.POST("/account-bindings/email", h.User.BindEmailIdentity)
 			user.DELETE("/account-bindings/:provider", h.User.UnbindIdentity)
@@ -100,6 +108,9 @@ func RegisterUserRoutes(
 		{
 			groups.GET("/available", h.APIKey.GetAvailableGroups)
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
+			if h.DynamicRate != nil {
+				groups.GET("/:id/dynamic-rate", h.DynamicRate.MyStatus)
+			}
 		}
 
 		// 用户可用渠道（非管理员接口）

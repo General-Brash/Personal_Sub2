@@ -97,8 +97,13 @@ WHERE id = $1`, user.ID, settlementDueAt)
 	var checkinID int64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, `
 INSERT INTO daily_checkins
-    (user_id, checkin_date, streak_day, reward_day, reward_amount)
-VALUES ($1, CURRENT_DATE, 1, 1, 2)
+    (user_id, checkin_date, streak_day, reward_day, reward_amount,
+     business_period_key, period_start_at, period_end_at, base_reward_amount)
+VALUES ($1, CURRENT_DATE, 1, 1, 2,
+        'checkin:' || EXTRACT(EPOCH FROM (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Shanghai'))::bigint::text,
+        CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Shanghai',
+        (CURRENT_DATE + 1)::timestamp AT TIME ZONE 'Asia/Shanghai',
+        2)
 RETURNING id`, user.ID).Scan(&checkinID))
 	adminID := user.ID
 	tests := []struct {

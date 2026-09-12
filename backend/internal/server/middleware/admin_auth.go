@@ -17,8 +17,9 @@ func NewAdminAuthMiddleware(
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+	permissionServices ...*service.AdminPermissionService,
 ) AdminAuthMiddleware {
-	return AdminAuthMiddleware(adminAuth(authService, userService, settingService, auditService))
+	return AdminAuthMiddleware(adminAuth(authService, userService, settingService, auditService, permissionServices...))
 }
 
 // adminAuth 管理员认证中间件实现
@@ -30,7 +31,9 @@ func adminAuth(
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+	permissionServices ...*service.AdminPermissionService,
 ) gin.HandlerFunc {
+	permissionService := firstAdminPermissionService(permissionServices)
 	return func(c *gin.Context) {
 		// WebSocket upgrade requests cannot set Authorization headers in browsers.
 		// For admin WebSocket endpoints (e.g. Ops realtime), allow passing the JWT via
@@ -38,10 +41,10 @@ func adminAuth(
 		//   Sec-WebSocket-Protocol: sub2api-admin, jwt.<token>
 		if isWebSocketUpgradeRequest(c) {
 			if token := extractJWTFromWebSocketSubprotocol(c); token != "" {
-				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService) {
+				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService, permissionService) {
 					return
 				}
-				c.Next()
+				RequireMappedAdminPermission(permissionService)(c)
 				return
 			}
 		}
@@ -49,10 +52,10 @@ func adminAuth(
 		// 检查 x-api-key header（Admin API Key 认证）
 		apiKey := c.GetHeader("x-api-key")
 		if apiKey != "" {
-			if !validateAdminAPIKey(c, apiKey, settingService, userService) {
+			if !validateAdminAPIKey(c, apiKey, settingService, userService, permissionService) {
 				return
 			}
-			c.Next()
+			RequireMappedAdminPermission(permissionService)(c)
 			return
 		}
 
@@ -66,10 +69,10 @@ func adminAuth(
 					AbortWithError(c, 401, "UNAUTHORIZED", "Authorization required")
 					return
 				}
-				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService) {
+				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService, permissionService) {
 					return
 				}
-				c.Next()
+				RequireMappedAdminPermission(permissionService)(c)
 				return
 			}
 		}
@@ -123,6 +126,7 @@ func validateAdminAPIKey(
 	key string,
 	settingService *service.SettingService,
 	userService *service.UserService,
+	permissionService *service.AdminPermissionService,
 ) bool {
 	storedKey, err := settingService.GetAdminAPIKey(c.Request.Context())
 	if err != nil {
@@ -136,10 +140,27 @@ func validateAdminAPIKey(
 		return false
 	}
 
-	// 获取真实的管理员用户
-	admin, err := userService.GetFirstAdmin(c.Request.Context())
-	if err != nil {
-		AbortWithError(c, 500, "INTERNAL_ERROR", "No admin user found")
+	// Legacy global key must resolve to an explicit principal + scopes in enforce mode.
+	principal, principalOK := attachLegacyAdminAPIKeyPrincipal(c, permissionService)
+	if !principalOK {
+		return false
+	}
+
+	var admin *service.User
+	if principal != nil {
+		admin, err = userService.GetByID(c.Request.Context(), principal.UserID)
+		if err != nil {
+			AbortWithError(c, 401, "USER_NOT_FOUND", "Admin principal user not found")
+			return false
+		}
+	} else {
+		admin, err = userService.GetFirstAdmin(c.Request.Context())
+		if err != nil {
+			AbortWithError(c, 500, "INTERNAL_ERROR", "No admin user found")
+			return false
+		}
+	}
+	if !SetAdminPrincipal(c, permissionService, principal) {
 		return false
 	}
 
@@ -161,7 +182,9 @@ func validateJWTForAdmin(
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+	permissionServices ...*service.AdminPermissionService,
 ) bool {
+	permissionService := firstAdminPermissionService(permissionServices)
 	// 验证 JWT token
 	claims, err := authService.ValidateToken(token)
 	if err != nil {
@@ -208,6 +231,9 @@ func validateJWTForAdmin(
 		Concurrency: user.Concurrency,
 	})
 	c.Set(string(ContextKeyUserRole), user.Role)
+	if !attachJWTAdminPrincipal(c, permissionService, user) {
+		return false
+	}
 	c.Set(ContextKeyAuthEmail, user.Email)
 	c.Set(ContextKeySessionID, claims.SessionID)
 	c.Set("auth_method", "jwt")

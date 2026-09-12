@@ -59,6 +59,7 @@
                 </p>
               </div>
             </div>
+            <PaymentUtilityLinks />
             <section v-if="currencyProducts.length" class="card p-5 sm:p-6" data-test="currency-products">
               <div class="mb-4">
                 <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('commerce.currencyProducts.title') }}</h2>
@@ -357,6 +358,8 @@
       :expected-spend="purchaseConfirmExpectedSpend"
       :expected-receive="purchaseConfirmExpectedReceive"
       :limits="purchaseConfirmLimits"
+      :quote-version="purchaseQuote?.quote_version"
+      :priced-at="purchaseQuote?.priced_at"
       :submitting="submitting"
       @close="closePurchaseConfirm"
       @confirm="submitConfirmedPurchase"
@@ -372,7 +375,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePaymentStore } from '@/stores/payment'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { useAppStore } from '@/stores'
-import { paymentAPI } from '@/api/payment'
+import { paymentAPI, type MallQuote } from '@/api/payment'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { compareDecimalAmounts, formatMoneyDisplay, multiplyDecimalAmount } from '@/utils/format'
@@ -396,6 +399,7 @@ import {
 import { platformAccentBarClass, platformBadgeLightClass, platformBadgeClass, platformTextClass, platformLabel } from '@/utils/platformColors'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
+import PaymentUtilityLinks from '@/components/payment/PaymentUtilityLinks.vue'
 import ProductPurchaseConfirmDialog from '@/components/payment/ProductPurchaseConfirmDialog.vue'
 import PurchaseLimitBadge from '@/components/payment/PurchaseLimitBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -442,6 +446,8 @@ const selectedPlan = ref<SubscriptionPlan | null>(null)
 const selectedCurrencyProduct = ref<CurrencyProduct | null>(null)
 const previewImage = ref('')
 const confirmingPurchase = ref<'currency' | 'subscription' | null>(null)
+const purchaseQuote = ref<MallQuote | null>(null)
+let purchaseQuoteSequence = 0
 const legacyExternalCheckoutEnabled = false
 
 const paymentPhase = ref<'select' | 'paying'>('select')
@@ -715,24 +721,22 @@ const purchaseConfirmLimits = computed<PurchaseLimitFields>(() => confirmingPurc
   ? selectedCurrencyProduct.value ?? {}
   : selectedPlan.value ?? {})
 const purchaseConfirmExpectedSpend = computed(() => {
-  if (confirmingPurchase.value === 'currency') {
-    const product = selectedCurrencyProduct.value
-    return `$${formatMoneyDisplay(product?.payment_price ?? 0)} ${creditTypeLabel(product?.payment_credit_type)}`
-  }
-  const plan = selectedPlan.value
-  return `$${formatMoneyDisplay(plan?.price ?? 0)} ${creditTypeLabel(plan?.payment_credit_type)}`
+  const quote = purchaseQuote.value
+  if (!quote?.quote_version) return '—'
+  const price = Number(quote.price)
+  return `$${Number.isFinite(price) ? formatMoneyDisplay(price) : '—'} ${creditTypeLabel(quote.payment_credit_type)}`
 })
 const purchaseConfirmExpectedReceive = computed(() => {
-  if (confirmingPurchase.value === 'currency') {
-    const product = selectedCurrencyProduct.value
-    return product
-      ? `$${formatMoneyDisplay(currencyProductCreditedAmount(product))} ${creditTypeLabel(product.credited_type)}`
-      : ''
+  const quote = purchaseQuote.value
+  if (!quote?.quote_version) return ''
+  if (quote.product_type === 'currency') {
+    const amount = Number(quote.credited_amount)
+    return `$${Number.isFinite(amount) ? formatMoneyDisplay(amount) : '—'} ${creditTypeLabel(quote.credited_type)}`
   }
   if (!selectedPlan.value) return ''
+  const days = quote.validity_days ?? selectedPlan.value.validity_days
   if (selectedPlan.value.benefit_type === 'daily_temporary_credit') {
     const daily = selectedPlan.value.daily_temporary_credit_amount ?? 0
-    const days = selectedPlan.value.validity_days
     return t('commerce.subscription.dailyReceiveSummary', {
       daily: formatMoneyDisplay(daily),
       days,
@@ -740,13 +744,14 @@ const purchaseConfirmExpectedReceive = computed(() => {
     })
   }
   return t('payment.purchaseConfirm.subscriptionReceive', {
-    validity: planValiditySuffix.value,
+    validity: days === selectedPlan.value.validity_days ? planValiditySuffix.value : `${days}${t('payment.days')}`,
     rate: Number((selectedPlan.value.rate_multiplier ?? 1).toPrecision(10)),
   })
 })
 const purchaseConfirmPaymentMethod = computed(() => {
-  const item = confirmingPurchase.value === 'currency' ? selectedCurrencyProduct.value : selectedPlan.value
-  return t('commerce.purchase.internalCredit', { type: creditTypeLabel(item?.payment_credit_type) })
+  const creditType = purchaseQuote.value?.payment_credit_type
+    ?? (confirmingPurchase.value === 'currency' ? selectedCurrencyProduct.value?.payment_credit_type : selectedPlan.value?.payment_credit_type)
+  return t('commerce.purchase.internalCredit', { type: creditTypeLabel(creditType) })
 })
 
 // Check if an amount fits a method's [min, max]. 0 = no limit.
@@ -958,31 +963,56 @@ function planPeakRateLabel(plan: SubscriptionPlan): string {
   return formatPeakRateWindow(plan, serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset))
 }
 
-function selectCurrencyProduct(product: CurrencyProduct): void {
+async function loadPurchaseQuote(kind: 'currency' | 'subscription', productId: number): Promise<boolean> {
+  const sequence = ++purchaseQuoteSequence
+  purchaseQuote.value = null
+  try {
+    const response = await paymentAPI.getMallQuote(kind, productId)
+    if (sequence !== purchaseQuoteSequence) return false
+    if (!response.data?.quote_version) {
+      appStore.showError(t('commerce.purchase.failed'))
+      return false
+    }
+    purchaseQuote.value = response.data
+    return true
+  } catch (err: unknown) {
+    if (sequence === purchaseQuoteSequence) {
+      appStore.showError(mallPurchaseErrorMessage(err))
+    }
+    return false
+  }
+}
+
+async function beginPurchase(kind: 'currency' | 'subscription', productId: number): Promise<void> {
+  if (!(await loadPurchaseQuote(kind, productId))) return
+  confirmingPurchase.value = kind
+}
+
+async function selectCurrencyProduct(product: CurrencyProduct): Promise<void> {
   if (currencyProductDisabledReason(product)) return
   selectedCurrencyProduct.value = product
   selectedPlan.value = null
   amount.value = null
   errorMessage.value = ''
-  confirmingPurchase.value = 'currency'
+  await beginPurchase('currency', product.id)
 }
 
-function selectPlan(plan: SubscriptionPlan) {
+async function selectPlan(plan: SubscriptionPlan) {
   if (subscriptionDisabledReason(plan)) return
   selectedPlan.value = plan
   selectedCurrencyProduct.value = null
   errorMessage.value = ''
-  confirmingPurchase.value = 'subscription'
+  await beginPurchase('subscription', plan.id)
 }
 
-function selectPlanFromModal(plan: SubscriptionPlan) {
+async function selectPlanFromModal(plan: SubscriptionPlan) {
   if (subscriptionDisabledReason(plan)) return
   showRenewalModal.value = false
   renewGroupId.value = null
   selectedPlan.value = plan
   selectedCurrencyProduct.value = null
   errorMessage.value = ''
-  confirmingPurchase.value = 'subscription'
+  await beginPurchase('subscription', plan.id)
 }
 
 function closeRenewalModal() {
@@ -993,7 +1023,7 @@ function closeRenewalModal() {
 async function handleSubmitRecharge() {
   if (!canSubmit.value || submitting.value) return
   if (selectedCurrencyProduct.value) {
-    confirmingPurchase.value = 'currency'
+    await beginPurchase('currency', selectedCurrencyProduct.value.id)
     return
   }
   await createOrder(rechargePaymentAmount.value, 'balance')
@@ -1001,7 +1031,7 @@ async function handleSubmitRecharge() {
 
 async function confirmSubscribe() {
   if (!selectedPlan.value || submitting.value) return
-  confirmingPurchase.value = 'subscription'
+  await beginPurchase('subscription', selectedPlan.value.id)
 }
 
 async function submitConfirmedPurchase() {
@@ -1009,11 +1039,16 @@ async function submitConfirmedPurchase() {
   if (!kind || submitting.value) return
   const item = kind === 'currency' ? selectedCurrencyProduct.value : selectedPlan.value
   if (!item || internalPurchaseDisabledReason(item)) return
+  if (!purchaseQuote.value?.quote_version) {
+    appStore.showError(t('commerce.purchase.failed'))
+    confirmingPurchase.value = null
+    return
+  }
 
   submitting.value = true
   try {
     const response = await paymentAPI.purchaseMallProduct(
-      { product_type: kind, product_id: item.id },
+      { product_type: kind, product_id: item.id, expected_quote_version: purchaseQuote.value.quote_version },
       mallPurchaseIdempotencyKey(kind, item.id),
     )
     checkout.value.balance = {
@@ -1024,11 +1059,19 @@ async function submitConfirmedPurchase() {
     decrementPurchaseRemaining(item)
     appStore.showSuccess(t('commerce.purchase.succeeded'))
     confirmingPurchase.value = null
+    purchaseQuote.value = null
     selectedCurrencyProduct.value = null
     selectedPlan.value = null
     void Promise.resolve(authStore.refreshUser()).catch(() => {})
     if (kind === 'subscription') void Promise.resolve(subscriptionStore.fetchActiveSubscriptions(true)).catch(() => {})
   } catch (err: unknown) {
+    const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : ''
+    if (code === 'MALL_QUOTE_CHANGED') {
+      // The old quote/key is terminal. Refresh the server quote and require a
+      // fresh explicit confirmation under a new idempotency key.
+      clearMallPurchaseIdempotencyKey(kind, item.id)
+      await loadPurchaseQuote(kind, item.id)
+    }
     appStore.showError(mallPurchaseErrorMessage(err))
   } finally {
     submitting.value = false
@@ -1037,13 +1080,18 @@ async function submitConfirmedPurchase() {
 
 function closePurchaseConfirm(): void {
   if (submitting.value) return
+  if (confirmingPurchase.value) {
+    const item = confirmingPurchase.value === 'currency' ? selectedCurrencyProduct.value : selectedPlan.value
+    if (item) clearMallPurchaseIdempotencyKey(confirmingPurchase.value, item.id)
+  }
   confirmingPurchase.value = null
+  purchaseQuote.value = null
   selectedCurrencyProduct.value = null
   selectedPlan.value = null
 }
 
 function mallPurchaseStorageKey(kind: 'currency' | 'subscription', id: number): string {
-  return `mall-purchase-${kind}-${id}-idempotency-key`
+  return `mall-purchase-user-${authStore.user?.id ?? 'unknown'}-${kind}-${id}-idempotency-key`
 }
 
 function mallPurchaseIdempotencyKey(kind: 'currency' | 'subscription', id: number): string {

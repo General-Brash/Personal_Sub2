@@ -69,6 +69,11 @@ RETURNING id, user_id, source, checkin_id, amount, remaining_amount, available_a
 	if err != nil {
 		return nil, fmt.Errorf("create temporary credit grant: %w", err)
 	}
+	if grant.ExpiryPolicyVersion != "" {
+		if _, err := tx.ExecContext(ctx, `UPDATE temporary_credit_grants SET expiry_policy_version=$2 WHERE id=$1`, out.ID, grant.ExpiryPolicyVersion); err != nil {
+			return nil, err
+		}
+	}
 	out.Source = service.TemporaryCreditSource(source)
 	out.CheckinID = nullableInt64Ptr(checkinID)
 	out.GrantedBy = nullableInt64Ptr(grantedBy)

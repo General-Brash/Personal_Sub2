@@ -442,6 +442,31 @@ func (h *PaymentHandler) GetMallBalance(c *gin.Context) {
 	response.Success(c, result)
 }
 
+// GetMallQuote returns the read-only product quote used by the confirmation
+// dialog. GET /api/v1/mall/quote?product_type=currency&product_id=1
+func (h *PaymentHandler) GetMallQuote(c *gin.Context) {
+	subject, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	if h.mallService == nil {
+		response.ErrorFrom(c, infraerrors.ServiceUnavailable("MALL_SERVICE_UNAVAILABLE", "mall service is unavailable"))
+		return
+	}
+	productType := service.MallProductType(strings.TrimSpace(c.Query("product_type")))
+	productID, err := strconv.ParseInt(strings.TrimSpace(c.Query("product_id")), 10, 64)
+	if err != nil || productID <= 0 {
+		response.BadRequest(c, "Invalid product_id")
+		return
+	}
+	quote, err := h.mallService.GetMallQuote(c.Request.Context(), subject.UserID, productType, productID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, quote)
+}
+
 // PurchaseMallProduct atomically settles one internal-credit product.
 // POST /api/v1/mall/purchases
 func (h *PaymentHandler) PurchaseMallProduct(c *gin.Context) {
@@ -462,7 +487,15 @@ func (h *PaymentHandler) PurchaseMallProduct(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
-	executeUserAtomicIdempotentJSON(c, "user.mall.purchase", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context, claim *service.IdempotencyAtomicClaim) (any, error) {
+	// Bind the confirmed quote to the idempotency fingerprint. A replayed key
+	// must not be able to charge a different price than the one the user
+	// confirmed; after a genuine quote conflict the client starts a new key.
+	idempotencyPayload := struct {
+		ProductType          service.MallProductType `json:"product_type"`
+		ProductID            int64                   `json:"product_id"`
+		ExpectedQuoteVersion string                  `json:"expected_quote_version,omitempty"`
+	}{ProductType: req.ProductType, ProductID: req.ProductID, ExpectedQuoteVersion: strings.TrimSpace(req.ExpectedQuoteVersion)}
+	executeUserAtomicIdempotentJSON(c, "user.mall.purchase", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context, claim *service.IdempotencyAtomicClaim) (any, error) {
 		return h.mallService.PurchaseAtomic(ctx, subject.UserID, req, claim)
 	})
 }

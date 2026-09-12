@@ -123,6 +123,17 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 		return
 	}
 
+	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
+	pricingCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(pricingCtx, apiKey, apiKey.UserID, service.DynamicRateModeText, pricingAt)
+	if dynamicRateErr != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{
+			"type":    "billing_error",
+			"message": "dynamic rate pricing unavailable",
+		}})
+		return
+	}
+	c.Request = c.Request.WithContext(pricingCtx)
+
 	failedAccounts := make(map[int64]struct{})
 	var account *service.Account
 	var accountReleaseFunc func()
@@ -247,6 +258,7 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 			RequestPayloadHash: requestPayloadHash,
 			APIKeyService:      h.apiKeyService,
 			QuotaPlatform:      quotaPlatform,
+			PricingAt:          pricingAt,
 		}); err != nil {
 			logger.L().With(
 				zap.String("component", "handler.gateway.web_search"),
