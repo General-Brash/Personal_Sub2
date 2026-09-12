@@ -7,22 +7,25 @@ import (
 )
 
 type User struct {
-	ID             int64
-	Email          string
-	Username       string
-	Notes          string
-	AvatarURL      string
-	AvatarSource   string
-	AvatarMIME     string
-	AvatarByteSize int
-	AvatarSHA256   string
-	PasswordHash   string
-	Role           string
-	Balance        float64
-	FrozenBalance  float64
-	Concurrency    int
-	Status         string
-	AllowedGroups  []int64
+	ID                 int64
+	Email              string
+	Username           string
+	Notes              string
+	AvatarURL          string
+	AvatarSource       string
+	AvatarMIME         string
+	AvatarByteSize     int
+	AvatarSHA256       string
+	PasswordHash       string
+	Role               string
+	Balance            float64
+	FrozenBalance      float64
+	Concurrency        int
+	Status             string
+	AllowedGroups      []int64
+	EntitlementTier    string
+	EntitlementVersion int64
+	PermissionVersion  int64
 	// RestrictPublicGroups limits non-exclusive group bindings to AllowedGroups.
 	RestrictPublicGroups bool
 	TokenVersion         int64 // Incremented on password change to invalidate existing tokens
@@ -67,7 +70,11 @@ type User struct {
 }
 
 func (u *User) IsAdmin() bool {
-	return u.Role == RoleAdmin
+	return u.Role == RoleAdmin || u.Role == RoleSuperAdmin
+}
+
+func (u *User) IsSuperAdmin() bool {
+	return u.Role == RoleSuperAdmin
 }
 
 func (u *User) IsActive() bool {

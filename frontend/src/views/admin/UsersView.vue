@@ -28,6 +28,7 @@
                 v-model="filters.role"
                 :options="[
                   { value: '', label: t('admin.users.allRoles') },
+                  { value: 'super_admin', label: '超级管理员' },
                   { value: 'admin', label: t('admin.users.admin') },
                   { value: 'user', label: t('admin.users.user') }
                 ]"
@@ -252,6 +253,8 @@
               {{ t('admin.users.bulkLimits.action', { count: selectedCount }) }}
             </button>
 
+            <button v-if="selectedCount > 0" type="button" class="btn btn-secondary" @click="entitlementTargets = [...selectedIds]; showUserEntitlementPanel = true">批量消费权益 ({{selectedCount}})</button>
+            <button type="button" class="btn btn-secondary" @click="showInvitationAdmin = true">邀请管理</button>
             <!-- Create User Button (full width on mobile, auto width on desktop) -->
             <button @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
               <Icon name="plus" size="md" class="mr-2" />
@@ -325,9 +328,9 @@
             </div>
           </template>
 
-          <template #cell-role="{ value }">
+          <template #cell-role="{ value, row }">
             <span :class="['badge', value === 'admin' ? 'badge-purple' : 'badge-gray']">
-              {{ t('admin.users.roles.' + value) }}
+              {{ value === 'super_admin' ? '超级管理员' : value === 'user' && row.entitlement_tier === 'premium' ? '优质用户' : t('admin.users.roles.' + value) }}
             </span>
           </template>
 
@@ -690,6 +693,22 @@
                 {{ t('admin.users.groups') }}
               </button>
 
+
+              <!-- W03/W04: read-only until real allowlists and DB tests pass -->
+              <button
+                @click="handleAdminPermissions(user); closeActionMenu()"
+                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+              >
+                <Icon name="cog" size="sm" class="text-gray-400" :stroke-width="2" />
+                管理员权限
+              </button>
+              <button
+                @click="handleUserEntitlement(user); closeActionMenu()"
+                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+              >
+                <Icon name="dollar" size="sm" class="text-gray-400" :stroke-width="2" />
+                消费权益
+              </button>
               <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
 
               <!-- Deposit -->
@@ -764,10 +783,13 @@
     />
     <UserApiKeysModal :show="showApiKeysModal" :user="viewingUser" @close="closeApiKeysModal" />
     <UserAllowedGroupsModal :show="showAllowedGroupsModal" :user="allowedGroupsUser" @close="closeAllowedGroupsModal" @success="loadUsers" />
+    <AdminPermissionsPanel :show="showAdminPermissionsPanel" :user-id="adminPermissionsUser?.id" @close="closeAdminPermissionsPanel" @changed="loadUsers" />
+    <UserEntitlementPanel :show="showUserEntitlementPanel" :user-id="entitlementUser?.id" :user-ids="entitlementTargets" @close="closeUserEntitlementPanel" @changed="loadUsers" />
     <UserBalanceModal :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" @close="closeBalanceModal" @success="loadUsers" />
     <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
     <GroupReplaceModal :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
     <UserAttributesConfigModal :show="showAttributesModal" @close="handleAttributesModalClose" />
+    <BaseDialog :show="showInvitationAdmin" title="邀请管理" width="wide" @close="showInvitationAdmin = false"><InvitationAdministrationCard /></BaseDialog>
   </AppLayout>
 </template>
 
@@ -807,11 +829,16 @@ import BulkEditUserModal from '@/components/admin/user/BulkEditUserModal.vue'
 import UserPlatformQuotaModal from '@/components/admin/user/UserPlatformQuotaModal.vue'
 import UserApiKeysModal from '@/components/admin/user/UserApiKeysModal.vue'
 import UserAllowedGroupsModal from '@/components/admin/user/UserAllowedGroupsModal.vue'
+import AdminPermissionsPanel from '@/components/admin/AdminPermissionsPanel.vue'
+import UserEntitlementPanel from '@/components/admin/UserEntitlementPanel.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import InvitationAdministrationCard from '@/components/admin/settings/InvitationAdministrationCard.vue'
 import UserBalanceModal from '@/components/admin/user/UserBalanceModal.vue'
 import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
 import GroupReplaceModal from '@/components/admin/user/GroupReplaceModal.vue'
 
 const appStore = useAppStore()
+const showInvitationAdmin = ref(false)
 
 // Generate dynamic attribute columns from enabled definitions
 const attributeColumns = computed<Column[]>(() =>
@@ -1514,6 +1541,11 @@ const handleClickOutside = (event: MouseEvent) => {
 
 // Allowed groups modal state
 const showAllowedGroupsModal = ref(false)
+const showAdminPermissionsPanel = ref(false)
+const adminPermissionsUser = ref<AdminUser | null>(null)
+const showUserEntitlementPanel = ref(false)
+const entitlementUser = ref<AdminUser | null>(null)
+const entitlementTargets = ref<number[]>([])
 const allowedGroupsUser = ref<AdminUser | null>(null)
 
 // Expanded group dropdown state (click to show exclusive groups list)
@@ -1746,6 +1778,27 @@ const closeApiKeysModal = () => {
 const handleAllowedGroups = (user: AdminUser) => {
   allowedGroupsUser.value = user
   showAllowedGroupsModal.value = true
+}
+
+const handleAdminPermissions = (user: AdminUser) => {
+  adminPermissionsUser.value = user
+  showAdminPermissionsPanel.value = true
+}
+
+const closeAdminPermissionsPanel = () => {
+  showAdminPermissionsPanel.value = false
+  adminPermissionsUser.value = null
+}
+
+const handleUserEntitlement = (user: AdminUser) => {
+ entitlementTargets.value = [user.id]
+  entitlementUser.value = user
+  showUserEntitlementPanel.value = true
+}
+
+const closeUserEntitlementPanel = () => {
+  showUserEntitlementPanel.value = false
+  entitlementUser.value = null
 }
 
 const closeAllowedGroupsModal = () => {

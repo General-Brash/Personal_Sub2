@@ -70,6 +70,58 @@ export interface BankLedgerPage {
   pages: number
 }
 
+export interface BankExchangeExpiryPolicy {
+  enabled: boolean
+  fee_bps: number
+  fee_rate: string
+  timezone: string
+  local_time: string
+  policy_version: number
+  updated_at: string
+  default_fee_bps: number
+  new_grants_only: boolean
+}
+
+export interface BankExchangeQuoteConfirmation {
+  policy_version: number
+  fee_bps: number
+  expires_at?: string
+}
+
+export interface BankExchangeConfirmation {
+  policy_version?: number
+  quote?: BankExchangeQuoteConfirmation
+}
+
+export interface BankExchangeCommitment {
+  grant_id: number
+  principal_permanent: BankAmount
+  generated_temporary: BankAmount
+  remaining_temporary: BankAmount
+  refundable_principal_estimate: BankAmount
+  fee_estimate: BankAmount
+  net_refund_estimate: BankAmount
+  fee_bps: number
+  policy_version: number
+  eligibility: string
+  status: string
+  expires_at: string
+}
+
+export interface BankExchangeSettlement {
+  id: number
+  event_id: string
+  grant_id: number
+  expired_remaining: BankAmount
+  refundable_principal: BankAmount
+  fee_amount: BankAmount
+  net_refund: BankAmount
+  status: string
+  reason: string
+  policy_version: number
+  settled_at: string
+}
+
 export interface BankStatus {
   permanent_balance: BankAmount
   temporary_credit_available: BankAmount
@@ -80,6 +132,9 @@ export interface BankStatus {
   policy: BankPolicy
   ledger: BankLedgerItem[]
   exchange_progress?: BankExchangeProgress | null
+  exchange_expiry_policy?: BankExchangeExpiryPolicy | null
+  exchange_commitments?: BankExchangeCommitment[]
+  exchange_settlements?: BankExchangeSettlement[]
 }
 
 export interface BankAdvanceResult {
@@ -101,6 +156,10 @@ export interface BankExchangeResult {
   daily_permanent_exchanged?: BankAmount
   exchange_progress?: BankExchangeProgress | null
   tier_allocations?: Array<{ tier_index: number; permanent_amount: BankAmount; rate: BankAmount; temporary_amount: BankAmount }>
+  refund_eligible?: boolean
+  refund_fee_bps?: number
+  refund_policy_version?: number
+  exchange_expiry_policy?: BankExchangeExpiryPolicy | null
 }
 
 export type BankRepaySource = 'temporary' | 'permanent'
@@ -142,10 +201,11 @@ export async function requestBankAdvance(
 export async function exchangePermanentForTemporary(
   permanentAmount: BankAmount,
   idempotencyKey: string,
+  confirmation?: BankExchangeConfirmation,
 ): Promise<BankExchangeResult> {
   const response = await apiClient.post<BankExchangeResult>(
     '/bank/exchange',
-    { amount: permanentAmount },
+    { amount: permanentAmount, ...confirmation },
     { headers: { 'Idempotency-Key': idempotencyKey } },
   )
   return response.data
@@ -190,6 +250,23 @@ export async function getBankTransactions(params?: { page?: number; user_id?: nu
   return response.data
 }
 
+export async function getBankExchangeExpirySettings(): Promise<BankExchangeExpiryPolicy> {
+  const response = await apiClient.get<BankExchangeExpiryPolicy>('/admin/settings/bank/exchange-expiry')
+  return response.data
+}
+
+export async function updateBankExchangeExpirySettings(
+  policy: BankExchangeExpiryPolicy,
+  idempotencyKey: string,
+): Promise<BankExchangeExpiryPolicy> {
+  const response = await apiClient.put<BankExchangeExpiryPolicy>(
+    '/admin/settings/bank/exchange-expiry',
+    policy,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  )
+  return response.data
+}
+
 export const bankAPI = {
   getStatus: getBankStatus,
   getLedger: getBankLedger,
@@ -198,5 +275,7 @@ export const bankAPI = {
   repay: repayBankDebt,
   getSettings: getBankSettings,
   updateSettings: updateBankSettings,
+  getExchangeExpirySettings: getBankExchangeExpirySettings,
+  updateExchangeExpirySettings: updateBankExchangeExpirySettings,
   getTransactions: getBankTransactions,
 }

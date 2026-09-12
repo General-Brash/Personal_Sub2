@@ -22,6 +22,7 @@ const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
 const showSuccess = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
+const getMallQuote = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
 const appState = vi.hoisted(() => ({
   cachedPublicSettings: { payment_enabled: true } as { payment_enabled?: boolean },
@@ -83,6 +84,7 @@ vi.mock('@/stores', () => ({
 vi.mock('@/api/payment', () => ({
   paymentAPI: {
     getCheckoutInfo,
+    getMallQuote,
     purchaseMallProduct,
   },
 }))
@@ -100,6 +102,21 @@ const PurchaseConfirmStub = {
 
 beforeEach(() => {
   appState.cachedPublicSettings = { payment_enabled: true }
+  getMallQuote.mockReset().mockImplementation(async (kind: 'currency'|'subscription', id: number) => {
+    const checkout = (await getCheckoutInfo.mock.results.at(-1)?.value)?.data
+    const item = (kind === 'currency' ? checkout?.currency_products : checkout?.plans)?.find((product: { id: number }) => product.id === id)
+    if (!item) throw new Error('quote fixture product not found')
+    const unit = String(item.validity_unit || 'day').replace(/s$/, '')
+    const validity = (item.validity_days ?? 0) * (unit === 'week' ? 7 : unit === 'month' ? 30 : 1)
+    return { data: {
+      product_type: kind, product_id: id, name: item.name,
+      price: String(item.payment_price ?? item.price), currency: 'USD',
+      payment_credit_type: item.payment_credit_type ?? 'permanent',
+      credited_type: item.credited_type, credited_amount: String(item.credited_amount ?? item.credited_permanent_amount ?? 0),
+      validity_days: validity, benefit_type: item.benefit_type,
+      quote_version: `fixture-${kind}-${id}`, priced_at: '2026-09-12T00:00:00Z',
+    } }
+  })
 })
 
 function checkoutInfoFixture(overrides: Partial<CheckoutInfoResponse> = {}) {
@@ -350,6 +367,7 @@ describe('PaymentView unified store layout', () => {
     expect(currencyWrapper.get('#store-panel-recharge').attributes('hidden')).toBeUndefined()
     expect(currencyWrapper.get('#store-panel-subscription').attributes('hidden')).toBeUndefined()
     await currencyWrapper.get('[data-test="currency-product-21"]').trigger('click')
+    await flushPromises()
     expect(currencyWrapper.get('[data-test="purchase-confirm-dialog"]').exists()).toBe(true)
     currencyWrapper.unmount()
 
@@ -362,6 +380,24 @@ describe('PaymentView unified store layout', () => {
 })
 
 describe('PaymentView internal subscription purchases', () => {
+  it('does not open confirmation or purchase when the authoritative quote fails', async () => {
+    getMallQuote.mockRejectedValueOnce(new Error('quote unavailable'))
+    const wrapper = await mountSubscriptionConfirm({ checkout: { methods: {} }, plan: { price: 12 } })
+    expect(wrapper.find('[data-test="purchase-confirm-dialog"]').exists()).toBe(false)
+    expect(purchaseMallProduct).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalled()
+  })
+
+  it('requires a second explicit confirmation after a quote conflict', async () => {
+    const wrapper = await mountSubscriptionConfirm({ plan: { price: 12 } })
+    purchaseMallProduct.mockRejectedValueOnce({ code: 'MALL_QUOTE_CHANGED' })
+    await wrapper.get('[data-test="purchase-confirm-submit"]').trigger('click')
+    await flushPromises()
+    expect(purchaseMallProduct).toHaveBeenCalledTimes(1)
+    expect(getMallQuote).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="purchase-confirm-dialog"]').exists()).toBe(true)
+  })
+
   it('purchases only after final confirmation without requiring a provider', async () => {
     const wrapper = await mountSubscriptionConfirm({
       checkout: { methods: {} },
@@ -386,7 +422,7 @@ describe('PaymentView internal subscription purchases', () => {
     await flushPromises()
 
     expect(purchaseMallProduct).toHaveBeenCalledWith(
-      { product_type: 'subscription', product_id: 7 },
+      { product_type: 'subscription', product_id: 7, expected_quote_version: 'fixture-subscription-7' },
       expect.stringMatching(/^mall-subscription-7-/),
     )
     expect(createOrder).not.toHaveBeenCalled()
@@ -394,8 +430,8 @@ describe('PaymentView internal subscription purchases', () => {
 
   it.each([
     ['days', 2, '2payment.days'],
-    ['weeks', 2, '2payment.weeks'],
-    ['months', 2, '2payment.months'],
+    ['weeks', 2, '14payment.days'],
+    ['months', 2, '60payment.days'],
   ])('shows backend-equivalent validity for legacy %s plans', async (validityUnit, validityDays, expected) => {
     const wrapper = await mountSubscriptionConfirm({
       plan: {
@@ -494,13 +530,14 @@ describe('PaymentView payment recovery', () => {
     await flushPromises()
 
     await wrapper.get('[data-test="currency-product-12"]').trigger('click')
+    await flushPromises()
     expect(purchaseMallProduct).not.toHaveBeenCalled()
     expect(wrapper.get('[data-test="purchase-confirm-dialog"]').exists()).toBe(true)
     await wrapper.get('[data-test="purchase-confirm-submit"]').trigger('click')
     await flushPromises()
 
     expect(purchaseMallProduct).toHaveBeenCalledWith(
-      { product_type: 'currency', product_id: 12 },
+      { product_type: 'currency', product_id: 12, expected_quote_version: 'fixture-currency-12' },
       expect.stringMatching(/^mall-currency-12-/),
     )
     expect(createOrder).not.toHaveBeenCalled()
@@ -576,6 +613,7 @@ describe('PaymentView payment recovery', () => {
     })
     await flushPromises()
     await wrapper.get('[data-test="currency-product-30"]').trigger('click')
+    await flushPromises()
 
     const dialog = wrapper.getComponent(PurchaseConfirmStub)
     expect(dialog.props('expectedSpend')).toContain(`commerce.creditType.${paymentCreditType}`)

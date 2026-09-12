@@ -56,6 +56,10 @@ type BankPolicy struct {
 	EarlyRepayTemporaryRatio        float64            `json:"early_repay_temporary_ratio"`
 	EarlyRepayPermanentRatio        float64            `json:"early_repay_permanent_ratio"`
 	ExchangeTiers                   []BankExchangeTier `json:"exchange_tiers,omitempty"`
+	exchangeExpiryRefundEnabled     bool
+	exchangeExpiryRefundFeeBPS      int
+	exchangeExpiryPolicyVersion     int64
+	exchangeExpiryLocalTime         string
 }
 
 func DefaultBankPolicy() BankPolicy {
@@ -68,6 +72,10 @@ func DefaultBankPolicy() BankPolicy {
 		UnusedAdvanceDebtReductionRatio: 0.75,
 		EarlyRepayTemporaryRatio:        1,
 		EarlyRepayPermanentRatio:        2,
+		exchangeExpiryRefundEnabled:     false,
+		exchangeExpiryRefundFeeBPS:      1000,
+		exchangeExpiryPolicyVersion:     1,
+		exchangeExpiryLocalTime:         "00:00",
 	}
 }
 
@@ -253,15 +261,18 @@ type BankExchangeProgress struct {
 }
 
 type BankStatus struct {
-	PermanentBalance                 string               `json:"permanent_balance"`
-	TemporaryCreditAvailable         string               `json:"temporary_credit_available"`
-	TemporaryCreditEarliestExpiresAt *time.Time           `json:"temporary_credit_earliest_expires_at"`
-	TemporaryDebt                    string               `json:"temporary_debt"`
-	TemporaryDebtDueAt               *time.Time           `json:"temporary_debt_due_at"`
-	ActiveAdvance                    *BankAdvanceStatus   `json:"active_advance"`
-	Policy                           BankPolicyDTO        `json:"policy"`
-	Ledger                           []BankLedgerItem     `json:"ledger"`
-	ExchangeProgress                 BankExchangeProgress `json:"exchange_progress"`
+	PermanentBalance                 string                       `json:"permanent_balance"`
+	TemporaryCreditAvailable         string                       `json:"temporary_credit_available"`
+	TemporaryCreditEarliestExpiresAt *time.Time                   `json:"temporary_credit_earliest_expires_at"`
+	TemporaryDebt                    string                       `json:"temporary_debt"`
+	TemporaryDebtDueAt               *time.Time                   `json:"temporary_debt_due_at"`
+	ActiveAdvance                    *BankAdvanceStatus           `json:"active_advance"`
+	Policy                           BankPolicyDTO                `json:"policy"`
+	Ledger                           []BankLedgerItem             `json:"ledger"`
+	ExchangeProgress                 BankExchangeProgress         `json:"exchange_progress"`
+	ExchangeExpiryPolicy             BankExchangeExpiryPolicyDTO  `json:"exchange_expiry_policy"`
+	ExchangeCommitments              []BankExchangeCommitment     `json:"exchange_commitments"`
+	ExchangeSettlements              []BankExchangeSettlementItem `json:"exchange_settlements"`
 }
 
 type BankAdvanceResult struct {
@@ -283,6 +294,10 @@ type BankExchangeResult struct {
 	DailyPermanentExchanged string                       `json:"daily_permanent_exchanged"`
 	ExchangeProgress        BankExchangeProgress         `json:"exchange_progress"`
 	TierAllocations         []BankExchangeTierAllocation `json:"tier_allocations"`
+	RefundEligible          bool                         `json:"refund_eligible"`
+	RefundFeeBPS            int                          `json:"refund_fee_bps"`
+	RefundPolicyVersion     int64                        `json:"refund_policy_version"`
+	ExchangeExpiryPolicy    BankExchangeExpiryPolicyDTO  `json:"exchange_expiry_policy"`
 }
 
 type BankRepaySource string
@@ -391,7 +406,7 @@ func loadBankPolicy(ctx context.Context, q bankQueryer) (BankPolicy, error) {
 		placeholders = append(placeholders, fmt.Sprintf("$%d", i+1))
 		args = append(args, key)
 	}
-	rows, err := q.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN (`+strings.Join(placeholders, ",")+")", args...)
+	rows, err := q.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN (`+strings.Join(placeholders, ",")+`) OR key IN ('bank_exchange_expiry_refund_enabled','bank_exchange_expiry_refund_fee_bps','bank_exchange_expiry_refund_policy_version','bank_exchange_expiry_local_time')`, args...)
 	if err != nil {
 		return BankPolicy{}, fmt.Errorf("load bank policy settings: %w", err)
 	}
@@ -460,6 +475,10 @@ func loadBankPolicy(ctx context.Context, q bankQueryer) (BankPolicy, error) {
 		if err != nil {
 			return BankPolicy{}, ErrBankPolicyInvalid
 		}
+	}
+	policy, err = applyBankExchangeExpiryPolicySettings(policy, values)
+	if err != nil {
+		return BankPolicy{}, err
 	}
 	return policy.normalized()
 }
@@ -616,6 +635,14 @@ WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&balance, &debt, &debtDue); 
 	if err != nil {
 		return nil, err
 	}
+	exchangeCommitments, err := loadBankExchangeCommitments(ctx, s.db, userID, 20)
+	if err != nil {
+		return nil, err
+	}
+	exchangeSettlements, err := loadBankExchangeSettlements(ctx, s.db, userID, 20)
+	if err != nil {
+		return nil, err
+	}
 	if earliestExpiry != nil {
 		utc := earliestExpiry.UTC()
 		earliestExpiry = &utc
@@ -635,6 +662,9 @@ WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&balance, &debt, &debtDue); 
 		Policy:                           policy.DTO(),
 		Ledger:                           ledger,
 		ExchangeProgress:                 bankExchangeProgress(policy.ExchangeTiers, localDate, dailyExchanged),
+		ExchangeExpiryPolicy:             policy.exchangeExpiryPolicyDTO(time.Now()),
+		ExchangeCommitments:              exchangeCommitments,
+		ExchangeSettlements:              exchangeSettlements,
 	}, nil
 }
 
@@ -792,6 +822,20 @@ func (s *BankService) ExchangeAtomic(
 	permanentAmount float64,
 	claim *IdempotencyAtomicClaim,
 ) (*BankExchangeResult, error) {
+	return s.ExchangeAtomicConfirmed(ctx, userID, permanentAmount, BankExchangeConfirmation{}, claim)
+}
+
+// ExchangeAtomicConfirmed executes a bank exchange only when the fee/expiry
+// policy shown to the user still matches the policy loaded in the transaction.
+// PolicyVersion is optional while refunds are disabled for legacy clients; once
+// the feature is enabled, the current version is mandatory.
+func (s *BankService) ExchangeAtomicConfirmed(
+	ctx context.Context,
+	userID int64,
+	permanentAmount float64,
+	confirmation BankExchangeConfirmation,
+	claim *IdempotencyAtomicClaim,
+) (*BankExchangeResult, error) {
 	if s == nil || s.db == nil || s.temporaryCredit == nil {
 		return nil, errors.New("bank service is not configured")
 	}
@@ -825,6 +869,13 @@ func (s *BankService) ExchangeAtomic(
 	var businessNow time.Time
 	if err := tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&businessNow); err != nil {
 		return nil, fmt.Errorf("sample bank exchange clock: %w", err)
+	}
+	exchangeExpiresAt, err := nextBankExchangeExpiry(businessNow, policy.exchangeExpiryLocalTime)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateBankExchangeConfirmation(policy, confirmation, exchangeExpiresAt); err != nil {
+		return nil, err
 	}
 	localDate := businessNow.In(beijingLocation).Format("2006-01-02")
 	if _, _, _, err := reconcileBankDebtLocked(ctx, tx, userID, balance, debtBefore, dueAt, policy, businessNow); err != nil {
@@ -864,9 +915,24 @@ RETURNING balance`, formatLedgerAmount(permanentAmount), userID).Scan(&deductedB
 		Source:      TemporaryCreditSourceBankExchange,
 		Amount:      temporaryAmount,
 		businessNow: &businessNow,
+		expiresAt:   &exchangeExpiresAt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create bank exchange grant: %w", err)
+	}
+	if policy.exchangeExpiryRefundEnabled {
+		if err := insertBankExchangeGrantSnapshotTx(
+			ctx,
+			tx,
+			userID,
+			grant.ID,
+			formatLedgerAmount(permanentAmount),
+			formatLedgerAmount(temporaryAmount),
+			policy,
+			grant.ExpiresAt(),
+		); err != nil {
+			return nil, err
+		}
 	}
 	dailyAfter, err := incrementBankExchangeDailyUsage(ctx, tx, userID, localDate, permanentAmount)
 	if err != nil {
@@ -897,6 +963,9 @@ VALUES ($1, 'exchange', $2, $1, $3, $4, 0, $5, $6, $7)`,
 			"exchange_local_date":    localDate,
 			"daily_permanent_before": formatLedgerAmount(dailyBefore),
 			"daily_permanent_after":  formatLedgerAmount(dailyAfter),
+			"refund_eligible":        policy.exchangeExpiryRefundEnabled,
+			"refund_fee_bps":         policy.exchangeExpiryRefundFeeBPS,
+			"refund_policy_version":  policy.exchangeExpiryPolicyVersion,
 		}),
 	); err != nil {
 		return nil, fmt.Errorf("record bank exchange ledger: %w", err)
@@ -911,6 +980,10 @@ VALUES ($1, 'exchange', $2, $1, $3, $4, 0, $5, $6, $7)`,
 		DailyPermanentExchanged: formatLedgerAmount(dailyAfter),
 		ExchangeProgress:        bankExchangeProgress(policy.ExchangeTiers, localDate, dailyAfter),
 		TierAllocations:         tierAllocations,
+		RefundEligible:          policy.exchangeExpiryRefundEnabled,
+		RefundFeeBPS:            policy.exchangeExpiryRefundFeeBPS,
+		RefundPolicyVersion:     policy.exchangeExpiryPolicyVersion,
+		ExchangeExpiryPolicy:    policy.exchangeExpiryPolicyDTO(businessNow),
 	}
 	if err := claim.PersistSuccess(ctx, tx, result); err != nil {
 		return nil, err
@@ -1354,11 +1427,15 @@ func (s *BankService) SettleDueForUser(ctx context.Context, userID int64) error 
 	if err != nil {
 		return err
 	}
+	exchangeRefundSettled, err := settleDueBankExchangeRefundsLocked(ctx, tx, userID, now)
+	if err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit bank settlement transaction: %w", err)
 	}
-	if unusedProcessed || forcedSettled {
-		s.invalidateBankCredits(ctx, userID, forcedSettled)
+	if unusedProcessed || forcedSettled || exchangeRefundSettled {
+		s.invalidateBankCredits(ctx, userID, forcedSettled || exchangeRefundSettled)
 	}
 	return nil
 }
@@ -1387,6 +1464,16 @@ WHERE deleted_at IS NULL
             AND bank_loans.status IN ('active', 'repaid')
             AND bank_loans.unused_credit_settled_at IS NULL
             AND bank_loans.grant_expires_at <= clock_timestamp()
+      )
+      OR EXISTS (
+          SELECT 1
+          FROM bank_exchange_grant_snapshots AS snapshot
+          LEFT JOIN bank_exchange_expiry_settlements AS settlement
+            ON settlement.grant_id = snapshot.grant_id
+          WHERE snapshot.user_id = users.id
+            AND snapshot.eligibility = 'eligible'
+            AND snapshot.expires_at <= clock_timestamp()
+            AND settlement.id IS NULL
       )
   )
 ORDER BY id

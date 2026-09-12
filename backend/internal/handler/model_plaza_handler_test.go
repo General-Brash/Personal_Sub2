@@ -125,3 +125,16 @@ func TestToModelPlazaOfficialPricing_NilPassthrough(t *testing.T) {
 }
 
 func testPtr(v float64) *float64 { return &v }
+
+func TestModelPlazaHandler_V2DisabledByDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &ModelPlazaHandler{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/model-plaza/v2", nil)
+
+	h.SetModelPlazaV2(false, nil, nil, nil, nil)
+	h.GetV2(c)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+}

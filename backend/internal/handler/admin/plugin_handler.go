@@ -25,7 +25,8 @@ const pluginUISessionTTL = 30 * time.Minute
 
 // PluginHandler 提供插件安装、生命周期、配置和隔离 UI 资源接口。
 type PluginHandler struct {
-	manager *service.PluginManager
+	permissions *service.AdminPermissionService
+	manager     *service.PluginManager
 }
 
 func NewPluginHandler(manager *service.PluginManager) *PluginHandler {
@@ -209,10 +210,17 @@ func (h *PluginHandler) CreateUISession(c *gin.Context) {
 // ServeUIAsset 使用短时随机能力 URL 提供插件静态资源，不向 iframe 暴露管理员凭据。
 func (h *PluginHandler) ServeUIAsset(c *gin.Context) {
 	token := strings.TrimSpace(c.Param("token"))
-	pluginID, err := h.manager.ResolveUIAssetToken(token)
+	pluginID, principal, err := h.manager.ResolveUIAssetTokenWithPrincipal(token)
 	if err != nil {
 		c.Status(http.StatusGone)
 		return
+	}
+	if h.permissions != nil && h.permissions.EnabledInEnforceMode() {
+		allowed, authErr := h.permissions.CheckPermission(c.Request.Context(), principal, "plugins.execute", map[string]any{"plugin_id": pluginID, "plugins_ids": pluginID, "id": pluginID})
+		if authErr != nil || !allowed {
+			c.Status(http.StatusGone)
+			return
+		}
 	}
 	relative := strings.TrimPrefix(c.Param("path"), "/")
 	data, logicalPath, err := h.manager.ReadUIAsset(c.Request.Context(), pluginID, relative)
@@ -254,4 +262,8 @@ func randomPluginToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buffer), nil
+}
+
+func (h *PluginHandler) SetAdminPermissionService(permissions *service.AdminPermissionService) {
+	h.permissions = permissions
 }

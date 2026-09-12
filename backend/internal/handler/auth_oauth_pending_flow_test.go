@@ -2581,7 +2581,7 @@ CREATE TABLE IF NOT EXISTS user_affiliates (
 
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
-			Secret:                   "test-secret",
+			Secret:                   "oauth-pending-flow-test-secret",
 			ExpireHour:               1,
 			AccessTokenExpireMinutes: 60,
 			RefreshTokenExpireDays:   7,
@@ -2652,6 +2652,7 @@ CREATE TABLE IF NOT EXISTS user_affiliates (
 	}
 
 	return &AuthHandler{
+		cfg:          cfg,
 		authService:  authSvc,
 		userService:  userSvc,
 		settingSvc:   settingSvc,

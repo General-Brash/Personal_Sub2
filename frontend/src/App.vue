@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
 import { onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import CheckinEntryTrigger from '@/components/checkin/CheckinEntryTrigger.vue'
+import type { CheckinResult } from '@/api/checkin'
 import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
@@ -10,6 +13,7 @@ import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, 
 import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
 
+const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
@@ -18,6 +22,16 @@ const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
 const adminSettingsStore = useAdminSettingsStore()
+
+function onAutomaticCheckinCompleted(result: CheckinResult) {
+  window.dispatchEvent(new CustomEvent('personal-checkin-completed', { detail: result }))
+  if (!result.already_checked_in) appStore.showSuccess(t('checkin.checkInSucceeded'))
+  void authStore.refreshUser().catch((error) => console.warn('Failed to refresh check-in balance:', error))
+}
+
+function onAutomaticCheckinError(error: unknown) {
+  console.warn('Automatic check-in was not completed:', error)
+}
 
 function updateDocumentTitle() {
   const customMenuItems = [
@@ -141,5 +155,12 @@ onMounted(async () => {
   <RouterView />
   <Toast />
   <AnnouncementPopup />
+  <CheckinEntryTrigger
+    v-if="authStore.isAuthenticated && authStore.user"
+    :key="authStore.user.id"
+    :user-id="authStore.user.id"
+    @completed="onAutomaticCheckinCompleted"
+    @error="onAutomaticCheckinError"
+  />
   <AdminComplianceDialog />
 </template>

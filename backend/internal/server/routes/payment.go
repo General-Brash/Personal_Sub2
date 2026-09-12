@@ -54,6 +54,7 @@ func RegisterPaymentRoutes(
 	mall.Use(middleware.MallEnabledUserGuard(settingService))
 	{
 		mall.GET("/balance", paymentHandler.GetMallBalance)
+		mall.GET("/quote", paymentHandler.GetMallQuote)
 		mall.POST("/purchases", paymentHandler.PurchaseMallProduct)
 	}
 

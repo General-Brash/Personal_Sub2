@@ -88,7 +88,7 @@
         </div>
 
         <!-- Invitation Code Input (Required when enabled) -->
-        <div v-if="invitationCodeEnabled">
+        <div v-if="invitationCodeEnabled || route.query.invite">
           <label for="invitation_code" class="input-label">
             {{ t('auth.invitationCodeLabel') }}
           </label>
@@ -509,6 +509,10 @@ function syncAffiliateReferralCode(): string {
   if (code) {
     formData.aff_code = code
   }
+  const invitation = typeof route.query.invite === 'string' ? route.query.invite.trim() : ''
+  if (invitation) {
+    formData.invitation_code = invitation
+  }
   return code
 }
 
@@ -566,7 +570,7 @@ onMounted(async () => {
 })
 
 watch(
-  () => [route.query.aff, route.query.aff_code],
+  () => [route.query.aff, route.query.aff_code, route.query.invite],
   () => {
     syncAffiliateReferralCode()
   }
@@ -742,6 +746,12 @@ function handleInvitationCodeInput(): void {
 }
 
 async function validateInvitationCodeDebounced(code: string): Promise<void> {
+  if (code.startsWith('pi_')) {
+    invitationValidation.valid = true
+    invitationValidation.invalid = false
+    invitationValidation.message = ''
+    return
+  }
   invitationValidating.value = true
 
   try {
@@ -820,6 +830,14 @@ async function acquireActionProof(): Promise<boolean> {
 
 async function handleOAuthStart(request: OAuthLoginStart): Promise<void> {
   if (registrationActionDisabled.value) return
+
+  const invitation = typeof route.query.invite === 'string' ? route.query.invite.trim() : formData.invitation_code.trim()
+  request = { ...request, params: { ...request.params, ...(invitation ? { invitation_code: invitation } : {}), ...(formData.aff_code.trim() ? { aff_code: formData.aff_code.trim() } : {}) } }
+  if (typeof window !== 'undefined') {
+    if (invitation) window.sessionStorage.setItem('oauth_invite_code', invitation)
+    else window.sessionStorage.removeItem('oauth_invite_code')
+  }
+
 
   if (!actionCaptchaEnabled.value) {
     window.location.href = buildOAuthLoginStartURL(request)

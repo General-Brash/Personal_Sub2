@@ -168,7 +168,7 @@ func (h *AuthHandler) DingTalkOAuthStart(c *gin.Context) {
 		return
 	}
 
-	respondOAuthStart(c, authURL)
+	h.respondOAuthStartWithInvitation(c, authURL)
 }
 
 // ─── buildDingTalkAuthorizeURL ─────────────────────────────────────────────
@@ -293,6 +293,10 @@ func (h *AuthHandler) createDingTalkOAuthChoicePendingSession(
 // DingTalkOAuthCallback 处理钉钉授权回调。
 // GET /api/v1/auth/oauth/dingtalk/callback?code=...&state=...
 func (h *AuthHandler) DingTalkOAuthCallback(c *gin.Context) {
+	if !h.restoreOAuthInvitation(c) {
+		return
+	}
+
 	cfg, cfgErr := h.getDingTalkOAuthConfig(c.Request.Context())
 	if cfgErr != nil {
 		response.ErrorFrom(c, cfgErr)

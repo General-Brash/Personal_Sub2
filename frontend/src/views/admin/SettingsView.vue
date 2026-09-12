@@ -3823,6 +3823,9 @@
 
         <!-- Tab: Users -->
         <div v-show="activeTab === 'users'" class="space-y-6">
+          <PersonalFeatureSettingsCard />
+          <EntitlementPolicyCard />
+          <InvitationAdministrationCard />
           <!-- Default Settings -->
           <div class="card">
             <div
@@ -8726,6 +8729,9 @@
 </template>
 
 <script setup lang="ts">
+import PersonalFeatureSettingsCard from '@/components/admin/settings/PersonalFeatureSettingsCard.vue'
+import EntitlementPolicyCard from '@/components/admin/settings/EntitlementPolicyCard.vue'
+import InvitationAdministrationCard from '@/components/admin/settings/InvitationAdministrationCard.vue'
 import { ref, reactive, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api";

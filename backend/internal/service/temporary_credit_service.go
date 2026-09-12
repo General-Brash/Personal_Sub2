@@ -40,6 +40,7 @@ const (
 )
 
 type TemporaryCreditGrant struct {
+	ExpiryPolicyVersion string
 	ID                  int64
 	UserID              int64
 	Source              TemporaryCreditSource
@@ -101,6 +102,7 @@ type CreateTemporaryCreditGrantInput struct {
 }
 
 type TemporaryCreditService struct {
+	expiryPolicy               TemporaryCreditSourceExpiryProvider
 	repo                       TemporaryCreditRepository
 	now                        func() time.Time
 	availableCreditInvalidator AvailableCreditInvalidator
@@ -146,7 +148,7 @@ func (s *TemporaryCreditService) CreateGrant(ctx context.Context, input CreateTe
 	if s == nil || s.repo == nil {
 		return nil, errors.New("temporary credit repository is nil")
 	}
-	grant, err := s.newGrant(input)
+	grant, err := s.newGrantWithPolicy(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +193,7 @@ func (s *TemporaryCreditService) CreateGrantTx(ctx context.Context, tx *sql.Tx, 
 	if tx == nil {
 		return nil, errors.New("temporary credit grant transaction is nil")
 	}
-	grant, err := s.newGrant(input)
+	grant, err := s.newGrantWithPolicy(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -347,4 +349,30 @@ func nextTemporaryCreditExpiry(now time.Time) (time.Time, error) {
 	}
 	businessNow := now.In(location)
 	return time.Date(businessNow.Year(), businessNow.Month(), businessNow.Day()+1, 0, 0, 0, 0, location), nil
+}
+
+type TemporaryCreditSourceExpiryProvider interface {
+	TemporaryCreditSourceExpiry(context.Context, TemporaryCreditSource, time.Time) (time.Time, string, error)
+}
+
+func (s *TemporaryCreditService) SetSourceExpiryPolicy(provider TemporaryCreditSourceExpiryProvider) {
+	s.expiryPolicy = provider
+}
+func (s *TemporaryCreditService) newGrantWithPolicy(ctx context.Context, input CreateTemporaryCreditGrantInput) (TemporaryCreditGrant, error) {
+	grant, err := s.newGrant(input)
+	if err != nil {
+		return grant, err
+	}
+	if s.expiryPolicy == nil || input.expiresAt != nil || (input.Source != TemporaryCreditSourceCheckin && input.Source != TemporaryCreditSourceAdminGrant) {
+		return grant, nil
+	}
+	end, version, err := s.expiryPolicy.TemporaryCreditSourceExpiry(ctx, input.Source, grant.availableAt)
+	if err != nil {
+		return grant, err
+	}
+	if !end.IsZero() {
+		grant.expiresAt = end
+		grant.ExpiryPolicyVersion = version
+	}
+	return grant, validateTemporaryCreditGrant(grant)
 }

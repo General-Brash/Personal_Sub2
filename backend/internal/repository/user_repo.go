@@ -339,6 +339,12 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 	}
 	oldEmail := existing.Email
 
+	if existing.Role == service.RoleSuperAdmin && ((fields.Role && userIn.Role != service.RoleSuperAdmin) || (fields.Status && userIn.Status != service.StatusActive)) {
+		if err := ensureNotLastSuperAdminWithClient(txCtx, txClient); err != nil {
+			return err
+		}
+	}
+
 	updateOp := txClient.User.UpdateOneID(userIn.ID)
 	if fields.Email {
 		updateOp = updateOp.SetEmail(userIn.Email)
@@ -536,6 +542,17 @@ func (r *userRepository) deleteUser(ctx context.Context, exec *dbent.Client, id 
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
+
+	existing, err := exec.User.Get(ctx, id)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	if existing.Role == service.RoleSuperAdmin {
+		if err := ensureNotLastSuperAdminWithClient(ctx, exec); err != nil {
+			return err
+		}
+	}
+
 	if len(identityIDs) > 0 {
 		if _, err := exec.IdentityAdoptionDecision.Update().
 			Where(identityadoptiondecision.IdentityIDIn(identityIDs...)).

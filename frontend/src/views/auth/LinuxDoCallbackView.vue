@@ -751,6 +751,8 @@ onMounted(async () => {
   const params = parseFragmentParams()
   const legacyLogin = readLegacyFragmentLogin(params)
   const legacyPendingToken = params.get('pending_oauth_token')?.trim() || ''
+  const storedInvitation = typeof window !== 'undefined' ? window.sessionStorage.getItem('oauth_invite_code') || '' : ''
+  invitationCode.value = params.get('invitation_code')?.trim() || storedInvitation || invitationCode.value
   const error = params.get('error')
   const errorDesc = params.get('error_description') || params.get('error_message') || ''
   const redirect = sanitizeRedirectPath(

@@ -17,6 +17,15 @@ import (
 // The route middleware already authenticates the API key and resolves the
 // group; this handler intentionally does not select an account or check billing.
 func (h *OpenAIGatewayHandler) GrokCountTokens(c *gin.Context) {
+	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
+	if !ok || apiKey == nil {
+		h.anthropicErrorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
+		return
+	}
+	if err := h.gatewayService.RequireDynamicRateAdmission(c.Request.Context(), apiKey, "count_tokens"); err != nil {
+		h.anthropicErrorResponse(c, http.StatusServiceUnavailable, "billing_error", "count_tokens cannot bypass dynamic rate billing")
+		return
+	}
 	body, err := readLenientJSONRequestBodyWithPrealloc(c.Request, h.cfg)
 	if err != nil {
 		if maxErr, ok := extractMaxBytesError(err); ok {
@@ -77,6 +86,12 @@ func (h *OpenAIGatewayHandler) CountTokens(c *gin.Context) {
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)
+
+	if err := h.gatewayService.RequireDynamicRateAdmission(c.Request.Context(), apiKey, "count_tokens"); err != nil {
+		reqLog.Warn("openai_count_tokens.dynamic_rate_admission_failed", zap.Error(err))
+		h.anthropicErrorResponse(c, http.StatusServiceUnavailable, "billing_error", "count_tokens cannot bypass dynamic rate billing")
+		return
+	}
 
 	if !allowOpenAICompatibleMessagesDispatch(apiKey) {
 		h.anthropicErrorResponse(c, http.StatusForbidden, "permission_error",

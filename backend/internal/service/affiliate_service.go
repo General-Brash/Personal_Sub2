@@ -58,17 +58,18 @@ func isValidAffiliateCodeFormat(code string) bool {
 }
 
 type AffiliateSummary struct {
-	UserID               int64     `json:"user_id"`
-	AffCode              string    `json:"aff_code"`
-	AffCodeCustom        bool      `json:"aff_code_custom"`
-	AffRebateRatePercent *float64  `json:"aff_rebate_rate_percent,omitempty"`
-	InviterID            *int64    `json:"inviter_id,omitempty"`
-	AffCount             int       `json:"aff_count"`
-	AffQuota             float64   `json:"aff_quota"`
-	AffFrozenQuota       float64   `json:"aff_frozen_quota"`
-	AffHistoryQuota      float64   `json:"aff_history_quota"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	UserID               int64      `json:"user_id"`
+	AffCode              string     `json:"aff_code"`
+	AffCodeCustom        bool       `json:"aff_code_custom"`
+	AffRebateRatePercent *float64   `json:"aff_rebate_rate_percent,omitempty"`
+	InviterID            *int64     `json:"inviter_id,omitempty"`
+	InviterEffectiveAt   *time.Time `json:"-"`
+	AffCount             int        `json:"aff_count"`
+	AffQuota             float64    `json:"aff_quota"`
+	AffFrozenQuota       float64    `json:"aff_frozen_quota"`
+	AffHistoryQuota      float64    `json:"aff_history_quota"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
 type AffiliateInvitee struct {
@@ -80,13 +81,14 @@ type AffiliateInvitee struct {
 }
 
 type AffiliateDetail struct {
-	UserID          int64   `json:"user_id"`
-	AffCode         string  `json:"aff_code"`
-	InviterID       *int64  `json:"inviter_id,omitempty"`
-	AffCount        int     `json:"aff_count"`
-	AffQuota        float64 `json:"aff_quota"`
-	AffFrozenQuota  float64 `json:"aff_frozen_quota"`
-	AffHistoryQuota float64 `json:"aff_history_quota"`
+	UserID             int64      `json:"user_id"`
+	AffCode            string     `json:"aff_code"`
+	InviterID          *int64     `json:"inviter_id,omitempty"`
+	InviterEffectiveAt *time.Time `json:"-"`
+	AffCount           int        `json:"aff_count"`
+	AffQuota           float64    `json:"aff_quota"`
+	AffFrozenQuota     float64    `json:"aff_frozen_quota"`
+	AffHistoryQuota    float64    `json:"aff_history_quota"`
 	// EffectiveRebateRatePercent 是当前用户作为邀请人时实际生效的返利比例：
 	// 优先用户自己的专属比例（aff_rebate_rate_percent），否则回退到全局比例。
 	// 用于在用户的 /affiliate 页面直观展示「分享后能拿到多少」。
@@ -266,6 +268,32 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 	}, nil
 }
 
+// ResolveInviterByCode returns the inviter user ID for an affiliate code
+// without mutating the invitee. Registration uses it for conflict detection
+// before the atomic invitation/affiliate transaction starts.
+func (s *AffiliateService) ResolveInviterByCode(ctx context.Context, rawCode string) (int64, error) {
+	code := strings.ToUpper(strings.TrimSpace(rawCode))
+	if code == "" {
+		return 0, nil
+	}
+	if s == nil || s.repo == nil {
+		return 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	if !isValidAffiliateCodeFormat(code) {
+		return 0, ErrAffiliateCodeInvalid
+	}
+	inviter, err := s.repo.GetAffiliateByCode(ctx, code)
+	if err != nil {
+		if errors.Is(err, ErrAffiliateProfileNotFound) {
+			return 0, ErrAffiliateCodeInvalid
+		}
+		return 0, err
+	}
+	if inviter == nil || inviter.UserID <= 0 {
+		return 0, ErrAffiliateCodeInvalid
+	}
+	return inviter.UserID, nil
+}
 func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, rawCode string) error {
 	code := strings.ToUpper(strings.TrimSpace(rawCode))
 	if code == "" {

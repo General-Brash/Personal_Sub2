@@ -48,17 +48,44 @@ type CheckinStatus struct {
 	MonthlyPermanentRewardTotal      string                         `json:"monthly_permanent_reward_total"`
 	RewardTiers                      []DailyCheckinRewardTierStatus `json:"reward_tiers"`
 	Calendar                         []DailyCheckinCalendarEntry    `json:"calendar"`
+	BusinessPeriodID                 string                         `json:"business_period_id,omitempty"`
+	PeriodStartAt                    *time.Time                     `json:"period_start_at,omitempty"`
+	NextResetAt                      *time.Time                     `json:"next_reset_at,omitempty"`
+	Mode                             CheckinMode                    `json:"mode,omitempty"`
+	AutoFeeBps                       int                            `json:"auto_fee_bps"`
+	AutoEnabled                      bool                           `json:"auto_enabled"`
+	ConsentValid                     bool                           `json:"consent_valid"`
+	PolicyVersion                    string                         `json:"policy_version,omitempty"`
+	NormalEnabled                    bool                           `json:"normal_enabled"`
+	NormalMinBps                     int                            `json:"normal_min_bps"`
+	NormalMaxBps                     int                            `json:"normal_max_bps"`
+	SuperEnabled                     bool                           `json:"super_enabled"`
+	SuperMinBps                      int                            `json:"super_min_bps"`
+	SuperMaxBps                      int                            `json:"super_max_bps"`
+	SuperCost                        string                         `json:"super_cost"`
+	PermanentBalance                 string                         `json:"permanent_balance"`
+	CanAffordSuper                   bool                           `json:"can_afford_super"`
 }
 
 type CheckinResult struct {
-	AlreadyCheckedIn       bool      `json:"already_checked_in"`
-	CheckinDate            string    `json:"checkin_date"`
-	StreakDay              int       `json:"streak_day"`
-	RewardDay              int       `json:"reward_day"`
-	RewardAmount           string    `json:"reward_amount"`
-	PermanentRewardAmount  string    `json:"permanent_reward_amount"`
-	TemporaryCreditGrantID int64     `json:"temporary_credit_grant_id"`
-	ExpiresAt              time.Time `json:"expires_at"`
+	AlreadyCheckedIn       bool        `json:"already_checked_in"`
+	CheckinDate            string      `json:"checkin_date"`
+	StreakDay              int         `json:"streak_day"`
+	RewardDay              int         `json:"reward_day"`
+	RewardAmount           string      `json:"reward_amount"`
+	PermanentRewardAmount  string      `json:"permanent_reward_amount"`
+	TemporaryCreditGrantID int64       `json:"temporary_credit_grant_id"`
+	ExpiresAt              time.Time   `json:"expires_at"`
+	Mode                   CheckinMode `json:"mode,omitempty"`
+	BusinessPeriodID       string      `json:"business_period_id,omitempty"`
+	PeriodStartAt          time.Time   `json:"period_start_at,omitzero"`
+	NextResetAt            time.Time   `json:"next_reset_at,omitzero"`
+	BaseRewardAmount       string      `json:"base_reward_amount,omitempty"`
+	MultiplierBps          int         `json:"multiplier_bps,omitempty"`
+	SuperCost              string      `json:"super_cost,omitempty"`
+	AutoFeeBps             int         `json:"auto_fee_bps,omitempty"`
+	PolicyVersion          string      `json:"policy_version,omitempty"`
+	RandomRuleVersion      string      `json:"random_rule_version,omitempty"`
 }
 
 type CheckinService struct {
@@ -67,6 +94,8 @@ type CheckinService struct {
 	temporaryCreditService *TemporaryCreditService
 	now                    func() time.Time
 	transactionNow         func() time.Time
+	policyV2               bool
+	randRead               func([]byte) (int, error)
 }
 
 func NewCheckinService(db *sql.DB, policyProvider DailyCheckinPolicyProvider, temporaryCreditService *TemporaryCreditService) *CheckinService {
@@ -101,6 +130,9 @@ func (s *CheckinService) CheckInAtomic(ctx context.Context, userID int64, claim 
 }
 
 func (s *CheckinService) checkIn(ctx context.Context, userID int64, claim *IdempotencyAtomicClaim) (*CheckinResult, error) {
+	if s.policyV2 {
+		return s.checkInV2(ctx, userID, CheckinModeDirect, claim)
+	}
 	if err := s.validateDependencies(); err != nil {
 		return nil, err
 	}
@@ -257,6 +289,9 @@ func (s *CheckinService) sampleTransactionNow(ctx context.Context, tx *sql.Tx) (
 }
 
 func (s *CheckinService) GetStatus(ctx context.Context, userID int64, requestedMonth string) (*CheckinStatus, error) {
+	if s.policyV2 {
+		return s.getStatusV2(ctx, userID, requestedMonth)
+	}
 	if err := s.validateDependencies(); err != nil {
 		return nil, err
 	}
@@ -370,6 +405,16 @@ type persistedCheckin struct {
 	rewardDay             int
 	rewardAmount          float64
 	permanentRewardAmount float64
+	mode                  CheckinMode
+	periodID              string
+	periodStartAt         time.Time
+	periodEndAt           time.Time
+	baseRewardAmount      float64
+	multiplierBps         int
+	superCost             float64
+	autoFeeBps            int
+	policyVersion         string
+	randomRuleVersion     string
 }
 
 func loadLatestCheckin(ctx context.Context, queryer sqlQueryer, userID int64) (*string, int, error) {
@@ -388,9 +433,13 @@ func loadLatestCheckin(ctx context.Context, queryer sqlQueryer, userID int64) (*
 func insertCheckin(ctx context.Context, tx *sql.Tx, userID int64, checkinDate string, streakDay, rewardDay int, rewardAmount, permanentRewardAmount float64) (*persistedCheckin, error) {
 	checkin := &persistedCheckin{}
 	err := tx.QueryRowContext(ctx, `
-INSERT INTO daily_checkins (user_id, checkin_date, streak_day, reward_day, reward_amount, permanent_reward_amount)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (user_id, checkin_date) DO NOTHING
+INSERT INTO daily_checkins (user_id, checkin_date, streak_day, reward_day, reward_amount, permanent_reward_amount,
+    business_period_key, period_start_at, period_end_at, base_reward_amount)
+VALUES ($1, $2::date, $3, $4, $5, $6,
+    'checkin:' || EXTRACT(EPOCH FROM ($2::date::timestamp AT TIME ZONE 'Asia/Shanghai'))::bigint::text,
+    $2::date::timestamp AT TIME ZONE 'Asia/Shanghai',
+    ($2::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai', $5)
+ON CONFLICT (user_id, business_period_key) DO NOTHING
 RETURNING id, checkin_date::text, streak_day, reward_day, reward_amount, permanent_reward_amount`,
 		userID, checkinDate, streakDay, rewardDay, formatLedgerAmount(rewardAmount), formatLedgerAmount(permanentRewardAmount),
 	).Scan(&checkin.id, &checkin.date, &checkin.streakDay, &checkin.rewardDay, &checkin.rewardAmount, &checkin.permanentRewardAmount)

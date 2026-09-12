@@ -545,6 +545,16 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	// 生图意图只影响能力路由与图片计费，不关门：混合 /v1/responses 请求的
 	// token 计费部分仍受利润门保护，独立图片/视频端点才在门外。
 	pricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
+	dynamicRateMode := service.DynamicRateModeText
+	if imageIntent {
+		dynamicRateMode = service.DynamicRateModeImage
+	}
+	pricingCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(pricingCtx, apiKey, subject.UserID, dynamicRateMode, pricingAt)
+	if dynamicRateErr != nil {
+		reqLog.Warn("openai.dynamic_rate_admission_failed", zap.Error(dynamicRateErr))
+		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "billing_error", "dynamic rate pricing unavailable", streamStarted)
+		return
+	}
 	c.Request = c.Request.WithContext(pricingCtx)
 
 	for {
@@ -1156,6 +1166,12 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 	// 分组利润控制：Messages 文本入口同样请求级装门并固定 pricingAt。
 	msgPricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
+	msgPricingCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(msgPricingCtx, apiKey, subject.UserID, service.DynamicRateModeText, pricingAt)
+	if dynamicRateErr != nil {
+		reqLog.Warn("openai.messages_dynamic_rate_admission_failed", zap.Error(dynamicRateErr))
+		h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "billing_error", "dynamic rate pricing unavailable", streamStarted)
+		return
+	}
 	c.Request = c.Request.WithContext(msgPricingCtx)
 
 	for {
@@ -1963,13 +1979,15 @@ const (
 // 这样每个 passthrough turn 都按自己的开始时刻计价，但不改变其仅在建连时执行
 // 准入门、没有 turn 级利润复核的既有行为。
 type openAIWSTurnPricing struct {
-	mu sync.Mutex
-	at time.Time
+	mu              sync.Mutex
+	at              time.Time
+	dynamicSnapshot *service.DynamicRatePricingSnapshot
 }
 
-func (p *openAIWSTurnPricing) freeze(at time.Time) {
+func (p *openAIWSTurnPricing) freeze(at time.Time, dynamicSnapshot *service.DynamicRatePricingSnapshot) {
 	p.mu.Lock()
 	p.at = at
+	p.dynamicSnapshot = dynamicSnapshot
 	p.mu.Unlock()
 }
 
@@ -1980,6 +1998,12 @@ func (p *openAIWSTurnPricing) currentOr(fallback time.Time) time.Time {
 		return p.at
 	}
 	return fallback
+}
+
+func (p *openAIWSTurnPricing) snapshot() *service.DynamicRatePricingSnapshot {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.dynamicSnapshot
 }
 
 // recordOpenAIProfitVeto 记录 OpenAI 侧选号循环的一次利润门终检否决：把账号
@@ -2689,6 +2713,15 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				return mapping.MappedModel, nil
 			},
 			BeforeTurn: func(turn int) error {
+				turnKey := apiKey
+				if h.apiKeyService != nil {
+					fresh, err := h.apiKeyService.RevalidateForTurn(ctx, apiKey)
+					if err != nil {
+						return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "API key or group access has changed", err)
+					}
+					turnKey = fresh
+				}
+
 				// turn==1 的会话屏蔽已由握手层检查覆盖；连接内 flag 只拦截后续 turn。
 				if cyberBlockedThisConn {
 					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, cyberSessionBlockedClientMsg, nil)
@@ -2697,6 +2730,11 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				// 当前账号，越线即要求客户端重连重选（连接绑定单一上游账号，
 				// 无法中途换号）。本 turn 的准入与计费共用同一 pricingAt。
 				turnCtx, turnAt := h.gatewayService.WithOpenAITurnPricingContext(ctx, apiKey.GroupID)
+				turnCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(turnCtx, turnKey, subject.UserID, service.DynamicRateModeText, turnAt)
+				if dynamicRateErr != nil {
+					reqLog.Error("openai.websocket_dynamic_rate_admission_failed", zap.Int("turn", turn), zap.Int64("account_id", account.ID), zap.Error(dynamicRateErr))
+					return service.NewOpenAIWSClientCloseError(coderws.StatusInternalError, "dynamic rate pricing admission failed", dynamicRateErr)
+				}
 				if _, vetoed, reason := h.gatewayService.ProfitControlVetoLatest(turnCtx, account); vetoed {
 					reqLog.Info("openai.websocket_turn_profit_vetoed",
 						zap.Int("turn", turn),
@@ -2704,7 +2742,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 						zap.String("reason", reason))
 					return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "account is no longer eligible for this connection, please reconnect", nil)
 				}
-				turnPricing.freeze(turnAt)
+				turnPricing.freeze(turnAt, service.DynamicRatePricingSnapshotFromContext(turnCtx))
 				if turn == 1 {
 					return nil
 				}
@@ -2813,6 +2851,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				turnRecordPricingAt := turnPricing.currentOr(turnStart)
 				cyberBlocked := service.GetOpsCyberPolicy(c) != nil
 				h.submitOpenAIUsageRecordTask(ctx, result, func(taskCtx context.Context) {
+					taskCtx = service.WithDynamicRatePricingSnapshot(taskCtx, turnPricing.snapshot())
 					if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
 						Result:                   result,
 						RequestedReasoningEffort: result.RequestedReasoningEffort,

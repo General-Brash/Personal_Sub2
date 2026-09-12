@@ -149,12 +149,16 @@ func (h *AuthHandler) WeChatOAuthStart(c *gin.Context) {
 		return
 	}
 
-	respondOAuthStart(c, authURL)
+	h.respondOAuthStartWithInvitation(c, authURL)
 }
 
 // WeChatOAuthCallback exchanges the code with WeChat, resolves openid/unionid,
 // and stores the result in the unified pending-auth flow.
 func (h *AuthHandler) WeChatOAuthCallback(c *gin.Context) {
+	if !h.restoreOAuthInvitation(c) {
+		return
+	}
+
 	frontendCallback := h.wechatOAuthFrontendCallback(c.Request.Context())
 
 	if providerErr := strings.TrimSpace(c.Query("error")); providerErr != "" {

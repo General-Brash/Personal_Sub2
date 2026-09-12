@@ -30,6 +30,13 @@
           <dt class="shrink-0 text-sm text-gray-500 dark:text-gray-400">{{ t('payment.purchaseConfirm.expectedReceive') }}</dt>
           <dd class="min-w-0 max-w-[60%] break-words text-right text-sm font-semibold text-emerald-700 dark:text-emerald-300" data-test="purchase-confirm-receive">{{ expectedReceive }}</dd>
         </div>
+        <div v-if="quoteVersion" class="flex min-w-0 items-start justify-between gap-4 py-3">
+          <dt class="shrink-0 text-sm text-gray-500 dark:text-gray-400">{{ locale === 'zh' ? '报价版本' : 'Quote version' }}</dt>
+          <dd class="min-w-0 max-w-[60%] break-all text-right font-mono text-[11px] text-gray-500 dark:text-gray-400" data-test="purchase-confirm-quote">
+            {{ quoteVersion.slice(0, 18) }}
+            <span v-if="pricedAt" class="mt-1 block font-sans">{{ formatPricedAt(pricedAt) }}</span>
+          </dd>
+        </div>
       </dl>
 
       <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-dark-800">
@@ -82,6 +89,8 @@ const props = defineProps<{
   expectedSpend: string
   expectedReceive: string
   limits: PurchaseLimitFields
+  quoteVersion?: string
+  pricedAt?: string
   submitting?: boolean
 }>()
 
@@ -90,7 +99,7 @@ const emit = defineEmits<{
   confirm: []
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const limitItems = computed(() => getPurchaseLimitItems(props.limits))
 const periodicLimit = computed(() => limitItems.value.find((item) => item.scope === 'periodic'))
 const exhausted = computed(() => limitItems.value.some((item) => item.exhausted))
@@ -100,6 +109,11 @@ function limitLabel(item: PurchaseLimitItem): string {
   return key.startsWith('rolling')
     ? t(`payment.purchaseLimit.${key}`, { count: item.windowSize })
     : t(`payment.purchaseLimit.${key}`)
+}
+
+function formatPricedAt(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
 function requestClose(): void {

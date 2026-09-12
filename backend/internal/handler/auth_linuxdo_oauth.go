@@ -150,12 +150,16 @@ func (h *AuthHandler) LinuxDoOAuthStart(c *gin.Context) {
 		return
 	}
 
-	respondOAuthStart(c, authURL)
+	h.respondOAuthStartWithInvitation(c, authURL)
 }
 
 // LinuxDoOAuthCallback 处理 OAuth 回调：创建/登录用户，然后重定向到前端。
 // GET /api/v1/auth/oauth/linuxdo/callback?code=...&state=...
 func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
+	if !h.restoreOAuthInvitation(c) {
+		return
+	}
+
 	cfg, cfgErr := h.getLinuxDoOAuthConfig(c.Request.Context())
 	if cfgErr != nil {
 		response.ErrorFrom(c, cfgErr)
@@ -338,8 +342,8 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 			c.Request.Context(),
 			email,
 			username,
-			"",
-			"",
+			readInvitationCodeFromRequest(c),
+			readAffiliateCodeFromRequest(c),
 			readOAuthPromoCode(c),
 			"linuxdo",
 		)
@@ -584,6 +588,10 @@ func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
 		AdoptAvatar:      req.AdoptAvatar,
 	})
 	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if err := h.mergePendingInvitationClaims(session.UpstreamIdentityClaims, &req.InvitationCode, &req.AffCode); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

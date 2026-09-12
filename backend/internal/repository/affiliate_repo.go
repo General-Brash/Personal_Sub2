@@ -79,6 +79,10 @@ func (r *affiliateRepository) GetAffiliateByCode(ctx context.Context, code strin
 func (r *affiliateRepository) BindInviter(ctx context.Context, userID, inviterID int64) (bool, error) {
 	var bound bool
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		if err := lockInvitationGraph(txCtx, txClient); err != nil {
+			return err
+		}
+
 		if _, err := ensureUserAffiliateWithClient(txCtx, txClient, userID); err != nil {
 			return err
 		}
@@ -86,8 +90,18 @@ func (r *affiliateRepository) BindInviter(ctx context.Context, userID, inviterID
 			return err
 		}
 
+		if err := lockInvitationGraph(txCtx, txClient); err != nil {
+			return err
+		}
+		cycle, err := invitationWouldCreateCycle(txCtx, txClient, inviterID, userID)
+		if err != nil {
+			return err
+		}
+		if cycle {
+			return service.ErrInvitationRelationshipCycle
+		}
 		res, err := txClient.ExecContext(txCtx,
-			"UPDATE user_affiliates SET inviter_id = $1, updated_at = NOW() WHERE user_id = $2 AND inviter_id IS NULL",
+			"UPDATE user_affiliates SET inviter_id = $1, inviter_effective_at = NOW(), updated_at = NOW() WHERE user_id = $2 AND inviter_id IS NULL",
 			inviterID, userID,
 		)
 		if err != nil {
@@ -99,11 +113,22 @@ func (r *affiliateRepository) BindInviter(ctx context.Context, userID, inviterID
 			return nil
 		}
 
-		if _, err = txClient.ExecContext(txCtx,
-			"UPDATE user_affiliates SET aff_count = aff_count + 1, updated_at = NOW() WHERE user_id = $1",
-			inviterID,
-		); err != nil {
-			return fmt.Errorf("increment inviter aff_count: %w", err)
+		relationRes, err := txClient.ExecContext(txCtx, `
+INSERT INTO player_invitation_relations
+    (invitee_user_id, inviter_user_id, source, effective_at, reason)
+VALUES ($2, $1, 'affiliate_code', NOW(), 'affiliate code registration binding')
+ON CONFLICT (invitee_user_id) DO NOTHING`, inviterID, userID)
+		if err != nil {
+			return fmt.Errorf("record affiliate relation: %w", err)
+		}
+		relationInserted, _ := relationRes.RowsAffected()
+		if relationInserted == 1 {
+			if _, err = txClient.ExecContext(txCtx,
+				"UPDATE user_affiliates SET aff_count = aff_count + 1, updated_at = NOW() WHERE user_id = $1",
+				inviterID,
+			); err != nil {
+				return fmt.Errorf("increment inviter aff_count: %w", err)
+			}
 		}
 		bound = true
 		return nil
@@ -785,6 +810,7 @@ SELECT user_id,
        aff_code_custom,
        aff_rebate_rate_percent,
        inviter_id,
+       inviter_effective_at,
        aff_count,
        aff_quota::double precision,
        aff_frozen_quota::double precision,
@@ -806,6 +832,7 @@ WHERE user_id = $1`, userID)
 
 	var out service.AffiliateSummary
 	var inviterID sql.NullInt64
+	var inviterEffectiveAt sql.NullTime
 	var rebateRate sql.NullFloat64
 	if err := rows.Scan(
 		&out.UserID,
@@ -813,6 +840,7 @@ WHERE user_id = $1`, userID)
 		&out.AffCodeCustom,
 		&rebateRate,
 		&inviterID,
+		&inviterEffectiveAt,
 		&out.AffCount,
 		&out.AffQuota,
 		&out.AffFrozenQuota,
@@ -824,6 +852,10 @@ WHERE user_id = $1`, userID)
 	}
 	if inviterID.Valid {
 		out.InviterID = &inviterID.Int64
+	}
+	if inviterEffectiveAt.Valid {
+		v := inviterEffectiveAt.Time
+		out.InviterEffectiveAt = &v
 	}
 	if rebateRate.Valid {
 		v := rebateRate.Float64
@@ -839,6 +871,7 @@ SELECT user_id,
        aff_code_custom,
        aff_rebate_rate_percent,
        inviter_id,
+       inviter_effective_at,
        aff_count,
        aff_quota::double precision,
        aff_frozen_quota::double precision,
@@ -862,6 +895,7 @@ LIMIT 1`, strings.ToUpper(strings.TrimSpace(code)))
 
 	var out service.AffiliateSummary
 	var inviterID sql.NullInt64
+	var inviterEffectiveAt sql.NullTime
 	var rebateRate sql.NullFloat64
 	if err := rows.Scan(
 		&out.UserID,
@@ -869,6 +903,7 @@ LIMIT 1`, strings.ToUpper(strings.TrimSpace(code)))
 		&out.AffCodeCustom,
 		&rebateRate,
 		&inviterID,
+		&inviterEffectiveAt,
 		&out.AffCount,
 		&out.AffQuota,
 		&out.AffFrozenQuota,
@@ -880,6 +915,10 @@ LIMIT 1`, strings.ToUpper(strings.TrimSpace(code)))
 	}
 	if inviterID.Valid {
 		out.InviterID = &inviterID.Int64
+	}
+	if inviterEffectiveAt.Valid {
+		v := inviterEffectiveAt.Time
+		out.InviterEffectiveAt = &v
 	}
 	if rebateRate.Valid {
 		v := rebateRate.Float64

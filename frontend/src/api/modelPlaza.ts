@@ -92,6 +92,106 @@ export async function getModelPlaza(options?: { signal?: AbortSignal }): Promise
   return data
 }
 
-export const modelPlazaAPI = { getModelPlaza }
+export const modelPlazaAPI = { getModelPlaza, getModelPlazaV2 }
 
 export default modelPlazaAPI
+
+/** W10 v2 independent catalog response. */
+export type ModelPlazaAvailabilityState =
+  | 'catalog_only'
+  | 'eligible'
+  | 'temporarily_unavailable'
+  | 'not_entitled'
+  | 'unknown'
+
+export interface ModelPlazaV2QuoteInterval {
+  min_tokens?: number
+  max_tokens?: number | null
+  tier_label?: string
+  input_per_million?: number | null
+  output_per_million?: number | null
+  cache_write_per_million?: number | null
+  cache_write_1h_per_million?: number | null
+  cache_read_per_million?: number | null
+  per_request_price?: number | null
+}
+
+export interface ModelPlazaV2PriceCondition {
+  pattern: string
+  pricing_unit: string
+  billing_mode?: string
+  input_per_million?: number | null
+  output_per_million?: number | null
+  cache_write_per_million?: number | null
+  cache_write_1h_per_million?: number | null
+  cache_read_per_million?: number | null
+  per_request_price?: number | null
+  intervals?: ModelPlazaV2QuoteInterval[]
+}
+
+export interface ModelPlazaV2PriceQuote {
+  peak_rate_multiplier?: number | null
+  quote_version: string
+  priced_at: string
+  pricing_unit: string
+  currency: string
+  input_per_million?: number | null
+  output_per_million?: number | null
+  cache_write_per_million?: number | null
+  cache_write_1h_per_million?: number | null
+  cache_read_per_million?: number | null
+  per_request_price?: number | null
+  intervals?: ModelPlazaV2QuoteInterval[]
+  dynamic_factor_status: 'not_configured' | 'unavailable' | 'unknown' | 'invalid' | 'available'
+  dynamic_factor?: { factor: number; source: string; version?: string; details?: Record<string, string> } | null
+  effective_rate_multiplier?: number | null
+  rate_source?: string
+  image_rate_independent?: boolean
+  image_rate_multiplier?: number | null
+  channel_time_multiplier?: number | null
+  price_conditions?: ModelPlazaV2PriceCondition[]
+  source?: string
+  unknown_fields?: string[]
+}
+
+export interface ModelPlazaV2GroupChoice {
+  group_id: number
+  group_name: string
+  platform: string
+  route_kind: string
+  availability_state: ModelPlazaAvailabilityState
+  reason_code?: string
+  schedulable: boolean
+  price_quote?: ModelPlazaV2PriceQuote | null
+  quote_version?: string
+  priced_at?: string
+}
+
+export interface ModelPlazaV2Model {
+  model_id: string
+  display_name: string
+  platform: string
+  capabilities?: string[]
+  supported_endpoints?: string[]
+  context_window?: number | null
+  availability_state: ModelPlazaAvailabilityState
+  eligibility: ModelPlazaAvailabilityState
+  reason_code?: string
+  user_group_choices: ModelPlazaV2GroupChoice[]
+  source_versions?: Record<string, string>
+  quote_version?: string
+  priced_at?: string
+}
+
+export interface ModelPlazaV2Response {
+  models: ModelPlazaV2Model[]
+  generated_at: string
+}
+
+/** Fetch the versioned independent catalog. Route registration is owned by the integrator. */
+export async function getModelPlazaV2(options?: { signal?: AbortSignal }): Promise<ModelPlazaV2Response> {
+  const { data } = await apiClient.get<ModelPlazaV2Response>('/model-plaza/v2', {
+    signal: options?.signal
+  })
+  return data
+}

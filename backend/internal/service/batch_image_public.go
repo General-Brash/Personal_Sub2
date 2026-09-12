@@ -85,6 +85,7 @@ type BatchImageOwner struct {
 }
 
 type BatchImagePublicService struct {
+	Entitlements      *EntitlementService
 	Repo              BatchImageRepository
 	AccountRepo       BatchImageAccountSelectionRepository
 	GroupRepo         BatchImageGroupPricingRepository
@@ -98,6 +99,7 @@ type BatchImagePublicService struct {
 }
 
 type BatchImagePricingSnapshot struct {
+	DynamicRateSnapshot     *DynamicRatePricingSnapshot
 	BaseUnitPrice           float64
 	GroupRateMultiplier     float64
 	AccountRateMultiplier   float64
@@ -281,6 +283,7 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		BillableUnitPrice:       pricingSnapshot.BillableUnitPrice,
 		HoldUnitPrice:           pricingSnapshot.HoldUnitPrice,
 		PricingSnapshotVersion:  1,
+		DynamicRateSnapshot:     pricingSnapshot.DynamicRateSnapshot,
 		Currency:                "USD",
 		HoldID:                  &holdID,
 		IdempotencyKey:          batchImageOptionalStringPtr(idempotencyKey),
@@ -1000,6 +1003,7 @@ func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Contex
 }
 
 func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, owner BatchImageOwner, req BatchImageSubmitRequest, provider string, account *Account) (*BatchImagePricingSnapshot, error) {
+	var dynamic *DynamicRatePricingSnapshot
 	unit := -1.0
 	groupMultiplier := 1.0
 	discountMultiplier := defaultBatchImageDiscountMultiplier
@@ -1020,6 +1024,7 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 			return nil, err
 		}
 		effectiveGroupMultiplier := groupDefaultMultiplier
+		var explicitUserRate *float64
 		if s.UserGroupRateRepo != nil {
 			userRate, rateErr := s.UserGroupRateRepo.GetByUserAndGroup(ctx, owner.UserID, group.ID)
 			if rateErr != nil {
@@ -1027,7 +1032,15 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 			}
 			if userRate != nil {
 				effectiveGroupMultiplier = *userRate
+				explicitUserRate = userRate
 			}
+		}
+		if s.Entitlements != nil {
+			rate, rateErr := s.Entitlements.ResolveGroupRate(ctx, owner.UserID, group.ID, explicitUserRate, groupDefaultMultiplier)
+			if rateErr != nil {
+				return nil, rateErr
+			}
+			effectiveGroupMultiplier = rate.Multiplier
 		}
 		groupMultiplier = effectiveGroupMultiplier
 		if group.ImageRateIndependent {
@@ -1035,6 +1048,16 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 		}
 		if err := validateBillingPriceFor(req.Model, "batch_image", "effective_group_rate_multiplier", groupMultiplier); err != nil {
 			return nil, err
+		}
+		if repo, ok := s.BillingRepo.(DynamicRateRepository); ok {
+			var freezeErr error
+			dynamic, freezeErr = newDynamicRateResolver(repo).Freeze(ctx, owner.UserID, group.ID, DynamicRateModeBatchImage, groupMultiplier, 1, time.Now().UTC(), group.IsSubscriptionType())
+			if freezeErr != nil {
+				return nil, freezeErr
+			}
+			if dynamic != nil {
+				groupMultiplier = dynamic.FinalFactor
+			}
 		}
 		discountMultiplier = group.BatchImageDiscountMultiplier
 		if err := validateBillingPriceFor(req.Model, "batch_image", "batch_discount_multiplier", discountMultiplier); err != nil {
@@ -1100,6 +1123,7 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 		}
 	}
 	return &BatchImagePricingSnapshot{
+		DynamicRateSnapshot:     dynamic,
 		BaseUnitPrice:           unit,
 		GroupRateMultiplier:     groupMultiplier,
 		AccountRateMultiplier:   accountMultiplier,

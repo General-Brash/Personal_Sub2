@@ -31,6 +31,27 @@ func RegisterAdminRoutes(
 	admin.Use(gin.HandlerFunc(auditLog))
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	{
+		if h.FeatureManagement != nil {
+			features := h.FeatureManagement
+			admin.GET("/settings/personal-features", features.GetFeatureSettings)
+			admin.PUT("/settings/personal-features", features.UpdateFeatureSettings)
+			admin.GET("/permissions", features.ListPermissions)
+			admin.GET("/users/:id/permissions", features.GetUserPermissions)
+			admin.PUT("/users/:id/permissions/:permission", features.GrantUserPermission)
+			admin.DELETE("/users/:id/permissions/:permission", features.RevokeUserPermission)
+			admin.GET("/users/:id/entitlement", features.GetUserEntitlement)
+			admin.PUT("/users/:id/entitlement", features.UpdateUserEntitlement)
+			admin.GET("/entitlements/catalog", features.GetEntitlementCatalog)
+			admin.PUT("/entitlements/catalog", features.UpdateEntitlementPolicy)
+			admin.POST("/entitlements/preview", features.PreviewEntitlements)
+			admin.POST("/entitlements/apply", features.ApplyEntitlements)
+		}
+		if h.Invitation != nil {
+			admin.POST("/invitations/quota-adjust", h.Invitation.AdminAdjustInvitationQuota)
+			admin.POST("/affiliates/relationships", h.Invitation.AdminCreateInvitationRelationship)
+			admin.POST("/affiliates/relationships/preview", h.Invitation.AdminPreviewRelationship)
+		}
+
 		// 部署与运营合规确认
 		registerAdminComplianceRoutes(admin, h)
 
@@ -342,6 +363,9 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	groups := admin.Group("/groups")
+	if h.DynamicRate != nil {
+		h.DynamicRate.RegisterRoutes(groups)
+	}
 	{
 		groups.GET("", h.Admin.Group.List)
 		groups.GET("/all", h.Admin.Group.GetAll)
@@ -574,9 +598,17 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
 		adminSettings.GET("/checkin", h.Admin.Setting.GetDailyCheckinSettings)
 		adminSettings.PUT("/checkin", h.Admin.Setting.UpdateDailyCheckinSettings)
+		if h.CheckinAdmin != nil {
+			adminSettings.GET("/checkin/v2", h.CheckinAdmin.GetSettings)
+			adminSettings.PUT("/checkin/v2", h.CheckinAdmin.UpdateSettings)
+		}
 		adminSettings.GET("/bank", h.Admin.Bank.GetPolicy)
 		adminSettings.PUT("/bank", h.Admin.Bank.UpdatePolicy)
 		adminSettings.GET("/bank/transactions", h.Admin.Bank.ListTransactions)
+		if h.Admin.BankExchangeExpiry != nil {
+			adminSettings.GET("/bank/exchange-expiry", h.Admin.BankExchangeExpiry.GetPolicy)
+			adminSettings.PUT("/bank/exchange-expiry", h.Admin.BankExchangeExpiry.UpdatePolicy)
+		}
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)

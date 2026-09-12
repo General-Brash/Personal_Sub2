@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"log/slog"
 	"math"
 	"strconv"
@@ -30,6 +32,12 @@ type AffiliateRebateJobInput struct {
 	SourceRedeemCodeID int64
 	SourceKind         string
 	BaseAmount         float64
+	// Relation snapshots are captured when the event is enqueued. A NULL
+	// inviter is authoritative: it must not be rebound by a later backfill.
+	InviterUserID       *int64
+	RelationEffectiveAt *time.Time
+	EventOccurredAt     time.Time
+	PolicySnapshot      []byte
 }
 
 type AffiliateAccrualResult struct {
@@ -62,13 +70,22 @@ type affiliateRebateRuntimeConfig struct {
 	PerInviteeCap float64
 }
 
+type affiliateEventPolicySnapshot struct {
+	Version int                          `json:"version"`
+	Config  affiliateRebateRuntimeConfig `json:"config"`
+}
+
 type affiliateRebateJob struct {
-	ID                 int64
-	InviteeUserID      int64
-	SourceRedeemCodeID int64
-	SourceKind         string
-	BaseAmount         float64
-	Attempts           int
+	ID                  int64
+	InviteeUserID       int64
+	SourceRedeemCodeID  int64
+	SourceKind          string
+	BaseAmount          float64
+	Attempts            int
+	InviterUserID       *int64
+	RelationEffectiveAt *time.Time
+	EventOccurredAt     time.Time
+	PolicySnapshot      []byte
 }
 
 func (s *AffiliateService) EnqueueAffiliateRebateJob(ctx context.Context, input AffiliateRebateJobInput) error {
@@ -85,6 +102,50 @@ func (s *AffiliateService) EnqueueAffiliateRebateJob(ctx context.Context, input 
 	if input.BaseAmount <= 0 || math.IsNaN(input.BaseAmount) || math.IsInf(input.BaseAmount, 0) {
 		return errors.New("invalid affiliate rebate base amount")
 	}
+	if input.EventOccurredAt.IsZero() {
+		input.EventOccurredAt = time.Now().UTC()
+	}
+	if input.InviterUserID == nil || input.RelationEffectiveAt == nil {
+		invitee, err := s.repo.EnsureUserAffiliate(ctx, input.InviteeUserID)
+		if err != nil {
+			return err
+		}
+		if invitee.InviterID != nil {
+			inviterID := *invitee.InviterID
+			input.InviterUserID = &inviterID
+			if invitee.InviterEffectiveAt != nil {
+				effectiveAt := *invitee.InviterEffectiveAt
+				input.RelationEffectiveAt = &effectiveAt
+			}
+		}
+	}
+	cfg := affiliateRebateRuntimeConfig{}
+	if s.settingService != nil {
+		var cfgErr error
+		cfg, cfgErr = s.settingService.loadAffiliateRebateRuntimeConfig(ctx, input.SourceKind)
+		if cfgErr != nil {
+			return cfgErr
+		}
+	}
+	if cfg.Enabled && input.InviterUserID != nil {
+		inviter, lookupErr := s.repo.EnsureUserAffiliate(ctx, *input.InviterUserID)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		if inviter.AffRebateRatePercent != nil {
+			cfg.RatePercent = *inviter.AffRebateRatePercent
+		}
+	}
+	if math.IsNaN(cfg.RatePercent) || math.IsInf(cfg.RatePercent, 0) || cfg.RatePercent < 0 || cfg.RatePercent > 100 {
+		return fmt.Errorf("invalid affiliate event-time rate")
+	}
+	// Freeze the resolved inviter override too; retries must not price an old
+	// redemption using today's promotion, freeze period, or per-invitee cap.
+	snapshotBytes, snapshotErr := json.Marshal(affiliateEventPolicySnapshot{Version: 1, Config: cfg})
+	if snapshotErr != nil {
+		return snapshotErr
+	}
+	input.PolicySnapshot = snapshotBytes
 	repo, ok := s.repo.(AffiliateRebateOutboxRepository)
 	if !ok || repo == nil {
 		return errors.New("affiliate rebate outbox repository is not configured")
@@ -100,31 +161,38 @@ func (s *AffiliateService) accrueQueuedAffiliateRebate(
 	if s == nil || s.repo == nil {
 		return AffiliateAccrualResult{}, "", errors.New("affiliate service is not configured")
 	}
+	if job.InviterUserID == nil || *job.InviterUserID <= 0 {
+		return AffiliateAccrualResult{}, "no inviter snapshot at event time", nil
+	}
+	if job.RelationEffectiveAt == nil || job.RelationEffectiveAt.After(job.EventOccurredAt) {
+		return AffiliateAccrualResult{}, "relation was not effective at source event", nil
+	}
+	inviterID := *job.InviterUserID
 
 	invitee, err := s.repo.EnsureUserAffiliate(ctx, job.InviteeUserID)
 	if err != nil {
 		return AffiliateAccrualResult{}, "", err
 	}
-	if invitee.InviterID == nil || *invitee.InviterID <= 0 {
-		return AffiliateAccrualResult{}, "no inviter bound", nil
+	if invitee.InviterID == nil || *invitee.InviterID != inviterID {
+		return AffiliateAccrualResult{}, "inviter snapshot no longer matches current relation", nil
 	}
-	if cfg.DurationDays > 0 && time.Now().After(invitee.CreatedAt.AddDate(0, 0, cfg.DurationDays)) {
-		return AffiliateAccrualResult{}, "rebate duration expired", nil
+	if cfg.DurationDays > 0 && job.EventOccurredAt.After(invitee.CreatedAt.AddDate(0, 0, cfg.DurationDays)) {
+		return AffiliateAccrualResult{}, "rebate duration expired at source event", nil
 	}
 
-	inviter, err := s.repo.EnsureUserAffiliate(ctx, *invitee.InviterID)
+	inviter, err := s.repo.EnsureUserAffiliate(ctx, inviterID)
 	if err != nil {
 		return AffiliateAccrualResult{}, "", err
 	}
 	rate := cfg.RatePercent
-	if inviter.AffRebateRatePercent != nil {
+	if len(job.PolicySnapshot) == 0 && inviter.AffRebateRatePercent != nil {
 		rate = *inviter.AffRebateRatePercent
 		if math.IsNaN(rate) || math.IsInf(rate, 0) || rate < AffiliateRebateRateMin || rate > AffiliateRebateRateMax {
 			return AffiliateAccrualResult{}, "", fmt.Errorf("invalid inviter affiliate rebate rate: %v", rate)
 		}
 	}
 
-	requested := roundTo(job.BaseAmount*(rate/100), 8)
+	requested, _ := decimal.NewFromFloat(job.BaseAmount).Mul(decimal.NewFromFloat(rate)).Div(decimal.NewFromInt(100)).Truncate(8).Float64()
 	if requested <= 0 {
 		return AffiliateAccrualResult{}, "rebate amount is zero", nil
 	}
@@ -135,7 +203,7 @@ func (s *AffiliateService) accrueQueuedAffiliateRebate(
 	sourceRedeemCodeID := job.SourceRedeemCodeID
 	result, err := repo.AccrueQuotaCapped(
 		ctx,
-		*invitee.InviterID,
+		inviterID,
 		job.InviteeUserID,
 		requested,
 		cfg.PerInviteeCap,
@@ -151,7 +219,6 @@ func (s *AffiliateService) accrueQueuedAffiliateRebate(
 	}
 	return result, "", nil
 }
-
 func (s *SettingService) loadAffiliateRebateRuntimeConfig(ctx context.Context, sourceKind string) (affiliateRebateRuntimeConfig, error) {
 	if s == nil || s.settingRepo == nil {
 		return affiliateRebateRuntimeConfig{}, errors.New("affiliate settings repository is not configured")
@@ -378,9 +445,22 @@ func (w *AffiliateRebateWorker) ProcessOnce(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	cfg, processErr := w.settingService.loadAffiliateRebateRuntimeConfig(txCtx, job.SourceKind)
+	var cfg affiliateRebateRuntimeConfig
+	var processErr error
+	if len(job.PolicySnapshot) > 0 {
+		var snapshot affiliateEventPolicySnapshot
+		processErr = json.Unmarshal(job.PolicySnapshot, &snapshot)
+		if processErr == nil && snapshot.Version != 1 {
+			processErr = fmt.Errorf("unsupported affiliate policy snapshot")
+		}
+		cfg = snapshot.Config
+	} else {
+		// Legacy jobs have no policy snapshot; keep their documented legacy
+		// policy interpretation but still enforce event-time relation bounds.
+		cfg, processErr = w.settingService.loadAffiliateRebateRuntimeConfig(txCtx, job.SourceKind)
+	}
 	if processErr == nil && !cfg.Enabled {
-		processErr = markAffiliateRebateJobSkipped(txCtx, client, job.ID)
+		processErr = markAffiliateRebateJobSkipped(txCtx, client, job.ID, "disabled_at_event_time")
 		if processErr == nil {
 			if err := tx.Commit(); err != nil {
 				return true, fmt.Errorf("commit skipped affiliate rebate job: %w", err)
@@ -394,7 +474,7 @@ func (w *AffiliateRebateWorker) ProcessOnce(ctx context.Context) (bool, error) {
 		processErr = accrueErr
 		if processErr == nil {
 			if reason != "" {
-				processErr = markAffiliateRebateJobSkipped(txCtx, client, job.ID)
+				processErr = markAffiliateRebateJobSkipped(txCtx, client, job.ID, reason)
 			} else if result.Applied || result.Duplicate {
 				processErr = markAffiliateRebateJobSucceeded(txCtx, client, job.ID)
 			} else {
@@ -425,7 +505,11 @@ SELECT id,
        source_redeem_code_id,
        source_kind,
        base_amount::double precision,
-       attempts
+       attempts,
+       inviter_user_id,
+       relation_effective_at,
+       event_occurred_at,
+       policy_snapshot
 FROM affiliate_rebate_jobs
 WHERE (status IN ('pending', 'failed') AND next_retry_at <= NOW())
    OR (
@@ -456,6 +540,10 @@ FOR UPDATE SKIP LOCKED`, affiliateRebateProcessingLease.Seconds())
 		&job.SourceKind,
 		&job.BaseAmount,
 		&job.Attempts,
+		&job.InviterUserID,
+		&job.RelationEffectiveAt,
+		&job.EventOccurredAt,
+		&job.PolicySnapshot,
 	); err != nil {
 		return nil, err
 	}
@@ -497,17 +585,22 @@ WHERE id = $1`, jobID)
 	return err
 }
 
-func markAffiliateRebateJobSkipped(ctx context.Context, client *dbent.Client, jobID int64) error {
+func markAffiliateRebateJobSkipped(ctx context.Context, client *dbent.Client, jobID int64, reason ...string) error {
+	why := "not_eligible"
+	if len(reason) > 0 {
+		why = reason[0]
+	}
 	_, err := client.ExecContext(ctx, `
 UPDATE affiliate_rebate_jobs
 SET status = 'skipped',
     skipped_at = NOW(),
     processing_started_at = NULL,
+    skip_reason = $2,
     last_error = NULL,
     last_error_at = NULL,
     failed_at = NULL,
     updated_at = NOW()
-WHERE id = $1`, jobID)
+WHERE id = $1`, jobID, why)
 	return err
 }
 

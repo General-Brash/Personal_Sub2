@@ -54,6 +54,9 @@ func groupIDAndVideoPricing(apiKey *APIKey) (*int64, *VideoPriceConfig) {
 }
 
 func (s *GatewayService) PreflightTokenRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult) error {
+	if err := s.RequireDynamicRateAdmission(ctx, apiKey, DynamicRateModeText); err != nil {
+		return err
+	}
 	model := gatewayBillingModelForPreflight(account, mapping, requestedModel)
 	var groupID *int64
 	if apiKey != nil {
@@ -66,6 +69,9 @@ func (s *GatewayService) PreflightTokenRequestPricing(ctx context.Context, apiKe
 }
 
 func (s *GatewayService) PreflightImageRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult, sizeTier string) error {
+	if err := s.RequireDynamicRateAdmission(ctx, apiKey, DynamicRateModeImage); err != nil {
+		return err
+	}
 	model := gatewayBillingModelForPreflight(account, mapping, requestedModel)
 	groupID, groupConfig := groupIDAndImagePricing(apiKey)
 	if s == nil || s.billingService == nil {
@@ -75,6 +81,9 @@ func (s *GatewayService) PreflightImageRequestPricing(ctx context.Context, apiKe
 }
 
 func (s *OpenAIGatewayService) PreflightTokenRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult) error {
+	if err := s.RequireDynamicRateAdmission(ctx, apiKey, DynamicRateModeText); err != nil {
+		return err
+	}
 	model := openAIBillingModelForPreflight(account, mapping, requestedModel)
 	var groupID *int64
 	if apiKey != nil {
@@ -87,6 +96,9 @@ func (s *OpenAIGatewayService) PreflightTokenRequestPricing(ctx context.Context,
 }
 
 func (s *OpenAIGatewayService) PreflightImageRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult, sizeTier string) error {
+	if err := s.RequireDynamicRateAdmission(ctx, apiKey, DynamicRateModeImage); err != nil {
+		return err
+	}
 	model := openAIBillingModelForPreflight(account, mapping, requestedModel)
 	if s != nil {
 		apiKey = s.apiKeyWithFreshGroupMediaPricing(ctx, apiKey)
@@ -99,6 +111,9 @@ func (s *OpenAIGatewayService) PreflightImageRequestPricing(ctx context.Context,
 }
 
 func (s *OpenAIGatewayService) PreflightVideoRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult, resolution string) error {
+	if err := s.RequireDynamicRateAdmission(ctx, apiKey, DynamicRateModeVideo); err != nil {
+		return err
+	}
 	model := openAIBillingModelForPreflight(account, mapping, requestedModel)
 	if s != nil {
 		apiKey = s.apiKeyWithFreshGroupMediaPricing(ctx, apiKey)
@@ -119,6 +134,9 @@ func (s *OpenAIGatewayService) PreflightResponsesRequestPricing(ctx context.Cont
 	}
 	if !IsExplicitImageGenerationIntent(openAIResponsesEndpoint, requestedModel, body) {
 		return nil
+	}
+	if err := s.RequireDynamicRateAdmission(ctx, apiKey, DynamicRateModeImage); err != nil {
+		return err
 	}
 	fallbackModel := openAIBillingModelForPreflight(account, mapping, requestedModel)
 	imageConfig, err := resolveOpenAIResponsesImageBillingConfigDetailedFromBody(body, fallbackModel)
@@ -145,6 +163,9 @@ func (s *OpenAIGatewayService) PreflightResponsesRequestPricing(ctx context.Cont
 // dispatch default; preflight must use that same order or it can approve a
 // request whose effective upstream model has no price.
 func (s *OpenAIGatewayService) PreflightMessagesRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel, defaultMappedModel string, mapping ChannelMappingResult) error {
+	if err := s.RequireDynamicRateAdmission(ctx, apiKey, DynamicRateModeText); err != nil {
+		return err
+	}
 	model := openAIMessagesBillingModelForPreflight(account, mapping, requestedModel, defaultMappedModel)
 	var groupID *int64
 	if apiKey != nil {

@@ -158,6 +158,12 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 
 	// 分组利润控制：chat completions 文本入口请求级装门并固定 pricingAt。
 	ccPricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
+	ccPricingCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(ccPricingCtx, apiKey, subject.UserID, service.DynamicRateModeText, pricingAt)
+	if dynamicRateErr != nil {
+		reqLog.Warn("openai_chat_completions.dynamic_rate_admission_failed", zap.Error(dynamicRateErr))
+		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "billing_error", "dynamic rate pricing unavailable", streamStarted)
+		return
+	}
 	c.Request = c.Request.WithContext(ccPricingCtx)
 
 	for {

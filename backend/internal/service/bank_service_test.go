@@ -43,6 +43,12 @@ func expectNoExpiredBankAdvance(mock sqlmock.Sqlmock, userID int64, now time.Tim
 		WillReturnRows(sqlmock.NewRows([]string{"id", "grant_id", "debt_remaining", "remaining_amount"}))
 }
 
+func expectNoBankExchangeExpiryRefunds(mock sqlmock.Sqlmock, userID int64, now time.Time) {
+	mock.ExpectQuery("SELECT snapshot.grant_id").
+		WithArgs(userID, now).
+		WillReturnRows(sqlmock.NewRows([]string{"grant_id", "principal_permanent", "generated_temporary", "remaining_amount", "fee_bps", "policy_version"}))
+}
+
 func expectBankSettlementNoop(mock sqlmock.Sqlmock, policy BankPolicy, userID int64, balance, debt string, dueAt, now time.Time) {
 	mock.ExpectBegin()
 	expectBankPolicy(mock, policy)
@@ -53,6 +59,7 @@ func expectBankSettlementNoop(mock sqlmock.Sqlmock, policy BankPolicy, userID in
 	mock.ExpectQuery(`SELECT clock_timestamp\(\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"clock_timestamp"}).AddRow(now))
 	expectNoExpiredBankAdvance(mock, userID, now)
+	expectNoBankExchangeExpiryRefunds(mock, userID, now)
 	mock.ExpectCommit()
 }
 
@@ -226,6 +233,7 @@ func TestExchangeAtomicSettlesDebtThatBecomesDueInsideTransactionBeforeDeduction
 	mock.ExpectQuery(`SELECT clock_timestamp\(\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"clock_timestamp"}).AddRow(outsideNow))
 	expectNoExpiredBankAdvance(mock, userID, outsideNow)
+	expectNoBankExchangeExpiryRefunds(mock, userID, outsideNow)
 	mock.ExpectCommit()
 
 	mock.ExpectBegin()
@@ -323,6 +331,7 @@ func TestExchangeAtomicAllowsDayBoundaryAndUsesDatabaseBusinessDate(t *testing.T
 			mock.ExpectQuery(`SELECT clock_timestamp\(\)`).
 				WillReturnRows(sqlmock.NewRows([]string{"clock_timestamp"}).AddRow(eligibilityNow))
 			expectNoExpiredBankAdvance(mock, userID, eligibilityNow)
+			expectNoBankExchangeExpiryRefunds(mock, userID, eligibilityNow)
 			mock.ExpectCommit()
 
 			mock.ExpectBegin()
@@ -396,6 +405,7 @@ func TestCheckPermanentBalanceEligibilitySettlesDueDebtBeforeRejecting(t *testin
 	mock.ExpectExec("INSERT INTO bank_ledger").
 		WithArgs(int64(42), int64(9), "-2.00000000", "-2.00000000", "2.00000000", sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	expectNoBankExchangeExpiryRefunds(mock, int64(42), now)
 	mock.ExpectCommit()
 	mock.ExpectQuery("SELECT balance FROM users").
 		WithArgs(int64(42)).
@@ -529,6 +539,7 @@ func TestSettleDueContinuesAfterPerUserFailure(t *testing.T) {
 	mock.ExpectQuery(`SELECT clock_timestamp\(\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"clock_timestamp"}).AddRow(now))
 	expectNoExpiredBankAdvance(mock, userTwo, now)
+	expectNoBankExchangeExpiryRefunds(mock, userTwo, now)
 	mock.ExpectCommit()
 
 	err = NewBankService(db, nil, nil).SettleDue(context.Background())

@@ -8,10 +8,9 @@ const { getCheckinSettings, updateCheckinSettings, showError, showSuccess } = vi
   showSuccess: vi.fn(),
 }))
 
-vi.mock('@/api/admin', () => ({
-  adminAPI: {
-    settings: { getCheckinSettings, updateCheckinSettings },
-  },
+vi.mock('@/api/checkin', () => ({
+  getCheckinSettingsV2: getCheckinSettings,
+  updateCheckinSettingsV2: updateCheckinSettings,
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -38,6 +37,13 @@ const settings = {
     { day: 1, amount: '0.00000001', permanent_amount: '0.00000000' },
     { day: 2, amount: '1.25000000', permanent_amount: '2.00000000' },
   ],
+  version: 'checkin-v2-version-1',
+  refresh_time: '00:00',
+  auto_fee_bps: 500,
+  reviewed: false,
+  normal: { enabled: false, min_bps: 10000, max_bps: 10000 },
+  super: { enabled: false, min_bps: 10000, max_bps: 10000, cost: '0.00000000' },
+  next_reset_at: '2026-09-13T16:00:00Z',
 }
 
 function deferred<T>() {
@@ -92,7 +98,7 @@ describe('CheckinSettingsCard', () => {
     await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
     await flushPromises()
 
-    expect(updateCheckinSettings).toHaveBeenCalledWith({
+    expect(updateCheckinSettings).toHaveBeenCalledWith(expect.objectContaining({
       enabled: false,
       max_reward_day: 3,
       reward_tiers: [
@@ -100,7 +106,7 @@ describe('CheckinSettingsCard', () => {
         { day: 2, amount: '1.25', permanent_amount: '2.00' },
         { day: 3, amount: '0.00000101', permanent_amount: '0.50000000' },
       ],
-    })
+    }))
     expect(typeof updateCheckinSettings.mock.calls[0]?.[0]?.reward_tiers[2]?.amount).toBe('string')
     expect(showSuccess).toHaveBeenCalledWith('checkin.admin.settingsSaved')
   })

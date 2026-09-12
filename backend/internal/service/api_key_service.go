@@ -290,6 +290,7 @@ type AvailableCreditEligibilityChecker interface {
 }
 
 type APIKeyService struct {
+	entitlements              APIKeyEntitlementResolver
 	apiKeyRepo                APIKeyRepository
 	userRepo                  UserRepository
 	groupRepo                 GroupRepository
@@ -492,6 +493,11 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 // 对于订阅类型分组：检查用户是否有有效订阅
 // 对于标准类型分组：使用原有的 AllowedGroups 和 IsExclusive 逻辑
 func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
+	var err error
+	user, err = s.liveEntitlementUser(ctx, user)
+	if err != nil || user == nil {
+		return false
+	}
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
@@ -757,7 +763,7 @@ func (s *APIKeyService) GetByKey(ctx context.Context, key string) (*APIKey, erro
 				return nil, fmt.Errorf("get api key: %w", err)
 			}
 			s.compileAPIKeyIPRules(apiKey)
-			return apiKey, nil
+			return s.applyLiveEntitlements(ctx, apiKey)
 		}
 	}
 
@@ -774,7 +780,7 @@ func (s *APIKeyService) GetByKey(ctx context.Context, key string) (*APIKey, erro
 				return nil, fmt.Errorf("get api key: %w", err)
 			}
 			s.compileAPIKeyIPRules(apiKey)
-			return apiKey, nil
+			return s.applyLiveEntitlements(ctx, apiKey)
 		}
 	} else {
 		entry, err := s.loadAuthCacheEntry(ctx, key, cacheKey)
@@ -786,7 +792,7 @@ func (s *APIKeyService) GetByKey(ctx context.Context, key string) (*APIKey, erro
 				return nil, fmt.Errorf("get api key: %w", err)
 			}
 			s.compileAPIKeyIPRules(apiKey)
-			return apiKey, nil
+			return s.applyLiveEntitlements(ctx, apiKey)
 		}
 	}
 
@@ -796,7 +802,7 @@ func (s *APIKeyService) GetByKey(ctx context.Context, key string) (*APIKey, erro
 	}
 	apiKey.Key = key
 	s.compileAPIKeyIPRules(apiKey)
-	return apiKey, nil
+	return s.applyLiveEntitlements(ctx, apiKey)
 }
 
 // Update 更新API Key
@@ -1066,6 +1072,11 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
+	}
+
+	user, err = s.liveEntitlementUser(ctx, user)
+	if err != nil {
+		return nil, err
 	}
 
 	// 获取所有活跃分组

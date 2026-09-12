@@ -19,6 +19,21 @@ import type {
 import type { BasePaginationResponse } from '@/types'
 import type { LedgerResponse } from '@/types/finance'
 
+export interface MallQuote {
+  product_type: 'currency' | 'subscription'
+  product_id: number
+  name: string
+  price: string
+  currency: string
+  payment_credit_type: 'permanent' | 'temporary'
+  credited_type?: 'permanent' | 'temporary'
+  credited_amount?: string
+  benefit_type?: 'sub2' | 'daily_temporary_credit'
+  validity_days?: number
+  quote_version: string
+  priced_at: string
+}
+
 export interface PublicOrderVerifyResult {
   out_trade_no: string
   status: string
@@ -48,8 +63,15 @@ export const paymentAPI = {
     return apiClient.get<MallBalanceSummary>('/mall/balance')
   },
 
+  /** Get the current server quote for one mall product. */
+  getMallQuote(productType: 'currency' | 'subscription', productId: number) {
+    return apiClient.get<MallQuote>('/mall/quote', {
+      params: { product_type: productType, product_id: productId },
+    })
+  },
+
   /** Purchase a mall product with internal permanent or temporary credit. */
-  purchaseMallProduct(data: MallPurchaseRequest, idempotencyKey: string) {
+  purchaseMallProduct(data: MallPurchaseRequest & { expected_quote_version?: string }, idempotencyKey: string) {
     return apiClient.post<MallPurchaseResult>('/mall/purchases', data, {
       headers: { 'Idempotency-Key': idempotencyKey },
     })

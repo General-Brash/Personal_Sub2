@@ -740,6 +740,14 @@ func (r *batchImageRepository) AppendBatchImageEvent(ctx context.Context, batchI
 }
 
 func createBatchImageJobWithSQL(ctx context.Context, sqlq batchImageSQLExecutor, params service.CreateBatchImageJobParams) (*service.BatchImageJob, error) {
+	var dynamicJSON any
+	if params.DynamicRateSnapshot != nil {
+		raw, err := json.Marshal(params.DynamicRateSnapshot)
+		if err != nil {
+			return nil, err
+		}
+		dynamicJSON = string(raw)
+	}
 	return scanBatchImageJob(sqlq.QueryRowContext(ctx, `
 INSERT INTO batch_image_jobs (
     batch_id, user_id, api_key_id, account_id, provider, model, task_name, parent_batch_id, status,
@@ -750,7 +758,7 @@ INSERT INTO batch_image_jobs (
     batch_discount_multiplier, hold_multiplier, billable_unit_price, hold_unit_price,
     pricing_snapshot_version,
     currency, hold_id,
-    idempotency_key, request_hash, manifest_hash, retry_count, session_id, output_expires_at
+    idempotency_key, request_hash, manifest_hash, retry_count, session_id, output_expires_at, dynamic_rate_snapshot
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
     $10, $11, $12, $13, $14,
@@ -760,7 +768,7 @@ INSERT INTO batch_image_jobs (
     $25, $26, $27, $28,
     $29,
     $30, $31,
-    $32, $33, $34, $35, $36, $37
+    $32, $33, $34, $35, $36, $37, $38::jsonb
 )
 RETURNING `+batchImageJobColumns,
 		params.BatchID, params.UserID, params.APIKeyID, params.AccountID, params.Provider, params.Model, params.TaskName, params.ParentBatchID, params.Status,
@@ -771,7 +779,7 @@ RETURNING `+batchImageJobColumns,
 		params.BatchDiscountMultiplier, params.HoldMultiplier, params.BillableUnitPrice, params.HoldUnitPrice,
 		params.PricingSnapshotVersion,
 		params.Currency, params.HoldID,
-		params.IdempotencyKey, params.RequestHash, params.ManifestHash, params.RetryCount, params.SessionID, params.OutputExpiresAt,
+		params.IdempotencyKey, params.RequestHash, params.ManifestHash, params.RetryCount, params.SessionID, params.OutputExpiresAt, dynamicJSON,
 	))
 }
 
@@ -827,7 +835,7 @@ currency, hold_id,
 idempotency_key, request_hash, manifest_hash,
 retry_count, version, session_id, output_expires_at, input_deleted_at, output_deleted_at, downloaded_at, user_deleted_at,
 last_error_code, last_error_message,
-created_at, updated_at, submitted_at, started_at, finished_at, settled_at`
+created_at, updated_at, submitted_at, started_at, finished_at, settled_at, dynamic_rate_snapshot`
 
 const batchImageJobSelectSQL = `SELECT ` + batchImageJobColumns + ` FROM batch_image_jobs`
 
@@ -842,6 +850,7 @@ func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 	var outputExpiresAt, inputDeletedAt, outputDeletedAt, downloadedAt, userDeletedAt sql.NullTime
 	var lastErrorCode, lastErrorMessage sql.NullString
 	var submittedAt, startedAt, finishedAt, settledAt sql.NullTime
+	var dynamicJSON []byte
 
 	err := row.Scan(
 		&job.ID, &job.BatchID, &job.UserID, &apiKeyID, &accountID, &job.Provider, &job.Model, &job.TaskName, &parentBatchID, &job.Status,
@@ -855,12 +864,17 @@ func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 		&idempotencyKey, &requestHash, &manifestHash,
 		&job.RetryCount, &job.Version, &sessionID, &outputExpiresAt, &inputDeletedAt, &outputDeletedAt, &downloadedAt, &userDeletedAt,
 		&lastErrorCode, &lastErrorMessage,
-		&job.CreatedAt, &job.UpdatedAt, &submittedAt, &startedAt, &finishedAt, &settledAt,
+		&job.CreatedAt, &job.UpdatedAt, &submittedAt, &startedAt, &finishedAt, &settledAt, &dynamicJSON,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	if len(dynamicJSON) > 0 && string(dynamicJSON) != "null" {
+		if err := json.Unmarshal(dynamicJSON, &job.DynamicRateSnapshot); err != nil {
+			return nil, err
+		}
+	}
 	job.APIKeyID = batchImageNullInt64Ptr(apiKeyID)
 	job.AccountID = batchImageNullInt64Ptr(accountID)
 	job.ProviderJobName = batchImageNullStringPtr(providerJobName)

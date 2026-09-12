@@ -211,6 +211,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	setOpsRequestContext(c, reqModel, reqStream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
+	pricingCtx, dynamicRateErr := h.gatewayService.FreezeDynamicRatePricing(pricingCtx, apiKey, subject.UserID, service.DynamicRateModeText, pricingAt)
+	if dynamicRateErr != nil {
+		reqLog.Warn("gateway.dynamic_rate_admission_failed", zap.Error(dynamicRateErr))
+		h.errorResponse(c, http.StatusServiceUnavailable, "billing_error", "dynamic rate pricing unavailable")
+		return
+	}
 	c.Request = c.Request.WithContext(pricingCtx)
 
 	// 验证 model 必填
@@ -2094,14 +2100,19 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		return
 	}
 
-	_, ok = middleware2.GetAuthSubjectFromContext(c)
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
+		return
+	}
+	if err := h.gatewayService.RequireDynamicRateAdmission(c.Request.Context(), apiKey, "count_tokens"); err != nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "billing_error", "count_tokens cannot bypass dynamic rate billing")
 		return
 	}
 	reqLog := requestLogger(
 		c,
 		"handler.gateway.count_tokens",
+		zap.Int64("user_id", subject.UserID),
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)

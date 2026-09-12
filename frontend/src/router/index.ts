@@ -1006,6 +1006,11 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
+  if (requiresAdmin && authStore.user?.permission_mode === 'enforce' && !authStore.canAccessAdminPath(to.path)) {
+    next('/dashboard')
+    return
+  }
+
   if (requiresAdmin && authStore.isAdmin) {
     const adminComplianceStore = useAdminComplianceStore()
     if (!adminComplianceStore.initialized) {

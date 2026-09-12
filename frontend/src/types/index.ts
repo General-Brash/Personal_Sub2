@@ -84,7 +84,11 @@ export interface User {
   linuxdo_bound?: boolean
   oidc_bound?: boolean
   wechat_bound?: boolean
-  role: 'admin' | 'user' // User role for authorization
+  role: 'admin' | 'user' | 'super_admin' // Management identity, separate from consumer tier
+  entitlement_tier?: 'standard' | 'premium'
+  permission_mode?: 'disabled' | 'shadow' | 'enforce'
+  permission_version?: number
+  permissions?: string[]
   balance: number // User balance for API usage
   temporary_credit_available?: number // Currently usable temporary credit from all active sources
   frozen_balance?: number // Balance currently held by async batch jobs
@@ -2010,7 +2014,7 @@ export interface UpdateUserRequest {
   password?: string
   username?: string
   notes?: string
-  role?: 'admin' | 'user'
+  role?: 'admin' | 'user' | 'super_admin'
   balance?: number
   concurrency?: number
   rpm_limit?: number

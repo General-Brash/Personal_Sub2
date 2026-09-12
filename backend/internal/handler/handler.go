@@ -11,6 +11,7 @@ type AdminHandlers struct {
 	User                   *admin.UserHandler
 	TemporaryCredit        *admin.TemporaryCreditHandler
 	Bank                   *admin.BankHandler
+	BankExchangeExpiry     *admin.BankExchangeExpiryHandler
 	Group                  *admin.GroupHandler
 	Account                *admin.AccountHandler
 	Announcement           *admin.AnnouncementHandler
@@ -50,29 +51,33 @@ type AdminHandlers struct {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	Auth             *AuthHandler
-	User             *UserHandler
-	APIKey           *APIKeyHandler
-	Usage            *UsageHandler
-	Redeem           *RedeemHandler
-	Subscription     *SubscriptionHandler
-	Announcement     *AnnouncementHandler
-	ChannelMonitor   *ChannelMonitorUserHandler
-	ChannelMonitorV2 *ChannelMonitorV2Handler
-	Admin            *AdminHandlers
-	Gateway          *GatewayHandler
-	OpenAIGateway    *OpenAIGatewayHandler
-	Setting          *SettingHandler
-	Totp             *TotpHandler
-	Passkey          *PasskeyHandler
-	Payment          *PaymentHandler
-	PaymentWebhook   *PaymentWebhookHandler
-	AvailableChannel *AvailableChannelHandler
-	ModelPlaza       *ModelPlazaHandler
-	AsyncImage       *AsyncImageHandler
-	BatchImage       *BatchImageHandler
-	Checkin          *CheckinHandler
-	Bank             *BankHandler
+	Auth              *AuthHandler
+	User              *UserHandler
+	APIKey            *APIKeyHandler
+	Usage             *UsageHandler
+	Redeem            *RedeemHandler
+	Subscription      *SubscriptionHandler
+	Announcement      *AnnouncementHandler
+	ChannelMonitor    *ChannelMonitorUserHandler
+	ChannelMonitorV2  *ChannelMonitorV2Handler
+	Admin             *AdminHandlers
+	Gateway           *GatewayHandler
+	OpenAIGateway     *OpenAIGatewayHandler
+	Setting           *SettingHandler
+	Totp              *TotpHandler
+	Passkey           *PasskeyHandler
+	Payment           *PaymentHandler
+	PaymentWebhook    *PaymentWebhookHandler
+	AvailableChannel  *AvailableChannelHandler
+	ModelPlaza        *ModelPlazaHandler
+	AsyncImage        *AsyncImageHandler
+	BatchImage        *BatchImageHandler
+	Checkin           *CheckinHandler
+	CheckinAdmin      *CheckinAdminHandler
+	Bank              *BankHandler
+	Invitation        *InvitationHandler
+	FeatureManagement *FeatureManagementHandler
+	DynamicRate       *DynamicRateHandler
 }
 
 // BuildInfo contains build-time information

@@ -145,6 +145,12 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 
 	sessionHash := h.gatewayService.GenerateExplicitSessionHash(c, body)
 	requestCtx := service.WithOpenAIImagesEndpoint(service.WithOpenAIImageGenerationIntent(c.Request.Context()))
+	requestCtx, dynamicErr := h.gatewayService.FreezeDynamicRatePricing(requestCtx, apiKey, subject.UserID, service.DynamicRateModeImage, requestStart)
+	if dynamicErr != nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "billing_error", "image pricing policy unavailable")
+		return
+	}
+	c.Request = c.Request.WithContext(requestCtx)
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0

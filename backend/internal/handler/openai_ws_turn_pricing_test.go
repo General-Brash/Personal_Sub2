@@ -13,7 +13,7 @@ func TestOpenAIWSTurnPricingCurrentOr(t *testing.T) {
 	t.Run("frozen time takes precedence", func(t *testing.T) {
 		frozen := fallback.Add(time.Minute)
 		var p openAIWSTurnPricing
-		p.freeze(frozen)
+		p.freeze(frozen, nil)
 		require.Equal(t, frozen, p.currentOr(fallback))
 	})
 
@@ -30,9 +30,9 @@ func TestOpenAIWSTurnPricingFreezePerTurn(t *testing.T) {
 	turn1 := time.Now().Add(-time.Hour)
 	turn2 := time.Now()
 
-	p.freeze(turn1)
+	p.freeze(turn1, nil)
 	require.Equal(t, turn1, p.currentOr(time.Time{}))
 
-	p.freeze(turn2)
+	p.freeze(turn2, nil)
 	require.Equal(t, turn2, p.currentOr(time.Time{}), "后续 turn 必须使用自己的定价时刻")
 }

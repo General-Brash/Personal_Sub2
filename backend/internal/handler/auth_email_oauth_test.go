@@ -140,13 +140,14 @@ func TestEmailOAuthCallbackCreatesPasswordRegistrationSessionForNewEmail(t *test
 			return service.NewAffiliateService(affiliateRepo, settingSvc, nil, nil)
 		},
 	})
+	handler.cfg.JWT.Secret = "oauth-pending-flow-test-secret"
 	ctx := context.Background()
 
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/github/callback", nil)
-	req.AddCookie(&http.Cookie{Name: emailOAuthAffiliateCookie, Value: encodeCookieValue("AFF123")})
 	c.Request = req
+	c.Set(oauthInvitationContextKey, signedOAuthInvitation{Affiliate: "AFF123"})
 
 	handler.emailOAuthCallbackWithProfile(c, "github", config.EmailOAuthProviderConfig{
 		Enabled:             true,
@@ -159,6 +160,7 @@ func TestEmailOAuthCallbackCreatesPasswordRegistrationSessionForNewEmail(t *test
 		Email:         "aff-user@example.com",
 		EmailVerified: true,
 		Username:      "aff-user",
+		Metadata:      map[string]any{legacyPendingOAuthAffiliateClaim: "AFF-LEGACY"},
 	})
 
 	require.Equal(t, http.StatusFound, recorder.Code)
@@ -172,7 +174,14 @@ func TestEmailOAuthCallbackCreatesPasswordRegistrationSessionForNewEmail(t *test
 	session, err := client.PendingAuthSession.Query().Only(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "aff-user@example.com", session.ResolvedEmail)
-	require.Equal(t, "AFF123", pendingSessionStringValue(session.UpstreamIdentityClaims, "aff_code"))
+	protected, ok := session.UpstreamIdentityClaims[oauthEncryptedInvitationClaim].(string)
+	require.True(t, ok)
+	require.NotContains(t, protected, "AFF123")
+	require.NotContains(t, session.UpstreamIdentityClaims, legacyPendingOAuthAffiliateClaim)
+	invitationCode, affiliateCode := "", ""
+	require.NoError(t, handler.mergePendingInvitationClaims(session.UpstreamIdentityClaims, &invitationCode, &affiliateCode))
+	require.Empty(t, invitationCode)
+	require.Equal(t, "AFF123", affiliateCode)
 
 	completion, ok := readCompletionResponse(session.LocalFlowState)
 	require.True(t, ok)
@@ -238,6 +247,10 @@ func TestCompleteEmailOAuthRegistrationUsesAffiliateCodeFromPendingSession(t *te
 			return service.NewAffiliateService(affiliateRepo, settingSvc, nil, nil)
 		},
 	})
+	handler.cfg.JWT.Secret = "oauth-pending-flow-test-secret"
+	protectedAffiliate, err := handler.protectPendingInvitation(signedOAuthInvitation{Affiliate: "AFF456"})
+	require.NoError(t, err)
+	require.NotContains(t, protectedAffiliate, "AFF456")
 	ctx := context.Background()
 	invitation, err := client.RedeemCode.Create().
 		SetCode("INVITE456").
@@ -257,13 +270,13 @@ func TestCompleteEmailOAuthRegistrationUsesAffiliateCodeFromPendingSession(t *te
 		SetRedirectTo("/dashboard").
 		SetBrowserSessionKey("browser-aff-key").
 		SetUpstreamIdentityClaims(map[string]any{
-			"email":            "pending-aff@example.com",
-			"email_verified":   true,
-			"username":         "pending-aff",
-			"provider":         "google",
-			"provider_key":     "google",
-			"provider_subject": "google-aff-user",
-			"aff_code":         "AFF456",
+			"email":                       "pending-aff@example.com",
+			"email_verified":              true,
+			"username":                    "pending-aff",
+			"provider":                    "google",
+			"provider_key":                "google",
+			"provider_subject":            "google-aff-user",
+			oauthEncryptedInvitationClaim: protectedAffiliate,
 		}).
 		SetLocalFlowState(map[string]any{
 			"step":  oauthPendingChoiceStep,

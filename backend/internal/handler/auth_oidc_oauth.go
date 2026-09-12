@@ -193,12 +193,16 @@ func (h *AuthHandler) OIDCOAuthStart(c *gin.Context) {
 		return
 	}
 
-	respondOAuthStart(c, authURL)
+	h.respondOAuthStartWithInvitation(c, authURL)
 }
 
 // OIDCOAuthCallback 处理 OIDC 回调：校验 id_token、创建/登录用户并重定向到前端。
 // GET /api/v1/auth/oauth/oidc/callback?code=...&state=...
 func (h *AuthHandler) OIDCOAuthCallback(c *gin.Context) {
+	if !h.restoreOAuthInvitation(c) {
+		return
+	}
+
 	cfg, cfgErr := h.getOIDCOAuthConfig(c.Request.Context())
 	if cfgErr != nil {
 		response.ErrorFrom(c, cfgErr)
