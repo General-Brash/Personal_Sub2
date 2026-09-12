@@ -84,7 +84,7 @@ func TestPersonalFeaturesPlayerInvitationRetryReserveAndClaimAreAtomic(t *testin
 			require.NoError(t, err)
 		}
 		for _, id := range ids {
-			for _, query := range []string{`DELETE FROM player_invitation_reservations WHERE inviter_user_id=$1`, `DELETE FROM player_invitation_quota_events WHERE user_id=$1`, `DELETE FROM user_affiliates WHERE user_id=$1`, `DELETE FROM users WHERE id=$1`} {
+			for _, query := range []string{`DELETE FROM player_invitation_reservations WHERE inviter_user_id=$1 OR claimed_user_id=$1`, `DELETE FROM player_invitation_quota_events WHERE user_id=$1`, `DELETE FROM user_affiliates WHERE user_id=$1`, `DELETE FROM users WHERE id=$1`} {
 				_, err := integrationDB.ExecContext(ctx, query, id)
 				require.NoError(t, err)
 			}

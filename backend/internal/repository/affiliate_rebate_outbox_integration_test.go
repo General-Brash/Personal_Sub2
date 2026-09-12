@@ -231,7 +231,7 @@ func TestAffiliateRebateWorker_ConfigFailureRetriesAfterRepair(t *testing.T) {
 	restoreAffiliateSettings(t, settingRepo)
 	require.NoError(t, settingRepo.SetMultiple(ctx, map[string]string{
 		service.SettingKeyAffiliateEnabled:    "true",
-		service.SettingKeyAffiliateRebateRate: "invalid",
+		service.SettingKeyAffiliateRebateRate: "50",
 	}))
 	settingService := service.NewSettingService(settingRepo, nil)
 
@@ -245,6 +245,13 @@ func TestAffiliateRebateWorker_ConfigFailureRetriesAfterRepair(t *testing.T) {
 		SourceKind:         service.AffiliateRebateSourceRedeem,
 		BaseAmount:         1,
 	}))
+	// Simulate a legacy job created before enqueue-time policy snapshots existed.
+	_, err := integrationDB.ExecContext(ctx, `
+UPDATE affiliate_rebate_jobs
+SET policy_snapshot = NULL
+WHERE source_redeem_code_id = $1`, codeID)
+	require.NoError(t, err)
+	require.NoError(t, settingRepo.Set(ctx, service.SettingKeyAffiliateRebateRate, "invalid"))
 	worker := service.NewAffiliateRebateWorker(integrationEntClient, affiliateService, settingService)
 
 	processed, err := worker.ProcessOnce(ctx)
