@@ -28,7 +28,7 @@ on:
         description: 'Existing release tag to publish'
         required: true
         type: string
-        default: 'v0.2.1-P1'
+        default: 'v0.2.1-p3.5'
       promote_latest:
         description: 'Also move classifier latest to this tag (manual runs default to false)'
         required: false

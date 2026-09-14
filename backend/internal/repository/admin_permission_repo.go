@@ -121,36 +121,27 @@ func (r *adminPermissionRepository) ListAdminPermissionDefinitions(ctx context.C
 }
 
 func (r *adminPermissionRepository) UpsertAdminGrant(ctx context.Context, targetUserID int64, permission, effect string, scope map[string]any, actorUserID int64, reason string) error {
-	db, err := r.requireDB()
-	if err != nil {
-		return err
-	}
-	rawScope, err := json.Marshal(scope)
-	if err != nil {
-		return fmt.Errorf("marshal permission scope: %w", err)
-	}
-	_, err = db.ExecContext(ctx, `
-INSERT INTO admin_principal_grants (user_id, permission, effect, scope, granted_by, reason, updated_at)
-VALUES ($1, $2, $3, $4::jsonb, NULLIF($5, 0), $6, NOW())
-ON CONFLICT (user_id, permission) DO UPDATE
-SET effect = EXCLUDED.effect, scope = EXCLUDED.scope, granted_by = EXCLUDED.granted_by, reason = EXCLUDED.reason, updated_at = NOW()`,
-		targetUserID, permission, effect, string(rawScope), actorUserID, reason)
-	if err != nil {
-		return fmt.Errorf("upsert admin grant: %w", err)
-	}
-	return nil
+	_, err := r.ApplyAdminPermissionChange(ctx, service.AdminPermissionChange{
+		ActorUserID:  actorUserID,
+		TargetUserID: targetUserID,
+		Action:       "grant",
+		Permission:   permission,
+		Effect:       effect,
+		Scope:        scope,
+		Reason:       reason,
+	})
+	return err
 }
 
 func (r *adminPermissionRepository) DeleteAdminGrant(ctx context.Context, targetUserID int64, permission string, actorUserID int64, reason string) error {
-	db, err := r.requireDB()
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, `DELETE FROM admin_principal_grants WHERE user_id = $1 AND permission = $2`, targetUserID, permission)
-	if err != nil {
-		return fmt.Errorf("delete admin grant: %w", err)
-	}
-	return nil
+	_, err := r.ApplyAdminPermissionChange(ctx, service.AdminPermissionChange{
+		ActorUserID:  actorUserID,
+		TargetUserID: targetUserID,
+		Action:       "revoke",
+		Permission:   permission,
+		Reason:       reason,
+	})
+	return err
 }
 
 func (r *adminPermissionRepository) BumpAdminPermissionVersion(ctx context.Context, userID int64) (int64, error) {
@@ -198,18 +189,26 @@ func (r *adminPermissionRepository) ApplyAdminPermissionChange(ctx context.Conte
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var targetRole string
-	if err := tx.QueryRowContext(ctx, `SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, change.TargetUserID).Scan(&targetRole); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, service.ErrAdminPrincipalNotFound
-		}
-		return 0, fmt.Errorf("lock admin permission target: %w", err)
+	// ApplyAdminPermissionChange is itself a sensitive admin mutation. Mark the
+	// transaction even for direct repository callers so the final guard cannot
+	// silently fall back to an unmarked legacy path.
+	ctx = service.ContextWithAdminMutationActorID(ctx, change.ActorUserID)
+	privilege := &AdminMutationPermission{Permission: change.Permission}
+	if change.Action == "grant" {
+		privilege.Scope = change.Scope
 	}
-	if targetRole != service.RoleAdmin && targetRole != service.RoleSuperAdmin {
-		return 0, service.ErrAdminPermissionTargetNotAdmin
-	}
-	if targetRole == service.RoleSuperAdmin && !change.ActorIsSuper {
-		return 0, service.ErrAdminCannotModifySuperAdmin
+	if _, err := AuthorizeAdminMutationTx(ctx, tx, change.ActorUserID, AdminMutationAuthorizationOptions{
+		TargetUserID:       change.TargetUserID,
+		TargetMustBeAdmin:  true,
+		TargetNotFound:     service.ErrAdminPrincipalNotFound,
+		DisallowSelfTarget: true,
+		Permissions: []AdminMutationPermission{{
+			Permission: "security.permissions.grant",
+			Scope:      userMutationScope(change.TargetUserID),
+		}},
+		Privilege: privilege,
+	}); err != nil {
+		return 0, err
 	}
 
 	switch change.Action {

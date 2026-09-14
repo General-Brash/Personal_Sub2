@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -13,18 +14,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
 )
 
 type entitlementRepository struct {
-	sqlDB *sql.DB
+	sqlDB             *sql.DB
+	previewSigningKey []byte
 }
 
 var _ service.EntitlementRepository = (*entitlementRepository)(nil)
 
-func NewEntitlementRepository(sqlDB *sql.DB) service.EntitlementRepository {
-	return &entitlementRepository{sqlDB: sqlDB}
+func NewEntitlementRepository(sqlDB *sql.DB, cfg *config.Config) service.EntitlementRepository {
+	r := &entitlementRepository{sqlDB: sqlDB}
+	if cfg != nil && strings.TrimSpace(cfg.JWT.Secret) != "" {
+		// Domain separation keeps preview credentials independent of JWT tokens.
+		// The existing configured secret is shared across instances and restarts.
+		mac := hmac.New(sha256.New, []byte(cfg.JWT.Secret))
+		_, _ = mac.Write([]byte("personal-sub2:entitlement-preview:v1"))
+		r.previewSigningKey = mac.Sum(nil)
+	}
+	return r
 }
 
 func (r *entitlementRepository) requireDB() (*sql.DB, error) {
@@ -57,13 +68,25 @@ func (r *entitlementRepository) ResolveEntitlement(ctx context.Context, userID i
 	if err != nil {
 		return nil, err
 	}
-	snapshot := &service.EntitlementSnapshot{UserID: userID, Tier: service.EntitlementTierStandard, TierEnabled: true, Version: 1, DefaultRates: map[int64]float64{}}
-	now := time.Now().UTC()
+	var exists int
+	if err := db.QueryRowContext(ctx, `SELECT 1 FROM users WHERE id=$1 AND deleted_at IS NULL`, userID).Scan(&exists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, service.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("load entitlement user: %w", err)
+	}
+	return r.resolveEntitlement(ctx, db, userID, time.Now().UTC())
+}
+
+func (r *entitlementRepository) resolveEntitlement(ctx context.Context, db entitlementQueryer, userID int64, now time.Time) (*service.EntitlementSnapshot, error) {
+	snapshot := &service.EntitlementSnapshot{UserID: userID, Tier: service.EntitlementTierStandard, TierEnabled: true, Version: 1,
+		DefaultRates: map[int64]float64{}, AllowedGroups: []int64{}, TierGroups: []int64{}, Sources: []service.EntitlementSource{},
+		ManualGroups: []int64{}, SubscriptionGroups: []int64{}}
 
 	var tier, source string
 	var version int64
 	var expiresAt sql.NullTime
-	err = db.QueryRowContext(ctx, `
+	err := db.QueryRowContext(ctx, `
 SELECT tier, source, version, expires_at
 FROM user_entitlements
 WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`, userID, now).Scan(&tier, &source, &version, &expiresAt)
@@ -146,7 +169,7 @@ LIMIT 1`, userID, now).Scan(&grantTier, &grantSource, &grantVersion, &grantExpir
 			snapshot.Sources = append(snapshot.Sources, service.EntitlementSource{Source: "tier_group", Tier: snapshot.Tier, GroupID: &groupID, Rate: &value, Version: snapshot.Version, Explain: "entitlement_tier_groups"})
 		}
 	}
-	if err := rows.Close(); err != nil {
+	if err := joinRowsCloseError(rows, rows.Err()); err != nil {
 		return nil, err
 	}
 	snapshot.AllowedGroups = mergeInt64Groups(snapshot.ManualGroups, snapshot.SubscriptionGroups, snapshot.TierGroups)
@@ -158,29 +181,67 @@ func (r *entitlementRepository) PreviewEntitlementChange(ctx context.Context, us
 	if err != nil {
 		return nil, err
 	}
-	preview := &service.EntitlementChangePreview{Tier: tier, UserIDs: userIDs, PreservedManual: true, PreservedSubscriptions: true}
-	granted := map[int64]struct{}{}
-	revoked := map[int64]struct{}{}
-	for _, userID := range userIDs {
-		snapshot, err := r.ResolveEntitlement(ctx, userID)
+	tier = service.NormalizeEntitlementWriteTier(tier)
+	if tier == "" {
+		return nil, service.ErrEntitlementTierUnknown
+	}
+	ids, err := normalizeEntitlementMutationIDs(userIDs)
+	if err != nil {
+		return nil, err
+	}
+	actor, err := currentEntitlementPreviewActor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("begin entitlement preview: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	now := time.Now().UTC()
+	state, err := loadEntitlementPreviewState(ctx, tx, ids, now)
+	if err != nil {
+		return nil, err
+	}
+	policy, err := entitlementPreviewTargetPolicy(state, tier)
+	if err != nil {
+		return nil, err
+	}
+	preview := &service.EntitlementChangePreview{Tier: tier, UserIDs: ids, AffectedUserIDs: []int64{}, AlreadyAtTier: []int64{},
+		GrantedGroupIDs: []int64{}, RevokedGroupIDs: []int64{}, PreservedManual: true, PreservedSubscriptions: true,
+		PolicyEnabled: policy.Enabled, PolicyVersion: policy.Version, ExpiresAt: time.Unix(now.Unix()+int64(entitlementPreviewLifetime/time.Second), 0).UTC()}
+	granted, revoked := map[int64]struct{}{}, map[int64]struct{}{}
+	claims := entitlementPreviewClaims{Format: entitlementPreviewFormat, Actor: actor, Tier: tier,
+		Targets: make([]entitlementPreviewTarget, 0, len(ids)), IssuedAt: now.Unix(), ExpiresAt: preview.ExpiresAt.Unix()}
+	for i, userID := range ids {
+		userState := state.Users[i]
+		claims.Targets = append(claims.Targets, userState.entitlementPreviewTarget)
+		needed, err := entitlementAssignmentNeeded(userState.Assigned, tier)
 		if err != nil {
 			return nil, err
 		}
-		if snapshot.Tier == tier {
+		if !needed {
 			preview.AlreadyAtTier = append(preview.AlreadyAtTier, userID)
 			continue
 		}
 		preview.AffectedUserIDs = append(preview.AffectedUserIDs, userID)
-		oldSet := map[int64]struct{}{}
-		for _, id := range snapshot.TierGroups {
-			oldSet[id] = struct{}{}
-		}
-		newGroups, err := r.tierGroups(ctx, db, tier)
+		snapshot, err := r.resolveEntitlement(ctx, tx, userID, now)
 		if err != nil {
 			return nil, err
 		}
-		newSet := map[int64]struct{}{}
-		for _, id := range newGroups {
+		projectedTier, err := projectedEntitlementTier(state, userState.Grants, tier)
+		if err != nil {
+			return nil, err
+		}
+		newTierGroups, err := r.tierGroups(ctx, tx, projectedTier)
+		if err != nil {
+			return nil, err
+		}
+		oldSet, newSet := map[int64]struct{}{}, map[int64]struct{}{}
+		for _, id := range snapshot.AllowedGroups {
+			oldSet[id] = struct{}{}
+		}
+		for _, id := range mergeInt64Groups(snapshot.ManualGroups, snapshot.SubscriptionGroups, newTierGroups) {
 			newSet[id] = struct{}{}
 		}
 		for id := range newSet {
@@ -194,28 +255,76 @@ func (r *entitlementRepository) PreviewEntitlementChange(ctx context.Context, us
 			}
 		}
 	}
-	preview.GrantedGroupIDs = mapKeys(granted)
-	preview.RevokedGroupIDs = mapKeys(revoked)
+	preview.GrantedGroupIDs, preview.RevokedGroupIDs = mapKeys(granted), mapKeys(revoked)
+	claims.StateHash, err = entitlementPreviewStateHash(state)
+	if err != nil {
+		return nil, err
+	}
+	preview.PreviewToken, err = r.signEntitlementPreview(claims)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("finish entitlement preview: %w", err)
+	}
 	return preview, nil
 }
 
-func (r *entitlementRepository) ApplyEntitlementChange(ctx context.Context, userIDs []int64, tier string, actorUserID int64, reason, requestID string) (*service.EntitlementChangeResult, error) {
+func (r *entitlementRepository) ApplyEntitlementChange(ctx context.Context, userIDs []int64, tier string, actorUserID int64, reason, requestID, previewToken string) (*service.EntitlementChangeResult, error) {
 	db, err := r.requireDB()
 	if err != nil {
 		return nil, err
 	}
-	ids := append([]int64(nil), userIDs...)
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	tier = service.NormalizeEntitlementWriteTier(tier)
+	if tier == "" {
+		return nil, service.ErrEntitlementTierUnknown
+	}
+	reason, requestID = strings.TrimSpace(reason), strings.TrimSpace(requestID)
+	if reason == "" {
+		return nil, service.ErrEntitlementReasonRequired
+	}
+	if requestID == "" || len(requestID) > 128 {
+		return nil, service.ErrEntitlementRequestIDRequired
+	}
+	ids, err := normalizeEntitlementMutationIDs(userIDs)
+	if err != nil {
+		return nil, err
+	}
+	actor, err := currentEntitlementPreviewActor(ctx)
+	if err != nil || actor.UserID != actorUserID {
+		return nil, service.ErrAdminPermissionDenied
+	}
+	ctx = service.ContextWithAdminMutationActorID(ctx, actorUserID)
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin entitlement change: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if strings.TrimSpace(requestID) == "" {
-		return nil, service.ErrEntitlementReasonRequired
+	if err := lockAdminMutationScope(ctx, tx); err != nil {
+		return nil, err
 	}
-	fingerprint := entitlementChangeFingerprint(ids, tier, reason)
+	lockIDs := append(append([]int64{}, ids...), actorUserID)
+	lockIDs, err = normalizeEntitlementMutationIDsForLocks(lockIDs)
+	if err != nil {
+		return nil, err
+	}
+	lockedUsers, err := lockAdminMutationUsers(ctx, tx, lockIDs)
+	if err != nil {
+		return nil, err
+	}
+	required := make([]AdminMutationPermission, 0, len(ids))
+	for _, id := range ids {
+		required = append(required, AdminMutationPermission{Permission: "users.entitlement.manage", Scope: userMutationScope(id)})
+	}
+	authorized, err := AuthorizeAdminMutationTx(ctx, tx, actorUserID, AdminMutationAuthorizationOptions{Permissions: required})
+	if err != nil {
+		return nil, err
+	}
+	if authorized == nil {
+		return nil, service.ErrAdminPermissionDenied
+	}
+	fingerprint := entitlementChangeFingerprint(ids, tier, reason, previewToken)
 	lockKey := fmt.Sprintf("entitlement-change:%d:%s", actorUserID, requestID)
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, lockKey); err != nil {
 		return nil, err
@@ -238,20 +347,45 @@ func (r *entitlementRepository) ApplyEntitlementChange(ctx context.Context, user
 		return nil, replayErr
 	}
 
-	var enabled bool
-	var tierVersion int64
-	if err := tx.QueryRowContext(ctx, `SELECT enabled, version FROM entitlement_tiers WHERE tier = $1 FOR UPDATE`, tier).Scan(&enabled, &tierVersion); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, service.ErrEntitlementTierUnknown
-		}
-		return nil, fmt.Errorf("lock entitlement tier: %w", err)
+	// Completed same-key/same-input results above are replayed before any preview,
+	// expiry or target-state check. New writes can never take that shortcut.
+	claims, err := r.verifyEntitlementPreview(previewToken, actor, ids, tier, time.Now().UTC())
+	if err != nil {
+		return nil, err
 	}
-	if !enabled {
+	if err := validateEntitlementPreviewTargets(lockedUsers, claims.Targets, authorized); err != nil {
+		return nil, err
+	}
+	if err := lockEntitlementPreviewState(ctx, tx, ids); err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	state, err := loadEntitlementPreviewState(ctx, tx, ids, now)
+	if errors.Is(err, service.ErrUserNotFound) {
+		return nil, service.ErrEntitlementPreviewConflict
+	}
+	if err != nil {
+		return nil, err
+	}
+	stateHash, err := entitlementPreviewStateHash(state)
+	if err != nil {
+		return nil, err
+	}
+	if stateHash != claims.StateHash {
+		return nil, service.ErrEntitlementPreviewConflict
+	}
+	if _, err := r.verifyEntitlementPreview(previewToken, actor, ids, tier, time.Now().UTC()); err != nil {
+		return nil, err
+	}
+	policy, err := entitlementPreviewTargetPolicy(state, tier)
+	if err != nil {
+		return nil, err
+	}
+	if !policy.Enabled {
 		return nil, service.ErrEntitlementDisabled
 	}
-	result := &service.EntitlementChangeResult{Tier: tier, Requested: len(ids), Version: tierVersion}
+	result := &service.EntitlementChangeResult{Tier: tier, Requested: len(ids), Version: policy.Version}
 
-	now := time.Now().UTC()
 	for _, userID := range ids {
 		var oldTier string
 		var oldVersion int64
@@ -273,7 +407,7 @@ func (r *entitlementRepository) ApplyEntitlementChange(ctx context.Context, user
 		if _, err := tx.ExecContext(ctx, `
 INSERT INTO user_entitlements (user_id, tier, source, version, updated_by, updated_at)
 VALUES ($1, $2, 'tier_grant', $3, NULLIF($4, 0), NOW())
-ON CONFLICT (user_id) DO UPDATE SET tier = EXCLUDED.tier, source = EXCLUDED.source, version = EXCLUDED.version, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
+ON CONFLICT (user_id) DO UPDATE SET tier = EXCLUDED.tier, source = EXCLUDED.source, version = EXCLUDED.version, expires_at = NULL, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
 			userID, tier, newVersion, actorUserID); err != nil {
 			return nil, fmt.Errorf("apply user entitlement: %w", err)
 		}
@@ -323,7 +457,7 @@ func (r *entitlementRepository) ListEntitlementTierPolicies(ctx context.Context)
 		item.Groups = []service.EntitlementTierGroupPolicy{}
 		tiers = append(tiers, item)
 	}
-	if err := rows.Close(); err != nil {
+	if err := joinRowsCloseError(rows, rows.Err()); err != nil {
 		return nil, err
 	}
 	for i := range tiers {
@@ -337,6 +471,22 @@ func (r *entitlementRepository) ListEntitlementTierPolicies(ctx context.Context)
 }
 
 func (r *entitlementRepository) UpdateEntitlementTierPolicy(ctx context.Context, input service.UpdateEntitlementTierPolicyInput, actorUserID int64) (*service.EntitlementTierPolicy, error) {
+	input.Tier = service.NormalizeEntitlementWriteTier(input.Tier)
+	if input.Tier == "" {
+		return nil, service.ErrEntitlementTierUnknown
+	}
+	if strings.TrimSpace(input.Reason) == "" {
+		return nil, service.ErrEntitlementReasonRequired
+	}
+	if strings.TrimSpace(input.RequestID) == "" || len(input.RequestID) > 116 {
+		return nil, service.ErrEntitlementRequestIDRequired
+	}
+	if input.ExpectedVersion == nil || *input.ExpectedVersion < 1 {
+		return nil, service.ErrEntitlementPolicyInvalid
+	}
+	if actorUserID <= 0 {
+		return nil, service.ErrAdminPermissionDenied
+	}
 	db, err := r.requireDB()
 	if err != nil {
 		return nil, err
@@ -347,8 +497,14 @@ func (r *entitlementRepository) UpdateEntitlementTierPolicy(ctx context.Context,
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if input.ExpectedVersion == nil || strings.TrimSpace(input.RequestID) == "" {
-		return nil, service.ErrEntitlementVersionConflict
+	// Take the actor FK lock before policy locks, matching assignment's
+	// user-before-policy order and avoiding a cycle on the idempotency row FK.
+	var actorID int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR KEY SHARE`, actorUserID).Scan(&actorID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, service.ErrAdminPermissionDenied
+		}
+		return nil, err
 	}
 	groups, err := normalizeTierGroups(input.Groups)
 	if err != nil {
@@ -397,6 +553,26 @@ func (r *entitlementRepository) UpdateEntitlementTierPolicy(ctx context.Context,
 	if *input.ExpectedVersion != currentVersion {
 		return nil, service.ErrEntitlementVersionConflict
 	}
+	if len(groups) > 0 {
+		ids := make([]int64, 0, len(groups))
+		for _, group := range groups {
+			ids = append(ids, group.GroupID)
+		}
+		rows, err := tx.QueryContext(ctx, `SELECT id FROM groups WHERE id=ANY($1) AND deleted_at IS NULL ORDER BY id FOR KEY SHARE`, pq.Array(ids))
+		if err != nil {
+			return nil, err
+		}
+		found := 0
+		for rows.Next() {
+			found++
+		}
+		if err := joinRowsCloseError(rows, rows.Err()); err != nil {
+			return nil, err
+		}
+		if found != len(ids) {
+			return nil, service.ErrEntitlementPolicyInvalid
+		}
+	}
 	newVersion := currentVersion + 1
 	if _, err := tx.ExecContext(ctx, `UPDATE entitlement_tiers SET display_name = $2, enabled = $3, version = $4, updated_at = NOW() WHERE tier = $1`, input.Tier, input.DisplayName, input.Enabled, newVersion); err != nil {
 		return nil, fmt.Errorf("update entitlement tier policy: %w", err)
@@ -442,13 +618,13 @@ func normalizeTierGroups(groups []service.EntitlementTierGroupPolicy) ([]service
 	seen := make(map[int64]struct{}, len(groups))
 	for _, group := range groups {
 		if group.GroupID <= 0 {
-			return nil, fmt.Errorf("entitlement tier group id must be positive")
+			return nil, fmt.Errorf("%w: group id must be positive", service.ErrEntitlementPolicyInvalid)
 		}
 		if group.RateMultiplier != nil && (math.IsNaN(*group.RateMultiplier) || math.IsInf(*group.RateMultiplier, 0) || *group.RateMultiplier < 0 || *group.RateMultiplier > 1000) {
-			return nil, fmt.Errorf("entitlement tier rate multiplier must be non-negative")
+			return nil, fmt.Errorf("%w: multiplier must be finite and between 0 and 1000", service.ErrEntitlementPolicyInvalid)
 		}
 		if _, ok := seen[group.GroupID]; ok {
-			return nil, fmt.Errorf("duplicate entitlement tier group id %d", group.GroupID)
+			return nil, fmt.Errorf("%w: duplicate group id %d", service.ErrEntitlementPolicyInvalid, group.GroupID)
 		}
 		seen[group.GroupID] = struct{}{}
 		out = append(out, group)
@@ -457,7 +633,7 @@ func normalizeTierGroups(groups []service.EntitlementTierGroupPolicy) ([]service
 	return out, nil
 }
 
-func (r *entitlementRepository) tierGroupPolicies(ctx context.Context, db *sql.DB, tier string) (policies []service.EntitlementTierGroupPolicy, err error) {
+func (r *entitlementRepository) tierGroupPolicies(ctx context.Context, db entitlementQueryer, tier string) (policies []service.EntitlementTierGroupPolicy, err error) {
 	rows, err := db.QueryContext(ctx, `SELECT group_id, rate_multiplier, source FROM entitlement_tier_groups WHERE tier = $1 ORDER BY group_id`, tier)
 	if err != nil {
 		return nil, fmt.Errorf("list entitlement tier groups: %w", err)
@@ -485,11 +661,11 @@ func scanTierGroupPolicies(rows *sql.Rows) ([]service.EntitlementTierGroupPolicy
 	return out, rows.Err()
 }
 
-func (r *entitlementRepository) tierGroups(ctx context.Context, db *sql.DB, tier string) ([]int64, error) {
+func (r *entitlementRepository) tierGroups(ctx context.Context, db entitlementQueryer, tier string) ([]int64, error) {
 	return queryInt64Column(ctx, db, `SELECT group_id FROM entitlement_tier_groups WHERE tier = $1 ORDER BY group_id`, tier)
 }
 
-func queryInt64Column(ctx context.Context, db *sql.DB, query string, args ...any) (values []int64, err error) {
+func queryInt64Column(ctx context.Context, db entitlementQueryer, query string, args ...any) (values []int64, err error) {
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -510,7 +686,7 @@ func queryInt64Column(ctx context.Context, db *sql.DB, query string, args ...any
 
 func mergeInt64Groups(groups ...[]int64) []int64 {
 	seen := map[int64]struct{}{}
-	var out []int64
+	out := []int64{}
 	for _, list := range groups {
 		for _, id := range list {
 			if id <= 0 {
@@ -538,16 +714,25 @@ func mapKeys(in map[int64]struct{}) []int64 {
 	for key := range in {
 		out = append(out, key)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
 }
 
-func entitlementChangeFingerprint(ids []int64, tier, reason string) string {
+func entitlementChangeFingerprint(ids []int64, tier, reason string, previewToken ...string) string {
 	ordered := append([]int64(nil), ids...)
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i] < ordered[j] })
+	guardHash := ""
+	if len(previewToken) > 0 && previewToken[0] != "" {
+		sum := sha256.Sum256([]byte(previewToken[0]))
+		guardHash = hex.EncodeToString(sum[:])
+	}
+	// Omit an absent guard to retain exact replay of completed pre-P3.5
+	// requests. A new request without a guard is still rejected after lookup.
 	raw, _ := json.Marshal(struct {
-		Users        []int64
-		Tier, Reason string
-	}{ordered, tier, reason})
+		Users            []int64
+		Tier, Reason     string
+		PreviewTokenHash string `json:",omitempty"`
+	}{ordered, tier, reason, guardHash})
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:])
 }

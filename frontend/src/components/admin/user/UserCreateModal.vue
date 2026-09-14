@@ -27,9 +27,10 @@
       </div>
       <div>
         <label class="input-label">{{ t('admin.users.form.roleLabel') }}</label>
-        <select v-model="form.role" class="input">
+        <select v-model="form.role" class="input" :disabled="loading || !canWrite">
           <option value="user">{{ t('admin.users.roles.user') }}</option>
           <option value="admin">{{ t('admin.users.roles.admin') }}</option>
+          <option v-if="canAssignSuperAdmin" value="super_admin">{{ t('admin.users.roles.super_admin') }}</option>
         </select>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -58,7 +59,7 @@
     <template #footer>
       <div class="flex justify-end gap-3">
         <button @click="$emit('close')" type="button" class="btn btn-secondary">{{ t('common.cancel') }}</button>
-        <button type="submit" form="create-user-form" :disabled="loading" class="btn btn-primary">
+        <button type="submit" form="create-user-form" :disabled="loading || !canWrite" class="btn btn-primary">
           {{ loading ? t('admin.users.creating') : t('common.create') }}
         </button>
       </div>
@@ -78,17 +79,46 @@ import Icon from '@/components/icons/Icon.vue'
 import { useStepUp, isStepUpBlocked, isStepUpCancelled, stepUpBlockReason } from '@/composables/useStepUp'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 
-const props = defineProps<{ show: boolean }>()
+const props = withDefaults(defineProps<{
+  show: boolean
+  canWrite?: boolean
+  canAssignSuperAdmin?: boolean
+}>(), {
+  canWrite: false,
+  canAssignSuperAdmin: false,
+})
 const emit = defineEmits(['close', 'success']); const { t } = useI18n()
 const appStore = useAppStore()
 
-const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin', balance: '', concurrency: 1, rpm_limit: 0 })
+const form = reactive({
+  email: '',
+  password: '',
+  username: '',
+  notes: '',
+  role: 'user' as 'user' | 'admin' | 'super_admin',
+  balance: '',
+  concurrency: 1,
+  rpm_limit: 0,
+})
 
 const stepUp = useStepUp()
 const loading = ref(false)
 
+const mutationErrorMessage = (error: any, fallback: string): string => {
+  const status = error?.response?.status ?? error?.status
+  const detail = error?.response?.data?.detail || error?.response?.data?.message || error?.detail || error?.message
+  if (status === 403) return t('admin.users.permissions.forbidden')
+  if (status === 404) return t('admin.users.permissions.notFound')
+  if (status === 409) return detail || t('admin.users.permissions.conflict')
+  return detail || error?.message || fallback
+}
+
 const submit = async () => {
-  if (loading.value) return
+  if (loading.value || !props.canWrite) return
+  if (form.role === 'super_admin' && !props.canAssignSuperAdmin) {
+    appStore.showError(t('admin.users.permissions.forbidden'))
+    return
+  }
   loading.value = true
   try {
     const { balance: rawBalance, ...rest } = { ...form }
@@ -111,7 +141,7 @@ const submit = async () => {
           : t('stepUp.notEnabled')
       )
     } else {
-      appStore.showError(e?.message || t('admin.users.failedToCreate'))
+      appStore.showError(mutationErrorMessage(e, t('admin.users.failedToCreate')))
     }
   } finally { loading.value = false }
 }

@@ -163,7 +163,7 @@ func TestAccountTestService_OpenAIImageNew25ModelsKeepRouteAndPayloadModel(t *te
 				require.Equal(t, chatgptCodexAPIURL, req.URL.String())
 				require.Equal(t, "chatgpt.com", req.Host)
 				require.Equal(t, "Bearer token-123", req.Header.Get("Authorization"))
-				require.Equal(t, openAIImagesResponsesMainModel, gjson.GetBytes(body, "model").String())
+				require.Equal(t, "gpt-5.6-luna", gjson.GetBytes(body, "model").String())
 				require.Equal(t, "gpt-image-2.5-flare", gjson.GetBytes(body, "tools.0.model").String())
 			},
 		},
@@ -186,7 +186,7 @@ func TestAccountTestService_OpenAIImageNew25ModelsKeepRouteAndPayloadModel(t *te
 				require.Equal(t, chatgptCodexAPIURL, req.URL.String())
 				require.Equal(t, "chatgpt.com", req.Host)
 				require.Equal(t, "Bearer token-123", req.Header.Get("Authorization"))
-				require.Equal(t, openAIImagesResponsesMainModel, gjson.GetBytes(body, "model").String())
+				require.Equal(t, "gpt-5.6-luna", gjson.GetBytes(body, "model").String())
 				require.Equal(t, "gpt-image-2.5-sunburst", gjson.GetBytes(body, "tools.0.model").String())
 			},
 		},

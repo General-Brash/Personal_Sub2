@@ -462,6 +462,8 @@ export default {
       searchUsers: 'Search by email, username, notes, or API key',
       roleFilter: 'Role Filter',
       allRoles: 'All Roles',
+      tierFilter: 'Consumer Tier',
+      allTiers: 'All Tiers',
       allStatus: 'All Status',
       allGroups: 'All Groups',
       searchGroups: 'Search groups...',
@@ -523,6 +525,7 @@ export default {
         username: 'Username',
         notes: 'Notes',
         role: 'Role',
+        tier: 'Consumer tier',
         groups: 'Groups',
         subscriptions: 'Subscriptions',
         balance: 'Balance',
@@ -673,7 +676,21 @@ export default {
       totalRecharged: 'Total Recharged',
       roles: {
         admin: 'Admin',
-        user: 'User'
+        user: 'User',
+        super_admin: 'Super administrator'
+      },
+      tiers: {
+        standard: 'Standard',
+        premium: 'Premium'
+      },
+      permissions: {
+        loading: 'Checking user-management write permission…',
+        unknown: 'User-management write permission could not be confirmed; write actions are paused to avoid an unsafe write.',
+        forbidden: 'The current administrator is not allowed to perform this user-management action.',
+        notFound: 'The target user does not exist or has been deleted.',
+        conflict: 'The target state changed; refresh and try again.',
+        modeOff: 'Administrator permission enforcement is not enabled; only user-list viewing is available.',
+        retry: 'Retry permission check'
       },
       // Settings Dropdowns
       filterSettings: 'Filter Settings',

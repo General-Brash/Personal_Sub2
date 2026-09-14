@@ -39,6 +39,7 @@ var (
 	ErrAvatarNotImage           = infraerrors.BadRequest("AVATAR_NOT_IMAGE", "avatar content must be an image")
 	ErrIdentityProviderInvalid  = infraerrors.BadRequest("IDENTITY_PROVIDER_INVALID", "identity provider is invalid")
 	ErrIdentityRedirectInvalid  = infraerrors.BadRequest("IDENTITY_REDIRECT_INVALID", "identity redirect path is invalid")
+	ErrInvalidUserListTier      = infraerrors.BadRequest("INVALID_ENTITLEMENT_TIER", "tier must be standard or premium")
 	ErrIdentityUnbindLastMethod = infraerrors.Conflict(
 		"IDENTITY_UNBIND_LAST_METHOD",
 		"bind another sign-in method before unbinding this provider",
@@ -66,8 +67,11 @@ var (
 
 // UserListFilters contains all filter options for listing users
 type UserListFilters struct {
-	Status    string // User status filter
-	Role      string // User role filter
+	Status string // User status filter
+	Role   string // User role filter
+	// Tier filters the effective consumer entitlement tier. It is deliberately
+	// named tier at the API boundary; role/group/subscription are not aliases.
+	Tier      string
 	Search    string // Search in email, username
 	GroupName string // Filter by allowed group name (fuzzy match)
 	// APIKeyGroupID filters users who own at least one non-soft-deleted API key
@@ -82,6 +86,21 @@ type UserListFilters struct {
 	// IncludeDeleted 为 true 时绕过软删除过滤，返回含已删除（deleted_at 非空）的用户。
 	// 仅供 /admin/usage 的 SearchUsers 端点使用，其他列表调用方不要设置。
 	IncludeDeleted bool
+}
+
+// NormalizeUserListTier validates the canonical effective-tier query value.
+// An empty value means no tier predicate; standard and premium are the only
+// effective values exposed by the user list API.
+func NormalizeUserListTier(tier string) (string, error) {
+	tier = strings.ToLower(strings.TrimSpace(tier))
+	switch tier {
+	case "":
+		return "", nil
+	case EntitlementTierStandard, EntitlementTierPremium:
+		return tier, nil
+	default:
+		return "", ErrInvalidUserListTier
+	}
 }
 
 // UserUpdateFields 声明 UserRepository.Update 允许写回的列。

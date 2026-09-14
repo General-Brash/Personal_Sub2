@@ -15,6 +15,7 @@ vi.mock('@/api/client', () => ({
 import {
   batchUpdateLimits,
   bindUserAuthIdentity,
+  list,
   getTemporaryCredits,
   grantTemporaryCredit,
   updateBalance,
@@ -134,6 +135,25 @@ describe('admin users api auth identity binding', () => {
 
     expect(post).toHaveBeenCalledWith('/admin/users/9/auth-identities', payload)
     expect(result).toEqual(response)
+  })
+
+  it('sends the canonical tier filter and accepts the super-admin role filter', async () => {
+    get.mockResolvedValue({
+      data: { items: [], total: 0, page: 2, page_size: 10, pages: 0 },
+    })
+
+    await list(2, 10, { role: 'super_admin', tier: 'premium' })
+
+    expect(get).toHaveBeenCalledWith('/admin/users', {
+      params: expect.objectContaining({
+        page: 2,
+        page_size: 10,
+        role: 'super_admin',
+        tier: 'premium',
+      }),
+      signal: undefined,
+    })
+    expect(get.mock.calls[0]?.[1]?.params).not.toHaveProperty('entitlement_tier')
   })
 
   it('keeps bind auth identity request and response types aligned with the backend contract', () => {

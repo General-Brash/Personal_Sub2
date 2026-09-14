@@ -134,7 +134,10 @@ func (r *dynamicRateResolver) Status(ctx context.Context, userID, groupID int64,
 	if r == nil || r.repo == nil || userID <= 0 || groupID <= 0 {
 		return nil, nil, nil
 	}
-	policy, err := r.repo.GetDynamicRatePolicy(ctx, groupID)
+	if at.IsZero() {
+		at = time.Now()
+	}
+	policy, err := effectiveDynamicRatePolicyAt(ctx, r.repo, groupID, at)
 	if err != nil {
 		return nil, nil, err
 	}

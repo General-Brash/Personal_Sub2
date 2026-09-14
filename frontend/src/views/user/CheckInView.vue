@@ -7,7 +7,7 @@
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('checkin.description') }}</p>
           <p v-if="status" data-test="checkin-period-state" class="mt-1 text-xs text-gray-400 dark:text-gray-500">
             下次刷新：{{ status.next_reset_at ? formatExpiry(status.next_reset_at) : '北京时间 00:00' }}
-            · 自动手续费：{{ (status.auto_fee_bps ?? 500) / 100 }}%
+            · 自动手续费：{{ formatBpsAsPercent(status.auto_fee_bps ?? 500) }}
             · 当前模式：{{ status.mode ?? 'direct' }}
           </p>
         </div>
@@ -648,6 +648,10 @@ function getBeijingDate(): string {
 
 function formatCredit(value: string): string {
   return `$${formatDecimalAmount(value)}`
+}
+
+function formatBpsAsPercent(bps: number): string {
+  return `${(bps / 100).toFixed(2)}%`
 }
 
 function fitSummaryValue(value: string, preferredFontSize: number): { fontSize: string } | undefined {

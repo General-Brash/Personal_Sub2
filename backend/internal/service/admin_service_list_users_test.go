@@ -17,12 +17,14 @@ type userRepoStubForListUsers struct {
 	users                 []User
 	err                   error
 	listWithFiltersParams pagination.PaginationParams
+	listWithFiltersFilter UserListFilters
 	lastUsedByUserID      map[int64]*time.Time
 	lastUsedErr           error
 }
 
-func (s *userRepoStubForListUsers) ListWithFilters(_ context.Context, params pagination.PaginationParams, _ UserListFilters) ([]User, *pagination.PaginationResult, error) {
+func (s *userRepoStubForListUsers) ListWithFilters(_ context.Context, params pagination.PaginationParams, filters UserListFilters) ([]User, *pagination.PaginationResult, error) {
 	s.listWithFiltersParams = params
+	s.listWithFiltersFilter = filters
 	if s.err != nil {
 		return nil, nil, s.err
 	}

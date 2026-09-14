@@ -29,11 +29,12 @@
         <label class="input-label">{{ t('admin.users.username') }}</label>
         <input v-model="form.username" type="text" class="input" />
       </div>
-      <div>
+      <div v-if="canAssignSuperAdmin || form.role !== 'super_admin'">
         <label class="input-label">{{ t('admin.users.form.roleLabel') }}</label>
-        <select v-model="form.role" class="input">
+        <select v-model="form.role" class="input" :disabled="submitting || !canWrite">
           <option value="user">{{ t('admin.users.roles.user') }}</option>
           <option value="admin">{{ t('admin.users.roles.admin') }}</option>
+          <option v-if="canAssignSuperAdmin" value="super_admin">{{ t('admin.users.roles.super_admin') }}</option>
         </select>
       </div>
       <div>
@@ -61,7 +62,7 @@
     <template #footer>
       <div class="flex justify-end gap-3">
         <button @click="$emit('close')" type="button" class="btn btn-secondary">{{ t('common.cancel') }}</button>
-        <button type="submit" form="edit-user-form" :disabled="submitting" class="btn btn-primary">
+        <button type="submit" form="edit-user-form" :disabled="submitting || !canWrite" class="btn btn-primary">
           {{ submitting ? t('admin.users.updating') : t('common.update') }}
         </button>
       </div>
@@ -85,12 +86,29 @@ import Icon from '@/components/icons/Icon.vue'
 import { useStepUp, isStepUpBlocked, isStepUpCancelled, stepUpBlockReason } from '@/composables/useStepUp'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 
-const props = defineProps<{ show: boolean, user: AdminUser | null }>()
+const props = withDefaults(defineProps<{
+  show: boolean
+  user: AdminUser | null
+  canWrite?: boolean
+  canAssignSuperAdmin?: boolean
+}>(), {
+  canWrite: false,
+  canAssignSuperAdmin: false,
+})
 const emit = defineEmits(['close', 'success'])
 const { t } = useI18n(); const appStore = useAppStore(); const { copyToClipboard } = useClipboard()
 
 const submitting = ref(false); const passwordCopied = ref(false)
-const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user', concurrency: 1, rpm_limit: 0, customAttributes: {} as UserAttributeValuesMap })
+const form = reactive({
+  email: '',
+  password: '',
+  username: '',
+  notes: '',
+  role: 'user' as AdminUser['role'],
+  concurrency: 1,
+  rpm_limit: 0,
+  customAttributes: {} as UserAttributeValuesMap,
+})
 
 watch(() => props.user, (u) => {
   if (u) {
@@ -111,8 +129,21 @@ const copyPassword = async () => {
 }
 const stepUp = useStepUp()
 
+const mutationErrorMessage = (error: any, fallback: string): string => {
+  const status = error?.response?.status ?? error?.status
+  const detail = error?.response?.data?.detail || error?.response?.data?.message || error?.detail || error?.message
+  if (status === 403) return t('admin.users.permissions.forbidden')
+  if (status === 404) return t('admin.users.permissions.notFound')
+  if (status === 409) return detail || t('admin.users.permissions.conflict')
+  return detail || error?.message || fallback
+}
+
 const handleUpdateUser = async () => {
-  if (!props.user) return
+  if (!props.user || !props.canWrite) return
+  if (form.role === 'super_admin' && !props.canAssignSuperAdmin) {
+    appStore.showError(t('admin.users.permissions.forbidden'))
+    return
+  }
   if (!form.email.trim()) {
     appStore.showError(t('admin.users.emailRequired'))
     return
@@ -141,7 +172,7 @@ const handleUpdateUser = async () => {
           : t('stepUp.notEnabled')
       )
     } else {
-      appStore.showError(e?.message || t('admin.users.failedToUpdate'))
+      appStore.showError(mutationErrorMessage(e, t('admin.users.failedToUpdate')))
     }
   } finally { submitting.value = false }
 }

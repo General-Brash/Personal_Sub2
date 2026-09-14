@@ -61,14 +61,15 @@ func normalizeCheckinMode(mode CheckinMode) (CheckinMode, error) {
 // DailyCheckinPolicy keeps the legacy reward-tier fields unchanged and carries
 // the additive v2 policy only when it was explicitly loaded by a v2 service.
 type DailyCheckinPolicyV2 struct {
-	Version        string                 `json:"version"`
-	RefreshTime    string                 `json:"refresh_time"`
-	AutoFeeBps     int                    `json:"auto_fee_bps"`
-	Normal         DailyCheckinRandomV2   `json:"normal"`
-	Super          DailyCheckinSuperV2    `json:"super"`
-	PendingRefresh *DailyCheckinPendingV2 `json:"pending_refresh,omitempty"`
-	ReviewApproved bool                   `json:"-"`
-	Configured     bool                   `json:"-"`
+	Version            string                 `json:"version"`
+	RefreshTime        string                 `json:"refresh_time"`
+	AutoFeeBps         int                    `json:"auto_fee_bps"`
+	Normal             DailyCheckinRandomV2   `json:"normal"`
+	Super              DailyCheckinSuperV2    `json:"super"`
+	PendingRefresh     *DailyCheckinPendingV2 `json:"pending_refresh,omitempty"`
+	RefreshEffectiveAt *time.Time             `json:"-"`
+	ReviewApproved     bool                   `json:"-"`
+	Configured         bool                   `json:"-"`
 }
 
 type DailyCheckinRandomV2 struct {
@@ -90,13 +91,14 @@ type DailyCheckinPendingV2 struct {
 }
 
 type checkinPolicyV2Wire struct {
-	Version        string                 `json:"version"`
-	RefreshTime    string                 `json:"refresh_time"`
-	AutoFeeBps     int                    `json:"auto_fee_bps"`
-	Normal         DailyCheckinRandomV2   `json:"normal"`
-	Super          DailyCheckinSuperWire  `json:"super"`
-	PendingRefresh *DailyCheckinPendingV2 `json:"pending_refresh,omitempty"`
-	Reviewed       bool                   `json:"reviewed,omitempty"`
+	Version            string                 `json:"version"`
+	RefreshTime        string                 `json:"refresh_time"`
+	AutoFeeBps         int                    `json:"auto_fee_bps"`
+	Normal             DailyCheckinRandomV2   `json:"normal"`
+	Super              DailyCheckinSuperWire  `json:"super"`
+	PendingRefresh     *DailyCheckinPendingV2 `json:"pending_refresh,omitempty"`
+	RefreshEffectiveAt *time.Time             `json:"refresh_effective_at,omitempty"`
+	Reviewed           bool                   `json:"reviewed,omitempty"`
 }
 
 type DailyCheckinSuperWire struct {
@@ -202,14 +204,15 @@ func parseDailyCheckinPolicyV2(raw string) (DailyCheckinPolicyV2, error) {
 		return DailyCheckinPolicyV2{}, ErrDailyCheckinPolicyInvalid
 	}
 	policy := DailyCheckinPolicyV2{
-		Version:        strings.TrimSpace(wire.Version),
-		RefreshTime:    strings.TrimSpace(wire.RefreshTime),
-		AutoFeeBps:     wire.AutoFeeBps,
-		Normal:         wire.Normal,
-		Super:          DailyCheckinSuperV2{Enabled: wire.Super.Enabled, MinBps: wire.Super.MinBps, MaxBps: wire.Super.MaxBps, Cost: cost},
-		PendingRefresh: wire.PendingRefresh,
-		ReviewApproved: wire.Reviewed,
-		Configured:     true,
+		Version:            strings.TrimSpace(wire.Version),
+		RefreshTime:        strings.TrimSpace(wire.RefreshTime),
+		AutoFeeBps:         wire.AutoFeeBps,
+		Normal:             wire.Normal,
+		Super:              DailyCheckinSuperV2{Enabled: wire.Super.Enabled, MinBps: wire.Super.MinBps, MaxBps: wire.Super.MaxBps, Cost: cost},
+		PendingRefresh:     wire.PendingRefresh,
+		RefreshEffectiveAt: wire.RefreshEffectiveAt,
+		ReviewApproved:     wire.Reviewed,
+		Configured:         true,
 	}
 	if policy.Version == "" {
 		policy.Version = "checkin-v2"
@@ -225,13 +228,14 @@ func (p DailyCheckinPolicyV2) settingValue() (string, error) {
 		return "", err
 	}
 	wire := checkinPolicyV2Wire{
-		Version:        p.Version,
-		RefreshTime:    p.RefreshTime,
-		AutoFeeBps:     p.AutoFeeBps,
-		Normal:         p.Normal,
-		Super:          DailyCheckinSuperWire{Enabled: p.Super.Enabled, MinBps: p.Super.MinBps, MaxBps: p.Super.MaxBps, Cost: formatLedgerAmount(p.Super.Cost)},
-		PendingRefresh: p.PendingRefresh,
-		Reviewed:       p.ReviewApproved,
+		Version:            p.Version,
+		RefreshTime:        p.RefreshTime,
+		AutoFeeBps:         p.AutoFeeBps,
+		Normal:             p.Normal,
+		Super:              DailyCheckinSuperWire{Enabled: p.Super.Enabled, MinBps: p.Super.MinBps, MaxBps: p.Super.MaxBps, Cost: formatLedgerAmount(p.Super.Cost)},
+		PendingRefresh:     p.PendingRefresh,
+		RefreshEffectiveAt: p.RefreshEffectiveAt,
+		Reviewed:           p.ReviewApproved,
 	}
 	raw, err := json.Marshal(wire)
 	if err != nil {
@@ -244,21 +248,24 @@ func (p DailyCheckinPolicyV2) EffectiveAt(now time.Time) DailyCheckinPolicyV2 {
 	effective := p
 	if p.PendingRefresh != nil && !now.Before(p.PendingRefresh.EffectiveAt) {
 		effective.RefreshTime = p.PendingRefresh.RefreshTime
+		anchor := p.PendingRefresh.EffectiveAt
+		effective.RefreshEffectiveAt = &anchor
 		effective.PendingRefresh = nil
 	}
 	return effective
 }
 
 type checkinPolicyRuleVersionWire struct {
-	Enabled        bool                          `json:"enabled"`
-	MaxRewardDay   int                           `json:"max_reward_day"`
-	RewardTiers    []dailyCheckinRewardTierValue `json:"reward_tiers"`
-	RefreshTime    string                        `json:"refresh_time"`
-	AutoFeeBps     int                           `json:"auto_fee_bps"`
-	Normal         DailyCheckinRandomV2          `json:"normal"`
-	Super          DailyCheckinSuperV2           `json:"super"`
-	PendingRefresh *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
-	Reviewed       bool                          `json:"reviewed"`
+	Enabled            bool                          `json:"enabled"`
+	MaxRewardDay       int                           `json:"max_reward_day"`
+	RewardTiers        []dailyCheckinRewardTierValue `json:"reward_tiers"`
+	RefreshTime        string                        `json:"refresh_time"`
+	AutoFeeBps         int                           `json:"auto_fee_bps"`
+	Normal             DailyCheckinRandomV2          `json:"normal"`
+	Super              DailyCheckinSuperV2           `json:"super"`
+	PendingRefresh     *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
+	RefreshEffectiveAt *time.Time                    `json:"refresh_effective_at,omitempty"`
+	Reviewed           bool                          `json:"reviewed"`
 }
 
 // EffectiveCheckinPolicyVersion is a deterministic fingerprint of every rule
@@ -281,7 +288,7 @@ func EffectiveCheckinPolicyVersion(base *DailyCheckinPolicy, extended DailyCheck
 		Enabled: base != nil && base.Enabled, MaxRewardDay: 0, RewardTiers: tiers,
 		RefreshTime: extended.RefreshTime, AutoFeeBps: extended.AutoFeeBps,
 		Normal: extended.Normal, Super: extended.Super,
-		PendingRefresh: extended.PendingRefresh, Reviewed: extended.ReviewApproved,
+		PendingRefresh: extended.PendingRefresh, RefreshEffectiveAt: extended.RefreshEffectiveAt, Reviewed: extended.ReviewApproved,
 	}
 	if base != nil {
 		wire.MaxRewardDay = base.MaxRewardDay
@@ -317,14 +324,15 @@ func checkinPeriodAt(policy DailyCheckinPolicyV2, now time.Time) (CheckinPeriod,
 	if candidate.After(localNow) {
 		candidate = candidate.AddDate(0, 0, -1)
 	}
-	if policy.PendingRefresh != nil && !now.Before(policy.PendingRefresh.EffectiveAt) {
-		if policy.PendingRefresh.EffectiveAt.After(candidate) {
-			candidate = policy.PendingRefresh.EffectiveAt.In(beijingLocation)
-		}
+	if effective.RefreshEffectiveAt != nil && !now.Before(*effective.RefreshEffectiveAt) && effective.RefreshEffectiveAt.After(candidate) {
+		candidate = effective.RefreshEffectiveAt.In(beijingLocation)
 	}
 	next := time.Date(candidate.Year(), candidate.Month(), candidate.Day(), refreshMinute/60, refreshMinute%60, 0, 0, beijingLocation)
 	if !next.After(candidate) {
 		next = next.AddDate(0, 0, 1)
+	}
+	if policy.PendingRefresh != nil && now.Before(policy.PendingRefresh.EffectiveAt) && policy.PendingRefresh.EffectiveAt.Before(next) {
+		next = policy.PendingRefresh.EffectiveAt.In(beijingLocation)
 	}
 	return CheckinPeriod{
 		ID:        fmt.Sprintf("checkin:%d", candidate.UTC().Unix()),
@@ -369,7 +377,11 @@ func (s *SettingService) GetDailyCheckinPolicyV2(ctx context.Context) (*DailyChe
 	if err != nil {
 		return nil, DailyCheckinPolicyV2{}, err
 	}
-	return parseCheckinPolicyBundle(values)
+	base, extended, err := parseCheckinPolicyBundle(values)
+	if err != nil {
+		return nil, DailyCheckinPolicyV2{}, err
+	}
+	return base, checkinAdminPolicyView(base, extended, time.Now()), nil
 }
 
 // UpdateDailyCheckinPolicyV2 is the additive admin entry point. Refresh-time
@@ -399,26 +411,14 @@ func (s *SettingService) UpdateDailyCheckinPolicyV2(ctx context.Context, policy 
 			expectedValues[key] = ""
 		}
 	}
-	_, current, err := parseCheckinPolicyBundle(expectedValues)
+	currentBase, current, err := parseCheckinPolicyBundle(expectedValues)
 	if err != nil {
 		return err
 	}
-	if expected != current.Version {
-		return ErrCheckinPolicyVersionStale
+	if err := prepareCheckinPolicyV2Change(currentBase, current, extended, expected, time.Now()); err != nil {
+		return err
 	}
-	now := time.Now()
-	active := current.EffectiveAt(now)
-	if extended.RefreshTime != active.RefreshTime {
-		period, periodErr := checkinPeriodAt(current, now)
-		if periodErr != nil {
-			return periodErr
-		}
-		effectiveAt := period.NextReset
-		extended.PendingRefresh = &DailyCheckinPendingV2{RefreshTime: extended.RefreshTime, EffectiveAt: effectiveAt}
-		extended.RefreshTime = active.RefreshTime // retain the old clock until the agreed boundary
-	} else {
-		extended.PendingRefresh = active.PendingRefresh
-	}
+
 	extended.Version = EffectiveCheckinPolicyVersion(policy, *extended)
 	raw, err := extended.settingValue()
 	if err != nil {
@@ -435,6 +435,41 @@ func (s *SettingService) UpdateDailyCheckinPolicyV2(ctx context.Context, policy 
 	}
 	if !applied {
 		return ErrCheckinPolicyVersionStale
+	}
+	return nil
+}
+
+// Admin CAS follows the effective representation, not just the stored JSON.
+// Crossing a pending boundary invalidates an old form without guessing whether
+// the old clock was an intentional edit. Customer consent still uses the raw
+// policy version and is not changed merely by this read-only projection.
+func checkinAdminPolicyView(base *DailyCheckinPolicy, policy DailyCheckinPolicyV2, now time.Time) DailyCheckinPolicyV2 {
+	view := policy.EffectiveAt(now)
+	view.Version = EffectiveCheckinPolicyVersion(base, view)
+	return view
+}
+
+func prepareCheckinPolicyV2Change(base *DailyCheckinPolicy, current DailyCheckinPolicyV2, updated *DailyCheckinPolicyV2, expected string, now time.Time) error {
+	active := checkinAdminPolicyView(base, current, now)
+	if expected != active.Version {
+		return ErrCheckinPolicyVersionStale
+	}
+	updated.RefreshTime = strings.TrimSpace(updated.RefreshTime)
+	// This anchor is server-owned. Retaining it keeps a short transition period
+	// unchanged when an unrelated setting is saved before its next reset.
+	updated.RefreshEffectiveAt = active.RefreshEffectiveAt
+	if updated.RefreshTime != active.RefreshTime {
+		if _, err := parseCheckinRefreshTime(updated.RefreshTime); err != nil {
+			return err
+		}
+		period, err := checkinPeriodAt(current, now)
+		if err != nil {
+			return err
+		}
+		updated.PendingRefresh = &DailyCheckinPendingV2{RefreshTime: updated.RefreshTime, EffectiveAt: period.NextReset}
+		updated.RefreshTime = active.RefreshTime
+	} else {
+		updated.PendingRefresh = active.PendingRefresh
 	}
 	return nil
 }

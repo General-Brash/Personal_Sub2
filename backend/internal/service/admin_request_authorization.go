@@ -6,9 +6,68 @@ import (
 )
 
 type adminAuthorizationContextKey struct{}
+type adminMutationActorContextKey struct{}
+type adminMutationTargetSnapshotContextKey struct{}
+type adminMutationPrincipalKindContextKey struct{}
 
 func ContextWithAdminAuthorization(ctx context.Context, svc *AdminPermissionService) context.Context {
 	return context.WithValue(ctx, adminAuthorizationContextKey{}, svc)
+}
+
+// ContextWithAdminMutationActorID carries the actor id into repository-owned
+// transactions for legacy callers that do not attach an AdminPrincipal.  When
+// a principal is present, repository authorization always prefers that
+// principal and verifies the id matches it; this value is only a compatibility
+// fallback for disabled/shadow mode.
+func ContextWithAdminMutationActorID(ctx context.Context, actorID int64) context.Context {
+	return context.WithValue(ctx, adminMutationActorContextKey{}, actorID)
+}
+
+func AdminMutationActorIDFromContext(ctx context.Context) (int64, bool) {
+	actorID, ok := ctx.Value(adminMutationActorContextKey{}).(int64)
+	return actorID, ok && actorID > 0
+}
+
+// AdminMutationContextPresent distinguishes an explicitly marked admin
+// mutation from ordinary user creation/update paths that share UserRepository.
+// The marker may intentionally carry actor id 0 in legacy unit/compatibility
+// callers; that still differs from an unmarked consumer mutation.
+func AdminMutationContextPresent(ctx context.Context) bool {
+	_, ok := ctx.Value(adminMutationActorContextKey{}).(int64)
+	return ok
+}
+
+// AdminMutationTargetSnapshot is the target role/status observed by the
+// service-layer preflight. The repository guard compares it with the row it
+// locks in the final write transaction; a mismatch is a 409 conflict rather
+// than a second, stale authorization decision.
+type AdminMutationTargetSnapshot struct {
+	Role   string
+	Status string
+}
+
+func ContextWithAdminMutationTargetSnapshot(ctx context.Context, role, status string) context.Context {
+	return context.WithValue(ctx, adminMutationTargetSnapshotContextKey{}, AdminMutationTargetSnapshot{
+		Role: role, Status: status,
+	})
+}
+
+func AdminMutationTargetSnapshotFromContext(ctx context.Context) (AdminMutationTargetSnapshot, bool) {
+	snapshot, ok := ctx.Value(adminMutationTargetSnapshotContextKey{}).(AdminMutationTargetSnapshot)
+	return snapshot, ok
+}
+
+// ContextWithAdminMutationPrincipalKind preserves the authentication kind when
+// a legacy/disabled deployment does not attach an explicit AdminPrincipal.
+// This prevents an admin API key from falling back to the bound user's human
+// super-admin role.
+func ContextWithAdminMutationPrincipalKind(ctx context.Context, kind string) context.Context {
+	return context.WithValue(ctx, adminMutationPrincipalKindContextKey{}, kind)
+}
+
+func AdminMutationPrincipalKindFromContext(ctx context.Context) (string, bool) {
+	kind, ok := ctx.Value(adminMutationPrincipalKindContextKey{}).(string)
+	return kind, ok && kind != ""
 }
 
 // AuthorizeAdminRequest preserves scoped API-key identity all the way into a

@@ -53,8 +53,8 @@
           <input id="daily-checkin-refresh-time" v-model="form.refresh_time" data-testid="checkin-refresh-time" type="time" step="60" required class="input" />
         </div>
         <div>
-          <label for="daily-checkin-auto-fee" class="input-label">自动签到手续费（bps）</label>
-          <input id="daily-checkin-auto-fee" v-model.number="form.auto_fee_bps" data-testid="checkin-auto-fee-bps" type="number" min="0" max="10000" step="1" required class="input" />
+          <label for="daily-checkin-auto-fee" class="input-label">自动签到手续费（%）</label>
+          <input id="daily-checkin-auto-fee" v-model="autoFeePercent" data-testid="checkin-auto-fee-percent" type="number" min="0" max="100" step="0.01" required class="input" />
         </div>
       </div>
 
@@ -65,8 +65,8 @@
             <Toggle v-model="form.normal.enabled" data-testid="checkin-normal-enabled" aria-label="普通博弈" />
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <label class="input-label">最小倍率 bps<input v-model.number="form.normal.min_bps" data-testid="checkin-normal-min-bps" type="number" min="1" :max="form.normal.max_bps" step="1" required class="input mt-1" /></label>
-            <label class="input-label">最大倍率 bps<input v-model.number="form.normal.max_bps" data-testid="checkin-normal-max-bps" type="number" :min="form.normal.min_bps" max="1000000" step="1" required class="input mt-1" /></label>
+            <label class="input-label">最小倍率（x）<input v-model="normalMinMultiplier" data-testid="checkin-normal-min-multiplier" type="number" min="0.0001" :max="form.normal.max_bps / 10000" step="0.0001" required class="input mt-1" /></label>
+            <label class="input-label">最大倍率（x）<input v-model="normalMaxMultiplier" data-testid="checkin-normal-max-multiplier" type="number" :min="form.normal.min_bps / 10000" max="100" step="0.0001" required class="input mt-1" /></label>
           </div>
         </div>
         <div class="space-y-3">
@@ -75,8 +75,8 @@
             <Toggle v-model="form.super.enabled" data-testid="checkin-super-enabled" aria-label="超级博弈" />
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <label class="input-label">最小倍率 bps<input v-model.number="form.super.min_bps" data-testid="checkin-super-min-bps" type="number" min="1" :max="form.super.max_bps" step="1" required class="input mt-1" /></label>
-            <label class="input-label">最大倍率 bps<input v-model.number="form.super.max_bps" data-testid="checkin-super-max-bps" type="number" :min="form.super.min_bps" max="1000000" step="1" required class="input mt-1" /></label>
+            <label class="input-label">最小倍率（x）<input v-model="superMinMultiplier" data-testid="checkin-super-min-multiplier" type="number" min="0.0001" :max="form.super.max_bps / 10000" step="0.0001" required class="input mt-1" /></label>
+            <label class="input-label">最大倍率（x）<input v-model="superMaxMultiplier" data-testid="checkin-super-max-multiplier" type="number" :min="form.super.min_bps / 10000" max="100" step="0.0001" required class="input mt-1" /></label>
           </div>
           <label class="input-label">永久成本<input v-model="form.super.cost" data-testid="checkin-super-cost" type="text" inputmode="decimal" required class="input mt-1 font-mono" @blur="form.super.cost = formatEditableAmount(form.super.cost)" /></label>
         </div>
@@ -218,6 +218,27 @@ const form = reactive<CheckinSettingsForm>({
   pending_refresh: null,
   next_reset_at: null,
 })
+
+// Only the editor units change. The form, validation and wire payload retain
+// integer bps; invalid precision stays invalid instead of silently rounding.
+function bpsEditor(read: () => number, write: (bps: number) => void, scale: number) {
+  return computed({
+    get: () => {
+      const value = read()
+      if (!Number.isFinite(value)) return ''
+      return (value / scale).toFixed(scale === 100 ? 2 : 4).replace(/(\.\d{2})0+$/, '$1')
+    },
+    set: (value: string | number) => {
+      const scaled = Number(value) * scale
+      write(value === '' || !Number.isFinite(scaled) || Math.abs(scaled - Math.round(scaled)) > 1e-7 ? NaN : Math.round(scaled))
+    },
+  })
+}
+const autoFeePercent = bpsEditor(() => form.auto_fee_bps, value => { form.auto_fee_bps = value }, 100)
+const normalMinMultiplier = bpsEditor(() => form.normal.min_bps, value => { form.normal.min_bps = value }, 10000)
+const normalMaxMultiplier = bpsEditor(() => form.normal.max_bps, value => { form.normal.max_bps = value }, 10000)
+const superMinMultiplier = bpsEditor(() => form.super.min_bps, value => { form.super.min_bps = value }, 10000)
+const superMaxMultiplier = bpsEditor(() => form.super.max_bps, value => { form.super.max_bps = value }, 10000)
 
 const effectivePreview = computed(() => {
   if (form.pending_refresh) {

@@ -9,13 +9,17 @@ const {
   getAllGroups,
   getBatchUsersUsage,
   listEnabledDefinitions,
-  getBatchUserAttributes
+  getBatchUserAttributes,
+  authState,
+  refreshUser,
 } = vi.hoisted(() => ({
   listUsers: vi.fn(),
   getAllGroups: vi.fn(),
   getBatchUsersUsage: vi.fn(),
   listEnabledDefinitions: vi.fn(),
-  getBatchUserAttributes: vi.fn()
+  getBatchUserAttributes: vi.fn(),
+  authState: { user: null as { role: 'admin' | 'user' | 'super_admin'; permission_mode?: 'disabled' | 'shadow' | 'enforce'; permissions?: string[] } | null },
+  refreshUser: vi.fn(),
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -36,6 +40,20 @@ vi.mock('@/api/admin', () => ({
       getBatchUserAttributes
     }
   }
+}))
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({
+    get user() { return authState.user },
+    get isAdmin() { return authState.user?.role === 'admin' || authState.user?.role === 'super_admin' },
+    canAdmin: (permission: string) => {
+      const user = authState.user
+      if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) return false
+      if (user.role === 'super_admin') return true
+      return user.permission_mode === 'enforce' && user.permissions?.includes(permission) === true
+    },
+    refreshUser,
+  }),
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -99,6 +117,7 @@ const DataTableStub = {
       <div v-for="row in data" :key="row.id">
         <slot name="cell-balance" :value="row.balance" :row="row" />
         <slot name="cell-last_used_at" :value="row.last_used_at" :row="row" />
+        <slot name="cell-actions" :row="row" />
       </div>
     </div>
   `
@@ -124,6 +143,13 @@ describe('admin UsersView', () => {
   beforeEach(() => {
     vi.useRealTimers()
     localStorage.clear()
+    authState.user = {
+      role: 'admin',
+      permission_mode: 'enforce',
+      permissions: ['users.update', 'users.status', 'users.delete', 'users.balance.adjust', 'users.entitlement.manage'],
+    }
+    refreshUser.mockReset()
+    refreshUser.mockResolvedValue(authState.user)
 
     listUsers.mockReset()
     getAllGroups.mockReset()
@@ -185,6 +211,7 @@ describe('admin UsersView', () => {
     const visibleColumns = columns.split(',')
     expect(visibleColumns.slice(-4, -1)).toEqual(['last_active_at', 'last_used_at', 'created_at'])
     expect(visibleColumns).not.toContain('last_login_at')
+    expect(visibleColumns).toContain('tier')
 
     await wrapper.get('[data-test="sort-last-used"]').trigger('click')
     await flushPromises()
@@ -369,6 +396,84 @@ describe('admin UsersView', () => {
     expect(wrapper.get('[data-test="row-order"]').text()).toBe('refreshed-page-two@example.com')
     expect(wrapper.find('[data-test="bulk-edit-limits"]').exists()).toBe(false)
     expect(wrapper.get('[data-test="selected-keys"]').text()).toBe('')
+  })
+
+  it('keeps user-management writes disabled when permission enforcement is off', async () => {
+    authState.user = { role: 'admin', permission_mode: 'shadow', permissions: [] }
+    refreshUser.mockReset()
+    refreshUser.mockResolvedValue(authState.user)
+
+    const wrapper = mount(UsersView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: { template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          ConfirmDialog: true,
+          EmptyState: true,
+          GroupBadge: true,
+          Select: true,
+          UserAttributesConfigModal: true,
+          UserConcurrencyCell: true,
+          UserCreateModal: true,
+          UserEditModal: true,
+          BulkEditUserModal: BulkEditUserModalStub,
+          UserPlatformQuotaModal: true,
+          UserApiKeysModal: true,
+          UserAllowedGroupsModal: true,
+          UserBalanceModal: true,
+          UserBalanceHistoryModal: true,
+          GroupReplaceModal: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="user-write-access-state"]').text()).toContain('modeOff')
+    expect(wrapper.get('[data-test="create-user"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="edit-user"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps missing permission metadata unknown instead of treating it as mode-off', async () => {
+    authState.user = { role: 'admin', permissions: [] }
+    refreshUser.mockReset()
+    refreshUser.mockResolvedValue(authState.user)
+
+    const wrapper = mount(UsersView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: { template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          ConfirmDialog: true,
+          EmptyState: true,
+          GroupBadge: true,
+          Select: true,
+          UserAttributesConfigModal: true,
+          UserConcurrencyCell: true,
+          UserCreateModal: true,
+          UserEditModal: true,
+          BulkEditUserModal: BulkEditUserModalStub,
+          UserPlatformQuotaModal: true,
+          UserApiKeysModal: true,
+          UserAllowedGroupsModal: true,
+          UserBalanceModal: true,
+          UserBalanceHistoryModal: true,
+          GroupReplaceModal: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="user-write-access-state"]').text()).toContain('unknown')
+    expect(wrapper.get('[data-test="create-user"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="edit-user"]').attributes('disabled')).toBeDefined()
   })
 
   it('opens the reused user history modal from the balance audit entry', async () => {

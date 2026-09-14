@@ -89,6 +89,6 @@ function formatCredit(value: string): string {
   return `$${formatDecimalAmount(value)}`
 }
 function formatMultiplier(bps: number): string {
-  return `${(bps / 10000).toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}×`
+  return `${(bps / 10000).toFixed(2)}x`
 }
 </script>

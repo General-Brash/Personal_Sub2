@@ -759,8 +759,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import {
   exchangePermanentForTemporary,
   getBankLedger,
@@ -820,6 +821,7 @@ const amountScale = 100_000_000n
 const { locale, t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const route = useRoute()
 const showAdminBankTransactions = computed(() => authStore.isAdmin && isFeatureFlagEnabled(FeatureFlags.adminBankTransactions))
 const status = ref<BankStatus | null>(null)
 const loading = ref(true)
@@ -1621,16 +1623,39 @@ function createIdempotencyKey(scope: string): string {
 }
 
 function initialBankMode(): BankMode {
+  return bankModeFromLocation()
+}
+
+function normalizeBankMode(value: string | null): BankMode | null {
+  return value === 'advance' || value === 'exchange' || value === 'repay' ? value : null
+}
+
+function normalizeRouteBankMode(value: unknown): BankMode | null {
+  const candidate = Array.isArray(value) ? value[0] : value
+  return typeof candidate === 'string' ? normalizeBankMode(candidate) : null
+}
+
+function bankModeFromLocation(): BankMode {
   try {
     const params = new URLSearchParams(window.location.search)
-    return normalizeBankMode(params.get('mode')) ?? normalizeBankMode(window.location.hash.replace(/^#/, '')) ?? 'exchange'
+    return normalizeBankMode(params.get('mode'))
+      ?? normalizeBankMode(window.location.hash.replace(/^#/, ''))
+      ?? 'exchange'
   } catch {
     return 'exchange'
   }
 }
 
-function normalizeBankMode(value: string | null): BankMode | null {
-  return value === 'advance' || value === 'exchange' || value === 'repay' ? value : null
+function syncBankModeFromExternalRoute(): void {
+  const mode = normalizeRouteBankMode(route.query.mode)
+    ?? normalizeBankMode(route.hash.replace(/^#/, ''))
+    ?? 'exchange'
+  if (activeBankMode.value !== mode) activeBankMode.value = mode
+}
+
+function syncBankModeFromExternalNavigation(): void {
+  const mode = bankModeFromLocation()
+  if (activeBankMode.value !== mode) activeBankMode.value = mode
 }
 
 function syncBankModeDeepLink(mode: BankMode): void {
@@ -1657,6 +1682,11 @@ function selectBankMode(mode: BankMode, focusTab = false): void {
     tab?.focus()
   })
 }
+
+watch(
+  () => [route.query.mode, route.hash],
+  syncBankModeFromExternalRoute,
+)
 
 function handleBankModeKeydown(event: KeyboardEvent, currentMode: BankMode): void {
   let nextMode: BankMode | null = null
@@ -1727,11 +1757,15 @@ async function refreshUserSilently(): Promise<void> {
 }
 
 onMounted(() => {
+  window.addEventListener('popstate', syncBankModeFromExternalNavigation)
+  window.addEventListener('hashchange', syncBankModeFromExternalNavigation)
   void loadStatus()
   void loadLedger(1)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('popstate', syncBankModeFromExternalNavigation)
+  window.removeEventListener('hashchange', syncBankModeFromExternalNavigation)
   removeExchangeTierTooltipListeners()
 })
 </script>

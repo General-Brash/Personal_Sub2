@@ -288,4 +288,28 @@ describe('CheckinSettingsCard', () => {
     expect(getCheckinSettings).toHaveBeenCalledTimes(2)
     expect(wrapper.find('[data-testid="checkin-settings-error"]').exists()).toBe(false)
   })
+  it('edits percent and x units but sends exact integer bps to the API', async () => {
+    const wrapper = mount(CheckinSettingsCard)
+    await flushPromises()
+    expect((wrapper.get('[data-testid="checkin-auto-fee-percent"]').element as HTMLInputElement).value).toBe('5.00')
+    expect((wrapper.get('[data-testid="checkin-normal-min-multiplier"]').element as HTMLInputElement).value).toBe('1.00')
+    await wrapper.get('[data-testid="checkin-auto-fee-percent"]').setValue('10.00')
+    await wrapper.get('[data-testid="checkin-normal-min-multiplier"]').setValue('0.8001')
+    await wrapper.get('[data-testid="checkin-normal-max-multiplier"]').setValue('1.50')
+    await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
+    await flushPromises()
+    expect(updateCheckinSettings).toHaveBeenCalledWith(expect.objectContaining({
+      auto_fee_bps: 1000,
+      normal: expect.objectContaining({ min_bps: 8001, max_bps: 15000 }),
+    }))
+  })
+
+  it('does not silently round a fractional basis point during percentage input', async () => {
+    const wrapper = mount(CheckinSettingsCard)
+    await flushPromises()
+    await wrapper.get('[data-testid="checkin-auto-fee-percent"]').setValue('0.001')
+    await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
+    expect(updateCheckinSettings).not.toHaveBeenCalled()
+  })
+
 })

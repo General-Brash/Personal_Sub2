@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing release tag to release (e.g., v0.2.1-P1)'
+        description: 'Existing release tag to release (e.g., v0.2.1-p3.5)'
         required: true
         type: string
-        default: 'v0.2.1-P1'
+        default: 'v0.2.1-p3.5'
       simple_release:
         description: 'Simple release: only x86_64 GHCR image, skip other artifacts'
         required: false

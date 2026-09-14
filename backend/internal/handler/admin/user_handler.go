@@ -119,6 +119,7 @@ type BindUserAuthIdentityChannelRequest struct {
 // Query params:
 //   - status: filter by user status
 //   - role: filter by user role
+//   - tier: filter by effective consumer entitlement tier (standard/premium)
 //   - search: search in email, username
 //   - attr[{id}]: filter by custom attribute value, e.g. attr[1]=company
 //   - group_name: fuzzy filter by allowed group name
@@ -139,6 +140,12 @@ func (h *UserHandler) List(c *gin.Context) {
 		Search:     search,
 		GroupName:  strings.TrimSpace(c.Query("group_name")),
 		Attributes: parseAttributeFilters(c),
+	}
+	var tierErr error
+	filters.Tier, tierErr = service.NormalizeUserListTier(c.Query("tier"))
+	if tierErr != nil {
+		response.ErrorFrom(c, tierErr)
+		return
 	}
 	if raw := strings.TrimSpace(c.Query("api_key_group_id")); raw != "" {
 		if id, parseErr := strconv.ParseInt(raw, 10, 64); parseErr == nil && id > 0 {
@@ -293,6 +300,8 @@ func (h *UserHandler) Create(c *gin.Context) {
 		return
 	}
 
+	ctx := adminMutationRequestContext(c)
+
 	// 创建管理员账号属权限敏感操作：需最近完成 step-up 2FA 验证。
 	if req.Role == service.RoleAdmin || req.Role == service.RoleSuperAdmin {
 		if !middleware.EnforceStepUp(c, h.totpService, h.userService, h.settingService) {
@@ -300,7 +309,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 		}
 	}
 
-	user, err := h.adminService.CreateUser(c.Request.Context(), &service.CreateUserInput{
+	user, err := h.adminService.CreateUser(ctx, &service.CreateUserInput{
 		Email:                req.Email,
 		Password:             req.Password,
 		Username:             req.Username,
@@ -335,6 +344,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	ctx := adminMutationRequestContext(c)
 
 	// 防锁死保护：管理员不能把自己降级为普通用户(单管理员场景下会失去后台访问权)。
 	// 与既有"不能禁用/删除 admin"保护一致。降级其他管理员仍然允许。
@@ -346,7 +356,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 	// 把普通用户提升为管理员属权限敏感操作：需最近完成 step-up 2FA 验证。
 	// 目标已是管理员时（前端编辑表单总是携带 role）不触发，避免日常编辑被打断。
 	if req.Role == service.RoleAdmin || req.Role == service.RoleSuperAdmin {
-		target, err := h.adminService.GetUser(c.Request.Context(), userID)
+		target, err := h.adminService.GetUser(ctx, userID)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return
@@ -359,7 +369,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 
 	// 使用指针类型直接传递，nil 表示未提供该字段
-	user, err := h.adminService.UpdateUser(c.Request.Context(), userID, &service.UpdateUserInput{
+	user, err := h.adminService.UpdateUser(ctx, userID, &service.UpdateUserInput{
 		Email:                req.Email,
 		Password:             req.Password,
 		Username:             req.Username,
@@ -391,7 +401,8 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	err = h.adminService.DeleteUser(c.Request.Context(), userID)
+	ctx := service.ContextWithAdminMutationActorID(adminMutationRequestContext(c), getAdminIDFromContext(c))
+	err = h.adminService.DeleteUser(ctx, userID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -991,3 +1002,20 @@ func (h *UserHandler) ResetUserPlatformQuotaWindow(c *gin.Context) {
 }
 
 func (h *UserHandler) SetEntitlementService(svc *service.EntitlementService) { h.entitlements = svc }
+
+// adminMutationRequestContext preserves the HTTP authentication kind for the
+// final repository transaction. In particular, a legacy admin API key must
+// not be treated as a human super-admin when explicit principal middleware is
+// unavailable in disabled/shadow deployments.
+func adminMutationRequestContext(c *gin.Context) context.Context {
+	if c == nil || c.Request == nil {
+		return context.Background()
+	}
+	ctx := c.Request.Context()
+	if raw, ok := c.Get("auth_method"); ok {
+		if method, ok := raw.(string); ok && method == "admin_api_key" {
+			ctx = service.ContextWithAdminMutationPrincipalKind(ctx, service.AdminPrincipalKindAPIKey)
+		}
+	}
+	return ctx
+}

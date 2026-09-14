@@ -3,12 +3,16 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 var (
-	ErrAdminCannotModifySuperAdmin = errors.New("ordinary administrators cannot modify super administrators")
-	ErrAdminCannotSelfGrant        = errors.New("administrators cannot grant themselves management privileges")
-	ErrSuperAdminAssignmentDenied  = errors.New("only a super administrator can assign the super_admin role")
+	ErrAdminCannotModifySuperAdmin = infraerrors.Forbidden("ADMIN_TARGET_PROTECTED", "ordinary administrators cannot modify super administrators")
+	ErrAdminCannotSelfGrant        = infraerrors.Forbidden("ADMIN_SELF_GRANT_DENIED", "administrators cannot grant themselves management privileges")
+	ErrSuperAdminAssignmentDenied  = infraerrors.Forbidden("SUPER_ADMIN_ASSIGNMENT_DENIED", "only a human super administrator can assign the super_admin role")
+	ErrAdminMutationConflict       = infraerrors.Conflict("ADMIN_MUTATION_CONFLICT", "the administrator mutation target changed; reread and retry")
 )
 
 type AdminPermissionState struct {
@@ -36,6 +40,9 @@ func loadAdminPermissionState(ctx context.Context, s *adminServiceImpl, userID i
 
 func authorizeAdminPrincipalMutation(ctx context.Context, s *adminServiceImpl, actorID, targetID int64, requestedRole, requestedStatus string) error {
 	mode := AdminPermissionModeFromEnv()
+	if permissionService := AdminAuthorizationService(ctx); permissionService != nil {
+		mode = permissionService.Mode()
+	}
 	actor, err := loadAdminPermissionState(ctx, s, actorID)
 	if err != nil || actor == nil {
 		if mode == AdminPermissionModeEnforce {
@@ -49,22 +56,37 @@ func authorizeAdminPrincipalMutation(ctx context.Context, s *adminServiceImpl, a
 		return nil
 	}
 
+	// The first GetByID is the service preflight. If the target row has already
+	// changed or disappeared by this second read, report a conflict instead of
+	// reclassifying the stale request as a fresh permission denial.
+	var target *AdminPermissionState
+	var targetErr error
+	if targetID > 0 {
+		target, targetErr = loadAdminPermissionState(ctx, s, targetID)
+		if targetErr != nil {
+			if mode == AdminPermissionModeEnforce {
+				if _, hasSnapshot := AdminMutationTargetSnapshotFromContext(ctx); hasSnapshot {
+					return ErrAdminMutationConflict
+				}
+				return ErrAdminPermissionDenied
+			}
+		} else if target != nil {
+			if expected, ok := AdminMutationTargetSnapshotFromContext(ctx); ok &&
+				((expected.Role != "" && target.Role != expected.Role) ||
+					(expected.Status != "" && target.Status != expected.Status)) {
+				return ErrAdminMutationConflict
+			}
+		}
+	}
+
 	if requestedRole == RoleSuperAdmin && actor.Role != RoleSuperAdmin {
 		return ErrSuperAdminAssignmentDenied
 	}
 	if actor.Role != RoleSuperAdmin {
-		if targetID == actorID {
-			if requestedRole != "" || requestedStatus != "" || (targetID == actorID && targetID > 0) {
-				// A normal admin may locally edit profile fields, but role/status
-				// changes are privilege-sensitive and must be denied.
-				if requestedRole != "" || requestedStatus != "" {
-					return ErrAdminCannotSelfGrant
-				}
-			}
-		}
-		target, targetErr := loadAdminPermissionState(ctx, s, targetID)
-		if targetErr != nil && mode == AdminPermissionModeEnforce {
-			return ErrAdminPermissionDenied
+		if targetID == actorID && targetID > 0 && (requestedRole != "" || requestedStatus != "") {
+			// A normal admin may locally edit profile fields, but role/status
+			// changes are privilege-sensitive and must be denied.
+			return ErrAdminCannotSelfGrant
 		}
 		if targetErr == nil && target != nil && target.Role == RoleSuperAdmin {
 			return ErrAdminCannotModifySuperAdmin
@@ -73,7 +95,9 @@ func authorizeAdminPrincipalMutation(ctx context.Context, s *adminServiceImpl, a
 	if mode == AdminPermissionModeEnforce {
 		permission := ""
 		switch {
-		case requestedRole != "":
+		case requestedRole == RoleSuperAdmin:
+			permission = "security.superadmin.assign"
+		case requestedRole != "" && targetID > 0:
 			permission = "users.role.assign"
 		case requestedStatus != "":
 			permission = "users.status"
@@ -88,7 +112,11 @@ func authorizeAdminPrincipalMutation(ctx context.Context, s *adminServiceImpl, a
 }
 
 func authorizeAdminPermission(ctx context.Context, s *adminServiceImpl, actorID int64, permission string) error {
-	if AdminPermissionModeFromEnv() != AdminPermissionModeEnforce {
+	mode := AdminPermissionModeFromEnv()
+	if permissionService := AdminAuthorizationService(ctx); permissionService != nil {
+		mode = permissionService.Mode()
+	}
+	if mode != AdminPermissionModeEnforce {
 		return nil
 	}
 	principal, ok := AdminPrincipalFromContext(ctx)
@@ -96,4 +124,17 @@ func authorizeAdminPermission(ctx context.Context, s *adminServiceImpl, actorID 
 		return ErrAdminPermissionDenied
 	}
 	return AuthorizeAdminRequest(ctx, permission, nil)
+}
+
+// Keep concurrent transaction aborts in the mutation-conflict contract without
+// automatically retrying a write or changing unrelated global error handling.
+func normalizeAdminMutationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var state interface{ SQLState() string }
+	if errors.As(err, &state) && (state.SQLState() == "40001" || state.SQLState() == "40P01") {
+		return fmt.Errorf("%w: %w", ErrAdminMutationConflict, err)
+	}
+	return err
 }

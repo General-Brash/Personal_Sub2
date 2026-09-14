@@ -26,9 +26,14 @@ func TestApplyAdminPermissionChangeCommitsGrantVersionAndAuditAtomically(t *test
 	repo := NewAdminPermissionRepository(db)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT role FROM users")).
-		WithArgs(int64(5)).
-		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(service.RoleAdmin))
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_xact_lock")).
+		WithArgs(superAdminGuardLockKey).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT u.id, u.role, u.status, COALESCE(v.version, 0)")).
+		WithArgs(int64(1), int64(5)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "role", "status", "version"}).
+			AddRow(int64(1), service.RoleSuperAdmin, service.StatusActive, int64(7)).
+			AddRow(int64(5), service.RoleAdmin, service.StatusActive, int64(2)))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO admin_principal_grants")).
 		WithArgs(int64(5), "users.read", service.AdminGrantAllow, `{"*":"*"}`, int64(1), "test reason").
 		WillReturnResult(sqlmock.NewResult(0, 1))

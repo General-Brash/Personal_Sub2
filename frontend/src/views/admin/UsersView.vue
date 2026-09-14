@@ -3,6 +3,28 @@
     <TablePageLayout>
       <!-- Single Row: Search, Filters, and Actions -->
       <template #filters>
+        <div
+          v-if="userWriteAccessState !== 'ready'"
+          data-test="user-write-access-state"
+          role="status"
+          class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"
+        >
+          <span>
+            <span v-if="userWriteAccessState === 'loading'">{{ t('admin.users.permissions.loading') }}</span>
+            <span v-else-if="userWriteAccessState === 'unknown'">{{ t('admin.users.permissions.unknown') }}</span>
+            <span v-else-if="userWriteAccessState === 'mode-off'">{{ t('admin.users.permissions.modeOff') }}</span>
+            <span v-else>{{ t('admin.users.permissions.forbidden') }}</span>
+          </span>
+          <button
+            v-if="userWriteAccessState === 'unknown'"
+            type="button"
+            data-test="user-write-access-retry"
+            class="font-medium underline underline-offset-2"
+            @click="loadUserManagementAccess"
+          >
+            {{ t('admin.users.permissions.retry') }}
+          </button>
+        </div>
         <div class="flex flex-wrap items-center gap-3">
           <!-- Left: Search + Active Filters -->
           <div class="flex flex-1 flex-wrap items-center gap-3">
@@ -28,10 +50,24 @@
                 v-model="filters.role"
                 :options="[
                   { value: '', label: t('admin.users.allRoles') },
-                  { value: 'super_admin', label: '超级管理员' },
+                  { value: 'super_admin', label: t('admin.users.roles.super_admin') },
                   { value: 'admin', label: t('admin.users.admin') },
                   { value: 'user', label: t('admin.users.user') }
                 ]"
+                @change="applyFilter"
+              />
+            </div>
+
+            <!-- Consumer tier filter (visible when enabled) -->
+            <div v-if="visibleFilters.has('tier')" class="w-full sm:w-36">
+              <Select
+                v-model="filters.tier"
+                :options="[
+                  { value: '', label: t('admin.users.allTiers') },
+                  { value: 'premium', label: t('admin.users.tiers.premium') },
+                  { value: 'standard', label: t('admin.users.tiers.standard') }
+                ]"
+                :aria-label="t('admin.users.tierFilter')"
                 @change="applyFilter"
               />
             </div>
@@ -245,6 +281,8 @@
 
             <button
               v-if="selectedCount > 0"
+              :disabled="!canUpdateUsers"
+              :title="writeActionTitle('users.update')"
               class="btn btn-secondary flex-1 md:flex-initial"
               data-test="bulk-edit-limits"
               @click="showBulkEditModal = true"
@@ -253,10 +291,23 @@
               {{ t('admin.users.bulkLimits.action', { count: selectedCount }) }}
             </button>
 
-            <button v-if="selectedCount > 0" type="button" class="btn btn-secondary" @click="entitlementTargets = [...selectedIds]; showUserEntitlementPanel = true">批量消费权益 ({{selectedCount}})</button>
+            <button
+              v-if="selectedCount > 0"
+              type="button"
+              class="btn btn-secondary"
+              :disabled="!canManageEntitlements"
+              :title="writeActionTitle('users.entitlement.manage')"
+              @click="entitlementTargets = [...selectedIds]; showUserEntitlementPanel = true"
+            >批量消费权益 ({{selectedCount}})</button>
             <button type="button" class="btn btn-secondary" @click="showInvitationAdmin = true">邀请管理</button>
             <!-- Create User Button (full width on mobile, auto width on desktop) -->
-            <button @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
+            <button
+              data-test="create-user"
+              :disabled="!canUpdateUsers"
+              :title="writeActionTitle('users.update')"
+              @click="showCreateModal = true"
+              class="btn btn-primary flex-1 md:flex-initial"
+            >
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.users.createUser') }}
             </button>
@@ -328,9 +379,15 @@
             </div>
           </template>
 
-          <template #cell-role="{ value, row }">
-            <span :class="['badge', value === 'admin' ? 'badge-purple' : 'badge-gray']">
-              {{ value === 'super_admin' ? '超级管理员' : value === 'user' && row.entitlement_tier === 'premium' ? '优质用户' : t('admin.users.roles.' + value) }}
+          <template #cell-role="{ value }">
+            <span :class="['badge', value === 'super_admin' ? 'badge-primary' : value === 'admin' ? 'badge-purple' : 'badge-gray']">
+              {{ t('admin.users.roles.' + value) }}
+            </span>
+          </template>
+
+          <template #cell-tier="{ row }">
+            <span :class="['badge', row.entitlement_tier === 'premium' ? 'badge-primary' : 'badge-gray']">
+              {{ row.entitlement_tier === 'premium' ? t('admin.users.tiers.premium') : row.entitlement_tier === 'standard' ? t('admin.users.tiers.standard') : t('common.unknown') }}
             </span>
           </template>
 
@@ -606,6 +663,9 @@
             <div class="flex items-center gap-1">
               <!-- Edit Button -->
               <button
+                data-test="edit-user"
+                :disabled="!canUpdateUsers"
+                :title="writeActionTitle('users.update')"
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
@@ -616,6 +676,8 @@
               <!-- Toggle Status Button (not for admin) -->
               <button
                 v-if="row.role !== 'admin'"
+                :disabled="!canToggleUserStatus"
+                :title="writeActionTitle('users.status')"
                 @click="handleToggleStatus(row)"
                 :class="[
                   'flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors',
@@ -645,7 +707,7 @@
             <EmptyState
               :title="t('admin.users.noUsersYet')"
               :description="t('admin.users.createFirstUser')"
-              :action-text="t('admin.users.createUser')"
+              :action-text="canUpdateUsers ? t('admin.users.createUser') : undefined"
               @action="showCreateModal = true"
             />
           </template>
@@ -686,6 +748,8 @@
 
               <!-- Allowed Groups -->
               <button
+                :disabled="!canUpdateUsers"
+                :title="writeActionTitle('users.update')"
                 @click="handleAllowedGroups(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -694,7 +758,7 @@
               </button>
 
 
-              <!-- W03/W04: read-only until real allowlists and DB tests pass -->
+              <!-- Basic entitlement reads remain separate from assignment permissions. -->
               <button
                 @click="handleAdminPermissions(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
@@ -703,6 +767,7 @@
                 管理员权限
               </button>
               <button
+                title="查看消费权益；赋级由面板独立核验写入权限"
                 @click="handleUserEntitlement(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -713,6 +778,8 @@
 
               <!-- Deposit -->
               <button
+                :disabled="!canAdjustBalance"
+                :title="writeActionTitle('users.balance.adjust')"
                 @click="handleDeposit(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -722,6 +789,8 @@
 
               <!-- Withdraw -->
               <button
+                :disabled="!canAdjustBalance"
+                :title="writeActionTitle('users.balance.adjust')"
                 @click="handleWithdraw(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -733,6 +802,8 @@
 
               <!-- Platform Quotas -->
               <button
+                :disabled="!canUpdateUsers"
+                :title="writeActionTitle('users.update')"
                 @click="handlePlatformQuota(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -754,6 +825,8 @@
               <!-- Delete (not for admin) -->
               <button
                 v-if="user.role !== 'admin'"
+                :disabled="!canDeleteUsers"
+                :title="writeActionTitle('users.delete')"
                 @click="handleDelete(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
               >
@@ -767,8 +840,21 @@
     </Teleport>
 
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.users.deleteUser')" :message="t('admin.users.deleteConfirm', { email: deletingUser?.email })" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
-    <UserCreateModal :show="showCreateModal" @close="showCreateModal = false" @success="loadUsers" />
-    <UserEditModal :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" />
+    <UserCreateModal
+      :show="showCreateModal"
+      :can-write="canUpdateUsers"
+      :can-assign-super-admin="canAssignSuperAdmin"
+      @close="showCreateModal = false"
+      @success="loadUsers"
+    />
+    <UserEditModal
+      :show="showEditModal"
+      :user="editingUser"
+      :can-write="canUpdateUsers"
+      :can-assign-super-admin="canAssignSuperAdmin"
+      @close="closeEditModal"
+      @success="loadUsers"
+    />
     <BulkEditUserModal
       :show="showBulkEditModal"
       :selected-ids="selectedIds"
@@ -797,6 +883,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { formatDateTime } from '@/utils/format'
@@ -838,7 +925,87 @@ import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryM
 import GroupReplaceModal from '@/components/admin/user/GroupReplaceModal.vue'
 
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const showInvitationAdmin = ref(false)
+
+type UserWriteAccessState = 'loading' | 'unknown' | 'forbidden' | 'mode-off' | 'ready'
+type UserMutationPermission = 'users.update' | 'users.status' | 'users.delete' | 'users.balance.adjust' | 'users.entitlement.manage'
+const permissionLoadState = ref<'loading' | 'ready' | 'unknown'>('loading')
+let permissionRequestSeq = 0
+const userMutationPermissions: readonly UserMutationPermission[] = [
+  'users.update',
+  'users.status',
+  'users.delete',
+  'users.balance.adjust',
+  'users.entitlement.manage',
+]
+
+const hasUserManagementMetadata = (): boolean => {
+  const user = authStore.user
+  if (!user || !['enforce', 'shadow', 'disabled'].includes(user.permission_mode ?? '')) return false
+  return user.permission_mode !== 'enforce' || Array.isArray(user.permissions)
+}
+
+const canUserMutation = (permission: UserMutationPermission): boolean => {
+  const user = authStore.user
+  if (permissionLoadState.value !== 'ready' || !user || !authStore.isAdmin || !hasUserManagementMetadata()) return false
+  if (user.role !== 'super_admin' && user.permission_mode !== 'enforce') return false
+  return authStore.canAdmin(permission)
+}
+
+const userWriteAccessState = computed<UserWriteAccessState>(() => {
+  if (permissionLoadState.value === 'loading') return 'loading'
+  if (permissionLoadState.value === 'unknown') return 'unknown'
+  const user = authStore.user
+  if (!user || !authStore.isAdmin) return 'forbidden'
+  if (!hasUserManagementMetadata()) return 'unknown'
+  if (user.role !== 'super_admin' && user.permission_mode !== 'enforce') return 'mode-off'
+  return userMutationPermissions.some(canUserMutation) ? 'ready' : 'forbidden'
+})
+
+const canUpdateUsers = computed(() => canUserMutation('users.update'))
+const canToggleUserStatus = computed(() => canUserMutation('users.status'))
+const canDeleteUsers = computed(() => canUserMutation('users.delete'))
+const canAdjustBalance = computed(() => canUserMutation('users.balance.adjust'))
+const canManageEntitlements = computed(() => canUserMutation('users.entitlement.manage'))
+const canAssignSuperAdmin = computed(() => {
+  const user = authStore.user
+  return permissionLoadState.value === 'ready'
+    && hasUserManagementMetadata()
+    && user?.role === 'super_admin'
+    && authStore.canAdmin('security.superadmin.assign')
+})
+
+const writeActionTitle = (permission: UserMutationPermission): string => {
+  if (userWriteAccessState.value === 'loading') return t('admin.users.permissions.loading')
+  if (userWriteAccessState.value === 'unknown') return t('admin.users.permissions.unknown')
+  if (userWriteAccessState.value === 'mode-off') return t('admin.users.permissions.modeOff')
+  if (!canUserMutation(permission)) return t('admin.users.permissions.forbidden')
+  return ''
+}
+
+const userMutationErrorMessage = (error: any, fallback: string): string => {
+  const status = error?.response?.status ?? error?.status
+  const detail = error?.response?.data?.detail || error?.response?.data?.message || error?.detail || error?.message
+  if (status === 403) return t('admin.users.permissions.forbidden')
+  if (status === 404) return t('admin.users.permissions.notFound')
+  if (status === 409) return detail || t('admin.users.permissions.conflict')
+  return detail || error?.message || fallback
+}
+
+const loadUserManagementAccess = async (): Promise<void> => {
+  const request = ++permissionRequestSeq
+  permissionLoadState.value = 'loading'
+  try {
+    const currentUser = await authStore.refreshUser()
+    if (request !== permissionRequestSeq) return
+    permissionLoadState.value = currentUser ? 'ready' : 'unknown'
+  } catch (error) {
+    if (request !== permissionRequestSeq) return
+    permissionLoadState.value = 'unknown'
+    console.warn('Failed to refresh user-management permissions:', error)
+  }
+}
 
 // Generate dynamic attribute columns from enabled definitions
 const attributeColumns = computed<Column[]>(() =>
@@ -895,6 +1062,7 @@ const allColumns = computed<Column[]>(() => [
   // Dynamic attribute columns
   ...attributeColumns.value,
   { key: 'role', label: t('admin.users.columns.role'), sortable: true },
+  { key: 'tier', label: t('admin.users.columns.tier'), sortable: false },
   { key: 'groups', label: t('admin.users.columns.groups'), sortable: false },
   { key: 'subscriptions', label: t('admin.users.columns.subscriptions'), sortable: false },
   { key: 'balance', label: t('admin.users.columns.balance'), sortable: true },
@@ -1132,9 +1300,10 @@ const apiKeyGroupFilterOptions = computed(() =>
   }) as SelectOption[]
 )
 
-// Filter values (role, status, and custom attributes)
+// Filter values (role, tier, status, and custom attributes)
 const filters = reactive({
   role: '',
+  tier: '',
   status: '',
   group: '',  // group name for fuzzy match, '' = all
   apiKeyGroup: null as number | null  // group id bound to the user's API keys, null = all
@@ -1142,7 +1311,7 @@ const filters = reactive({
 const activeAttributeFilters = reactive<Record<number, string>>({})
 
 // Visible filters tracking (which filters are shown in the UI)
-// Keys: 'role', 'status', 'attr_${id}'
+// Keys: 'role', 'tier', 'status', 'attr_${id}'
 const visibleFilters = reactive<Set<string>>(new Set())
 
 // Dropdown states
@@ -1165,6 +1334,7 @@ const filterableAttributes = computed(() =>
 // Built-in filter definitions
 const builtInFilters = computed(() => [
   { key: 'role', name: t('admin.users.columns.role'), type: 'select' as const },
+  { key: 'tier', name: t('admin.users.tierFilter'), type: 'select' as const },
   { key: 'status', name: t('admin.users.columns.status'), type: 'select' as const },
   { key: 'group', name: t('admin.users.authorizedGroupFilter'), type: 'select' as const },
   { key: 'apiKeyGroup', name: t('admin.users.apiKeyGroupFilter'), type: 'select' as const }
@@ -1184,6 +1354,7 @@ const loadSavedFilters = () => {
     if (savedValues) {
       const parsed = JSON.parse(savedValues)
       if (parsed.role) filters.role = parsed.role
+      if (parsed.tier === 'standard' || parsed.tier === 'premium') filters.tier = parsed.tier
       if (parsed.status) filters.status = parsed.status
       if (parsed.group) filters.group = parsed.group
       if (typeof parsed.apiKeyGroup === 'number') filters.apiKeyGroup = parsed.apiKeyGroup
@@ -1204,6 +1375,7 @@ const saveFiltersToStorage = () => {
     // Save filter values
     const values = {
       role: filters.role,
+      tier: filters.tier,
       status: filters.status,
       group: filters.group,
       apiKeyGroup: filters.apiKeyGroup,
@@ -1611,6 +1783,7 @@ const loadUsers = async () => {
       pagination.page_size,
       {
         role: filters.role as any,
+        tier: filters.tier === 'standard' || filters.tier === 'premium' ? filters.tier : undefined,
         status: filters.status as any,
         search: searchQuery.value || undefined,
         group_name: filters.group || undefined,
@@ -1647,7 +1820,7 @@ const loadUsers = async () => {
     if (errorInfo?.name === 'AbortError' || errorInfo?.name === 'CanceledError' || errorInfo?.code === 'ERR_CANCELED') {
       return
     }
-    const message = error.response?.data?.detail || error.message || t('admin.users.failedToLoad')
+    const message = userMutationErrorMessage(error, t('admin.users.failedToLoad'))
     appStore.showError(message)
     console.error('Error loading users:', error)
   } finally {
@@ -1703,6 +1876,7 @@ const toggleBuiltInFilter = (key: string) => {
   if (visibleFilters.has(key)) {
     visibleFilters.delete(key)
     if (key === 'role') filters.role = ''
+    if (key === 'tier') filters.tier = ''
     if (key === 'status') filters.status = ''
     if (key === 'group') filters.group = ''
     if (key === 'apiKeyGroup') filters.apiKeyGroup = null
@@ -1760,7 +1934,7 @@ const handleToggleStatus = async (user: AdminUser) => {
     )
     loadUsers()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.users.failedToToggle'))
+    appStore.showError(userMutationErrorMessage(error, t('admin.users.failedToToggle')))
     console.error('Error toggling user status:', error)
   }
 }
@@ -1833,7 +2007,7 @@ const confirmDelete = async () => {
     deletingUser.value = null
     loadUsers()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.users.failedToDelete'))
+    appStore.showError(userMutationErrorMessage(error, t('admin.users.failedToDelete')))
     console.error('Error deleting user:', error)
   }
 }
@@ -1885,6 +2059,7 @@ const handleScroll = () => {
 }
 
 onMounted(async () => {
+  void loadUserManagementAccess()
   await loadAttributeDefinitions()
   loadSavedFilters()
   loadSavedColumns()

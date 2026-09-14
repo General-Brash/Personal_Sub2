@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 const (
@@ -15,11 +16,15 @@ const (
 )
 
 var (
-	ErrEntitlementTierUnknown         = errors.New("unknown entitlement tier")
-	ErrEntitlementDisabled            = errors.New("entitlement tier is disabled")
-	ErrEntitlementReasonRequired      = errors.New("entitlement change reason is required")
-	ErrEntitlementVersionConflict     = errors.New("entitlement configuration changed")
-	ErrEntitlementIdempotencyConflict = errors.New("idempotency key was already used for a different entitlement change")
+	ErrEntitlementTierUnknown         = infraerrors.BadRequest("ENTITLEMENT_TIER_INVALID", "an explicit standard or premium tier is required")
+	ErrEntitlementDisabled            = infraerrors.Conflict("ENTITLEMENT_POLICY_DISABLED", "entitlement tier is disabled")
+	ErrEntitlementReasonRequired      = infraerrors.BadRequest("ENTITLEMENT_REASON_REQUIRED", "entitlement change reason is required")
+	ErrEntitlementRequestIDRequired   = infraerrors.BadRequest("ENTITLEMENT_REQUEST_ID_REQUIRED", "an idempotency request_id is required")
+	ErrEntitlementTargetsInvalid      = infraerrors.BadRequest("ENTITLEMENT_TARGETS_INVALID", "select between 1 and 1000 positive user IDs")
+	ErrEntitlementPolicyInvalid       = infraerrors.BadRequest("ENTITLEMENT_POLICY_INVALID", "invalid entitlement tier policy")
+	ErrEntitlementVersionConflict     = infraerrors.Conflict("ENTITLEMENT_VERSION_CONFLICT", "entitlement configuration changed")
+	ErrEntitlementIdempotencyConflict = infraerrors.Conflict("ENTITLEMENT_IDEMPOTENCY_CONFLICT", "idempotency key was already used for a different entitlement change")
+	ErrEntitlementPreviewConflict     = infraerrors.Conflict("ENTITLEMENT_PREVIEW_STALE", "entitlement preview is missing, expired or changed; preview again")
 )
 
 type EntitlementSource struct {
@@ -78,14 +83,18 @@ type EffectiveGroupRate struct {
 }
 
 type EntitlementChangePreview struct {
-	Tier                   string  `json:"tier"`
-	UserIDs                []int64 `json:"user_ids"`
-	AffectedUserIDs        []int64 `json:"affected_user_ids"`
-	AlreadyAtTier          []int64 `json:"already_at_tier"`
-	RevokedGroupIDs        []int64 `json:"revoked_group_ids,omitempty"`
-	GrantedGroupIDs        []int64 `json:"granted_group_ids,omitempty"`
-	PreservedManual        bool    `json:"preserved_manual_groups"`
-	PreservedSubscriptions bool    `json:"preserved_subscriptions"`
+	PreviewToken           string    `json:"preview_token"`
+	ExpiresAt              time.Time `json:"expires_at"`
+	PolicyEnabled          bool      `json:"policy_enabled"`
+	PolicyVersion          int64     `json:"policy_version"`
+	Tier                   string    `json:"tier"`
+	UserIDs                []int64   `json:"user_ids"`
+	AffectedUserIDs        []int64   `json:"affected_user_ids"`
+	AlreadyAtTier          []int64   `json:"already_at_tier"`
+	RevokedGroupIDs        []int64   `json:"revoked_group_ids"`
+	GrantedGroupIDs        []int64   `json:"granted_group_ids"`
+	PreservedManual        bool      `json:"preserved_manual_groups"`
+	PreservedSubscriptions bool      `json:"preserved_subscriptions"`
 }
 
 type EntitlementChangeResult struct {
@@ -100,7 +109,7 @@ type EntitlementChangeResult struct {
 type EntitlementRepository interface {
 	ResolveEntitlement(ctx context.Context, userID int64) (*EntitlementSnapshot, error)
 	PreviewEntitlementChange(ctx context.Context, userIDs []int64, tier string) (*EntitlementChangePreview, error)
-	ApplyEntitlementChange(ctx context.Context, userIDs []int64, tier string, actorUserID int64, reason, requestID string) (*EntitlementChangeResult, error)
+	ApplyEntitlementChange(ctx context.Context, userIDs []int64, tier string, actorUserID int64, reason, requestID, previewToken string) (*EntitlementChangeResult, error)
 	EntitlementTierDefinition(ctx context.Context, tier string) (displayName string, enabled bool, version int64, err error)
 	ListEntitlementTierPolicies(ctx context.Context) ([]EntitlementTierPolicy, error)
 	UpdateEntitlementTierPolicy(ctx context.Context, input UpdateEntitlementTierPolicyInput, actorUserID int64) (*EntitlementTierPolicy, error)
@@ -125,6 +134,48 @@ func NormalizeEntitlementTier(tier string) string {
 	}
 }
 
+// NormalizeEntitlementWriteTier does not apply the read-side blank-to-standard
+// compatibility default to a mutation or a preview of a mutation.
+func NormalizeEntitlementWriteTier(tier string) string {
+	if strings.TrimSpace(tier) == "" {
+		return ""
+	}
+	return NormalizeEntitlementTier(tier)
+}
+
+func normalizeEntitlementCollections(snapshot *EntitlementSnapshot) {
+	if snapshot.AllowedGroups == nil {
+		snapshot.AllowedGroups = []int64{}
+	}
+	if snapshot.TierGroups == nil {
+		snapshot.TierGroups = []int64{}
+	}
+	if snapshot.Sources == nil {
+		snapshot.Sources = []EntitlementSource{}
+	}
+	if snapshot.ManualGroups == nil {
+		snapshot.ManualGroups = []int64{}
+	}
+	if snapshot.SubscriptionGroups == nil {
+		snapshot.SubscriptionGroups = []int64{}
+	}
+	if snapshot.DefaultRates == nil {
+		snapshot.DefaultRates = map[int64]float64{}
+	}
+}
+
+func validateEntitlementTargets(ids []int64) error {
+	if len(ids) == 0 || len(ids) > 1000 {
+		return ErrEntitlementTargetsInvalid
+	}
+	for _, id := range ids {
+		if id <= 0 {
+			return ErrEntitlementTargetsInvalid
+		}
+	}
+	return nil
+}
+
 func (s *EntitlementService) Resolve(ctx context.Context, userID int64) (*EntitlementSnapshot, error) {
 	if s == nil || s.repo == nil || userID <= 0 {
 		return nil, ErrEntitlementTierUnknown
@@ -136,12 +187,11 @@ func (s *EntitlementService) Resolve(ctx context.Context, userID int64) (*Entitl
 	if snapshot == nil {
 		snapshot = &EntitlementSnapshot{UserID: userID, Tier: EntitlementTierStandard, TierEnabled: true, Version: 1}
 	}
-	if NormalizeEntitlementTier(snapshot.Tier) == "" {
+	snapshot.Tier = NormalizeEntitlementTier(snapshot.Tier)
+	if snapshot.Tier == "" {
 		snapshot.Tier = EntitlementTierStandard
 	}
-	if snapshot.DefaultRates == nil {
-		snapshot.DefaultRates = map[int64]float64{}
-	}
+	normalizeEntitlementCollections(snapshot)
 	return snapshot, nil
 }
 
@@ -162,18 +212,22 @@ func (s *EntitlementService) ResolveGroupRate(ctx context.Context, userID, group
 }
 
 func (s *EntitlementService) PreviewTierChange(ctx context.Context, userIDs []int64, tier string) (*EntitlementChangePreview, error) {
-	tier = NormalizeEntitlementTier(tier)
+	tier = NormalizeEntitlementWriteTier(tier)
 	if tier == "" {
 		return nil, ErrEntitlementTierUnknown
 	}
 	if s == nil || s.repo == nil {
 		return nil, errors.New("entitlement repository is nil")
 	}
+	if err := validateEntitlementTargets(userIDs); err != nil {
+		return nil, err
+	}
 	return s.repo.PreviewEntitlementChange(ctx, normalizeEntitlementUserIDs(userIDs), tier)
 }
 
-func (s *EntitlementService) ApplyTierChange(ctx context.Context, userIDs []int64, tier string, actorUserID int64, reason, requestID string) (*EntitlementChangeResult, error) {
-	tier = NormalizeEntitlementTier(tier)
+func (s *EntitlementService) ApplyTierChange(ctx context.Context, userIDs []int64, tier string, actorUserID int64, reason, requestID, previewToken string) (result *EntitlementChangeResult, resultErr error) {
+	defer func() { resultErr = normalizeAdminMutationError(resultErr) }()
+	tier = NormalizeEntitlementWriteTier(tier)
 	reason = strings.TrimSpace(reason)
 	requestID = strings.TrimSpace(requestID)
 	if tier == "" {
@@ -185,18 +239,37 @@ func (s *EntitlementService) ApplyTierChange(ctx context.Context, userIDs []int6
 	if s == nil || s.repo == nil {
 		return nil, errors.New("entitlement repository is nil")
 	}
-	return s.repo.ApplyEntitlementChange(ctx, normalizeEntitlementUserIDs(userIDs), tier, actorUserID, reason, requestID)
+	if requestID == "" || len(requestID) > 128 {
+		return nil, ErrEntitlementRequestIDRequired
+	}
+	if err := validateEntitlementTargets(userIDs); err != nil {
+		return nil, err
+	}
+	return s.repo.ApplyEntitlementChange(ctx, normalizeEntitlementUserIDs(userIDs), tier, actorUserID, reason, requestID, strings.TrimSpace(previewToken))
 }
 
 func (s *EntitlementService) ListTierPolicies(ctx context.Context) ([]EntitlementTierPolicy, error) {
 	if s == nil || s.repo == nil {
 		return nil, errors.New("entitlement repository is nil")
 	}
-	return s.repo.ListEntitlementTierPolicies(ctx)
+	policies, err := s.repo.ListEntitlementTierPolicies(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if policies == nil {
+		policies = []EntitlementTierPolicy{}
+	}
+	for i := range policies {
+		if policies[i].Groups == nil {
+			policies[i].Groups = []EntitlementTierGroupPolicy{}
+		}
+	}
+	return policies, nil
 }
 
-func (s *EntitlementService) UpdateTierPolicy(ctx context.Context, input UpdateEntitlementTierPolicyInput, actorUserID int64) (*EntitlementTierPolicy, error) {
-	input.Tier = NormalizeEntitlementTier(input.Tier)
+func (s *EntitlementService) UpdateTierPolicy(ctx context.Context, input UpdateEntitlementTierPolicyInput, actorUserID int64) (result *EntitlementTierPolicy, resultErr error) {
+	defer func() { resultErr = normalizeAdminMutationError(resultErr) }()
+	input.Tier = NormalizeEntitlementWriteTier(input.Tier)
 	input.DisplayName = strings.TrimSpace(input.DisplayName)
 	input.Reason = strings.TrimSpace(input.Reason)
 	input.RequestID = strings.TrimSpace(input.RequestID)
@@ -205,6 +278,12 @@ func (s *EntitlementService) UpdateTierPolicy(ctx context.Context, input UpdateE
 	}
 	if input.Reason == "" {
 		return nil, ErrEntitlementReasonRequired
+	}
+	if input.RequestID == "" || len(input.RequestID) > 116 {
+		return nil, ErrEntitlementRequestIDRequired
+	}
+	if input.ExpectedVersion == nil || *input.ExpectedVersion < 1 {
+		return nil, ErrEntitlementPolicyInvalid
 	}
 	if input.DisplayName == "" {
 		input.DisplayName = input.Tier

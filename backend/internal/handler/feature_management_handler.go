@@ -37,6 +37,9 @@ func (h *FeatureManagementHandler) authorize(c *gin.Context, permission string, 
 		response.Forbidden(c, "Administrator permission denied")
 		return nil, false
 	}
+	ctx := service.ContextWithAdminPrincipal(c.Request.Context(), principal)
+	ctx = service.ContextWithAdminAuthorization(ctx, h.permissions)
+	c.Request = c.Request.WithContext(ctx)
 	return principal, true
 }
 
@@ -161,15 +164,16 @@ func (h *FeatureManagementHandler) GetUserEntitlement(c *gin.Context) {
 }
 
 type entitlementChangeRequest struct {
-	UserIDs   []int64 `json:"user_ids"`
-	Tier      string  `json:"tier"`
-	Reason    string  `json:"reason"`
-	RequestID string  `json:"request_id"`
+	UserIDs      []int64 `json:"user_ids"`
+	Tier         string  `json:"tier"`
+	Reason       string  `json:"reason"`
+	RequestID    string  `json:"request_id"`
+	PreviewToken string  `json:"preview_token"`
 }
 
 func readEntitlementChange(c *gin.Context, requireReason bool) (entitlementChangeRequest, bool) {
 	var req entitlementChangeRequest
-	if err := c.ShouldBindJSON(&req); err != nil || len(req.UserIDs) == 0 || len(req.UserIDs) > 1000 || service.NormalizeEntitlementTier(req.Tier) == "" {
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.UserIDs) == 0 || len(req.UserIDs) > 1000 || service.NormalizeEntitlementWriteTier(req.Tier) == "" {
 		response.BadRequest(c, "Select a valid tier and between 1 and 1000 users")
 		return req, false
 	}
@@ -226,7 +230,7 @@ func (h *FeatureManagementHandler) ApplyEntitlements(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.entitlements.ApplyTierChange(c.Request.Context(), req.UserIDs, req.Tier, principal.UserID, req.Reason, req.RequestID)
+	result, err := h.entitlements.ApplyTierChange(c.Request.Context(), req.UserIDs, req.Tier, principal.UserID, req.Reason, req.RequestID, req.PreviewToken)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -282,11 +286,12 @@ func (h *FeatureManagementHandler) UpdateUserEntitlement(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Tier      string `json:"tier"`
-		Reason    string `json:"reason"`
-		RequestID string `json:"request_id"`
+		Tier         string `json:"tier"`
+		Reason       string `json:"reason"`
+		RequestID    string `json:"request_id"`
+		PreviewToken string `json:"preview_token"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil || service.NormalizeEntitlementTier(req.Tier) == "" || strings.TrimSpace(req.Reason) == "" {
+	if err := c.ShouldBindJSON(&req); err != nil || service.NormalizeEntitlementWriteTier(req.Tier) == "" || strings.TrimSpace(req.Reason) == "" {
 		response.BadRequest(c, "A valid tier and audit reason are required")
 		return
 	}
@@ -297,7 +302,7 @@ func (h *FeatureManagementHandler) UpdateUserEntitlement(c *gin.Context) {
 		response.BadRequest(c, "An idempotency request_id is required")
 		return
 	}
-	result, err := h.entitlements.ApplyTierChange(c.Request.Context(), []int64{id}, req.Tier, principal.UserID, req.Reason, req.RequestID)
+	result, err := h.entitlements.ApplyTierChange(c.Request.Context(), []int64{id}, req.Tier, principal.UserID, req.Reason, req.RequestID, req.PreviewToken)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

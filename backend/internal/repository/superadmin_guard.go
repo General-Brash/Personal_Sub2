@@ -18,7 +18,7 @@ func ensureNotLastSuperAdminWithClient(ctx context.Context, client *dbent.Client
 	// All last-super-admin checks use one transaction-scoped mutex. This avoids
 	// cross-row lock inversion when two demotions/disables/deletions race and
 	// makes the count-then-write sequence serial within one PostgreSQL tx.
-	if _, err := client.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, superAdminGuardLockKey); err != nil {
+	if err := lockAdminMutationScope(ctx, client); err != nil {
 		return err
 	}
 	rows, err := client.User.Query().

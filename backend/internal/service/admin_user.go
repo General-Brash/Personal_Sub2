@@ -24,10 +24,20 @@ const adminBalanceCacheInvalidationTimeout = 5 * time.Second
 var (
 	ErrAdminBalanceInsufficient      = infraerrors.Conflict("INSUFFICIENT_BALANCE", "insufficient permanent balance")
 	ErrInvalidAdminBalanceAdjustment = infraerrors.BadRequest("INVALID_BALANCE_ADJUSTMENT", "invalid balance adjustment")
+	ErrInvalidAdminUserRole          = infraerrors.BadRequest("INVALID_USER_ROLE", "invalid user role")
+	ErrLastAdmin                     = infraerrors.Conflict("LAST_ADMIN", "cannot demote the last admin user")
+	ErrAdminCannotDisableAdmin       = infraerrors.Forbidden("ADMIN_TARGET_PROTECTED", "cannot disable admin user")
+	ErrAdminCannotDeleteAdmin        = infraerrors.Forbidden("ADMIN_TARGET_PROTECTED", "cannot delete admin user")
 )
 
 // User management implementations
 func (s *adminServiceImpl) ListUsers(ctx context.Context, page, pageSize int, filters UserListFilters, sortBy, sortOrder string) ([]User, int64, error) {
+	tier, err := NormalizeUserListTier(filters.Tier)
+	if err != nil {
+		return nil, 0, err
+	}
+	filters.Tier = tier
+
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: sortBy, SortOrder: sortOrder}
 	users, result, err := s.userRepo.ListWithFilters(ctx, params, filters)
 	if err != nil {
@@ -120,12 +130,13 @@ func normalizeUserRole(role, fallback string) (string, error) {
 		return fallback, nil
 	}
 	if role != RoleAdmin && role != RoleUser && role != RoleSuperAdmin {
-		return "", fmt.Errorf("invalid role: %q (must be %s, %s or %s)", role, RoleUser, RoleAdmin, RoleSuperAdmin)
+		return "", infraerrors.Newf(400, "INVALID_USER_ROLE", "invalid role: %q (must be %s, %s or %s)", role, RoleUser, RoleAdmin, RoleSuperAdmin)
 	}
 	return role, nil
 }
 
-func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInput) (*User, error) {
+func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInput) (result *User, resultErr error) {
+	defer func() { resultErr = normalizeAdminMutationError(resultErr) }()
 	balance := 0.0
 	if input.Balance != nil {
 		balance = *input.Balance
@@ -142,6 +153,7 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 	if err := authorizeAdminPrincipalMutation(ctx, s, input.ActorAdminID, 0, role, ""); err != nil {
 		return nil, err
 	}
+	ctx = ContextWithAdminMutationActorID(ctx, input.ActorAdminID)
 
 	user := &User{
 		Email:                input.Email,
@@ -183,7 +195,7 @@ func (s *adminServiceImpl) ensureNotLastAdmin(ctx context.Context) error {
 		return fmt.Errorf("count admin users: %w", err)
 	}
 	if result == nil || result.Total <= 1 {
-		return errors.New("cannot demote the last admin user")
+		return ErrLastAdmin
 	}
 	return nil
 }
@@ -205,7 +217,8 @@ func (s *adminServiceImpl) assignDefaultSubscriptions(ctx context.Context, userI
 	}
 }
 
-func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error) {
+func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (result *User, resultErr error) {
+	defer func() { resultErr = normalizeAdminMutationError(resultErr) }()
 	// 校验用户专属分组倍率：必须 > 0（nil 合法，表示清除专属倍率）
 	if input.GroupRates != nil {
 		for groupID, rate := range input.GroupRates {
@@ -219,14 +232,19 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if err != nil {
 		return nil, err
 	}
+	ctx = ContextWithAdminMutationTargetSnapshot(ctx, user.Role, user.Status)
 
 	if err := authorizeAdminPrincipalMutation(ctx, s, input.ActorAdminID, user.ID, input.Role, input.Status); err != nil {
 		return nil, err
 	}
+	ctx = ContextWithAdminMutationActorID(ctx, input.ActorAdminID)
 
 	// Protect admin users: cannot disable admin accounts
-	if user.Role == "admin" && input.Status == "disabled" {
-		return nil, errors.New("cannot disable admin user")
+	if user.Role == RoleAdmin && input.Status == StatusDisabled {
+		principal, ok := AdminPrincipalFromContext(ctx)
+		if !ok || principal.Kind == AdminPrincipalKindAPIKey || !principal.IsSuperAdmin() {
+			return nil, ErrAdminCannotDisableAdmin
+		}
 	}
 
 	oldConcurrency := user.Concurrency
@@ -301,21 +319,37 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		fields.RestrictPublicGroups = true
 	}
 
-	if err := s.userRepo.Update(ctx, user, fields); err != nil {
+	mutationCtx := ctx
+	var mutationTx *dbent.Tx
+	if input.GroupRates != nil && s.userGroupRateRepo != nil && dbent.TxFromContext(ctx) == nil {
+		if s.entClient != nil {
+			mutationTx, err = s.entClient.Tx(ctx)
+			if err != nil {
+				return nil, err
+			}
+			defer func() { _ = mutationTx.Rollback() }()
+			mutationCtx = dbent.NewTxContext(ctx, mutationTx)
+		} else if _, authenticated := AdminPrincipalFromContext(ctx); authenticated {
+			return nil, errors.New("admin user update transaction unavailable")
+		}
+	}
+	if err := s.userRepo.Update(mutationCtx, user, fields); err != nil {
 		return nil, err
 	}
+	if input.GroupRates != nil && s.userGroupRateRepo != nil {
+		if err := s.userGroupRateRepo.SyncUserGroupRates(mutationCtx, user.ID, input.GroupRates); err != nil {
+			return nil, fmt.Errorf("sync user group rates: %w", err)
+		}
+	}
+	if mutationTx != nil {
+		if err := mutationTx.Commit(); err != nil {
+			return nil, err
+		}
+	}
 
-	// 角色变更属权限敏感操作，落审计日志（含操作者），便于事后追溯。
 	if user.Role != oldRole {
 		logger.LegacyPrintf("service.admin", "audit: user role changed actor_admin_id=%d target_user_id=%d old_role=%s new_role=%s",
 			input.ActorAdminID, user.ID, oldRole, user.Role)
-	}
-
-	// 同步用户专属分组倍率
-	if input.GroupRates != nil && s.userGroupRateRepo != nil {
-		if err := s.userGroupRateRepo.SyncUserGroupRates(ctx, user.ID, input.GroupRates); err != nil {
-			return nil, fmt.Errorf("sync user group rates: %w", err)
-		}
 	}
 
 	if s.authCacheInvalidator != nil {
@@ -370,23 +404,29 @@ func sameInt64Set(a, b []int64) bool {
 	return true
 }
 
-func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
+func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) (resultErr error) {
+	defer func() { resultErr = normalizeAdminMutationError(resultErr) }()
 	// Protect admin users: cannot delete admin accounts
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
+	ctx = ContextWithAdminMutationTargetSnapshot(ctx, user.Role, user.Status)
+	principal, hasPrincipal := AdminPrincipalFromContext(ctx)
+	humanSuperAdmin := hasPrincipal && principal != nil && principal.Kind == AdminPrincipalKindJWT && principal.IsSuperAdmin()
 	if user.Role == RoleSuperAdmin {
-		principal, ok := AdminPrincipalFromContext(ctx)
-		if !ok || !principal.IsSuperAdmin() || principal.Kind == AdminPrincipalKindAPIKey {
+		if !humanSuperAdmin {
 			return ErrAdminCannotModifySuperAdmin
 		}
 		if err := AuthorizeAdminRequest(ctx, "security.superadmin.assign", nil); err != nil {
 			return err
 		}
 	}
-	if user.Role == "admin" {
-		return errors.New("cannot delete admin user")
+	if user.Role == RoleAdmin && !humanSuperAdmin {
+		return ErrAdminCannotDeleteAdmin
+	}
+	if hasPrincipal && principal != nil {
+		ctx = ContextWithAdminMutationActorID(ctx, principal.UserID)
 	}
 
 	apiKeys, err := s.listUserAPIKeysForDeletion(ctx, id)

@@ -5,6 +5,10 @@ import { autoCheckIn, getCheckinPreference, getCheckinStatus, type CheckinStatus
 
 vi.mock('vue-router', () => ({ RouterLink: { template: '<a><slot /></a>' } }))
 
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}))
+
 vi.mock('@/api/checkin', () => ({
   autoCheckIn: vi.fn(), getCheckinPreference: vi.fn(), getCheckinStatus: vi.fn(),
 }))
@@ -70,6 +74,52 @@ describe('CheckinEntryTrigger', () => {
     await flushPromises()
     expect(vi.mocked(autoCheckIn).mock.calls[2][0]).not.toBe(key)
     anotherUser.unmount()
+  })
+
+  it('shows automatic failures and retries once after rereading consent with the same key', async () => {
+    vi.mocked(autoCheckIn)
+      .mockRejectedValueOnce(new Error('temporary upstream failure'))
+      .mockResolvedValueOnce({
+        already_checked_in: false,
+        checkin_date: '2026-09-12',
+        streak_day: 1,
+        reward_day: 1,
+        reward_amount: '0.95000000',
+        temporary_credit_grant_id: 9,
+        expires_at: '2026-09-12T16:00:00Z',
+        business_period_id: 'server-window-20260912',
+      })
+
+    const wrapper = mount(CheckinEntryTrigger, { props: { userId: 11 } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="auto-checkin-error"]').exists()).toBe(true)
+    expect(wrapper.emitted('completed')).toBeUndefined()
+    const firstKey = vi.mocked(autoCheckIn).mock.calls[0]?.[0]
+
+    await wrapper.get('[data-test="auto-checkin-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(getCheckinPreference).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(autoCheckIn).mock.calls[1]?.[0]).toBe(firstKey)
+    expect(wrapper.emitted('completed')).toHaveLength(1)
+    expect(wrapper.find('[data-test="auto-checkin-error"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('bounds automatic recovery to two attempts and does not mark a failed claim complete', async () => {
+    vi.mocked(autoCheckIn).mockRejectedValue(new Error('still unavailable'))
+
+    const wrapper = mount(CheckinEntryTrigger, { props: { userId: 11 } })
+    await flushPromises()
+    await wrapper.get('[data-test="auto-checkin-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(autoCheckIn).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="auto-checkin-retry"]').exists()).toBe(false)
+    expect(wrapper.emitted('completed')).toBeUndefined()
+    expect(wrapper.get('[data-test="auto-checkin-error"]').exists()).toBe(true)
+    wrapper.unmount()
   })
 
   it('does not submit a claim after the authenticated component has unmounted', async () => {

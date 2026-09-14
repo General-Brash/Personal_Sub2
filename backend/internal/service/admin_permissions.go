@@ -2,13 +2,13 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 const (
@@ -28,15 +28,15 @@ const (
 )
 
 var (
-	ErrAdminPermissionUnknown        = errors.New("unknown admin permission")
-	ErrAdminPrincipalNotFound        = errors.New("admin principal not found")
-	ErrAdminPermissionDenied         = errors.New("admin permission denied")
-	ErrAdminPermissionSelfGrant      = errors.New("administrators cannot grant permissions to themselves")
-	ErrAdminPermissionPrivilege      = errors.New("cannot grant a permission the actor does not hold")
-	ErrAdminPermissionEnforceNoBind  = errors.New("legacy admin key has no explicit principal binding in enforce mode")
-	ErrAdminPermissionScopeInvalid   = errors.New("administrator permission scope is invalid")
-	ErrAdminPermissionTargetNotAdmin = errors.New("administrator permission target is not an administrator")
-	ErrLastSuperAdmin                = errors.New("cannot disable, demote or delete the last active super administrator")
+	ErrAdminPermissionUnknown        = infraerrors.BadRequest("UNKNOWN_ADMIN_PERMISSION", "unknown admin permission")
+	ErrAdminPrincipalNotFound        = infraerrors.NotFound("ADMIN_PRINCIPAL_NOT_FOUND", "admin principal not found")
+	ErrAdminPermissionDenied         = infraerrors.Forbidden("ADMIN_PERMISSION_DENIED", "admin permission denied")
+	ErrAdminPermissionSelfGrant      = infraerrors.Forbidden("ADMIN_PERMISSION_SELF_GRANT", "administrators cannot grant permissions to themselves")
+	ErrAdminPermissionPrivilege      = infraerrors.Forbidden("ADMIN_PERMISSION_PRIVILEGE", "cannot grant a permission the actor does not hold")
+	ErrAdminPermissionEnforceNoBind  = infraerrors.Unauthorized("ADMIN_KEY_PRINCIPAL_REQUIRED", "legacy admin key has no explicit principal binding in enforce mode")
+	ErrAdminPermissionScopeInvalid   = infraerrors.BadRequest("ADMIN_PERMISSION_SCOPE_INVALID", "administrator permission scope is invalid")
+	ErrAdminPermissionTargetNotAdmin = infraerrors.NotFound("ADMIN_PERMISSION_TARGET_NOT_ADMIN", "administrator permission target is not an administrator")
+	ErrLastSuperAdmin                = infraerrors.Conflict("LAST_SUPER_ADMIN", "cannot disable, demote or delete the last active super administrator")
 )
 
 type AdminPermissionDefinition struct {
@@ -303,24 +303,25 @@ func (s *AdminPermissionService) CheckPermission(ctx context.Context, principal 
 	return s.Authorize(ctx, fresh, permission, scope)
 }
 
-func (s *AdminPermissionService) validateTargetAdmin(ctx context.Context, actor *AdminPrincipal, targetUserID int64) error {
+func (s *AdminPermissionService) validateTargetAdmin(ctx context.Context, actor *AdminPrincipal, targetUserID int64) (*AdminPrincipalRecord, error) {
 	record, err := s.repo.GetAdminPrincipal(ctx, targetUserID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if record == nil || record.UserID <= 0 {
-		return ErrAdminPermissionTargetNotAdmin
+		return nil, ErrAdminPermissionTargetNotAdmin
 	}
 	if record.Role != RoleAdmin && record.Role != RoleSuperAdmin {
-		return ErrAdminPermissionTargetNotAdmin
+		return nil, ErrAdminPermissionTargetNotAdmin
 	}
 	if record.Role == RoleSuperAdmin && !actor.IsSuperAdmin() {
-		return ErrAdminCannotModifySuperAdmin
+		return nil, ErrAdminCannotModifySuperAdmin
 	}
-	return nil
+	return record, nil
 }
 
-func (s *AdminPermissionService) GrantPermission(ctx context.Context, actor *AdminPrincipal, targetUserID int64, permission, effect string, scope map[string]any, reason string) error {
+func (s *AdminPermissionService) GrantPermission(ctx context.Context, actor *AdminPrincipal, targetUserID int64, permission, effect string, scope map[string]any, reason string) (resultErr error) {
+	defer func() { resultErr = normalizeAdminMutationError(resultErr) }()
 	permission = strings.TrimSpace(permission)
 	effect = strings.ToLower(strings.TrimSpace(effect))
 	reason = strings.TrimSpace(reason)
@@ -349,9 +350,11 @@ func (s *AdminPermissionService) GrantPermission(ctx context.Context, actor *Adm
 	if effect == AdminGrantAllow && len(normalizedScope) == 0 {
 		return ErrAdminPermissionScopeInvalid
 	}
-	if err := s.validateTargetAdmin(ctx, actor, targetUserID); err != nil {
+	target, err := s.validateTargetAdmin(ctx, actor, targetUserID)
+	if err != nil {
 		return err
 	}
+	ctx = ContextWithAdminMutationTargetSnapshot(ctx, target.Role, target.Status)
 	if !actor.IsSuperAdmin() {
 		allowed, err := s.Authorize(ctx, actor, permission, normalizedScope)
 		if err != nil {
@@ -361,6 +364,7 @@ func (s *AdminPermissionService) GrantPermission(ctx context.Context, actor *Adm
 			return ErrAdminPermissionPrivilege
 		}
 	}
+	ctx = ContextWithAdminMutationActorID(ctx, actor.UserID)
 	_, err = s.repo.ApplyAdminPermissionChange(ctx, AdminPermissionChange{
 		ActorUserID: actor.UserID, ActorIsSuper: actor.IsSuperAdmin(), TargetUserID: targetUserID,
 		Action: "grant", Permission: permission, Effect: effect, Scope: normalizedScope, Reason: reason,
@@ -369,7 +373,8 @@ func (s *AdminPermissionService) GrantPermission(ctx context.Context, actor *Adm
 	return err
 }
 
-func (s *AdminPermissionService) RevokePermission(ctx context.Context, actor *AdminPrincipal, targetUserID int64, permission, reason string) error {
+func (s *AdminPermissionService) RevokePermission(ctx context.Context, actor *AdminPrincipal, targetUserID int64, permission, reason string) (resultErr error) {
+	defer func() { resultErr = normalizeAdminMutationError(resultErr) }()
 	permission = strings.TrimSpace(permission)
 	reason = strings.TrimSpace(reason)
 	if !IsKnownAdminPermission(permission) {
@@ -387,9 +392,11 @@ func (s *AdminPermissionService) RevokePermission(ctx context.Context, actor *Ad
 	if reason == "" {
 		return fmt.Errorf("audit reason is required")
 	}
-	if err := s.validateTargetAdmin(ctx, actor, targetUserID); err != nil {
+	target, err := s.validateTargetAdmin(ctx, actor, targetUserID)
+	if err != nil {
 		return err
 	}
+	ctx = ContextWithAdminMutationTargetSnapshot(ctx, target.Role, target.Status)
 	if !actor.IsSuperAdmin() {
 		allowed, err := s.Authorize(ctx, actor, permission, nil)
 		if err != nil {
@@ -399,7 +406,8 @@ func (s *AdminPermissionService) RevokePermission(ctx context.Context, actor *Ad
 			return ErrAdminPermissionPrivilege
 		}
 	}
-	_, err := s.repo.ApplyAdminPermissionChange(ctx, AdminPermissionChange{
+	ctx = ContextWithAdminMutationActorID(ctx, actor.UserID)
+	_, err = s.repo.ApplyAdminPermissionChange(ctx, AdminPermissionChange{
 		ActorUserID: actor.UserID, ActorIsSuper: actor.IsSuperAdmin(), TargetUserID: targetUserID,
 		Action: "revoke", Permission: permission, Reason: reason,
 		OldValue: map[string]any{"reason": reason},

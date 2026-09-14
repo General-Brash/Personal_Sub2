@@ -135,6 +135,7 @@ describe('CheckInView', () => {
     expect(wrapper.get('[data-test="next-reward"]').text()).not.toContain('Day 7')
     expect(wrapper.get('[data-test="next-reward"]').text()).not.toContain('/')
     expect(wrapper.get('[data-test="next-temporary-reward"]').text()).toBe('$2.50')
+    expect(wrapper.get('[data-test="checkin-period-state"]').text()).toContain('5.00%')
     expect(wrapper.get('[data-test="next-permanent-reward"]').text()).toBe('$0.25')
     expect(wrapper.get('[data-test="temporary-credit"]').text()).toContain('$5.25')
     expect(wrapper.get('[data-test="monthly-temporary-reward-total"]').text()).toBe('$12.50')

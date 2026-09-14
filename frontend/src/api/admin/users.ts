@@ -59,7 +59,7 @@ export interface BatchUpdateUserLimitsResponse {
  * List all users with pagination
  * @param page - Page number (default: 1)
  * @param pageSize - Items per page (default: 20)
- * @param filters - Optional filters (status, role, search, attributes)
+ * @param filters - Optional filters (status, role, tier, search, attributes)
  * @param options - Optional request options (signal)
  * @returns Paginated list of users
  */
@@ -68,7 +68,8 @@ export async function list(
   pageSize: number = 20,
   filters?: {
     status?: 'active' | 'disabled'
-    role?: 'admin' | 'user'
+    role?: 'admin' | 'user' | 'super_admin'
+    tier?: 'standard' | 'premium'
     search?: string
     group_name?: string         // fuzzy filter by allowed group name
     api_key_group_id?: number   // filter users by the group their API keys are bound to
@@ -87,6 +88,7 @@ export async function list(
     page_size: pageSize,
     status: filters?.status,
     role: filters?.role,
+    tier: filters?.tier,
     search: filters?.search,
     group_name: filters?.group_name,
     api_key_group_id: filters?.api_key_group_id,
@@ -132,7 +134,7 @@ export async function create(userData: {
   password: string
   username?: string
   notes?: string
-  role?: 'admin' | 'user'
+  role?: 'admin' | 'user' | 'super_admin'
   balance?: number
   concurrency?: number
   rpm_limit?: number

@@ -24,6 +24,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
 
+	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 )
 
@@ -99,6 +100,10 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 			txClient = tx.Client()
 			txCtx = dbent.NewTxContext(ctx, tx)
 		}
+	}
+
+	if err := authorizeUserCreateMutationTx(txCtx, txClient, 0, userIn.Role); err != nil {
+		return err
 	}
 
 	lockKeys := []string{normalizedEmailUniquenessLockKey(userIn.Email)}
@@ -288,30 +293,45 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 	if userIn == nil {
 		return nil
 	}
-	// 空掩码代表调用方不改任何列，直接返回，避免产生一次无意义的整行写。
-	if fields.IsEmpty() {
+	// A group-rate-only admin update has an empty user-column mask, but still
+	// needs the same transaction-bound authorization before its related write.
+	_, hasAdminPrincipal := service.AdminPrincipalFromContext(ctx)
+	if fields.IsEmpty() && !service.AdminMutationContextPresent(ctx) && !hasAdminPrincipal {
 		return nil
 	}
 
 	// 使用 ent 事务包裹用户更新与 allowed_groups 同步，避免跨层事务不一致。
-	tx, err := r.client.Tx(ctx)
-	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
-		return err
-	}
-
+	// 若调用方已经把 ent Tx 放进 context，则必须复用该 Tx；否则权限复核
+	// 与后续用户/关联表写入会落在不同事务，无法形成单一原子合同。
+	var ownedTx *dbent.Tx
 	var txClient *dbent.Client
 	txCtx := ctx
-	if err == nil {
-		defer func() { _ = tx.Rollback() }()
-		txClient = tx.Client()
-		txCtx = dbent.NewTxContext(ctx, tx)
+	if existingTx := dbent.TxFromContext(ctx); existingTx != nil {
+		txClient = existingTx.Client()
 	} else {
-		// 已处于外部事务中（ErrTxStarted），复用当前事务 client 并由调用方负责提交/回滚。
-		if existingTx := dbent.TxFromContext(ctx); existingTx != nil {
-			txClient = existingTx.Client()
+		tx, err := r.client.Tx(ctx)
+		if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
+			return err
+		}
+		if err == nil {
+			ownedTx = tx
+			defer func() { _ = ownedTx.Rollback() }()
+			txClient = tx.Client()
+			txCtx = dbent.NewTxContext(ctx, tx)
 		} else {
+			// r.client 本身是事务绑定 client；提交/回滚由其持有方负责。
 			txClient = r.client
 		}
+	}
+
+	if err := authorizeUserUpdateMutationTx(txCtx, txClient, 0, userIn.ID, userIn, fields); err != nil {
+		return err
+	}
+	if fields.IsEmpty() {
+		if ownedTx != nil {
+			return ownedTx.Commit()
+		}
+		return nil
 	}
 
 	// 邮箱唯一性锁与查重只在本次确实要改邮箱时才做：不改邮箱的更新既不需要
@@ -333,13 +353,24 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 		}
 	}
 
-	existing, err := clientFromContext(txCtx, txClient).User.Get(txCtx, userIn.ID)
+	// Role/status writes also share the last-login-super-admin mutex when
+	// invoked by a non-admin internal path; the count must never use a stale row.
+	if (fields.Role || fields.Status) && txClient.Driver().Dialect() == dialect.Postgres {
+		if err := lockAdminMutationScope(txCtx, txClient); err != nil {
+			return err
+		}
+	}
+	existingQuery := clientFromContext(txCtx, txClient).User.Query().Where(dbuser.IDEQ(userIn.ID))
+	if txClient.Driver().Dialect() == dialect.Postgres {
+		existingQuery.ForUpdate()
+	}
+	existing, err := existingQuery.Only(txCtx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
 	oldEmail := existing.Email
 
-	if existing.Role == service.RoleSuperAdmin && ((fields.Role && userIn.Role != service.RoleSuperAdmin) || (fields.Status && userIn.Status != service.StatusActive)) {
+	if existing.Role == service.RoleSuperAdmin && existing.Status == service.StatusActive && ((fields.Role && userIn.Role != service.RoleSuperAdmin) || (fields.Status && userIn.Status != service.StatusActive)) {
 		if err := ensureNotLastSuperAdminWithClient(txCtx, txClient); err != nil {
 			return err
 		}
@@ -409,8 +440,8 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 		return err
 	}
 
-	if tx != nil {
-		if err := tx.Commit(); err != nil {
+	if ownedTx != nil {
+		if err := ownedTx.Commit(); err != nil {
 			return err
 		}
 	}
@@ -535,19 +566,30 @@ func (r *userRepository) Delete(ctx context.Context, id int64) error {
 }
 
 // deleteUser 在给定 client（可能是外部事务 client）上删除用户及其身份关联记录，自身不开启/提交事务。
+
 func (r *userRepository) deleteUser(ctx context.Context, exec *dbent.Client, id int64) error {
-	identityIDs, err := exec.AuthIdentity.Query().
-		Where(authidentity.UserIDEQ(id)).
-		IDs(ctx)
-	if err != nil {
-		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	if exec.Driver().Dialect() == dialect.Postgres {
+		if err := lockAdminMutationScope(ctx, exec); err != nil {
+			return err
+		}
+	}
+	if err := authorizeUserDeleteMutationTx(ctx, exec, 0, id); err != nil {
+		return err
 	}
 
-	existing, err := exec.User.Get(ctx, id)
+	existingQuery := exec.User.Query().Where(dbuser.IDEQ(id))
+	if exec.Driver().Dialect() == dialect.Postgres {
+		existingQuery.ForUpdate()
+	}
+	existing, err := existingQuery.Only(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
-	if existing.Role == service.RoleSuperAdmin {
+	identityIDs, err := exec.AuthIdentity.Query().Where(authidentity.UserIDEQ(id)).IDs(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	if existing.Role == service.RoleSuperAdmin && existing.Status == service.StatusActive {
 		if err := ensureNotLastSuperAdminWithClient(ctx, exec); err != nil {
 			return err
 		}
@@ -587,6 +629,12 @@ func (r *userRepository) List(ctx context.Context, params pagination.PaginationP
 }
 
 func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters service.UserListFilters) ([]service.User, *pagination.PaginationResult, error) {
+	tier, err := service.NormalizeUserListTier(filters.Tier)
+	if err != nil {
+		return nil, nil, err
+	}
+	filters.Tier = tier
+
 	// SkipSoftDelete 仅作用于 User 身份解析（下方 Count/All）；订阅、分组等关联实体沿用原始 ctx，避免穿透到这些同样带软删除的实体而带出已删除行。
 	userCtx := ctx
 	if filters.IncludeDeleted {
@@ -627,6 +675,12 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 			apikey.GroupIDEQ(filters.APIKeyGroupID),
 			apikey.DeletedAtIsNil(),
 		))
+	}
+	if filters.Tier != "" {
+		// The effective-tier predicate is part of q before both Count and All.
+		// Do not page first and resolve/filter tiers in the handler: that would
+		// make totals and page boundaries incorrect.
+		q = q.Where(userEffectiveEntitlementTierPredicate(filters.Tier))
 	}
 
 	// If attribute filters are specified, we need to filter by user IDs first
@@ -707,6 +761,30 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 	}
 
 	return outUsers, paginationResultFromTotal(int64(total), params), nil
+}
+
+func userEffectiveEntitlementTierPredicate(tier string) predicate.User {
+	return predicate.User(func(s *entsql.Selector) {
+		s.Where(entsql.P(func(b *entsql.Builder) {
+			if tier == service.EntitlementTierPremium {
+				b.WriteString("EXISTS (")
+			} else {
+				b.WriteString("NOT EXISTS (")
+			}
+			b.WriteString(`SELECT 1
+FROM (
+  SELECT user_id, tier, expires_at FROM user_entitlements
+  UNION ALL
+  SELECT user_id, tier, expires_at FROM user_entitlement_grants
+) e
+JOIN entitlement_tiers t ON t.tier = e.tier AND t.enabled = TRUE
+WHERE e.user_id = `).
+				Ident(s.C(dbuser.FieldID)).
+				WriteString(` AND e.tier = 'premium'
+  AND (e.expires_at IS NULL OR e.expires_at > NOW())
+)`)
+		}))
+	})
 }
 
 func userListOrder(params pagination.PaginationParams) []func(*entsql.Selector) {

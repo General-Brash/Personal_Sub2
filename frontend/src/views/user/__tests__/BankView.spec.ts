@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { nextTick } from 'vue'
 
 import type { BankPolicy, BankStatus } from '@/api/bank'
 import BankView from '../BankView.vue'
@@ -42,6 +43,10 @@ const {
   showError: vi.fn(),
   showSuccess: vi.fn(),
   updateBankSettings: vi.fn(),
+}))
+
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {}, hash: '' }),
 }))
 
 vi.mock('@/api/bank', () => ({
@@ -151,6 +156,7 @@ const showRepayMode = async (wrapper: VueWrapper) => {
 describe('BankView', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    window.history.replaceState({}, '', '/bank')
     vi.setSystemTime(new Date('2026-07-19T08:00:00.000Z'))
     authState.isAdmin = false
     authState.refreshUser = refreshUser
@@ -320,6 +326,31 @@ describe('BankView', () => {
     expect(wrapper.get('[data-test="exchange-rate"]').text()).toContain('2.00')
     expect(wrapper.get('[data-test="exchange-preview"]').element.tagName).toBe('OUTPUT')
     expect(wrapper.get('[data-test="exchange-preview-amount"]').text()).toBe('0.00')
+  })
+
+  it('synchronizes external query and hash navigation while mounted without adding history entries', async () => {
+    const wrapper = await mountView()
+    const historyLength = window.history.length
+
+    window.history.replaceState({}, '', '/bank?mode=repay')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    await nextTick()
+    expect(wrapper.get('[data-test="bank-mode-repay"]').attributes('aria-selected')).toBe('true')
+
+    window.history.replaceState({}, '', '/bank#advance')
+    window.dispatchEvent(new Event('hashchange'))
+    await nextTick()
+    expect(wrapper.get('[data-test="bank-mode-advance"]').attributes('aria-selected')).toBe('true')
+
+    window.history.replaceState({}, '', '/bank?mode=not-a-bank-mode')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    await nextTick()
+    expect(wrapper.get('[data-test="bank-mode-exchange"]').attributes('aria-selected')).toBe('true')
+
+    await wrapper.get('[data-test="bank-mode-repay"]').trigger('click')
+    expect(window.history.length).toBe(historyLength)
+    expect(window.location.search).toContain('mode=repay')
+    wrapper.unmount()
   })
 
   it('keeps roving focus and selection synchronized for click and every tab navigation key', async () => {

@@ -462,6 +462,8 @@ export default {
       searchUsers: '邮箱/用户名/备注/API Key 模糊搜索',
       roleFilter: '角色筛选',
       allRoles: '全部角色',
+      tierFilter: '消费等级筛选',
+      allTiers: '全部消费等级',
       allStatus: '全部状态',
       allGroups: '全部分组',
       searchGroups: '搜索分组...',
@@ -503,6 +505,7 @@ export default {
         username: '用户名',
         notes: '备注',
         role: '角色',
+        tier: '消费等级',
         groups: '分组',
         subscriptions: '订阅分组',
         balance: '余额',
@@ -559,7 +562,21 @@ export default {
       deleteConfirm: "确定要删除用户 '{email}' 吗？此操作无法撤销。",
       roles: {
         admin: '管理员',
-        user: '用户'
+        user: '用户',
+        super_admin: '超级管理员'
+      },
+      tiers: {
+        standard: '标准',
+        premium: '优质'
+      },
+      permissions: {
+        loading: '正在确认用户管理写权限…',
+        unknown: '暂时无法确认用户管理写权限；为避免误写，写入操作已暂停。',
+        forbidden: '当前管理员没有执行该用户管理操作的权限。',
+        notFound: '目标用户不存在或已被删除。',
+        conflict: '目标状态已变化，请刷新后重试。',
+        modeOff: '管理员权限 enforce 未开启；当前仅允许查看用户列表。',
+        retry: '重试权限检查'
       },
       form: {
         emailLabel: '邮箱',
