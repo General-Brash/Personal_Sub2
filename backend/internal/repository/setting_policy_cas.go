@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 )
 
@@ -32,10 +33,10 @@ func (r *settingRepository) CompareAndSetMultiple(ctx context.Context, expected,
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if err := tx.Setting.Create().SetKey(key).SetValue("").OnConflictColumns(setting.FieldKey).DoNothing().Exec(ctx); err != nil {
-			return false, err
-		}
 		row, err := tx.Setting.Query().Where(setting.KeyEQ(key)).ForUpdate().Only(ctx)
+		if ent.IsNotFound(err) {
+			row, err = tx.Setting.Create().SetKey(key).SetValue("").SetUpdatedAt(time.Now()).Save(ctx)
+		}
 		if err != nil {
 			return false, err
 		}

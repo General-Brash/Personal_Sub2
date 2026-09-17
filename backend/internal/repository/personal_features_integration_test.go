@@ -166,6 +166,51 @@ func TestPersonalFeaturesCheckinV2ConsentAndReplay(t *testing.T) {
 	require.Equal(t, "1.00000000", balance)
 }
 
+func TestPersonalFeaturesSettingPolicyCASUpdatesExistingAndInitializesMissingKeys(t *testing.T) {
+	ctx := context.Background()
+	repo := NewSettingRepository(testEntClient(t)).(*settingRepository)
+	existingKey := fmt.Sprintf("test_setting_policy_cas_existing_%d", time.Now().UnixNano())
+	missingKey := fmt.Sprintf("test_setting_policy_cas_missing_%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		require.NoError(t, repo.Delete(ctx, existingKey))
+		require.NoError(t, repo.Delete(ctx, missingKey))
+	})
+
+	require.NoError(t, repo.Set(ctx, existingKey, "before"))
+	applied, err := repo.CompareAndSetMultiple(
+		ctx,
+		map[string]string{existingKey: "before"},
+		map[string]string{existingKey: "after"},
+	)
+	require.NoError(t, err)
+	require.True(t, applied)
+	value, err := repo.GetValue(ctx, existingKey)
+	require.NoError(t, err)
+	require.Equal(t, "after", value)
+
+	applied, err = repo.CompareAndSetMultiple(
+		ctx,
+		map[string]string{existingKey: "before"},
+		map[string]string{existingKey: "overwritten"},
+	)
+	require.NoError(t, err)
+	require.False(t, applied)
+	value, err = repo.GetValue(ctx, existingKey)
+	require.NoError(t, err)
+	require.Equal(t, "after", value)
+
+	applied, err = repo.CompareAndSetMultiple(
+		ctx,
+		map[string]string{missingKey: ""},
+		map[string]string{missingKey: "created"},
+	)
+	require.NoError(t, err)
+	require.True(t, applied)
+	value, err = repo.GetValue(ctx, missingKey)
+	require.NoError(t, err)
+	require.Equal(t, "created", value)
+}
+
 func personalFeatureSettingsFixture(t *testing.T, updates map[string]string) {
 	t.Helper()
 	ctx := context.Background()
