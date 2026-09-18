@@ -777,7 +777,6 @@ const customMenuItemsForAdmin = computed(() => {
 })
 
 function applyAdminPermissions(items: NavItem[]): NavItem[] {
-  if (authStore.user?.permission_mode !== 'enforce') return items
   return items.flatMap((item) => {
     if (item.children) {
       const children = applyAdminPermissions(item.children)
@@ -856,7 +855,8 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/bank/transactions', label: t('finance.transactions.bankTitle'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagAdminBankTransactions },
     { path: '/admin/finance', label: t('finance.allSiteTitle'), icon: ChartIcon, featureFlag: flagAdminFinance },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
-    { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true, featureFlag: flagAdminAuditLogs }
+    { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true, featureFlag: flagAdminAuditLogs },
+    { path: '/admin/oidc-provider', label: t('admin.oidcProvider.nav'), icon: KeyIcon }
   ]
 
   const visible = applyFeatureFlags(baseItems)

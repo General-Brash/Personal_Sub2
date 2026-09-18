@@ -36,6 +36,7 @@ import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
 import auditAPI from './audit'
 import pluginsAPI from './plugins'
+import oidcProviderAPI, { OIDC_PROVIDER_PERMISSIONS } from './oidcProvider'
 
 /**
  * Unified admin API object for convenient access
@@ -73,7 +74,8 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
   audit: auditAPI,
-  plugins: pluginsAPI
+  plugins: pluginsAPI,
+  oidcProvider: oidcProviderAPI
 }
 
 export {
@@ -109,13 +111,31 @@ export {
   riskControlAPI,
   adminComplianceAPI,
   auditAPI,
-  pluginsAPI
+  pluginsAPI,
+  oidcProviderAPI,
+  OIDC_PROVIDER_PERMISSIONS
 }
 
 export default adminAPI
 
 // Re-export types used by components
 export type { AuditLog, AuditLogQuery, AuditLogListResponse } from './audit'
+export type {
+  OidcAuditEvent,
+  OidcClientCreateResponse,
+  OidcClientDetail,
+  OidcClientDraft,
+  OidcClientSecretIssueMetadata,
+  OidcClientSecretIssueResponse,
+  OidcClientSecretSummary,
+  OidcClientSummary,
+  OidcCollectionQuery,
+  OidcCollectionResponse,
+  OidcConsentSummary,
+  OidcProviderStatusResponse,
+  OidcResourceId,
+  OidcSigningKeySummary,
+} from './oidcProvider'
 export type {
   BalanceHistoryItem,
   GrantTemporaryCreditRequest,

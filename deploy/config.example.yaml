@@ -11,9 +11,9 @@
 # 服务器配置
 # =============================================================================
 server:
-  # Bind address (0.0.0.0 for all interfaces)
-  # 绑定地址（0.0.0.0 表示监听所有网络接口）
-  host: "0.0.0.0"
+  # Bind address (loopback by default; set explicitly to 0.0.0.0 only when required by the deployment topology)
+  # 绑定地址（默认仅监听回环地址；只有部署拓扑明确需要时才显式设置为 0.0.0.0）
+  host: "127.0.0.1"
   # Port to listen on
   # 监听端口
   port: 8080
@@ -1105,6 +1105,38 @@ oidc_connect:
   userinfo_username_path: ""
 
 # =============================================================================
+# Local OIDC Provider (backend-only, disabled by default)
+# =============================================================================
+oidc_provider:
+  enabled: false
+  issuer: "https://auth.taffy.edu.kg"
+  public_host: "auth.taffy.edu.kg"
+  signing_alg: "RS256"
+  signing_key_source: "database_encrypted"
+  # Required only when enabled: independent AES-256 key and secret pepper.
+  encryption_key: ""
+  secret_pepper: ""
+  transaction_ttl_seconds: 300
+  browser_session_idle_ttl_seconds: 1800
+  browser_session_absolute_ttl_seconds: 43200
+  authorization_code_ttl_seconds: 60
+  access_token_ttl_seconds: 300
+  id_token_ttl_seconds: 300
+  refresh_token_idle_ttl_seconds: 604800
+  refresh_token_absolute_ttl_seconds: 2592000
+  clock_skew_seconds: 60
+  jwks_cache_max_age_seconds: 300
+  client_secret_max_overlap_seconds: 86400
+  require_pkce_s256: true
+  authorization_response_iss: true
+  allowed_scopes: ["openid", "profile", "email", "roles", "offline_access"]
+  cookie:
+    session_name: "__Host-sub2_oidc_session"
+    transaction_name: "__Host-sub2_oidc_tx"
+    secure: true
+    http_only: true
+    same_site: "lax"
+
 # Default Settings
 # 默认设置
 # =============================================================================

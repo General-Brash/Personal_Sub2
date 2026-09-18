@@ -86,6 +86,32 @@ func RequireAdminPermission(permissionService *service.AdminPermissionService, p
 	}
 }
 
+// RequireOIDCAdminPermission is intentionally independent from the global
+// ADMIN_PERMISSIONS_MODE. OIDC administration is security-sensitive, so every
+// route must have a live explicit principal and permission even when the
+// global policy is disabled or shadow-only.
+func RequireOIDCAdminPermission(permission string) gin.HandlerFunc {
+	permission = strings.TrimSpace(permission)
+	return func(c *gin.Context) {
+		if permission == "" {
+			AbortWithError(c, http.StatusForbidden, "OIDC_PERMISSION_DENIED", "OIDC permission is required")
+			return
+		}
+		principal, ok := GetAdminPrincipalFromContext(c)
+		permissionService := service.AdminAuthorizationService(c.Request.Context())
+		if permissionService == nil || !ok || principal == nil {
+			AbortWithError(c, http.StatusForbidden, "OIDC_PERMISSION_DENIED", "OIDC permission denied")
+			return
+		}
+		allowed, err := permissionService.CheckPermission(c.Request.Context(), principal, permission, adminRequestScope(c))
+		if err != nil || !allowed {
+			AbortWithError(c, http.StatusForbidden, "OIDC_PERMISSION_DENIED", "OIDC permission denied")
+			return
+		}
+		c.Next()
+	}
+}
+
 func RequireAdminSuperAdmin(permissionService *service.AdminPermissionService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mode := adminPermissionMode(c, permissionService)
@@ -153,6 +179,17 @@ func AdminPermissionCatalog() []service.AdminPermissionDefinition {
 		{Permission: "security.superadmin.assign", Resource: "security", Action: "superadmin.assign", Sensitive: true, Description: "Assign or remove super administrators"},
 		{Permission: "audit.read", Resource: "audit", Action: "read", Sensitive: true, Description: "Read audit data"},
 		{Permission: "audit.export", Resource: "audit", Action: "export", Sensitive: true, Description: "Export audit data"},
+		{Permission: "oidc.provider.read", Resource: "oidc", Action: "provider.read", Description: "Read OIDC Provider status"},
+		{Permission: "oidc.clients.read", Resource: "oidc", Action: "clients.read", Description: "Read OIDC Provider clients"},
+		{Permission: "oidc.clients.write", Resource: "oidc", Action: "clients.write", Sensitive: true, Description: "Manage OIDC Provider clients"},
+		{Permission: "oidc.clients.secret.rotate", Resource: "oidc", Action: "clients.secret.rotate", Sensitive: true, Description: "Rotate OIDC Provider secrets"},
+		{Permission: "oidc.clients.disable", Resource: "oidc", Action: "clients.disable", Sensitive: true, Description: "Enable or disable OIDC clients"},
+		{Permission: "oidc.consents.read", Resource: "oidc", Action: "consents.read", Sensitive: true, Description: "Read OIDC consents"},
+		{Permission: "oidc.consents.revoke", Resource: "oidc", Action: "consents.revoke", Sensitive: true, Description: "Revoke OIDC consents"},
+		{Permission: "oidc.keys.read", Resource: "oidc", Action: "keys.read", Sensitive: true, Description: "Read OIDC signing key metadata"},
+		{Permission: "oidc.keys.rotate", Resource: "oidc", Action: "keys.rotate", Sensitive: true, Description: "Rotate OIDC signing keys"},
+		{Permission: "oidc.keys.revoke", Resource: "oidc", Action: "keys.revoke", Sensitive: true, Description: "Retire or revoke OIDC signing keys"},
+		{Permission: "oidc.audit.read", Resource: "oidc", Action: "audit.read", Sensitive: true, Description: "Read OIDC audit events"},
 	}
 }
 

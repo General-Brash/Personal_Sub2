@@ -1,0 +1,18 @@
+{
+  "authorization": [
+    "invalid_request", "unauthorized_client", "access_denied", "unsupported_response_type",
+    "invalid_scope", "server_error", "temporarily_unavailable", "interaction_required",
+    "login_required", "account_selection_required", "consent_required"
+  ],
+  "token": [
+    "invalid_request", "invalid_client", "invalid_grant", "unauthorized_client",
+    "unsupported_grant_type", "invalid_scope"
+  ],
+  "rules": {
+    "invalid_client_status": 401,
+    "revocation_invalid_target_status": 200,
+    "redirect_mismatch": "local_error_only",
+    "unknown_group_scope": "invalid_scope",
+    "access_token_resource": "userinfo_only"
+  }
+}

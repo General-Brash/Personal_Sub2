@@ -654,6 +654,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/oidc-provider',
+    name: 'AdminOIDCProvider',
+    component: () => import('@/views/admin/OIDCProviderView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'OIDC Provider',
+      titleKey: 'admin.oidcProvider.title',
+      descriptionKey: 'admin.oidcProvider.description'
+    }
+  },
+  {
     path: '/admin/risk-control',
     name: 'AdminRiskControl',
     component: () => import('@/views/admin/RiskControlView.vue'),
@@ -1006,7 +1018,7 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  if (requiresAdmin && authStore.user?.permission_mode === 'enforce' && !authStore.canAccessAdminPath(to.path)) {
+  if (requiresAdmin && !authStore.canAccessAdminPath(to.path)) {
     next('/dashboard')
     return
   }

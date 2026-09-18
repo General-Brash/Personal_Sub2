@@ -98,6 +98,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   function canAdmin(permission: string): boolean {
     if (!isAdmin.value) return false
+    // OIDC administration is fail-closed on the backend even when the global
+    // permission mode is disabled or shadow-only. Keep the UI aligned with
+    // that boundary instead of presenting controls that every request will
+    // reject.
+    if (permission.startsWith('oidc.')) {
+      return user.value?.permissions?.includes(permission) === true
+    }
     if (user.value?.permission_mode !== 'enforce') return true
     return user.value?.permissions?.includes(permission) === true
   }
@@ -105,7 +112,8 @@ export const useAuthStore = defineStore('auth', () => {
   function canAccessAdminPath(path: string): boolean {
     if (!path.startsWith('/admin')) return true
     if (!isAdmin.value) return false
-    if (user.value?.permission_mode !== 'enforce') return true
+    const isOIDCProviderPath = path === '/admin/oidc-provider' || path.startsWith('/admin/oidc-provider/')
+    if (user.value?.permission_mode !== 'enforce' && !isOIDCProviderPath) return true
     const rules: Array<[string, string[]]> = [
       ['/admin/dashboard', ['ops.read']], ['/admin/users', ['users.read']],
       ['/admin/groups', ['groups.read']], ['/admin/accounts', ['accounts.catalog.read']],
@@ -121,6 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
       ['/admin/redeem', ['users.balance.adjust']], ['/admin/promo-codes', ['users.balance.adjust']],
       ['/admin/risk-control', ['audit.read']], ['/admin/prompt-audit', ['audit.read']],
       ['/admin/secondary-review', ['audit.read']],
+      ['/admin/oidc-provider', ['oidc.provider.read', 'oidc.clients.read', 'oidc.consents.read', 'oidc.keys.read', 'oidc.audit.read']],
     ]
     const match = rules.find(([prefix]) => path === prefix || path.startsWith(prefix + '/'))
     return match?.[1].some(canAdmin) === true

@@ -117,6 +117,20 @@ func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
 	respondWithTokenPair(c, h.authService, user)
 }
 
+func setAdminSessionCookie(c *gin.Context, token string, expiresIn int, user *service.User) {
+	if user == nil || !user.IsAdmin() {
+		return
+	}
+	middleware2.SetAdminSessionCookie(c, token, expiresIn)
+}
+
+func setAdminSessionCookieForRole(c *gin.Context, token string, expiresIn int, role string) {
+	if role != service.RoleAdmin && role != service.RoleSuperAdmin {
+		return
+	}
+	middleware2.SetAdminSessionCookie(c, token, expiresIn)
+}
+
 func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user *service.User) {
 	if err := ensureLoginUserActive(user); err != nil {
 		response.ErrorFrom(c, err)
@@ -132,6 +146,7 @@ func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user
 			response.InternalError(c, "Failed to generate token")
 			return
 		}
+		setAdminSessionCookie(c, token, authService.GetAccessTokenExpiresIn(), user)
 		response.Success(c, AuthResponse{
 			AccessToken: token,
 			TokenType:   "Bearer",
@@ -139,6 +154,7 @@ func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user
 		})
 		return
 	}
+	setAdminSessionCookie(c, tokenPair.AccessToken, tokenPair.ExpiresIn, user)
 	response.Success(c, AuthResponse{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
@@ -719,6 +735,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	setAdminSessionCookieForRole(c, result.AccessToken, result.ExpiresIn, result.UserRole)
 	response.Success(c, RefreshTokenResponse{
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
@@ -753,6 +770,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	}
 	h.consumePendingOAuthSessionOnLogout(c)
 	clearOAuthLogoutCookies(c)
+	middleware2.ClearAdminSessionCookie(c)
 
 	response.Success(c, LogoutResponse{
 		Message: "Logged out successfully",

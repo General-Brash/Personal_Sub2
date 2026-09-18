@@ -80,6 +80,7 @@ type Config struct {
 	LinuxDo                 LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
 	WeChat                  WeChatConnectConfig           `mapstructure:"wechat_connect"`
 	OIDC                    OIDCConnectConfig             `mapstructure:"oidc_connect"`
+	OIDCProvider            OIDCProviderConfig            `mapstructure:"oidc_provider"`
 	DingTalk                DingTalkConnectConfig         `mapstructure:"dingtalk_connect"`
 	GitHubOAuth             EmailOAuthProviderConfig      `mapstructure:"github_oauth"`
 	GoogleOAuth             EmailOAuthProviderConfig      `mapstructure:"google_oauth"`
@@ -356,6 +357,74 @@ type OIDCConnectConfig struct {
 	UserInfoEmailPath    string `mapstructure:"userinfo_email_path"`
 	UserInfoIDPath       string `mapstructure:"userinfo_id_path"`
 	UserInfoUsernamePath string `mapstructure:"userinfo_username_path"`
+}
+
+// OIDCProviderConfig contains the independent, disabled-by-default local
+// OpenID Connect Provider contract. It intentionally does not share the
+// upstream OIDCConnectConfig or the panel JWT configuration.
+type OIDCProviderConfig struct {
+	Enabled                          bool                     `mapstructure:"enabled"`
+	Issuer                           string                   `mapstructure:"issuer"`
+	PublicHost                       string                   `mapstructure:"public_host"`
+	SigningAlg                       string                   `mapstructure:"signing_alg"`
+	SigningKeySource                 string                   `mapstructure:"signing_key_source"`
+	EncryptionKey                    string                   `mapstructure:"encryption_key"`
+	SecretPepper                     string                   `mapstructure:"secret_pepper"`
+	TransactionTTLSeconds            int                      `mapstructure:"transaction_ttl_seconds"`
+	BrowserSessionIdleTTLSeconds     int                      `mapstructure:"browser_session_idle_ttl_seconds"`
+	BrowserSessionAbsoluteTTLSeconds int                      `mapstructure:"browser_session_absolute_ttl_seconds"`
+	AuthorizationCodeTTLSeconds      int                      `mapstructure:"authorization_code_ttl_seconds"`
+	AccessTokenTTLSeconds            int                      `mapstructure:"access_token_ttl_seconds"`
+	IDTokenTTLSeconds                int                      `mapstructure:"id_token_ttl_seconds"`
+	RefreshTokenIdleTTLSeconds       int                      `mapstructure:"refresh_token_idle_ttl_seconds"`
+	RefreshTokenAbsoluteTTLSeconds   int                      `mapstructure:"refresh_token_absolute_ttl_seconds"`
+	ClockSkewSeconds                 int                      `mapstructure:"clock_skew_seconds"`
+	JWKSCacheMaxAgeSeconds           int                      `mapstructure:"jwks_cache_max_age_seconds"`
+	ClientSecretMaxOverlapSeconds    int                      `mapstructure:"client_secret_max_overlap_seconds"`
+	RequirePKCES256                  bool                     `mapstructure:"require_pkce_s256"`
+	AuthorizationResponseIssuer      bool                     `mapstructure:"authorization_response_iss"`
+	AllowedScopes                    []string                 `mapstructure:"allowed_scopes"`
+	Cookie                           OIDCProviderCookieConfig `mapstructure:"cookie"`
+}
+
+type OIDCProviderCookieConfig struct {
+	SessionName     string `mapstructure:"session_name"`
+	TransactionName string `mapstructure:"transaction_name"`
+	Secure          bool   `mapstructure:"secure"`
+	HTTPOnly        bool   `mapstructure:"http_only"`
+	SameSite        string `mapstructure:"same_site"`
+}
+
+func (c OIDCProviderConfig) TransactionTTL() time.Duration {
+	return time.Duration(c.TransactionTTLSeconds) * time.Second
+}
+
+func (c OIDCProviderConfig) BrowserSessionIdleTTL() time.Duration {
+	return time.Duration(c.BrowserSessionIdleTTLSeconds) * time.Second
+}
+
+func (c OIDCProviderConfig) BrowserSessionAbsoluteTTL() time.Duration {
+	return time.Duration(c.BrowserSessionAbsoluteTTLSeconds) * time.Second
+}
+
+func (c OIDCProviderConfig) AuthorizationCodeTTL() time.Duration {
+	return time.Duration(c.AuthorizationCodeTTLSeconds) * time.Second
+}
+
+func (c OIDCProviderConfig) AccessTokenTTL() time.Duration {
+	return time.Duration(c.AccessTokenTTLSeconds) * time.Second
+}
+
+func (c OIDCProviderConfig) IDTokenTTL() time.Duration {
+	return time.Duration(c.IDTokenTTLSeconds) * time.Second
+}
+
+func (c OIDCProviderConfig) RefreshTokenIdleTTL() time.Duration {
+	return time.Duration(c.RefreshTokenIdleTTLSeconds) * time.Second
+}
+
+func (c OIDCProviderConfig) RefreshTokenAbsoluteTTL() time.Duration {
+	return time.Duration(c.RefreshTokenAbsoluteTTLSeconds) * time.Second
 }
 
 type DingTalkConnectConfig struct {
@@ -1826,6 +1895,16 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.OIDC.UserInfoUsernamePath = strings.TrimSpace(cfg.OIDC.UserInfoUsernamePath)
 	cfg.OIDC.UsePKCEExplicit = hasExplicitConfigOrEnv("oidc_connect.use_pkce", "OIDC_CONNECT_USE_PKCE")
 	cfg.OIDC.ValidateIDTokenExplicit = hasExplicitConfigOrEnv("oidc_connect.validate_id_token", "OIDC_CONNECT_VALIDATE_ID_TOKEN")
+	cfg.OIDCProvider.Issuer = strings.TrimSpace(cfg.OIDCProvider.Issuer)
+	cfg.OIDCProvider.PublicHost = strings.TrimSpace(cfg.OIDCProvider.PublicHost)
+	cfg.OIDCProvider.SigningAlg = strings.ToUpper(strings.TrimSpace(cfg.OIDCProvider.SigningAlg))
+	cfg.OIDCProvider.SigningKeySource = strings.ToLower(strings.TrimSpace(cfg.OIDCProvider.SigningKeySource))
+	cfg.OIDCProvider.EncryptionKey = strings.TrimSpace(cfg.OIDCProvider.EncryptionKey)
+	cfg.OIDCProvider.SecretPepper = strings.TrimSpace(cfg.OIDCProvider.SecretPepper)
+	cfg.OIDCProvider.Cookie.SessionName = strings.TrimSpace(cfg.OIDCProvider.Cookie.SessionName)
+	cfg.OIDCProvider.Cookie.TransactionName = strings.TrimSpace(cfg.OIDCProvider.Cookie.TransactionName)
+	cfg.OIDCProvider.Cookie.SameSite = strings.ToLower(strings.TrimSpace(cfg.OIDCProvider.Cookie.SameSite))
+	cfg.OIDCProvider.AllowedScopes = normalizeStringSlice(cfg.OIDCProvider.AllowedScopes)
 	cfg.Dashboard.KeyPrefix = strings.TrimSpace(cfg.Dashboard.KeyPrefix)
 	cfg.CORS.AllowedOrigins = normalizeStringSlice(cfg.CORS.AllowedOrigins)
 	cfg.Security.ResponseHeaders.AdditionalAllowed = normalizeStringSlice(cfg.Security.ResponseHeaders.AdditionalAllowed)
@@ -1941,7 +2020,7 @@ func setDefaults() {
 	viper.SetDefault("run_mode", RunModeStandard)
 
 	// Server
-	viper.SetDefault("server.host", "0.0.0.0")
+	viper.SetDefault("server.host", "127.0.0.1")
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.mode", "release")
 	viper.SetDefault("server.enable_server_timing", false)
@@ -2088,6 +2167,34 @@ func setDefaults() {
 	viper.SetDefault("oidc_connect.userinfo_email_path", "")
 	viper.SetDefault("oidc_connect.userinfo_id_path", "")
 	viper.SetDefault("oidc_connect.userinfo_username_path", "")
+
+	// Local OIDC Provider (disabled by default; independent from oidc_connect RP settings)
+	viper.SetDefault("oidc_provider.enabled", false)
+	viper.SetDefault("oidc_provider.issuer", "https://auth.taffy.edu.kg")
+	viper.SetDefault("oidc_provider.public_host", "auth.taffy.edu.kg")
+	viper.SetDefault("oidc_provider.signing_alg", "RS256")
+	viper.SetDefault("oidc_provider.signing_key_source", "database_encrypted")
+	viper.SetDefault("oidc_provider.encryption_key", "")
+	viper.SetDefault("oidc_provider.secret_pepper", "")
+	viper.SetDefault("oidc_provider.transaction_ttl_seconds", 300)
+	viper.SetDefault("oidc_provider.browser_session_idle_ttl_seconds", 1800)
+	viper.SetDefault("oidc_provider.browser_session_absolute_ttl_seconds", 43200)
+	viper.SetDefault("oidc_provider.authorization_code_ttl_seconds", 60)
+	viper.SetDefault("oidc_provider.access_token_ttl_seconds", 300)
+	viper.SetDefault("oidc_provider.id_token_ttl_seconds", 300)
+	viper.SetDefault("oidc_provider.refresh_token_idle_ttl_seconds", 604800)
+	viper.SetDefault("oidc_provider.refresh_token_absolute_ttl_seconds", 2592000)
+	viper.SetDefault("oidc_provider.clock_skew_seconds", 60)
+	viper.SetDefault("oidc_provider.jwks_cache_max_age_seconds", 300)
+	viper.SetDefault("oidc_provider.client_secret_max_overlap_seconds", 86400)
+	viper.SetDefault("oidc_provider.require_pkce_s256", true)
+	viper.SetDefault("oidc_provider.authorization_response_iss", true)
+	viper.SetDefault("oidc_provider.allowed_scopes", []string{"openid", "profile", "email", "roles", "offline_access"})
+	viper.SetDefault("oidc_provider.cookie.session_name", "__Host-sub2_oidc_session")
+	viper.SetDefault("oidc_provider.cookie.transaction_name", "__Host-sub2_oidc_tx")
+	viper.SetDefault("oidc_provider.cookie.secure", true)
+	viper.SetDefault("oidc_provider.cookie.http_only", true)
+	viper.SetDefault("oidc_provider.cookie.same_site", "lax")
 
 	// DingTalk Connect OAuth 登录
 	viper.SetDefault("dingtalk_connect.enabled", false)
@@ -2536,6 +2643,11 @@ func setEnvReachableDefaults() {
 	viper.SetDefault("gateway.user_message_queue.mode", "")
 	viper.SetDefault("update.proxy_url", "")
 
+	// The provider pepper is a security-critical runtime secret. Bind it
+	// explicitly so OIDC_PROVIDER_SECRET_PEPPER always overrides the config
+	// file instead of relying on AutomaticEnv discovery during Unmarshal.
+	_ = viper.BindEnv("oidc_provider.secret_pepper", "OIDC_PROVIDER_SECRET_PEPPER")
+
 	// sticky_escape_enabled is the one exception to the zero-value rule: its
 	// effective default is true, applied post-unmarshal via a viper.IsSet guard.
 	// Registering false would make IsSet always report true and permanently
@@ -2975,6 +3087,11 @@ func (c *Config) Validate() error {
 		warnIfInsecureURL("oidc_connect.jwks_url", c.OIDC.JWKSURL)
 		warnIfInsecureURL("oidc_connect.redirect_url", c.OIDC.RedirectURL)
 		warnIfInsecureURL("oidc_connect.frontend_redirect_url", c.OIDC.FrontendRedirectURL)
+	}
+	if c.OIDCProvider.Enabled {
+		if err := validateOIDCProviderConfig(c.OIDCProvider); err != nil {
+			return err
+		}
 	}
 	if c.Billing.CircuitBreaker.Enabled {
 		if c.Billing.CircuitBreaker.FailureThreshold <= 0 {
@@ -3709,7 +3826,7 @@ func GetServerAddress() string {
 	// Support SERVER_HOST and SERVER_PORT environment variables
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.SetDefault("server.host", "0.0.0.0")
+	v.SetDefault("server.host", "127.0.0.1")
 	v.SetDefault("server.port", 8080)
 
 	// Try to read config file (ignore errors if not found)

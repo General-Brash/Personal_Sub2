@@ -140,6 +140,31 @@ func TestEnforceStepUpDisabledSkipsAllChecks(t *testing.T) {
 	})
 }
 
+func TestStepUpAuthDisabledStillAllowsOrdinaryRoutes(t *testing.T) {
+	c, _ := newStepUpTestContext(t)
+	c.Set(string(ContextKeyUser), AuthSubject{UserID: 1})
+
+	stepUpAuth(stubStepUpGrantChecker{granted: false}, stubStepUpUserReader{user: &service.User{ID: 1, TotpEnabled: false}}, stubStepUpSettingReader{enabled: false})(c)
+
+	require.False(t, c.IsAborted())
+}
+
+func TestRequireStepUpAlwaysRejectsWhenGlobalSettingIsDisabled(t *testing.T) {
+	c, rec := newStepUpTestContext(t)
+	c.Set(string(ContextKeyUser), AuthSubject{UserID: 1})
+
+	stepUp := StepUpAuthMiddleware(stepUpAuth(
+		stubStepUpGrantChecker{granted: true},
+		stubStepUpUserReader{user: &service.User{ID: 1, TotpEnabled: false}},
+		stubStepUpSettingReader{enabled: false},
+	))
+	RequireStepUpAlways(stepUp)(c)
+
+	require.True(t, c.IsAborted())
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Contains(t, rec.Body.String(), "STEP_UP_TOTP_NOT_ENABLED")
+}
+
 // settings 为 nil 时保持门控（fail-closed），避免装配缺陷静默关闭安全控制。
 func TestEnforceStepUpNilSettingsFailsClosed(t *testing.T) {
 	c, rec := newStepUpTestContext(t)

@@ -470,7 +470,8 @@ To change after installation:
 2. Add or modify:
    ```ini
    [Service]
-   Environment=SERVER_HOST=0.0.0.0
+   # Loopback by default; use 0.0.0.0 only when the deployment topology explicitly requires external binding.
+   Environment=SERVER_HOST=127.0.0.1
    Environment=SERVER_PORT=3000
    ```
 

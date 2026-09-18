@@ -77,9 +77,34 @@ func adminAuth(
 			}
 		}
 
+		// The OIDC administration surface also supports a host-only HttpOnly
+		// browser session. It is deliberately not accepted for the rest of the
+		// admin API, whose legacy bearer/API-key boundary remains unchanged.
+		if isOIDCProviderAdminPath(c) {
+			if token, err := c.Cookie(AdminSessionCookieName); err == nil && token != "" {
+				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService, permissionService) {
+					return
+				}
+				RequireMappedAdminPermission(permissionService)(c)
+				return
+			}
+		}
+
 		// 无有效认证信息
 		AbortWithError(c, 401, "UNAUTHORIZED", "Authorization required")
 	}
+}
+
+func isOIDCProviderAdminPath(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	path := c.FullPath()
+	if path == "" {
+		path = c.Request.URL.Path
+	}
+	const prefix = "/api/v1/admin/oidc-provider"
+	return path == prefix || strings.HasPrefix(path, prefix+"/")
 }
 
 func isWebSocketUpgradeRequest(c *gin.Context) bool {
@@ -170,7 +195,7 @@ func validateAdminAPIKey(
 	})
 	c.Set(string(ContextKeyUserRole), admin.Role)
 	c.Set(ContextKeyAuthEmail, admin.Email)
-	c.Set("auth_method", "admin_api_key")
+	c.Set("auth_method", service.AuditAuthMethodAdminAPIKey)
 	return true
 }
 
@@ -236,7 +261,8 @@ func validateJWTForAdmin(
 	}
 	c.Set(ContextKeyAuthEmail, user.Email)
 	c.Set(ContextKeySessionID, claims.SessionID)
-	c.Set("auth_method", "jwt")
+	c.Set(string(ContextKeyTokenVersion), claims.TokenVersion)
+	c.Set("auth_method", service.AuditAuthMethodJWT)
 
 	return true
 }

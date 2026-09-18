@@ -16,4 +16,15 @@ func init() {
 	knownAdminPermissions["subscriptions.read"] = struct{}{}
 	knownAdminPermissions["users.credentials.read"] = struct{}{}
 	knownAdminPermissions["users.credentials.write"] = struct{}{}
+	knownAdminPermissions["oidc.provider.read"] = struct{}{}
+	knownAdminPermissions["oidc.clients.read"] = struct{}{}
+	knownAdminPermissions["oidc.clients.write"] = struct{}{}
+	knownAdminPermissions["oidc.clients.secret.rotate"] = struct{}{}
+	knownAdminPermissions["oidc.clients.disable"] = struct{}{}
+	knownAdminPermissions["oidc.consents.read"] = struct{}{}
+	knownAdminPermissions["oidc.consents.revoke"] = struct{}{}
+	knownAdminPermissions["oidc.keys.read"] = struct{}{}
+	knownAdminPermissions["oidc.keys.rotate"] = struct{}{}
+	knownAdminPermissions["oidc.keys.revoke"] = struct{}{}
+	knownAdminPermissions["oidc.audit.read"] = struct{}{}
 }

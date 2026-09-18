@@ -47,6 +47,7 @@ type AdminHandlers struct {
 	Affiliate              *admin.AffiliateHandler
 	Compliance             *admin.ComplianceHandler
 	AuditLog               *admin.AuditLogHandler
+	OIDCProvider           *admin.OIDCProviderHandler
 }
 
 // Handlers contains all HTTP handlers
@@ -78,6 +79,7 @@ type Handlers struct {
 	Invitation        *InvitationHandler
 	FeatureManagement *FeatureManagementHandler
 	DynamicRate       *DynamicRateHandler
+	OIDCProvider      *OIDCProviderHandler
 }
 
 // BuildInfo contains build-time information

@@ -26,6 +26,8 @@ const (
 	ContextKeyAuthEmail = "auth_email"
 	// ContextKeySessionID 认证中间件写入的会话 ID（refresh token family）。
 	ContextKeySessionID = "session_id"
+	// ContextKeyTokenVersion 认证中间件写入的当前 JWT 认证 epoch。
+	ContextKeyTokenVersion = "token_version"
 )
 
 // SetAuditAction 允许 handler / 中间件为当前请求指定审计动作名（覆盖自动推导）。
@@ -58,6 +60,9 @@ var auditExtraAllowedKeys = map[string]struct{}{
 	"http_status": {}, "latency_ms": {}, "token_applied": {}, "retryable": {},
 	"event_id": {}, "requested_count": {}, "deleted_events": {}, "deleted_jobs": {},
 	"matched_count": {}, "snapshot_max_id": {}, "filter_hash": {}, "confirm": {},
+	"reason": {}, "request_id": {}, "client_id": {}, "secret_id": {},
+	"secret_fingerprint": {}, "kid": {}, "user_id": {}, "family_id": {},
+	"old_status": {}, "new_status": {}, "guard_blocked": {},
 }
 
 // SetAuditExtra adds allowlisted, scalar details to the current audit entry.
@@ -109,39 +114,55 @@ func truncateAuditExtraString(value string, limit int) string {
 
 // auditSensitiveReads 需要审计的敏感 GET 读取（method+FullPath → 动作名）。
 var auditSensitiveReads = map[string]string{
-	"GET /api/v1/admin/accounts/data":             "admin.accounts.export",
-	"GET /api/v1/admin/proxies/data":              "admin.proxies.export",
-	"GET /api/v1/admin/redeem-codes/export":       "admin.redeem_codes.export",
-	"GET /api/v1/admin/backups/:id/download-url":  "admin.backups.download",
-	"GET /api/v1/admin/settings/admin-api-key":    "admin.admin_api_key.read",
-	"GET /api/v1/admin/users/:id/api-keys":        "admin.users.api_keys.read",
-	"GET /api/v1/admin/groups/:id/api-keys":       "admin.groups.api_keys.read",
-	"GET /api/v1/admin/backups/s3-config":         "admin.backups.s3_config.read",
-	"GET /api/v1/admin/data-management/s3/config": "admin.data_management.s3_config.read",
+	"GET /api/v1/admin/accounts/data":              "admin.accounts.export",
+	"GET /api/v1/admin/proxies/data":               "admin.proxies.export",
+	"GET /api/v1/admin/redeem-codes/export":        "admin.redeem_codes.export",
+	"GET /api/v1/admin/backups/:id/download-url":   "admin.backups.download",
+	"GET /api/v1/admin/settings/admin-api-key":     "admin.admin_api_key.read",
+	"GET /api/v1/admin/users/:id/api-keys":         "admin.users.api_keys.read",
+	"GET /api/v1/admin/groups/:id/api-keys":        "admin.groups.api_keys.read",
+	"GET /api/v1/admin/backups/s3-config":          "admin.backups.s3_config.read",
+	"GET /api/v1/admin/data-management/s3/config":  "admin.data_management.s3_config.read",
+	"GET /api/v1/admin/oidc-provider/status":       "oidc.provider.read",
+	"GET /api/v1/admin/oidc-provider/clients":      "oidc.clients.read",
+	"GET /api/v1/admin/oidc-provider/clients/:id":  "oidc.clients.read",
+	"GET /api/v1/admin/oidc-provider/consents":     "oidc.consents.read",
+	"GET /api/v1/admin/oidc-provider/keys":         "oidc.keys.read",
+	"GET /api/v1/admin/oidc-provider/audit-events": "oidc.audit.read",
 }
 
 // auditActionOverrides 变更类请求的动作名精确映射（未命中时自动推导）。
 var auditActionOverrides = map[string]string{
-	"POST /api/v1/auth/login":                                 service.AuditActionLogin,
-	"POST /api/v1/auth/login/2fa":                             service.AuditActionLogin2FA,
-	"POST /api/v1/auth/passkey/login/finish":                  service.AuditActionLogin,
-	"POST /api/v1/auth/register":                              service.AuditActionRegister,
-	"POST /api/v1/auth/refresh":                               service.AuditActionTokenRefresh,
-	"POST /api/v1/user/totp/step-up":                          service.AuditActionStepUpVerify,
-	"POST /api/v1/admin/audit-logs/clear":                     service.AuditActionAuditLogClear,
-	"POST /api/v1/admin/accounts/data":                        "admin.accounts.import",
-	"POST /api/v1/admin/backups":                              "admin.backups.create",
-	"POST /api/v1/admin/backups/:id/restore":                  "admin.backups.restore",
-	"DELETE /api/v1/admin/backups/:id":                        "admin.backups.delete",
-	"PUT /api/v1/admin/backups/s3-config":                     "admin.backups.s3_config.update",
-	"POST /api/v1/admin/settings/admin-api-key/regenerate":    "admin.admin_api_key.regenerate",
-	"DELETE /api/v1/admin/settings/admin-api-key":             "admin.admin_api_key.delete",
-	"PUT /api/v1/admin/prompt-audit/config":                   "admin.prompt_audit.config.update",
-	"POST /api/v1/admin/prompt-audit/endpoints/probe":         "admin.prompt_audit.endpoint.probe",
-	"DELETE /api/v1/admin/prompt-audit/events/:id":            "admin.prompt_audit.event.delete",
-	"POST /api/v1/admin/prompt-audit/events/batch-delete":     "admin.prompt_audit.events.batch_delete",
-	"POST /api/v1/admin/prompt-audit/events/delete-preview":   "admin.prompt_audit.events.delete_preview",
-	"POST /api/v1/admin/prompt-audit/events/delete-by-filter": "admin.prompt_audit.events.filter_delete",
+	"POST /api/v1/auth/login":                                               service.AuditActionLogin,
+	"POST /api/v1/auth/login/2fa":                                           service.AuditActionLogin2FA,
+	"POST /api/v1/auth/passkey/login/finish":                                service.AuditActionLogin,
+	"POST /api/v1/auth/register":                                            service.AuditActionRegister,
+	"POST /api/v1/auth/refresh":                                             service.AuditActionTokenRefresh,
+	"POST /api/v1/user/totp/step-up":                                        service.AuditActionStepUpVerify,
+	"POST /api/v1/admin/audit-logs/clear":                                   service.AuditActionAuditLogClear,
+	"POST /api/v1/admin/accounts/data":                                      "admin.accounts.import",
+	"POST /api/v1/admin/backups":                                            "admin.backups.create",
+	"POST /api/v1/admin/backups/:id/restore":                                "admin.backups.restore",
+	"DELETE /api/v1/admin/backups/:id":                                      "admin.backups.delete",
+	"PUT /api/v1/admin/backups/s3-config":                                   "admin.backups.s3_config.update",
+	"POST /api/v1/admin/settings/admin-api-key/regenerate":                  "admin.admin_api_key.regenerate",
+	"DELETE /api/v1/admin/settings/admin-api-key":                           "admin.admin_api_key.delete",
+	"PUT /api/v1/admin/prompt-audit/config":                                 "admin.prompt_audit.config.update",
+	"POST /api/v1/admin/prompt-audit/endpoints/probe":                       "admin.prompt_audit.endpoint.probe",
+	"DELETE /api/v1/admin/prompt-audit/events/:id":                          "admin.prompt_audit.event.delete",
+	"POST /api/v1/admin/prompt-audit/events/batch-delete":                   "admin.prompt_audit.events.batch_delete",
+	"POST /api/v1/admin/prompt-audit/events/delete-preview":                 "admin.prompt_audit.events.delete_preview",
+	"POST /api/v1/admin/prompt-audit/events/delete-by-filter":               "admin.prompt_audit.events.filter_delete",
+	"POST /api/v1/admin/oidc-provider/clients":                              "oidc.client.create",
+	"PUT /api/v1/admin/oidc-provider/clients/:id":                           "oidc.client.update",
+	"POST /api/v1/admin/oidc-provider/clients/:id/secrets":                  "oidc.client.secret.rotate",
+	"POST /api/v1/admin/oidc-provider/clients/:id/secrets/:secretID/revoke": "oidc.client.secret.revoke",
+	"POST /api/v1/admin/oidc-provider/clients/:id/disable":                  "oidc.client.disable",
+	"POST /api/v1/admin/oidc-provider/clients/:id/enable":                   "oidc.client.enable",
+	"POST /api/v1/admin/oidc-provider/consents/:id/revoke":                  "oidc.consent.revoke",
+	"POST /api/v1/admin/oidc-provider/keys/rotate":                          "oidc.key.rotate",
+	"POST /api/v1/admin/oidc-provider/keys/:kid/retire":                     "oidc.key.retire",
+	"POST /api/v1/admin/oidc-provider/keys/:kid/revoke":                     "oidc.key.revoke",
 }
 
 // auditBodyOmittedRoutes 请求体几乎整体由凭证构成的路由（如整块粘贴 auth JSON 的导入接口）。

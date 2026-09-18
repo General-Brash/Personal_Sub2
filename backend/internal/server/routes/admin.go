@@ -30,6 +30,7 @@ func RegisterAdminRoutes(
 	// 审计中间件挂在认证之后：所有管理面变更类操作 + 敏感读取入审计日志
 	admin.Use(gin.HandlerFunc(auditLog))
 	admin.Use(middleware.AdminComplianceGuard(settingService))
+	RegisterOIDCProviderAdminRoutes(admin, h, stepUpAuth)
 	{
 		if h.FeatureManagement != nil {
 			features := h.FeatureManagement

@@ -243,10 +243,18 @@ apiClient.interceptors.response.use(
         }
       }
 
-      // Return structured error
+      // Return structured error. Some legacy handlers use `error` for the
+      // machine-readable code; normalize that shape so feature-specific UIs
+      // do not lose actionable error information.
+      const structuredCode =
+        typeof apiData.code === 'string' || typeof apiData.code === 'number'
+          ? apiData.code
+          : typeof apiData.error === 'string'
+            ? apiData.error
+            : undefined
       return Promise.reject({
         status,
-        code: apiData.code,
+        code: structuredCode,
         reason: apiData.reason,
         error: apiData.error,
         message: apiData.message || apiData.detail || error.message,

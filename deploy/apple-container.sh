@@ -407,7 +407,7 @@ prepare_environment() {
     fi
     POSTGRES_IMAGE="$(read_env_value APPLE_CONTAINER_POSTGRES_IMAGE postgres:18-alpine)"
     REDIS_IMAGE="$(read_env_value APPLE_CONTAINER_REDIS_IMAGE redis:8-alpine)"
-    BIND_HOST="$(read_env_value BIND_HOST 0.0.0.0)"
+    BIND_HOST="$(read_env_value BIND_HOST 127.0.0.1)"
     HOST_PORT="$(read_env_value SERVER_PORT 8080)"
     POSTGRES_USER="$(read_env_value POSTGRES_USER sub2api)"
     POSTGRES_PASSWORD="$(read_env_value POSTGRES_PASSWORD)"

@@ -26,3 +26,14 @@ func GetUserRoleFromContext(c *gin.Context) (string, bool) {
 	role, ok := value.(string)
 	return role, ok
 }
+func GetAuthTokenVersionFromContext(c *gin.Context) (int64, bool) {
+	if c == nil {
+		return 0, false
+	}
+	value, exists := c.Get(string(ContextKeyTokenVersion))
+	if !exists {
+		return 0, false
+	}
+	version, ok := value.(int64)
+	return version, ok
+}
