@@ -36,7 +36,7 @@ func (r *oidcRepository) ListSigningKeys(ctx context.Context, now time.Time) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.OIDCSigningKeyRecord, 0)
 	for rows.Next() {
 		key, err := scanOIDCSigningKey(rows.Scan)
@@ -56,7 +56,7 @@ func (r *oidcRepository) ListAllSigningKeys(ctx context.Context) ([]service.OIDC
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.OIDCSigningKeyRecord, 0)
 	for rows.Next() {
 		key, err := scanOIDCSigningKey(rows.Scan)

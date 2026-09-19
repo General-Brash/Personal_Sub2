@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
@@ -369,36 +370,48 @@ func TestQuotaFetcher_CachesFailureSnapshotWithShortTTL(t *testing.T) {
 }
 
 func TestQuotaFetcher_ConcurrentFetchesShareSingleFlight(t *testing.T) {
-	fetcher, usage, _, _, accounts := newQuotaFetcherTestSetup(t)
-	accounts.accounts[12] = &Account{ID: 12, Platform: domain.PlatformOpenAI}
-	usage.usage = &UsageInfo{FiveHour: &UsageProgress{Utilization: 10}}
-	usage.block = make(chan struct{})
+	// singleflight 合并要求「所有并发 waiter 在 leader 完成前都已 attach 到同一次调用」。
+	// 用 testing/synctest 把并发调度变确定：synctest.Wait 仅在 bubble 内所有其他
+	// goroutine 都 durably blocked 时返回——此刻 leader 正卡在被 block 的 GetUsage 内、
+	// 其余 4 个 Fetch 已 attach 到同一 flight 并阻塞在结果 channel 上，上游恰好只被调 1 次。
+	//
+	// 旧写法用 require.Eventually(calls==1) 只能确认 leader 就位，并不保证其余 waiter
+	// 已 attach；CI 用 `go test -tags=unit ./...`（多包并行、无 GOMAXPROCS 上限）高负载下，
+	// 落后的 waiter 可能在 leader 完成、singleflight 删除 key 之后才调 DoChan，从而成为
+	// 新 leader 触发第二次真实查询 → calls==2，间歇性失败在本行的断言上。
+	synctest.Test(t, func(t *testing.T) {
+		fetcher, usage, _, _, accounts := newQuotaFetcherTestSetup(t)
+		accounts.accounts[12] = &Account{ID: 12, Platform: domain.PlatformOpenAI}
+		usage.usage = &UsageInfo{FiveHour: &UsageProgress{Utilization: 10}}
+		usage.block = make(chan struct{})
 
-	var wg sync.WaitGroup
-	snapshots := make([]*domain.MonitorQuotaSnapshot, 5)
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			snapshots[idx] = fetcher.Fetch(context.Background(), 12)
-		}(i)
-	}
+		var wg sync.WaitGroup
+		snapshots := make([]*domain.MonitorQuotaSnapshot, 5)
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				snapshots[idx] = fetcher.Fetch(context.Background(), 12)
+			}(i)
+		}
 
-	// 上游被 block 卡住时，5 个并发 Fetch 应只产生 1 次真实查询。
-	require.Eventually(t, func() bool { return usage.getCalls() == 1 },
-		5*time.Second, 10*time.Millisecond)
-	close(usage.block)
-	wg.Wait()
+		// 5 个并发 Fetch 全部 attach 到同一 flight 并阻塞后：上游只应被调用 1 次。
+		synctest.Wait()
+		require.Equal(t, 1, usage.getCalls())
 
-	for _, snapshot := range snapshots {
-		require.NotNil(t, snapshot)
-		require.True(t, snapshot.Success)
-	}
-	require.Equal(t, 1, usage.getCalls())
+		close(usage.block)
+		wg.Wait()
 
-	// 成功快照已缓存：再取一次仍不打上游。
-	_ = fetcher.Fetch(context.Background(), 12)
-	require.Equal(t, 1, usage.getCalls())
+		for _, snapshot := range snapshots {
+			require.NotNil(t, snapshot)
+			require.True(t, snapshot.Success)
+		}
+		require.Equal(t, 1, usage.getCalls())
+
+		// 成功快照已缓存：再取一次仍不打上游。
+		_ = fetcher.Fetch(context.Background(), 12)
+		require.Equal(t, 1, usage.getCalls())
+	})
 }
 
 // --- UsageInfo → tiers 归一 ---

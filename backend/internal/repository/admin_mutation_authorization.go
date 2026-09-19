@@ -241,13 +241,11 @@ func AuthorizeAdminMutationTx(
 		return nil, err
 	}
 	if freshPrincipal == nil {
-		// Disabled mode may retain legacy compatibility for ordinary admins, but
-		// a super-admin operation still requires a live explicit principal.
-		if actor.Role == service.RoleSuperAdmin {
-			return nil, service.ErrAdminPermissionDenied
-		}
-		// Non-enforce legacy mode with an ordinary actor id still gets the locked
-		// role and target protections below, but does not invent grant semantics.
+		// Non-enforce legacy mode with an actor id still gets the locked role and
+		// target protections below, but does not invent grant semantics. Enforce
+		// mode already denied the no-principal case in freshAdminMutationPrincipal,
+		// so a verified super-admin actor here is treated like any locked admin
+		// row rather than being singled out for a 403.
 		freshPrincipal = &service.AdminPrincipal{
 			UserID:  actor.UserID,
 			Kind:    service.AdminPrincipalKindJWT,

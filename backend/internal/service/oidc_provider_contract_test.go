@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -122,7 +123,7 @@ func TestOIDCProviderTrustedSkipCannotBypassPromptConsent(t *testing.T) {
 }
 
 func TestOIDCProviderRevocationRejectsEmptyToken(t *testing.T) {
-	if err := (&OIDCProviderService{}).Revoke(nil, "client", "secret", "   "); !errors.Is(err, ErrOIDCInvalidRequest) {
+	if err := (&OIDCProviderService{}).Revoke(context.TODO(), "client", "secret", "   "); !errors.Is(err, ErrOIDCInvalidRequest) {
 		t.Fatalf("empty revocation token error = %v, want ErrOIDCInvalidRequest", err)
 	}
 	if validOIDCRevocationToken("") || validOIDCRevocationToken("\t") {

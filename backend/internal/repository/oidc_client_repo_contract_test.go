@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"regexp"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 func TestOIDCAuthenticateClientQualifiesJoinedClientColumns(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
 	clientRows := sqlmock.NewRows([]string{
@@ -33,7 +34,7 @@ func TestOIDCAuthenticateClientQualifiesJoinedClientColumns(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "client_pk", "fingerprint", "status", "not_before", "expires_at", "created_at", "revoked_at"}).
 			AddRow(7, 42, "fingerprint", "active", now, now.Add(time.Hour), now, nil))
 
-	client, err := (&oidcRepository{db: db}).AuthenticateClient(nil, "sub2-client", "digest", now)
+	client, err := (&oidcRepository{db: db}).AuthenticateClient(context.TODO(), "sub2-client", "digest", now)
 	require.NoError(t, err)
 	require.Equal(t, int64(42), client.ID)
 	require.Equal(t, "sub2-client", client.ClientID)

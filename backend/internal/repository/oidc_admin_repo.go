@@ -72,7 +72,7 @@ func (r *oidcRepository) ListConsents(ctx context.Context, input service.OIDCCon
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := make([]service.OIDCConsentRecord, 0, pageSize)
 	for rows.Next() {
 		item, err := scanOIDCConsent(rows.Scan)
@@ -171,7 +171,7 @@ func (r *oidcRepository) ListAuditEvents(ctx context.Context, input service.OIDC
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := make([]service.OIDCAuditEventRecord, 0, pageSize)
 	for rows.Next() {
 		var item service.OIDCAuditEventRecord

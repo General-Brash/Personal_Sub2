@@ -17,6 +17,7 @@ const authStore = vi.hoisted(() => ({
   isAdmin: false,
   isSimpleMode: false,
   hasPendingAuthSession: false,
+  canAccessAdminPath: vi.fn(() => true),
 }))
 
 const appStore = vi.hoisted(() => ({

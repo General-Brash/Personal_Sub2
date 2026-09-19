@@ -101,7 +101,7 @@ func (r *oidcRepository) loadOIDCClientDetails(ctx context.Context, q oidcQuerye
 	if err != nil {
 		return nil, err
 	}
-	defer redirectRows.Close()
+	defer func() { _ = redirectRows.Close() }()
 	for redirectRows.Next() {
 		var uri string
 		if err := redirectRows.Scan(&uri); err != nil {
@@ -117,7 +117,7 @@ func (r *oidcRepository) loadOIDCClientDetails(ctx context.Context, q oidcQuerye
 	if err != nil {
 		return nil, err
 	}
-	defer scopeRows.Close()
+	defer func() { _ = scopeRows.Close() }()
 	for scopeRows.Next() {
 		var scope string
 		if err := scopeRows.Scan(&scope); err != nil {
@@ -133,7 +133,7 @@ func (r *oidcRepository) loadOIDCClientDetails(ctx context.Context, q oidcQuerye
 	if err != nil {
 		return nil, err
 	}
-	defer secretRows.Close()
+	defer func() { _ = secretRows.Close() }()
 	for secretRows.Next() {
 		var secret service.OIDCClientSecretRecord
 		var revokedAt sql.NullTime
@@ -156,7 +156,7 @@ func (r *oidcRepository) ListClients(ctx context.Context) ([]service.OIDCClientR
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.OIDCClientRecord, 0)
 	for rows.Next() {
 		client, err := scanOIDCClientFrom(rows.Scan)
