@@ -1,16 +1,27 @@
 name: CI
 
 on:
+  # 普通分支 push 时运行 CI。
+  # 显式限定 branches 后，tag push 不会再额外触发这一套普通 CI。
   push:
+    branches:
+      - '**'
+
+  # PR 始终执行完整 CI。
   pull_request:
+
+  # 允许 release.yml 把本工作流作为 Release Gate 调用。
   workflow_call:
     inputs:
       target_sha:
         description: 'Exact commit SHA to check out for a release gate'
         required: false
         type: string
+
+      # 为兼容当前 release.yml 暂时保留。
+      # 注意：此参数现在不会再导致 Integration Tests 被跳过。
       release_gate:
-        description: 'Run the database-free subset required before a release'
+        description: 'Run the complete CI suite as a release gate'
         required: false
         type: boolean
         default: false
@@ -19,17 +30,26 @@ permissions:
   contents: read
 
 jobs:
+  # ============================================================
+  # Shell / deployment checks
+  # ============================================================
   shell:
+    name: shell
     runs-on: macos-15
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout source
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.target_sha || github.sha }}
+
       - name: Verify checked-out source
         if: ${{ inputs.target_sha != '' }}
         env:
           TARGET_SHA: ${{ inputs.target_sha }}
-        run: test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
+        run: |
+          test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
+
       - name: Check deployment scripts
         run: |
           /bin/bash -n deploy/apple-container.sh
@@ -41,91 +61,153 @@ jobs:
           /bin/bash deploy/tests/install-github-token-test.sh
           /bin/bash deploy/tests/intent-classifier-deploy-test.sh
 
+
+  # ============================================================
+  # Backend tests
+  #
+  # 重点：
+  # 无论普通 CI 还是 Release Gate，都执行：
+  #   1. Unit Tests
+  #   2. Integration Tests
+  # ============================================================
   test:
+    name: test
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout source
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.target_sha || github.sha }}
+
       - name: Verify checked-out source
         if: ${{ inputs.target_sha != '' }}
         env:
           TARGET_SHA: ${{ inputs.target_sha }}
-        run: test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
-      - uses: actions/setup-go@v6
+        run: |
+          test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
         with:
           go-version: '1.27.0'
           check-latest: false
           cache: true
           cache-dependency-path: backend/go.sum
+
       - name: Verify Go version
         run: |
+          go version
           go version | grep -q 'go1.27.0'
+
       - name: Unit tests
         working-directory: backend
-        run: make test-unit
+        run: |
+          make test-unit
+
+      # Release Gate 不再跳过这里。
       - name: Integration tests
-        if: ${{ inputs.release_gate != true }}
         working-directory: backend
         env:
-          # Only allow disposable containers on the GitHub-hosted CI runner.
+          # GitHub-hosted CI runner 中允许测试使用临时容器。
           SUB2API_VALIDATION_MODE: ci-container
           SUB2API_ALLOW_LEGACY_CI_CONTAINERS: ALLOW
-        run: make test-integration
+        run: |
+          make test-integration
 
+
+  # ============================================================
+  # Frontend complete gate
+  # ============================================================
   frontend:
+    name: frontend
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout source
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.target_sha || github.sha }}
+
       - name: Verify checked-out source
         if: ${{ inputs.target_sha != '' }}
         env:
           TARGET_SHA: ${{ inputs.target_sha }}
-        run: test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
+        run: |
+          test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
           version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'pnpm'
           cache-dependency-path: frontend/pnpm-lock.yaml
+
       - name: Install frontend dependencies
         working-directory: frontend
-        run: pnpm install --frozen-lockfile
-      - name: Frontend complete code gate
+        run: |
+          pnpm install --frozen-lockfile
+
+      - name: TypeScript type check
         working-directory: frontend
         run: |
           pnpm run typecheck
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: |
           pnpm run test:run
+
+      - name: Frontend lint
+        working-directory: frontend
+        run: |
           pnpm run lint:check
+
+      - name: Frontend production build
+        working-directory: frontend
+        run: |
           pnpm run build
 
+
+  # ============================================================
+  # Go static analysis
+  # ============================================================
   golangci-lint:
+    name: golangci-lint
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout source
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.target_sha || github.sha }}
+
       - name: Verify checked-out source
         if: ${{ inputs.target_sha != '' }}
         env:
           TARGET_SHA: ${{ inputs.target_sha }}
-        run: test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
-      - uses: actions/setup-go@v6
+        run: |
+          test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
         with:
           go-version: '1.27.0'
           check-latest: false
           cache: true
           cache-dependency-path: backend/go.sum
+
       - name: Verify Go version
         run: |
+          go version
           go version | grep -q 'go1.27.0'
-      - name: golangci-lint
+
+      - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13
