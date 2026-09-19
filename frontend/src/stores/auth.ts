@@ -74,6 +74,18 @@ function clearPendingAuthSessionStorage(): void {
   localStorage.removeItem(PENDING_AUTH_SESSION_KEY)
 }
 
+type AdminPermissionMode = 'disabled' | 'enforce'
+
+// The backend accepts the historical shadow value only as configuration input
+// and returns the normalized effective mode. Normalize persisted/legacy user
+// data here as well so the UI never treats shadow as a live mode.
+function normalizeUserPermissionMode<T extends { permission_mode?: unknown }>(user: T): T & { permission_mode: AdminPermissionMode } {
+  return {
+    ...user,
+    permission_mode: user.permission_mode === 'enforce' ? 'enforce' : 'disabled'
+  }
+}
+
 export const useAuthStore = defineStore('auth', () => {
   // ==================== State ====================
 
@@ -97,23 +109,21 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   function canAdmin(permission: string): boolean {
-    if (!isAdmin.value) return false
-    // OIDC administration is fail-closed on the backend even when the global
-    // permission mode is disabled or shadow-only. Keep the UI aligned with
-    // that boundary instead of presenting controls that every request will
-    // reject.
+    const currentUser = user.value
+    if (!isAdmin.value || !currentUser) return false
+    // OIDC and administrator-assignment surfaces remain explicit-permission
+    // boundaries for every human role.
     if (permission.startsWith('oidc.')) {
-      return user.value?.permissions?.includes(permission) === true
+      return currentUser.permissions?.includes(permission) === true
     }
-    if (user.value?.permission_mode !== 'enforce') return true
-    return user.value?.permissions?.includes(permission) === true
+    if (currentUser.role === 'super_admin') return true
+    if (currentUser.permission_mode !== 'enforce') return true
+    return currentUser.permissions?.includes(permission) === true
   }
 
   function canAccessAdminPath(path: string): boolean {
     if (!path.startsWith('/admin')) return true
     if (!isAdmin.value) return false
-    const isOIDCProviderPath = path === '/admin/oidc-provider' || path.startsWith('/admin/oidc-provider/')
-    if (user.value?.permission_mode !== 'enforce' && !isOIDCProviderPath) return true
     const rules: Array<[string, string[]]> = [
       ['/admin/dashboard', ['ops.read']], ['/admin/users', ['users.read']],
       ['/admin/groups', ['groups.read']], ['/admin/accounts', ['accounts.catalog.read']],
@@ -155,7 +165,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (savedToken && savedUser) {
       try {
         token.value = savedToken
-        user.value = JSON.parse(savedUser)
+        user.value = normalizeUserPermissionMode(JSON.parse(savedUser) as User)
         refreshTokenValue.value = savedRefreshToken
         tokenExpiresAt.value = savedExpiresAt ? parseInt(savedExpiresAt, 10) : null
 
@@ -350,11 +360,12 @@ export const useAuthStore = defineStore('auth', () => {
       runMode.value = response.user.run_mode
     }
     const { run_mode: _run_mode, ...userData } = response.user
-    user.value = userData
+    const normalizedUser = normalizeUserPermissionMode(userData)
+    user.value = normalizedUser
 
     // Persist to localStorage
     localStorage.setItem(AUTH_TOKEN_KEY, response.access_token)
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(normalizedUser))
     clearPendingAuthSession()
 
     // Start auto-refresh interval for user data
@@ -482,12 +493,13 @@ export const useAuthStore = defineStore('auth', () => {
         runMode.value = response.data.run_mode
       }
       const { run_mode: _run_mode, ...userData } = response.data
-      user.value = userData
+      const normalizedUser = normalizeUserPermissionMode(userData)
+      user.value = normalizedUser
 
       // Update localStorage
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(normalizedUser))
 
-      return userData
+      return normalizedUser
     } catch (error) {
       // If refresh fails with 401, clear auth state
       if ((error as { status?: number }).status === 401) {

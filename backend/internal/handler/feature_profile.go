@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"sort"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -59,7 +60,13 @@ func buildFeatureProfile(ctx context.Context, user *service.User, permissions *s
 			}
 		}
 		for _, scope := range scopes {
-			allowed, err := permissions.Authorize(ctx, principal, definition.Permission, scope)
+			var allowed bool
+			var err error
+			if strings.HasPrefix(definition.Permission, "oidc.") {
+				allowed, err = permissions.CheckPermission(ctx, principal, definition.Permission, scope)
+			} else {
+				allowed, err = permissions.AuthorizeRequest(ctx, principal, definition.Permission, scope)
+			}
 			if err == nil && allowed {
 				profile.Permissions = append(profile.Permissions, definition.Permission)
 				break

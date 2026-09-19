@@ -29,7 +29,7 @@ export default {
     failedToLoad: 'Failed to load daily check-in status.',
     failedToCheckIn: 'Failed to check in. Please try again.',
     auto: {
-      pending: 'You have not checked in this period. You can claim directly or choose an enabled game mode.',
+      pending: 'You have not checked in this period. You can claim directly or enable automatic check-in.',
       consentRequired: 'The automatic check-in rules changed. Please review the fee consent again.',
       failed: 'Automatic check-in was not completed, so the reward state is not confirmed. You can safely retry with the same request.',
       retry: 'Retry automatic check-in',

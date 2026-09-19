@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -20,11 +21,12 @@ func TestCheckinPolicyV2_ParameterBoundaries(t *testing.T) {
 		{name: "refresh minute", mutate: func(p *DailyCheckinPolicyV2) { p.RefreshTime = "23:60" }},
 		{name: "fee negative", mutate: func(p *DailyCheckinPolicyV2) { p.AutoFeeBps = -1 }},
 		{name: "fee over 100 percent", mutate: func(p *DailyCheckinPolicyV2) { p.AutoFeeBps = 10001 }},
-		{name: "normal zero", mutate: func(p *DailyCheckinPolicyV2) { p.Normal.MinBps = 0 }},
-		{name: "normal reversed", mutate: func(p *DailyCheckinPolicyV2) { p.Normal.MinBps = 12000; p.Normal.MaxBps = 11000 }},
-		{name: "normal too large", mutate: func(p *DailyCheckinPolicyV2) { p.Normal.MaxBps = checkinMaxMultiplierBps + 1 }},
-		{name: "super enabled without cost", mutate: func(p *DailyCheckinPolicyV2) { p.Super.Enabled = true; p.Super.Cost = 0 }},
-		{name: "super cost too precise", mutate: func(p *DailyCheckinPolicyV2) { p.Super.Cost = 0.000000001 }},
+		{name: "pending refresh time", mutate: func(p *DailyCheckinPolicyV2) {
+			p.PendingRefresh = &DailyCheckinPendingV2{RefreshTime: "25:00", EffectiveAt: time.Date(2026, time.September, 12, 0, 0, 0, 0, beijingLocation)}
+		}},
+		{name: "pending refresh boundary", mutate: func(p *DailyCheckinPolicyV2) {
+			p.PendingRefresh = &DailyCheckinPendingV2{RefreshTime: "06:00"}
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -60,12 +62,9 @@ func TestCheckinPeriodAt_RefreshTransitionIsNonOverlapping(t *testing.T) {
 	require.Equal(t, "2026-09-12T06:00:00+08:00", period.NextReset.Format(time.RFC3339))
 }
 
-func TestCheckinV2_Floor8AndRandomBoundary(t *testing.T) {
+func TestCheckinV2_RewardQuantization(t *testing.T) {
 	require.Equal(t, 3.80000000, floor8(4-floor8(4*500.0/10000)))
 	require.Equal(t, 0.12345678, floor8(0.123456789))
-	value, err := secureCheckinMultiplier(nil, 8000, 8000)
-	require.NoError(t, err)
-	require.Equal(t, 8000, value)
 }
 
 func TestCheckinPeriodAt_PendingClockDoesNotChangeActivePeriod(t *testing.T) {
@@ -93,16 +92,51 @@ func TestCheckinBasisPointAmount_UsesDecimalBeforeQuantization(t *testing.T) {
 	require.Equal(t, 4.0, checkinBasisPointAmount(4, 10000))
 }
 
-func TestCheckinPolicyVersionIncludesBaseRewardsAndRandomCost(t *testing.T) {
+func TestCheckinPolicyVersionExcludesDeprecatedGameFields(t *testing.T) {
 	base := DefaultDailyCheckinPolicy()
 	extended := DefaultDailyCheckinPolicyV2()
 	first := EffectiveCheckinPolicyVersion(&base, extended)
-	base.RewardTiers[0].Amount = 2
-	second := EffectiveCheckinPolicyVersion(&base, extended)
-	require.NotEqual(t, first, second)
+
+	extended.Normal.MinBps = 8000
+	extended.Normal.MaxBps = 12000
 	extended.Super.Cost = 1.25
-	third := EffectiveCheckinPolicyVersion(&base, extended)
-	require.NotEqual(t, second, third)
+	extended.ReviewApproved = true
+	require.Equal(t, first, EffectiveCheckinPolicyVersion(&base, extended))
+
+	base.RewardTiers[0].Amount = 2
+	rewardChanged := EffectiveCheckinPolicyVersion(&base, extended)
+	require.NotEqual(t, first, rewardChanged)
+
+	extended.AutoFeeBps++
+	feeChanged := EffectiveCheckinPolicyVersion(&base, extended)
+	require.NotEqual(t, rewardChanged, feeChanged)
+}
+
+func TestCheckinPolicyV2_LegacyGameFieldsAreReadableButNotValidatedOrStored(t *testing.T) {
+	raw := `{"version":"legacy","refresh_time":"00:00","auto_fee_bps":500,"normal":{"enabled":true,"min_bps":0,"max_bps":0},"super":{"enabled":true,"min_bps":0,"max_bps":0,"cost":"0.00000000"},"reviewed":true}`
+	policy, err := parseDailyCheckinPolicyV2(raw)
+	require.NoError(t, err)
+	require.True(t, policy.Normal.Enabled)
+	require.True(t, policy.Super.Enabled)
+	require.True(t, policy.ReviewApproved)
+	policy.Normal.MinBps = 0
+	policy.Normal.MaxBps = 0
+	policy.Super.Cost = -1
+	require.NoError(t, policy.Validate())
+
+	stored, err := policy.settingValue()
+	require.NoError(t, err)
+	require.NotContains(t, stored, `"normal"`)
+	require.NotContains(t, stored, `"super"`)
+	require.NotContains(t, stored, `"reviewed"`)
+}
+
+func TestCheckinModeAtomic_RejectsRetiredModesBeforeDependencies(t *testing.T) {
+	service := &CheckinService{}
+	for _, mode := range []CheckinMode{CheckinModeNormal, CheckinModeSuper} {
+		_, err := service.CheckInModeAtomic(context.Background(), 42, mode, nil)
+		require.ErrorIs(t, err, ErrCheckinModeRemoved)
+	}
 }
 
 func TestNextCheckinStreakFromPeriodKeepsTransitionStreak(t *testing.T) {

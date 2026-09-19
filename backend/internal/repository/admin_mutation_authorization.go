@@ -241,8 +241,13 @@ func AuthorizeAdminMutationTx(
 		return nil, err
 	}
 	if freshPrincipal == nil {
-		// Non-enforce legacy mode with an actor id still gets the locked role and
-		// target protections below, but does not invent grant semantics.
+		// Disabled mode may retain legacy compatibility for ordinary admins, but
+		// a super-admin operation still requires a live explicit principal.
+		if actor.Role == service.RoleSuperAdmin {
+			return nil, service.ErrAdminPermissionDenied
+		}
+		// Non-enforce legacy mode with an ordinary actor id still gets the locked
+		// role and target protections below, but does not invent grant semantics.
 		freshPrincipal = &service.AdminPrincipal{
 			UserID:  actor.UserID,
 			Kind:    service.AdminPrincipalKindJWT,
@@ -256,7 +261,7 @@ func AuthorizeAdminMutationTx(
 		return nil, service.ErrSuperAdminAssignmentDenied
 	}
 
-	if mode == service.AdminPermissionModeEnforce {
+	if mode == service.AdminPermissionModeEnforce || freshPrincipal.Kind == service.AdminPrincipalKindAPIKey {
 		permissionService := service.NewAdminPermissionService(nil, service.AdminPermissionModeEnforce)
 		for _, required := range opts.Permissions {
 			allowed, checkErr := permissionService.Authorize(ctx, freshPrincipal, required.Permission, required.Scope)
@@ -406,7 +411,7 @@ func freshAdminMutationPrincipal(
 		return nil, service.ErrAdminPermissionDenied
 	}
 	if !principal.Explicit {
-		if mode == service.AdminPermissionModeEnforce {
+		if actor.Role == service.RoleSuperAdmin || mode == service.AdminPermissionModeEnforce {
 			return nil, service.ErrAdminPermissionDenied
 		}
 		if principalKind == service.AdminPrincipalKindAPIKey || principal.Kind == service.AdminPrincipalKindAPIKey {

@@ -12,7 +12,6 @@
           <span>
             <span v-if="userWriteAccessState === 'loading'">{{ t('admin.users.permissions.loading') }}</span>
             <span v-else-if="userWriteAccessState === 'unknown'">{{ t('admin.users.permissions.unknown') }}</span>
-            <span v-else-if="userWriteAccessState === 'mode-off'">{{ t('admin.users.permissions.modeOff') }}</span>
             <span v-else>{{ t('admin.users.permissions.forbidden') }}</span>
           </span>
           <button
@@ -928,7 +927,7 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const showInvitationAdmin = ref(false)
 
-type UserWriteAccessState = 'loading' | 'unknown' | 'forbidden' | 'mode-off' | 'ready'
+type UserWriteAccessState = 'loading' | 'unknown' | 'forbidden' | 'ready'
 type UserMutationPermission = 'users.update' | 'users.status' | 'users.delete' | 'users.balance.adjust' | 'users.entitlement.manage'
 const permissionLoadState = ref<'loading' | 'ready' | 'unknown'>('loading')
 let permissionRequestSeq = 0
@@ -940,26 +939,15 @@ const userMutationPermissions: readonly UserMutationPermission[] = [
   'users.entitlement.manage',
 ]
 
-const hasUserManagementMetadata = (): boolean => {
-  const user = authStore.user
-  if (!user || !['enforce', 'shadow', 'disabled'].includes(user.permission_mode ?? '')) return false
-  return user.permission_mode !== 'enforce' || Array.isArray(user.permissions)
-}
-
 const canUserMutation = (permission: UserMutationPermission): boolean => {
-  const user = authStore.user
-  if (permissionLoadState.value !== 'ready' || !user || !authStore.isAdmin || !hasUserManagementMetadata()) return false
-  if (user.role !== 'super_admin' && user.permission_mode !== 'enforce') return false
+  if (permissionLoadState.value !== 'ready') return false
   return authStore.canAdmin(permission)
 }
 
 const userWriteAccessState = computed<UserWriteAccessState>(() => {
   if (permissionLoadState.value === 'loading') return 'loading'
   if (permissionLoadState.value === 'unknown') return 'unknown'
-  const user = authStore.user
-  if (!user || !authStore.isAdmin) return 'forbidden'
-  if (!hasUserManagementMetadata()) return 'unknown'
-  if (user.role !== 'super_admin' && user.permission_mode !== 'enforce') return 'mode-off'
+  if (!authStore.user || !authStore.isAdmin) return 'forbidden'
   return userMutationPermissions.some(canUserMutation) ? 'ready' : 'forbidden'
 })
 
@@ -971,7 +959,6 @@ const canManageEntitlements = computed(() => canUserMutation('users.entitlement.
 const canAssignSuperAdmin = computed(() => {
   const user = authStore.user
   return permissionLoadState.value === 'ready'
-    && hasUserManagementMetadata()
     && user?.role === 'super_admin'
     && authStore.canAdmin('security.superadmin.assign')
 })
@@ -979,7 +966,6 @@ const canAssignSuperAdmin = computed(() => {
 const writeActionTitle = (permission: UserMutationPermission): string => {
   if (userWriteAccessState.value === 'loading') return t('admin.users.permissions.loading')
   if (userWriteAccessState.value === 'unknown') return t('admin.users.permissions.unknown')
-  if (userWriteAccessState.value === 'mode-off') return t('admin.users.permissions.modeOff')
   if (!canUserMutation(permission)) return t('admin.users.permissions.forbidden')
   return ''
 }

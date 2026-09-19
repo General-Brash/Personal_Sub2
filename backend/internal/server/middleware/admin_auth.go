@@ -171,19 +171,14 @@ func validateAdminAPIKey(
 		return false
 	}
 
-	var admin *service.User
-	if principal != nil {
-		admin, err = userService.GetByID(c.Request.Context(), principal.UserID)
-		if err != nil {
-			AbortWithError(c, 401, "USER_NOT_FOUND", "Admin principal user not found")
-			return false
-		}
-	} else {
-		admin, err = userService.GetFirstAdmin(c.Request.Context())
-		if err != nil {
-			AbortWithError(c, 500, "INTERNAL_ERROR", "No admin user found")
-			return false
-		}
+	if principal == nil {
+		AbortWithError(c, 401, "ADMIN_KEY_PRINCIPAL_REQUIRED", "Admin API key has no explicit principal binding")
+		return false
+	}
+	admin, err := userService.GetByID(c.Request.Context(), principal.UserID)
+	if err != nil {
+		AbortWithError(c, 401, "USER_NOT_FOUND", "Admin principal user not found")
+		return false
 	}
 	if !SetAdminPrincipal(c, permissionService, principal) {
 		return false

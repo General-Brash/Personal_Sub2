@@ -15,8 +15,11 @@ const (
 	RoleSuperAdmin = domain.RoleSuperAdmin
 
 	AdminPermissionModeDisabled = "disabled"
-	AdminPermissionModeShadow   = "shadow"
-	AdminPermissionModeEnforce  = "enforce"
+	// AdminPermissionModeShadow is retained only so older configuration readers
+	// and callers can continue to compile. It is a legacy input alias and is
+	// always normalized to disabled; it is never an effective runtime mode.
+	AdminPermissionModeShadow  = "shadow"
+	AdminPermissionModeEnforce = "enforce"
 
 	AdminPrincipalKindJWT       = "jwt"
 	AdminPrincipalKindAPIKey    = "admin_api_key"
@@ -134,7 +137,7 @@ func NormalizeAdminPermissionMode(mode string) string {
 	case AdminPermissionModeEnforce:
 		return AdminPermissionModeEnforce
 	case AdminPermissionModeShadow:
-		return AdminPermissionModeShadow
+		return AdminPermissionModeDisabled
 	default:
 		return AdminPermissionModeDisabled
 	}
@@ -148,7 +151,7 @@ func (s *AdminPermissionService) Mode() string {
 	if s == nil {
 		return AdminPermissionModeDisabled
 	}
-	return s.mode
+	return NormalizeAdminPermissionMode(s.mode)
 }
 
 func (s *AdminPermissionService) EnabledInEnforceMode() bool {
@@ -198,6 +201,9 @@ func (s *AdminPermissionService) ResolveLegacyAPIKeyPrincipal(ctx context.Contex
 	if record == nil || record.UserID <= 0 {
 		return nil, ErrAdminPermissionEnforceNoBind
 	}
+	if record.Status != StatusActive {
+		return nil, ErrAdminPermissionEnforceNoBind
+	}
 	grants := make([]AdminGrant, 0, len(record.Grants))
 	for _, grant := range record.Grants {
 		if grant.Effect == "" {
@@ -232,15 +238,21 @@ func (s *AdminPermissionService) Authorize(_ context.Context, principal *AdminPr
 	if principal == nil || principal.UserID <= 0 {
 		return false, ErrAdminPermissionDenied
 	}
+	if principal.Role != RoleAdmin && principal.Role != RoleSuperAdmin {
+		return false, ErrAdminPermissionDenied
+	}
 	// API-key principals are always ordinary administrators and can only use
 	// the explicit scopes stored on their own binding. They never inherit the
 	// bound user's super-admin role or grants.
-	if principal.Kind == AdminPrincipalKindAPIKey && principal.Role == RoleSuperAdmin {
+	if principal.Kind == AdminPrincipalKindAPIKey && principal.Role != RoleAdmin {
 		return false, ErrAdminPermissionDenied
 	}
 	// Super-admin is an explicit role only. It never results from an implicit
 	// "first admin" lookup or a legacy API-key binding.
 	if principal.IsSuperAdmin() {
+		if principal.Kind != AdminPrincipalKindJWT {
+			return false, ErrAdminPermissionDenied
+		}
 		return true, nil
 	}
 	allowed := false
@@ -266,12 +278,23 @@ func (s *AdminPermissionService) Authorize(_ context.Context, principal *AdminPr
 
 func (s *AdminPermissionService) Capabilities(ctx context.Context, principal *AdminPrincipal, permission string) AdminCapabilities {
 	mode := s.Mode()
-	cap := AdminCapabilities{WritesEnabled: mode == AdminPermissionModeEnforce, Mode: mode}
-	if !cap.WritesEnabled {
-		cap.DenyReason = "enforcement_disabled"
+	cap := AdminCapabilities{Mode: mode}
+	if principal == nil {
+		cap.DenyReason = "principal_required"
 		return cap
 	}
-	allowed, err := s.CheckPermission(ctx, principal, permission, nil)
+	// Both effective modes support the ordinary write path. In disabled mode a
+	// human JWT admin retains the legacy role-based compatibility behavior; in
+	// enforce mode the same path is grant/scope based. API keys are always
+	// explicit-scope principals.
+	cap.WritesEnabled = true
+	var allowed bool
+	var err error
+	if strings.HasPrefix(permission, "oidc.") {
+		allowed, err = s.CheckPermission(ctx, principal, permission, nil)
+	} else {
+		allowed, err = s.AuthorizeRequest(ctx, principal, permission, nil)
+	}
 	if err != nil {
 		cap.DenyReason = "permission_denied"
 		return cap
@@ -287,20 +310,90 @@ func (s *AdminPermissionService) CheckPermission(ctx context.Context, principal 
 	if principal == nil {
 		return false, ErrAdminPermissionDenied
 	}
-	fresh, err := s.ResolvePrincipal(ctx, principal.UserID)
+	fresh, err := s.resolveCurrentPrincipal(ctx, principal)
 	if err != nil {
 		return false, err
 	}
-	if principal.Kind == AdminPrincipalKindAPIKey {
-		fresh, err = s.ResolveLegacyAPIKeyPrincipal(ctx, strings.TrimPrefix(principal.ID, "admin-key:"))
-		if err != nil {
-			return false, err
-		}
+	return authorizeExplicitGrant(fresh, permission, scope)
+}
+
+// authorizeExplicitGrant is used by security-sensitive surfaces that must not
+// inherit the ordinary human super-admin shortcut.
+func authorizeExplicitGrant(principal *AdminPrincipal, permission string, scope map[string]any) (bool, error) {
+	permission = strings.TrimSpace(permission)
+	if !IsKnownAdminPermission(permission) {
+		return false, ErrAdminPermissionUnknown
 	}
-	if fresh.Version != principal.Version {
+	if principal == nil || principal.UserID <= 0 || (principal.Role != RoleAdmin && principal.Role != RoleSuperAdmin) {
 		return false, ErrAdminPermissionDenied
 	}
+	allowed := false
+	for _, grant := range principal.Grants {
+		if strings.HasPrefix(permission, "oidc.") {
+			if grant.Permission != permission {
+				continue
+			}
+		} else if grant.Permission != permission && grant.Permission != "*" {
+			continue
+		}
+		if grant.Effect == AdminGrantDeny && len(grant.Scope) == 0 {
+			return false, nil
+		}
+		if !adminScopeContains(grant.Scope, scope) {
+			continue
+		}
+		switch grant.Effect {
+		case AdminGrantDeny:
+			return false, nil
+		case AdminGrantAllow:
+			allowed = true
+		}
+	}
+	return allowed, nil
+}
+
+// AuthorizeRequest is the ordinary backend authorization helper. OIDC
+// management must use CheckPermission directly because it has an independent
+// fail-closed boundary. For ordinary admin routes, a live human JWT admin in
+// disabled mode keeps the traditional role-based behavior; enforce mode uses
+// grants/scopes, and API-key principals always use their own explicit scopes.
+func (s *AdminPermissionService) AuthorizeRequest(ctx context.Context, principal *AdminPrincipal, permission string, scope map[string]any) (bool, error) {
+	if principal == nil {
+		return false, ErrAdminPermissionDenied
+	}
+	fresh, err := s.resolveCurrentPrincipal(ctx, principal)
+	if err != nil {
+		return false, err
+	}
+	if fresh.Kind == AdminPrincipalKindJWT && fresh.Role == RoleAdmin && s.Mode() == AdminPermissionModeDisabled {
+		return true, nil
+	}
 	return s.Authorize(ctx, fresh, permission, scope)
+}
+
+func (s *AdminPermissionService) resolveCurrentPrincipal(ctx context.Context, principal *AdminPrincipal) (*AdminPrincipal, error) {
+	if s == nil || principal == nil || principal.UserID <= 0 {
+		return nil, ErrAdminPermissionDenied
+	}
+	var (
+		fresh *AdminPrincipal
+		err   error
+	)
+	switch principal.Kind {
+	case AdminPrincipalKindAPIKey:
+		fresh, err = s.ResolveLegacyAPIKeyPrincipal(ctx, strings.TrimPrefix(principal.ID, "admin-key:"))
+	case AdminPrincipalKindJWT:
+		fresh, err = s.ResolvePrincipal(ctx, principal.UserID)
+	default:
+		return nil, ErrAdminPermissionDenied
+	}
+	if err != nil {
+		return nil, err
+	}
+	if fresh == nil || fresh.Kind != principal.Kind || fresh.UserID != principal.UserID || fresh.Version != principal.Version {
+		return nil, ErrAdminPermissionDenied
+	}
+	return fresh, nil
 }
 
 func (s *AdminPermissionService) validateTargetAdmin(ctx context.Context, actor *AdminPrincipal, targetUserID int64) (*AdminPrincipalRecord, error) {
@@ -356,7 +449,7 @@ func (s *AdminPermissionService) GrantPermission(ctx context.Context, actor *Adm
 	}
 	ctx = ContextWithAdminMutationTargetSnapshot(ctx, target.Role, target.Status)
 	if !actor.IsSuperAdmin() {
-		allowed, err := s.Authorize(ctx, actor, permission, normalizedScope)
+		allowed, err := s.AuthorizeRequest(ctx, actor, permission, normalizedScope)
 		if err != nil {
 			return err
 		}
@@ -398,7 +491,7 @@ func (s *AdminPermissionService) RevokePermission(ctx context.Context, actor *Ad
 	}
 	ctx = ContextWithAdminMutationTargetSnapshot(ctx, target.Role, target.Status)
 	if !actor.IsSuperAdmin() {
-		allowed, err := s.Authorize(ctx, actor, permission, nil)
+		allowed, err := s.AuthorizeRequest(ctx, actor, permission, nil)
 		if err != nil {
 			return err
 		}

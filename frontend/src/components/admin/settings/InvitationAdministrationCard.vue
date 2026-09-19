@@ -18,7 +18,7 @@
   </div>
   <label class="block"><span class="input-label">真实变更原因（必填）</span><input v-model.trim="reason" class="input" /></label>
   <p v-if="error" class="text-sm text-red-600" role="alert">{{error}}</p>
-  <p v-if="!canQuota && !canRelationship" class="text-sm text-amber-700">当前尚未启用权限 enforce 或没有被授予邀请管理权限。</p>
+  <p v-if="!canQuota && !canRelationship" class="text-sm text-amber-700">当前没有对应的邀请管理权限。</p>
   <BaseDialog :show="!!pending" title="确认邀请管理操作" @close="pending=null">
    <p class="text-sm leading-6">{{pending?.kind==='quota'?`将为用户 #${pending?.body.target_user_id} 增加 ${pending?.body.delta} 次邀请机会。`:`将用户 #${pending?.body.invitee_user_id} 的新邀请人补录为 #${pending?.body.inviter_user_id}。`}} 不回放历史返利。</p>
    <p class="mt-3 text-sm">原因：{{pending?.body.reason}}</p>
@@ -34,8 +34,8 @@ import {useAuthStore} from '@/stores/auth'
 import {useAppStore} from '@/stores/app'
 const auth=useAuthStore(),app=useAppStore()
 const target=ref(0),delta=ref(1),inviter=ref(0),invitee=ref(0),reason=ref(''),error=ref(''),busy=ref(false)
-const canQuota=computed(()=>auth.user?.permission_mode==='enforce'&&auth.canAdmin('invites.quota.adjust'))
-const canRelationship=computed(()=>auth.user?.permission_mode==='enforce'&&auth.canAdmin('affiliates.relationship.create'))
+const canQuota=computed(()=>auth.canAdmin('invites.quota.adjust'))
+const canRelationship=computed(()=>auth.canAdmin('affiliates.relationship.create'))
 const pending=ref<{kind:'quota'|'relationship';body:Record<string,string|number>}|null>(null)
 async function confirmAction(kind:'quota'|'relationship'){
  error.value='';busy.value=true

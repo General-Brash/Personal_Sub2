@@ -29,7 +29,7 @@ export default {
     failedToLoad: '签到状态加载失败。',
     failedToCheckIn: '签到失败，请重试。',
     auto: {
-      pending: '本周期尚未签到，可选择直接领取或已启用的博弈模式。',
+      pending: '本周期尚未签到，可选择直接领取或开启自动签到。',
       consentRequired: '自动签到规则已更新，请重新确认手续费。',
       failed: '自动签到未完成，奖励状态未确认。可用相同请求安全重试。',
       retry: '重试自动签到',

@@ -27,7 +27,7 @@ func (s *AdminPermissionService) AuthorizeInvitation(ctx context.Context, actorI
 	if !ok || principal.UserID != actorID || s == nil {
 		return ErrInvitationPermissionDenied
 	}
-	allowed, err := s.CheckPermission(ctx, principal, scope, nil)
+	allowed, err := s.AuthorizeRequest(ctx, principal, scope, nil)
 	if err != nil || !allowed {
 		return ErrInvitationPermissionDenied
 	}

@@ -22,17 +22,13 @@ func NewFeatureManagementHandler(permissions *service.AdminPermissionService, en
 	return &FeatureManagementHandler{permissions: permissions, entitlements: entitlements, settings: settings}
 }
 
-func (h *FeatureManagementHandler) authorize(c *gin.Context, permission string, write bool) (*service.AdminPrincipal, bool) {
+func (h *FeatureManagementHandler) authorize(c *gin.Context, permission string, _ bool) (*service.AdminPrincipal, bool) {
 	principal, ok := middleware.GetAdminPrincipalFromContext(c)
 	if !ok || h == nil || h.permissions == nil {
 		response.Forbidden(c, "Explicit administrator principal required")
 		return nil, false
 	}
-	if write && !h.permissions.EnabledInEnforceMode() {
-		response.Forbidden(c, "Administrator permission enforcement must be enabled before management writes")
-		return nil, false
-	}
-	allowed, err := h.permissions.CheckPermission(c.Request.Context(), principal, permission, nil)
+	allowed, err := h.permissions.AuthorizeRequest(c.Request.Context(), principal, permission, nil)
 	if err != nil || !allowed {
 		response.Forbidden(c, "Administrator permission denied")
 		return nil, false
@@ -47,10 +43,7 @@ func (h *FeatureManagementHandler) capability(c *gin.Context, permission string)
 	if h == nil || h.permissions == nil {
 		return &service.AdminCapabilities{Mode: service.AdminPermissionModeDisabled, DenyReason: "permission_service_unavailable"}
 	}
-	principal, ok := middleware.GetAdminPrincipalFromContext(c)
-	if !ok || principal == nil {
-		return &service.AdminCapabilities{WritesEnabled: h.permissions.EnabledInEnforceMode(), Mode: h.permissions.Mode(), DenyReason: "principal_required"}
-	}
+	principal, _ := middleware.GetAdminPrincipalFromContext(c)
 	cap := h.permissions.Capabilities(c.Request.Context(), principal, permission)
 	return &cap
 }

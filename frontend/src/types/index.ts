@@ -86,7 +86,7 @@ export interface User {
   wechat_bound?: boolean
   role: 'admin' | 'user' | 'super_admin' // Management identity, separate from consumer tier
   entitlement_tier?: 'standard' | 'premium'
-  permission_mode?: 'disabled' | 'shadow' | 'enforce'
+  permission_mode?: 'disabled' | 'enforce'
   permission_version?: number
   permissions?: string[]
   balance: number // User balance for API usage

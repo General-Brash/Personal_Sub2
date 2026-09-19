@@ -2,6 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"strconv"
 	"time"
 
@@ -62,7 +65,17 @@ type checkinAdminPolicyV2DTO struct {
 	NextResetAt     *time.Time                     `json:"next_reset_at,omitempty"`
 }
 
-func (dto checkinAdminPolicyV2DTO) toPolicy() (*service.DailyCheckinPolicy, *service.DailyCheckinPolicyV2, error) {
+type checkinAdminPolicyV2UpdateDTO struct {
+	Enabled         bool                   `json:"enabled"`
+	MaxRewardDay    int                    `json:"max_reward_day"`
+	RewardTiers     []checkinRewardTierDTO `json:"reward_tiers"`
+	Version         string                 `json:"version"`
+	RefreshTime     string                 `json:"refresh_time"`
+	AutoFeeBps      int                    `json:"auto_fee_bps"`
+	ExpectedVersion string                 `json:"expected_version,omitempty"`
+}
+
+func (dto checkinAdminPolicyV2UpdateDTO) toPolicy() (*service.DailyCheckinPolicy, *service.DailyCheckinPolicyV2, error) {
 	tiers := make([]service.DailyCheckinRewardTier, len(dto.RewardTiers))
 	for index, tier := range dto.RewardTiers {
 		amount, err := service.ParseStrictPositiveLedgerAmount(tier.Amount)
@@ -75,16 +88,9 @@ func (dto checkinAdminPolicyV2DTO) toPolicy() (*service.DailyCheckinPolicy, *ser
 		}
 		tiers[index] = service.DailyCheckinRewardTier{Day: tier.Day, Amount: amount, PermanentAmount: permanent}
 	}
-	cost, err := service.ParseStrictLedgerAmount(dto.Super.Cost)
-	if err != nil || cost < 0 {
-		return nil, nil, service.ErrDailyCheckinPolicyInvalid
-	}
 	return &service.DailyCheckinPolicy{Enabled: dto.Enabled, MaxRewardDay: dto.MaxRewardDay, RewardTiers: tiers},
 		&service.DailyCheckinPolicyV2{
 			Version: dto.Version, RefreshTime: dto.RefreshTime, AutoFeeBps: dto.AutoFeeBps,
-			Normal:         service.DailyCheckinRandomV2{Enabled: dto.Normal.Enabled, MinBps: dto.Normal.MinBps, MaxBps: dto.Normal.MaxBps},
-			Super:          service.DailyCheckinSuperV2{Enabled: dto.Super.Enabled, MinBps: dto.Super.MinBps, MaxBps: dto.Super.MaxBps, Cost: cost},
-			ReviewApproved: dto.Reviewed,
 		}, nil
 }
 
@@ -117,8 +123,22 @@ func (h *CheckinAdminHandler) GetSettings(c *gin.Context) {
 }
 
 func (h *CheckinAdminHandler) UpdateSettings(c *gin.Context) {
-	var dto checkinAdminPolicyV2DTO
-	if err := c.ShouldBindJSON(&dto); err != nil {
+	if c == nil {
+		return
+	}
+	if c.Request == nil || c.Request.Body == nil {
+		response.ErrorFrom(c, service.ErrDailyCheckinPolicyInvalid)
+		return
+	}
+	var dto checkinAdminPolicyV2UpdateDTO
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&dto); err != nil {
+		response.ErrorFrom(c, service.ErrDailyCheckinPolicyInvalid)
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		response.ErrorFrom(c, service.ErrDailyCheckinPolicyInvalid)
 		return
 	}

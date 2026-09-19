@@ -49,17 +49,6 @@
         </div>
       </div>
 
-      <CheckinModeDialog
-        :show="showModeDialog"
-        :base-reward="status?.next_reward_amount ?? '0.00000000'"
-        :permanent-reward="status?.next_permanent_reward_amount ?? '0.00000000'"
-        :permanent-balance="status?.permanent_balance ?? '0.00000000'"
-        :normal="normalPolicy"
-        :super-mode="superPolicy"
-        :can-afford-super="canAffordSuper"
-        @select="handleModeSelect"
-        @close="showModeDialog = false"
-      />
       <CheckinConsentDialog
         :show="showConsentDialog"
         :fee-bps="status?.auto_fee_bps ?? 500"
@@ -342,16 +331,13 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import CheckinSettingsCard from '@/components/admin/settings/CheckinSettingsCard.vue'
-import CheckinModeDialog from '@/components/checkin/CheckinModeDialog.vue'
 import CheckinConsentDialog from '@/components/checkin/CheckinConsentDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import {
   checkIn,
-  checkInMode,
   getCheckinStatus,
   updateCheckinPreference,
   type CheckinCalendarEntry,
-  type CheckinMode,
   type CheckinResult,
   type CheckinStatus,
 } from '@/api/checkin'
@@ -379,7 +365,6 @@ const loading = ref(true)
 const loadFailed = ref(false)
 const submitting = ref(false)
 const showCheckinSettings = ref(false)
-const showModeDialog = ref(false)
 const showConsentDialog = ref(false)
 const preferenceSaving = ref(false)
 const currentMonth = ref(getBeijingDate().slice(0, 7))
@@ -400,18 +385,6 @@ const checkInButtonLabel = computed(() => {
 const temporaryCreditText = computed(() => status.value ? formatCredit(status.value.temporary_credit_available) : '')
 const rewardTiers = computed(() => status.value?.reward_tiers ?? [])
 const rewardTierCapDay = computed(() => rewardTiers.value[rewardTiers.value.length - 1]?.day ?? 0)
-const normalPolicy = computed(() => ({
-  enabled: Boolean(status.value?.normal_enabled),
-  min_bps: status.value?.normal_min_bps ?? 10000,
-  max_bps: status.value?.normal_max_bps ?? 10000,
-}))
-const superPolicy = computed(() => ({
-  enabled: Boolean(status.value?.super_enabled),
-  min_bps: status.value?.super_min_bps ?? 10000,
-  max_bps: status.value?.super_max_bps ?? 10000,
-  cost: status.value?.super_cost ?? '0.00000000',
-}))
-const canAffordSuper = computed(() => Boolean(status.value?.can_afford_super))
 const rewardGuideVisible = computed(
   () => rewardGuideHovered.value || rewardGuideFocused.value || rewardGuidePinned.value,
 )
@@ -494,42 +467,18 @@ function handleDocumentPointerDown(event: PointerEvent) {
 async function handleCheckIn() {
   if (!canCheckIn.value) return
   if (status.value?.auto_enabled) {
-    appStore.showError('自动签到已开启，不支持手动改为普通或超级博弈')
+    appStore.showError('自动签到已开启，请先关闭自动签到后再手动签到')
     return
   }
-  // Keep the pre-v2 API/tests on the legacy empty-body direct request. New
-  // server responses always include business_period_id and use the dialog.
-  if (!status.value?.business_period_id) {
-    submitting.value = true
-    try {
-      const result = await checkIn(getOrCreateIdempotencyKey('direct'))
-      applyCheckinResult(result)
-      lastCheckinResult.value = result
-      appStore.showSuccess(t(result.already_checked_in ? 'checkin.alreadyCheckedIn' : 'checkin.checkInSucceeded'))
-      await Promise.all([loadStatus(), refreshUserSilently()])
-    } catch (error) {
-      console.error('Failed to complete daily check-in:', error)
-      appStore.showError(t('checkin.failedToCheckIn'))
-    } finally {
-      submitting.value = false
-    }
-    return
-  }
-  showModeDialog.value = true
-}
-
-async function handleModeSelect(mode: Exclude<CheckinMode, 'direct-auto'>) {
-  if (!canCheckIn.value) return
   submitting.value = true
   try {
-    const result = await checkInMode(getOrCreateIdempotencyKey(mode), mode, status.value?.policy_version)
-    showModeDialog.value = false
+    const result = await checkIn(getOrCreateIdempotencyKey())
     applyCheckinResult(result)
     lastCheckinResult.value = result
     appStore.showSuccess(t(result.already_checked_in ? 'checkin.alreadyCheckedIn' : 'checkin.checkInSucceeded'))
     await Promise.all([loadStatus(), refreshUserSilently()])
   } catch (error) {
-    console.error('Failed to complete selected daily check-in:', error)
+    console.error('Failed to complete daily check-in:', error)
     appStore.showError(t('checkin.failedToCheckIn'))
   } finally {
     submitting.value = false
@@ -618,7 +567,7 @@ function applyCheckinResult(result: CheckinResult) {
   }
 }
 
-function getOrCreateIdempotencyKey(mode: CheckinMode = 'direct'): string {
+function getOrCreateIdempotencyKey(mode: 'direct' = 'direct'): string {
   const businessDate = getBeijingDate()
   const storedDate = localStorage.getItem(idempotencyDateStorage)
   const storedMode = localStorage.getItem(`${idempotencyKeyStorage}-mode`)

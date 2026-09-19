@@ -116,12 +116,13 @@ func authorizeAdminPermission(ctx context.Context, s *adminServiceImpl, actorID 
 	if permissionService := AdminAuthorizationService(ctx); permissionService != nil {
 		mode = permissionService.Mode()
 	}
-	if mode != AdminPermissionModeEnforce {
-		return nil
-	}
 	principal, ok := AdminPrincipalFromContext(ctx)
-	if !ok || principal.UserID != actorID {
+	apiKey := ok && principal != nil && principal.Kind == AdminPrincipalKindAPIKey
+	if !ok || principal == nil || principal.UserID != actorID {
 		return ErrAdminPermissionDenied
+	}
+	if mode != AdminPermissionModeEnforce && !apiKey {
+		return nil
 	}
 	return AuthorizeAdminRequest(ctx, permission, nil)
 }

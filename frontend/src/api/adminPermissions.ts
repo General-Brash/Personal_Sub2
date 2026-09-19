@@ -18,7 +18,7 @@ export interface AdminPermissionGrant {
 export interface AdminCapabilities {
   writes_enabled: boolean
   can_write: boolean
-  mode: 'disabled' | 'shadow' | 'enforce'
+  mode: 'disabled' | 'enforce'
   deny_reason?: string
 }
 

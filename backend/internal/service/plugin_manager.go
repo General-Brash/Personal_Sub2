@@ -830,7 +830,7 @@ func (m *PluginManager) CreateUIAssetToken(ctx context.Context, id int64, ttl ti
 	}
 	expires := time.Now().Add(ttl)
 	principal, _ := AdminPrincipalFromContext(ctx)
-	if AdminPermissionModeFromEnv() == AdminPermissionModeEnforce {
+	if AdminPermissionModeFromEnv() == AdminPermissionModeEnforce || principal != nil {
 		if principal == nil || AuthorizeAdminRequest(ctx, "plugins.execute", map[string]any{"plugin_id": id, "plugins_ids": id, "id": id}) != nil {
 			return "", time.Time{}, ErrAdminPermissionDenied
 		}

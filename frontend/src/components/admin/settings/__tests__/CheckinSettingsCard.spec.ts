@@ -288,20 +288,21 @@ describe('CheckinSettingsCard', () => {
     expect(getCheckinSettings).toHaveBeenCalledTimes(2)
     expect(wrapper.find('[data-testid="checkin-settings-error"]').exists()).toBe(false)
   })
-  it('edits percent and x units but sends exact integer bps to the API', async () => {
+  it('edits the automatic fee and omits retired game fields from writes', async () => {
     const wrapper = mount(CheckinSettingsCard)
     await flushPromises()
     expect((wrapper.get('[data-testid="checkin-auto-fee-percent"]').element as HTMLInputElement).value).toBe('5.00')
-    expect((wrapper.get('[data-testid="checkin-normal-min-multiplier"]').element as HTMLInputElement).value).toBe('1.00')
+    expect(wrapper.find('[data-testid="checkin-normal-min-multiplier"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="checkin-super-cost"]').exists()).toBe(false)
     await wrapper.get('[data-testid="checkin-auto-fee-percent"]').setValue('10.00')
-    await wrapper.get('[data-testid="checkin-normal-min-multiplier"]').setValue('0.8001')
-    await wrapper.get('[data-testid="checkin-normal-max-multiplier"]').setValue('1.50')
     await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
     await flushPromises()
-    expect(updateCheckinSettings).toHaveBeenCalledWith(expect.objectContaining({
-      auto_fee_bps: 1000,
-      normal: expect.objectContaining({ min_bps: 8001, max_bps: 15000 }),
-    }))
+
+    const payload = updateCheckinSettings.mock.calls[0]?.[0]
+    expect(payload.auto_fee_bps).toBe(1000)
+    expect(payload).not.toHaveProperty('normal')
+    expect(payload).not.toHaveProperty('super')
+    expect(payload).not.toHaveProperty('reviewed')
   })
 
   it('does not silently round a fractional basis point during percentage input', async () => {

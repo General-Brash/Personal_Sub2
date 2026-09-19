@@ -17,15 +17,17 @@ import (
 const (
 	SettingKeyDailyCheckinPolicyV2 = "daily_checkin_policy_v2"
 
-	defaultCheckinAutoFeeBps = 500
-	defaultCheckinRandomBps  = 10000
-	checkinMaxMultiplierBps  = 1000000
+	defaultCheckinAutoFeeBps               = 500
+	defaultCheckinRandomBps                = 10000
+	checkinMaxMultiplierBps                = 1000000
+	checkinPolicyCanonicalizationVersionV1 = "checkin-effective-v1"
 )
 
 var (
 	ErrCheckinPreferenceInvalid  = infraerrors.BadRequest("INVALID_CHECKIN_PREFERENCE", "checkin preference is invalid")
 	ErrCheckinConsentRequired    = infraerrors.Conflict("CHECKIN_CONSENT_REQUIRED", "current automatic-checkin consent is required")
-	ErrCheckinAutoModeConflict   = infraerrors.Conflict("CHECKIN_AUTO_MODE_CONFLICT", "automatic check-in is enabled; normal and super modes are unavailable")
+	ErrCheckinModeRemoved        = infraerrors.Conflict("CHECKIN_MODE_REMOVED", "check-in game modes have been retired; use direct check-in")
+	ErrCheckinAutoModeConflict   = infraerrors.Conflict("CHECKIN_AUTO_MODE_CONFLICT", "automatic check-in is enabled; manual direct check-in is unavailable")
 	ErrCheckinModeDisabled       = infraerrors.Conflict("CHECKIN_MODE_DISABLED", "check-in mode is disabled")
 	ErrCheckinAlreadyCompleted   = infraerrors.Conflict("CHECKIN_ALREADY_COMPLETED", "check-in already completed for this period")
 	ErrCheckinRewardZero         = infraerrors.Conflict("CHECKIN_REWARD_ZERO", "check-in reward is zero")
@@ -49,27 +51,27 @@ func normalizeCheckinMode(mode CheckinMode) (CheckinMode, error) {
 		return CheckinModeDirect, nil
 	case CheckinModeDirectAuto:
 		return CheckinModeDirectAuto, nil
-	case CheckinModeNormal:
-		return CheckinModeNormal, nil
-	case CheckinModeSuper:
-		return CheckinModeSuper, nil
+	case CheckinModeNormal, CheckinModeSuper:
+		return "", ErrCheckinModeRemoved
 	default:
 		return "", infraerrors.BadRequest("INVALID_CHECKIN_MODE", "checkin mode is invalid")
 	}
 }
 
-// DailyCheckinPolicy keeps the legacy reward-tier fields unchanged and carries
-// the additive v2 policy only when it was explicitly loaded by a v2 service.
+// DailyCheckinPolicyV2 keeps the legacy normal/super/reviewed fields readable
+// for old settings and history, but those fields are no longer active policy.
 type DailyCheckinPolicyV2 struct {
-	Version            string                 `json:"version"`
-	RefreshTime        string                 `json:"refresh_time"`
-	AutoFeeBps         int                    `json:"auto_fee_bps"`
-	Normal             DailyCheckinRandomV2   `json:"normal"`
-	Super              DailyCheckinSuperV2    `json:"super"`
-	PendingRefresh     *DailyCheckinPendingV2 `json:"pending_refresh,omitempty"`
-	RefreshEffectiveAt *time.Time             `json:"-"`
-	ReviewApproved     bool                   `json:"-"`
-	Configured         bool                   `json:"-"`
+	Version              string                        `json:"version"`
+	RefreshTime          string                        `json:"refresh_time"`
+	AutoFeeBps           int                           `json:"auto_fee_bps"`
+	Normal               DailyCheckinRandomV2          `json:"normal"`
+	Super                DailyCheckinSuperV2           `json:"super"`
+	PendingRefresh       *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
+	RefreshEffectiveAt   *time.Time                    `json:"-"`
+	ReviewApproved       bool                          `json:"-"`
+	Configured           bool                          `json:"-"`
+	ConsentCompatibility []checkinConsentCompatibility `json:"-"`
+	legacyGameFields     bool                          `json:"-"`
 }
 
 type DailyCheckinRandomV2 struct {
@@ -91,14 +93,29 @@ type DailyCheckinPendingV2 struct {
 }
 
 type checkinPolicyV2Wire struct {
-	Version            string                 `json:"version"`
-	RefreshTime        string                 `json:"refresh_time"`
-	AutoFeeBps         int                    `json:"auto_fee_bps"`
-	Normal             DailyCheckinRandomV2   `json:"normal"`
-	Super              DailyCheckinSuperWire  `json:"super"`
-	PendingRefresh     *DailyCheckinPendingV2 `json:"pending_refresh,omitempty"`
-	RefreshEffectiveAt *time.Time             `json:"refresh_effective_at,omitempty"`
-	Reviewed           bool                   `json:"reviewed,omitempty"`
+	Version              string                        `json:"version"`
+	RefreshTime          string                        `json:"refresh_time"`
+	AutoFeeBps           *int                          `json:"auto_fee_bps"`
+	Normal               json.RawMessage               `json:"normal"`
+	Super                json.RawMessage               `json:"super"`
+	PendingRefresh       *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
+	RefreshEffectiveAt   *time.Time                    `json:"refresh_effective_at,omitempty"`
+	Reviewed             json.RawMessage               `json:"reviewed"`
+	ConsentCompatibility []checkinConsentCompatibility `json:"consent_compatibility,omitempty"`
+}
+
+type checkinPolicyV2StoredWire struct {
+	Version              string                        `json:"version"`
+	RefreshTime          string                        `json:"refresh_time"`
+	AutoFeeBps           int                           `json:"auto_fee_bps"`
+	PendingRefresh       *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
+	RefreshEffectiveAt   *time.Time                    `json:"refresh_effective_at,omitempty"`
+	ConsentCompatibility []checkinConsentCompatibility `json:"consent_compatibility,omitempty"`
+}
+
+type checkinConsentCompatibility struct {
+	ConsentVersion string `json:"consent_version"`
+	PolicyVersion  string `json:"policy_version"`
 }
 
 type DailyCheckinSuperWire struct {
@@ -128,21 +145,6 @@ func (p DailyCheckinPolicyV2) Validate() error {
 		return ErrDailyCheckinPolicyInvalid
 	}
 	if p.AutoFeeBps < 0 || p.AutoFeeBps > 10000 {
-		return ErrDailyCheckinPolicyInvalid
-	}
-	if err := validateCheckinRandomRange(p.Normal.MinBps, p.Normal.MaxBps); err != nil {
-		return err
-	}
-	if err := validateCheckinRandomRange(p.Super.MinBps, p.Super.MaxBps); err != nil {
-		return err
-	}
-	if (p.Normal.Enabled || p.Super.Enabled) && !p.ReviewApproved {
-		return ErrDailyCheckinPolicyInvalid
-	}
-	if err := validateCheckinV2LedgerAmount(p.Super.Cost); err != nil {
-		return ErrDailyCheckinPolicyInvalid
-	}
-	if p.Super.Enabled && p.Super.Cost <= 0 {
 		return ErrDailyCheckinPolicyInvalid
 	}
 	if p.PendingRefresh != nil {
@@ -199,20 +201,41 @@ func parseDailyCheckinPolicyV2(raw string) (DailyCheckinPolicyV2, error) {
 	if err := json.Unmarshal([]byte(raw), &wire); err != nil {
 		return DailyCheckinPolicyV2{}, ErrDailyCheckinPolicyInvalid
 	}
-	cost, err := ParseStrictLedgerAmount(strings.TrimSpace(wire.Super.Cost))
-	if err != nil || cost < 0 {
+	if wire.AutoFeeBps == nil {
 		return DailyCheckinPolicyV2{}, ErrDailyCheckinPolicyInvalid
 	}
+
+	// These fields are intentionally best-effort compatibility reads. Their
+	// values no longer affect runtime rewards, consent, or validation, and they
+	// are omitted by settingValue when the policy is saved again.
+	var normal DailyCheckinRandomV2
+	if len(wire.Normal) > 0 {
+		_ = json.Unmarshal(wire.Normal, &normal)
+	}
+	var superWire DailyCheckinSuperWire
+	if len(wire.Super) > 0 {
+		_ = json.Unmarshal(wire.Super, &superWire)
+	}
+	cost := 0.0
+	if parsed, parseErr := ParseStrictLedgerAmount(strings.TrimSpace(superWire.Cost)); parseErr == nil && parsed >= 0 {
+		cost = parsed
+	}
+	reviewed := false
+	if len(wire.Reviewed) > 0 {
+		_ = json.Unmarshal(wire.Reviewed, &reviewed)
+	}
 	policy := DailyCheckinPolicyV2{
-		Version:            strings.TrimSpace(wire.Version),
-		RefreshTime:        strings.TrimSpace(wire.RefreshTime),
-		AutoFeeBps:         wire.AutoFeeBps,
-		Normal:             wire.Normal,
-		Super:              DailyCheckinSuperV2{Enabled: wire.Super.Enabled, MinBps: wire.Super.MinBps, MaxBps: wire.Super.MaxBps, Cost: cost},
-		PendingRefresh:     wire.PendingRefresh,
-		RefreshEffectiveAt: wire.RefreshEffectiveAt,
-		ReviewApproved:     wire.Reviewed,
-		Configured:         true,
+		Version:              strings.TrimSpace(wire.Version),
+		RefreshTime:          strings.TrimSpace(wire.RefreshTime),
+		AutoFeeBps:           *wire.AutoFeeBps,
+		Normal:               normal,
+		Super:                DailyCheckinSuperV2{Enabled: superWire.Enabled, MinBps: superWire.MinBps, MaxBps: superWire.MaxBps, Cost: cost},
+		PendingRefresh:       wire.PendingRefresh,
+		RefreshEffectiveAt:   wire.RefreshEffectiveAt,
+		ReviewApproved:       reviewed,
+		Configured:           true,
+		ConsentCompatibility: normalizeCheckinConsentCompatibility(wire.ConsentCompatibility),
+		legacyGameFields:     len(wire.Normal) > 0 || len(wire.Super) > 0 || len(wire.Reviewed) > 0,
 	}
 	if policy.Version == "" {
 		policy.Version = "checkin-v2"
@@ -227,15 +250,13 @@ func (p DailyCheckinPolicyV2) settingValue() (string, error) {
 	if err := p.Validate(); err != nil {
 		return "", err
 	}
-	wire := checkinPolicyV2Wire{
-		Version:            p.Version,
-		RefreshTime:        p.RefreshTime,
-		AutoFeeBps:         p.AutoFeeBps,
-		Normal:             p.Normal,
-		Super:              DailyCheckinSuperWire{Enabled: p.Super.Enabled, MinBps: p.Super.MinBps, MaxBps: p.Super.MaxBps, Cost: formatLedgerAmount(p.Super.Cost)},
-		PendingRefresh:     p.PendingRefresh,
-		RefreshEffectiveAt: p.RefreshEffectiveAt,
-		Reviewed:           p.ReviewApproved,
+	wire := checkinPolicyV2StoredWire{
+		Version:              p.Version,
+		RefreshTime:          p.RefreshTime,
+		AutoFeeBps:           p.AutoFeeBps,
+		PendingRefresh:       p.PendingRefresh,
+		RefreshEffectiveAt:   p.RefreshEffectiveAt,
+		ConsentCompatibility: normalizeCheckinConsentCompatibility(p.ConsentCompatibility),
 	}
 	raw, err := json.Marshal(wire)
 	if err != nil {
@@ -255,7 +276,7 @@ func (p DailyCheckinPolicyV2) EffectiveAt(now time.Time) DailyCheckinPolicyV2 {
 	return effective
 }
 
-type checkinPolicyRuleVersionWire struct {
+type legacyCheckinPolicyRuleVersionWire struct {
 	Enabled            bool                          `json:"enabled"`
 	MaxRewardDay       int                           `json:"max_reward_day"`
 	RewardTiers        []dailyCheckinRewardTierValue `json:"reward_tiers"`
@@ -268,10 +289,25 @@ type checkinPolicyRuleVersionWire struct {
 	Reviewed           bool                          `json:"reviewed"`
 }
 
-// EffectiveCheckinPolicyVersion is a deterministic fingerprint of every rule
-// that can change rewards or consent. It intentionally includes the legacy base
-// reward tiers so an old admin endpoint cannot advance the clock of the V2
-// policy without invalidating consent.
+type checkinPolicyRuleVersionWire struct {
+	Canonicalization   string                        `json:"canonicalization"`
+	Enabled            bool                          `json:"enabled"`
+	MaxRewardDay       int                           `json:"max_reward_day"`
+	RewardTiers        []dailyCheckinRewardTierValue `json:"reward_tiers"`
+	RefreshTime        string                        `json:"refresh_time"`
+	AutoFeeBps         int                           `json:"auto_fee_bps"`
+	PendingRefresh     *checkinPendingRefreshVersion `json:"pending_refresh,omitempty"`
+	RefreshEffectiveAt string                        `json:"refresh_effective_at,omitempty"`
+}
+
+type checkinPendingRefreshVersion struct {
+	RefreshTime string `json:"refresh_time"`
+	EffectiveAt string `json:"effective_at"`
+}
+
+// EffectiveCheckinPolicyVersion is a deterministic fingerprint of the active
+// direct/direct-auto policy only. Deprecated normal/super/reviewed settings are
+// intentionally excluded so they cannot silently invalidate automatic consent.
 func EffectiveCheckinPolicyVersion(base *DailyCheckinPolicy, extended DailyCheckinPolicyV2) string {
 	tiers := make([]dailyCheckinRewardTierValue, 0)
 	if base != nil {
@@ -284,11 +320,22 @@ func EffectiveCheckinPolicyVersion(base *DailyCheckinPolicy, extended DailyCheck
 			}
 		}
 	}
+	var pending *checkinPendingRefreshVersion
+	if extended.PendingRefresh != nil {
+		pending = &checkinPendingRefreshVersion{
+			RefreshTime: strings.TrimSpace(extended.PendingRefresh.RefreshTime),
+			EffectiveAt: canonicalCheckinTime(extended.PendingRefresh.EffectiveAt),
+		}
+	}
 	wire := checkinPolicyRuleVersionWire{
-		Enabled: base != nil && base.Enabled, MaxRewardDay: 0, RewardTiers: tiers,
-		RefreshTime: extended.RefreshTime, AutoFeeBps: extended.AutoFeeBps,
-		Normal: extended.Normal, Super: extended.Super,
-		PendingRefresh: extended.PendingRefresh, RefreshEffectiveAt: extended.RefreshEffectiveAt, Reviewed: extended.ReviewApproved,
+		Canonicalization:   checkinPolicyCanonicalizationVersionV1,
+		Enabled:            base != nil && base.Enabled,
+		MaxRewardDay:       0,
+		RewardTiers:        tiers,
+		RefreshTime:        strings.TrimSpace(extended.RefreshTime),
+		AutoFeeBps:         extended.AutoFeeBps,
+		PendingRefresh:     pending,
+		RefreshEffectiveAt: canonicalCheckinTimePtr(extended.RefreshEffectiveAt),
 	}
 	if base != nil {
 		wire.MaxRewardDay = base.MaxRewardDay
@@ -298,12 +345,103 @@ func EffectiveCheckinPolicyVersion(base *DailyCheckinPolicy, extended DailyCheck
 	return "checkin-v2-" + hex.EncodeToString(sum[:12])
 }
 
+func legacyCheckinConsentVersion(base *DailyCheckinPolicy, extended DailyCheckinPolicyV2) string {
+	tiers := make([]dailyCheckinRewardTierValue, 0)
+	maxRewardDay := 0
+	enabled := false
+	if base != nil {
+		enabled = base.Enabled
+		maxRewardDay = base.MaxRewardDay
+		tiers = make([]dailyCheckinRewardTierValue, len(base.RewardTiers))
+		for index, tier := range base.RewardTiers {
+			tiers[index] = dailyCheckinRewardTierValue{
+				Day:             tier.Day,
+				Amount:          formatLedgerAmount(tier.Amount),
+				PermanentAmount: formatLedgerAmount(tier.PermanentAmount),
+			}
+		}
+	}
+	wire := legacyCheckinPolicyRuleVersionWire{
+		Enabled:            enabled,
+		MaxRewardDay:       maxRewardDay,
+		RewardTiers:        tiers,
+		RefreshTime:        extended.RefreshTime,
+		AutoFeeBps:         extended.AutoFeeBps,
+		Normal:             extended.Normal,
+		Super:              extended.Super,
+		PendingRefresh:     extended.PendingRefresh,
+		RefreshEffectiveAt: extended.RefreshEffectiveAt,
+		Reviewed:           extended.ReviewApproved,
+	}
+	raw, _ := json.Marshal(wire)
+	sum := sha256.Sum256(raw)
+	return fmt.Sprintf("checkin-v2-%s:auto-fee:%d", hex.EncodeToString(sum[:12]), extended.AutoFeeBps)
+}
+
+func normalizeCheckinConsentCompatibility(values []checkinConsentCompatibility) []checkinConsentCompatibility {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]checkinConsentCompatibility, 0, len(values))
+	for _, value := range values {
+		value.ConsentVersion = strings.TrimSpace(value.ConsentVersion)
+		value.PolicyVersion = strings.TrimSpace(value.PolicyVersion)
+		if value.ConsentVersion == "" || value.PolicyVersion == "" {
+			continue
+		}
+		key := value.ConsentVersion + "\x00" + value.PolicyVersion
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, value)
+	}
+	return normalized
+}
+
+func addCheckinConsentCompatibility(values []checkinConsentCompatibility, consentVersion, policyVersion string) []checkinConsentCompatibility {
+	values = append(values, checkinConsentCompatibility{
+		ConsentVersion: strings.TrimSpace(consentVersion),
+		PolicyVersion:  strings.TrimSpace(policyVersion),
+	})
+	return normalizeCheckinConsentCompatibility(values)
+}
+
+func canonicalCheckinTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func canonicalCheckinTimePtr(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return canonicalCheckinTime(*value)
+}
+
 func (p DailyCheckinPolicyV2) ConsentVersion() string {
 	version := strings.TrimSpace(p.Version)
 	if version == "" {
-		version = "checkin-v2"
+		version = "checkin-v2-" + checkinPolicyCanonicalizationVersionV1
 	}
-	return fmt.Sprintf("%s:auto-fee:%d", version, p.AutoFeeBps)
+	return version
+}
+
+func (p DailyCheckinPolicyV2) AcceptsConsentVersion(version string) bool {
+	version = strings.TrimSpace(version)
+	current := p.ConsentVersion()
+	if version == current {
+		return true
+	}
+	for _, compatible := range p.ConsentCompatibility {
+		if compatible.ConsentVersion == version && compatible.PolicyVersion == current {
+			return true
+		}
+	}
+	return false
 }
 
 type CheckinPeriod struct {
@@ -366,6 +504,13 @@ func parseCheckinPolicyBundle(values map[string]string) (*DailyCheckinPolicy, Da
 		return nil, DailyCheckinPolicyV2{}, err
 	}
 	extended.Version = EffectiveCheckinPolicyVersion(base, extended)
+	if extended.legacyGameFields {
+		extended.ConsentCompatibility = addCheckinConsentCompatibility(
+			extended.ConsentCompatibility,
+			legacyCheckinConsentVersion(base, extended),
+			extended.Version,
+		)
+	}
 	return base, extended, nil
 }
 
@@ -415,11 +560,18 @@ func (s *SettingService) UpdateDailyCheckinPolicyV2(ctx context.Context, policy 
 	if err != nil {
 		return err
 	}
-	if err := prepareCheckinPolicyV2Change(currentBase, current, extended, expected, time.Now()); err != nil {
+	now := time.Now()
+	if err := prepareCheckinPolicyV2Change(currentBase, current, extended, expected, now); err != nil {
 		return err
 	}
 
-	extended.Version = EffectiveCheckinPolicyVersion(policy, *extended)
+	nextVersion := EffectiveCheckinPolicyVersion(policy, *extended)
+	if nextVersion == activeCheckinPolicyVersion(currentBase, current, now) {
+		extended.ConsentCompatibility = current.ConsentCompatibility
+	} else {
+		extended.ConsentCompatibility = nil
+	}
+	extended.Version = nextVersion
 	raw, err := extended.settingValue()
 	if err != nil {
 		return err
@@ -443,9 +595,13 @@ func (s *SettingService) UpdateDailyCheckinPolicyV2(ctx context.Context, policy 
 // Crossing a pending boundary invalidates an old form without guessing whether
 // the old clock was an intentional edit. Customer consent still uses the raw
 // policy version and is not changed merely by this read-only projection.
+func activeCheckinPolicyVersion(base *DailyCheckinPolicy, policy DailyCheckinPolicyV2, now time.Time) string {
+	return EffectiveCheckinPolicyVersion(base, policy.EffectiveAt(now))
+}
+
 func checkinAdminPolicyView(base *DailyCheckinPolicy, policy DailyCheckinPolicyV2, now time.Time) DailyCheckinPolicyV2 {
 	view := policy.EffectiveAt(now)
-	view.Version = EffectiveCheckinPolicyVersion(base, view)
+	view.Version = activeCheckinPolicyVersion(base, policy, now)
 	return view
 }
 

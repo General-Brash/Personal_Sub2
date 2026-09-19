@@ -30,16 +30,14 @@ const auth = useAuthStore(), app = useAppStore()
 const policy = ref<Policy | null>(null), loading = ref(false), saving = ref(false), error = ref(''), notice = ref(''), requiresReload = ref(false)
 const permissionState = ref<'loading' | 'ready' | 'unknown'>('loading')
 let alive = true, sequence = 0
-type AccessState = 'loading' | 'unknown' | 'mode-off' | 'forbidden' | 'ready'
+type AccessState = 'loading' | 'unknown' | 'forbidden' | 'ready'
 const accessState = computed<AccessState>(() => {
   if (loading.value || permissionState.value === 'loading') return 'loading'
-  if (permissionState.value !== 'ready' || !auth.user || !['enforce', 'shadow', 'disabled'].includes(auth.user.permission_mode ?? '')) return 'unknown'
-  if (auth.user.permission_mode !== 'enforce') return 'mode-off'
-  if (!Array.isArray(auth.user.permissions)) return 'unknown'
+  if (permissionState.value !== 'ready' || !auth.user) return 'unknown'
   return auth.canAdmin('system.settings.manage') ? 'ready' : 'forbidden'
 })
 const canEdit = computed(() => accessState.value === 'ready' && !saving.value && !requiresReload.value && !!policy.value)
-const accessMessage = computed(() => ({ loading: '正在核验 system.settings.manage 写入能力。', unknown: '写入能力未知，请重新读取；不会把能力缺失当作 enforce 已关闭。', 'mode-off': 'enforce 未开启，当前设置只读。', forbidden: '当前没有 system.settings.manage 权限，不能保存功能设置。', ready: requiresReload.value ? '请先重新读取当前版本，再确认是否需要写入。' : '已核验 system.settings.manage 写入权限。' })[accessState.value])
+const accessMessage = computed(() => ({ loading: '正在核验 system.settings.manage 写入能力。', unknown: '写入能力未知，请重新读取。', forbidden: '当前没有 system.settings.manage 权限，不能保存功能设置。', ready: requiresReload.value ? '请先重新读取当前版本，再确认是否需要写入。' : '已核验 system.settings.manage 写入权限。' })[accessState.value])
 function statusOf(value: unknown): number | undefined { const error = value as { status?: number; response?: { status?: number } }; return error?.response?.status ?? error?.status }
 async function load(): Promise<boolean> {
   const current = ++sequence, wasUncertain = requiresReload.value

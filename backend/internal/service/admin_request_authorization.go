@@ -78,7 +78,7 @@ func AuthorizeAdminRequest(ctx context.Context, permission string, scope map[str
 	if svc == nil || !ok {
 		return ErrAdminPermissionDenied
 	}
-	allowed, err := svc.CheckPermission(ctx, principal, permission, scope)
+	allowed, err := svc.AuthorizeRequest(ctx, principal, permission, scope)
 	if err != nil || !allowed {
 		return ErrAdminPermissionDenied
 	}
@@ -87,8 +87,11 @@ func AuthorizeAdminRequest(ctx context.Context, permission string, scope map[str
 
 func RecheckAdminStream(ctx context.Context) error {
 	svc, _ := ctx.Value(adminAuthorizationContextKey{}).(*AdminPermissionService)
-	if svc == nil || svc.Mode() != AdminPermissionModeEnforce {
+	if svc == nil {
 		return nil
+	}
+	if _, hasPrincipal := AdminPrincipalFromContext(ctx); !hasPrincipal {
+		return ErrAdminPermissionDenied
 	}
 	if err := AuthorizeAdminRequest(ctx, "ops.read", nil); err != nil {
 		return errors.New("administrator stream permission revoked")

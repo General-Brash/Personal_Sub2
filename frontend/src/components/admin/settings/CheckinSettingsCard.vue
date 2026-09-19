@@ -58,34 +58,6 @@
         </div>
       </div>
 
-      <div class="grid gap-4 rounded-lg border border-gray-200 p-4 sm:grid-cols-2 dark:border-dark-600">
-        <div class="space-y-3">
-          <div class="flex items-center justify-between gap-3">
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">普通博弈</span>
-            <Toggle v-model="form.normal.enabled" data-testid="checkin-normal-enabled" aria-label="普通博弈" />
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="input-label">最小倍率（x）<input v-model="normalMinMultiplier" data-testid="checkin-normal-min-multiplier" type="number" min="0.0001" :max="form.normal.max_bps / 10000" step="0.0001" required class="input mt-1" /></label>
-            <label class="input-label">最大倍率（x）<input v-model="normalMaxMultiplier" data-testid="checkin-normal-max-multiplier" type="number" :min="form.normal.min_bps / 10000" max="100" step="0.0001" required class="input mt-1" /></label>
-          </div>
-        </div>
-        <div class="space-y-3">
-          <div class="flex items-center justify-between gap-3">
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">超级博弈</span>
-            <Toggle v-model="form.super.enabled" data-testid="checkin-super-enabled" aria-label="超级博弈" />
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="input-label">最小倍率（x）<input v-model="superMinMultiplier" data-testid="checkin-super-min-multiplier" type="number" min="0.0001" :max="form.super.max_bps / 10000" step="0.0001" required class="input mt-1" /></label>
-            <label class="input-label">最大倍率（x）<input v-model="superMaxMultiplier" data-testid="checkin-super-max-multiplier" type="number" :min="form.super.min_bps / 10000" max="100" step="0.0001" required class="input mt-1" /></label>
-          </div>
-          <label class="input-label">永久成本<input v-model="form.super.cost" data-testid="checkin-super-cost" type="text" inputmode="decimal" required class="input mt-1 font-mono" @blur="form.super.cost = formatEditableAmount(form.super.cost)" /></label>
-        </div>
-        <div class="flex items-center justify-between gap-3 sm:col-span-2">
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">随机功能已完成合规复核</span>
-          <Toggle v-model="form.reviewed" data-testid="checkin-reviewed" aria-label="随机功能已完成合规复核" />
-        </div>
-      </div>
-
       <p data-testid="checkin-policy-effective-preview" class="rounded-lg bg-gray-50 p-3 text-sm text-gray-600 dark:bg-dark-800 dark:text-gray-300">
         {{ effectivePreview }}
       </p>
@@ -196,7 +168,7 @@ const props = withDefaults(defineProps<{
   showHeader: true,
 })
 
-type CheckinSettingsForm = CheckinAdminSettings
+type CheckinSettingsForm = Omit<CheckinAdminSettings, 'reviewed' | 'normal' | 'super'>
 
 const loading = ref(true)
 const saving = ref(false)
@@ -212,9 +184,6 @@ const form = reactive<CheckinSettingsForm>({
   version: '',
   refresh_time: '00:00',
   auto_fee_bps: 500,
-  reviewed: false,
-  normal: { enabled: false, min_bps: 10000, max_bps: 10000 },
-  super: { enabled: false, min_bps: 10000, max_bps: 10000, cost: '0.00000000' },
   pending_refresh: null,
   next_reset_at: null,
 })
@@ -235,10 +204,6 @@ function bpsEditor(read: () => number, write: (bps: number) => void, scale: numb
   })
 }
 const autoFeePercent = bpsEditor(() => form.auto_fee_bps, value => { form.auto_fee_bps = value }, 100)
-const normalMinMultiplier = bpsEditor(() => form.normal.min_bps, value => { form.normal.min_bps = value }, 10000)
-const normalMaxMultiplier = bpsEditor(() => form.normal.max_bps, value => { form.normal.max_bps = value }, 10000)
-const superMinMultiplier = bpsEditor(() => form.super.min_bps, value => { form.super.min_bps = value }, 10000)
-const superMaxMultiplier = bpsEditor(() => form.super.max_bps, value => { form.super.max_bps = value }, 10000)
 
 const effectivePreview = computed(() => {
   if (form.pending_refresh) {
@@ -284,11 +249,6 @@ function applySettings(settings: CheckinAdminSettings) {
   form.version = settings.version
   form.refresh_time = settings.refresh_time || '00:00'
   form.auto_fee_bps = settings.auto_fee_bps ?? 0
-  form.reviewed = Boolean(settings.reviewed)
-  const normal = settings.normal ?? { enabled: false, min_bps: 10000, max_bps: 10000 }
-  const superMode = settings.super ?? { enabled: false, min_bps: 10000, max_bps: 10000, cost: '0.00000000' }
-  form.normal = { enabled: Boolean(normal.enabled), min_bps: normal.min_bps ?? 10000, max_bps: normal.max_bps ?? 10000 }
-  form.super = { ...superMode, enabled: Boolean(superMode.enabled), min_bps: superMode.min_bps ?? 10000, max_bps: superMode.max_bps ?? 10000, cost: formatEditableAmount(superMode.cost || '0.00000000') }
   form.pending_refresh = settings.pending_refresh ?? null
   form.next_reset_at = settings.next_reset_at ?? null
 }
@@ -348,12 +308,7 @@ async function saveSettings() {
   }
   if (
     !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(form.refresh_time) ||
-    !Number.isInteger(form.auto_fee_bps) || form.auto_fee_bps < 0 || form.auto_fee_bps > 10000 ||
-    !Number.isInteger(form.normal.min_bps) || !Number.isInteger(form.normal.max_bps) ||
-    form.normal.min_bps < 1 || form.normal.min_bps > form.normal.max_bps || form.normal.max_bps > 1000000 ||
-    !Number.isInteger(form.super.min_bps) || !Number.isInteger(form.super.max_bps) ||
-    form.super.min_bps < 1 || form.super.min_bps > form.super.max_bps || form.super.max_bps > 1000000 ||
-    !isValidNonNegativeAmount(form.super.cost) || (form.super.enabled && !isValidPositiveAmount(form.super.cost))
+    !Number.isInteger(form.auto_fee_bps) || form.auto_fee_bps < 0 || form.auto_fee_bps > 10000
   ) {
     appStore.showError(t('checkin.admin.invalidRewardAmount'))
     return
@@ -386,9 +341,6 @@ async function saveSettings() {
       expected_version: form.version,
       refresh_time: form.refresh_time,
       auto_fee_bps: form.auto_fee_bps,
-      reviewed: form.reviewed,
-      normal: { ...form.normal },
-      super: { ...form.super },
     })
     applySettings(saved)
     appStore.showSuccess(t('checkin.admin.settingsSaved'))

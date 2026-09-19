@@ -41,12 +41,12 @@ func NewCheckinServiceV2WithClock(db *sql.DB, policyProvider DailyCheckinPolicyP
 // CheckInModeAtomic is the additive mode-aware entry point. CheckInAtomic keeps
 // its historical direct-mode signature for callers that cannot be rewired yet.
 func (s *CheckinService) CheckInModeAtomic(ctx context.Context, userID int64, mode CheckinMode, claim *IdempotencyAtomicClaim, expectedPolicy ...string) (*CheckinResult, error) {
-	if claim == nil {
-		return nil, ErrIdempotencyStoreUnavail
-	}
 	normalized, err := normalizeCheckinMode(mode)
 	if err != nil {
 		return nil, err
+	}
+	if claim == nil {
+		return nil, ErrIdempotencyStoreUnavail
 	}
 	if !s.policyV2 {
 		if normalized != CheckinModeDirect {
@@ -162,12 +162,15 @@ func decorateCheckinPreference(preference CheckinPreference, policy DailyCheckin
 	preference.CurrentPolicyVersion = policy.ConsentVersion()
 	preference.CurrentFeeBps = policy.AutoFeeBps
 	preference.ConsentValid = preference.AutoEnabled &&
-		preference.ConsentPolicyVersion == preference.CurrentPolicyVersion &&
+		policy.AcceptsConsentVersion(preference.ConsentPolicyVersion) &&
 		preference.ConsentFeeBps == policy.AutoFeeBps
 	return &preference
 }
 
 func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode CheckinMode, claim *IdempotencyAtomicClaim, expectedPolicy ...string) (*CheckinResult, error) {
+	if mode != CheckinModeDirect && mode != CheckinModeDirectAuto {
+		return nil, ErrCheckinModeRemoved
+	}
 	if err := s.validateDependencies(); err != nil {
 		return nil, err
 	}
@@ -230,16 +233,8 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 		return nil, err
 	}
 	consentValid := preference.AutoEnabled &&
-		preference.ConsentPolicyVersion == extended.ConsentVersion() &&
+		extended.AcceptsConsentVersion(preference.ConsentPolicyVersion) &&
 		preference.ConsentFeeBps == extended.AutoFeeBps
-	if mode == CheckinModeNormal || mode == CheckinModeSuper {
-		if preference.AutoEnabled {
-			return nil, ErrCheckinAutoModeConflict
-		}
-		if (mode == CheckinModeNormal && !extended.Normal.Enabled) || (mode == CheckinModeSuper && !extended.Super.Enabled) {
-			return nil, ErrCheckinModeDisabled
-		}
-	}
 	if mode == CheckinModeDirectAuto && (!preference.AutoEnabled || !consentValid) {
 		return nil, ErrCheckinConsentRequired
 	}
@@ -251,7 +246,7 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 	if len(expectedPolicy) > 0 {
 		providedVersion = strings.TrimSpace(expectedPolicy[0])
 	}
-	if (providedVersion != "" && providedVersion != extended.ConsentVersion()) || ((mode == CheckinModeNormal || mode == CheckinModeSuper) && providedVersion == "") {
+	if providedVersion != "" && providedVersion != extended.ConsentVersion() {
 		return nil, ErrCheckinPolicyVersionStale
 	}
 
@@ -276,21 +271,6 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 	case CheckinModeDirectAuto:
 		fee := checkinBasisPointAmount(baseReward, extended.AutoFeeBps)
 		rewardAmount = floor8(baseReward - fee)
-	case CheckinModeNormal:
-		multiplierBps, err = secureCheckinMultiplier(s.randRead, extended.Normal.MinBps, extended.Normal.MaxBps)
-		if err != nil {
-			return nil, ErrCheckinRandomUnavailable.WithCause(err)
-		}
-		rewardAmount = checkinBasisPointAmount(baseReward, multiplierBps)
-		randomRuleVersion = checkinRandomRuleVersion("normal", extended.Version, extended.Normal.MinBps, extended.Normal.MaxBps)
-	case CheckinModeSuper:
-		multiplierBps, err = secureCheckinMultiplier(s.randRead, extended.Super.MinBps, extended.Super.MaxBps)
-		if err != nil {
-			return nil, ErrCheckinRandomUnavailable.WithCause(err)
-		}
-		rewardAmount = checkinBasisPointAmount(baseReward, multiplierBps)
-		superCost = extended.Super.Cost
-		randomRuleVersion = checkinRandomRuleVersion("super", extended.Version, extended.Super.MinBps, extended.Super.MaxBps)
 	}
 	if rewardAmount < 0 {
 		return nil, ErrCheckinRewardZero
@@ -324,13 +304,6 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 	}
 	if err != nil {
 		return nil, err
-	}
-	// Pay the super cost before the current period's permanent reward is added,
-	// so the current Q cannot fund this period's super choice.
-	if mode == CheckinModeSuper {
-		if err := applySuperCheckinCost(ctx, tx, userID, superCost, period.ID, businessNow); err != nil {
-			return nil, err
-		}
 	}
 	if permanentReward > 0 {
 		if err := addCheckinPermanentBalance(ctx, tx, userID, permanentReward); err != nil {
@@ -592,10 +565,6 @@ func (s *CheckinService) getStatusV2(ctx context.Context, userID int64, requeste
 	}
 	periodStartUTC := period.StartAt.UTC()
 	nextResetUTC := period.NextReset.UTC()
-	var permanentBalance float64
-	if err := s.db.QueryRowContext(ctx, `SELECT balance FROM users WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&permanentBalance); err != nil {
-		return nil, fmt.Errorf("load permanent balance for checkin status: %w", err)
-	}
 	status := &CheckinStatus{
 		Enabled:                          policy.Enabled,
 		TodayCheckedIn:                   todayCheckedIn,
@@ -617,15 +586,6 @@ func (s *CheckinService) getStatusV2(ctx context.Context, userID int64, requeste
 		AutoEnabled:                      decoratedPreference.AutoEnabled,
 		ConsentValid:                     decoratedPreference.ConsentValid,
 		PolicyVersion:                    extended.ConsentVersion(),
-		NormalEnabled:                    extended.Normal.Enabled,
-		NormalMinBps:                     extended.Normal.MinBps,
-		NormalMaxBps:                     extended.Normal.MaxBps,
-		SuperEnabled:                     extended.Super.Enabled,
-		SuperMinBps:                      extended.Super.MinBps,
-		SuperMaxBps:                      extended.Super.MaxBps,
-		SuperCost:                        formatLedgerAmount(extended.Super.Cost),
-		PermanentBalance:                 formatLedgerAmount(permanentBalance),
-		CanAffordSuper:                   permanentBalance >= 0 && permanentBalance+ledgerAmountEpsilon >= extended.Super.Cost,
 	}
 	if existing != nil {
 		status.Mode = existing.mode

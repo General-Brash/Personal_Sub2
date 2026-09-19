@@ -103,7 +103,9 @@ func (h *CheckinHandler) UpdatePreference(c *gin.Context) {
 }
 
 // CheckIn handles POST /api/v1/user/check-in. Empty body and {} retain the
-// legacy direct behavior; mode-aware clients may submit direct/normal/super.
+// legacy direct behavior; new mode-aware clients may submit direct or
+// direct-auto. Retired normal/super requests are rejected by the handler for
+// new claims, while a completed historical idempotency response can replay.
 func (h *CheckinHandler) CheckIn(c *gin.Context) {
 	subject, ok := middleware.GetAuthSubjectFromContext(c)
 	if !ok {
@@ -120,6 +122,9 @@ func (h *CheckinHandler) CheckIn(c *gin.Context) {
 		return
 	}
 	executeUserAtomicIdempotentJSON(c, "user.daily_checkin.create", payload, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context, claim *service.IdempotencyAtomicClaim) (any, error) {
+		if mode == service.CheckinModeNormal || mode == service.CheckinModeSuper {
+			return nil, service.ErrCheckinModeRemoved
+		}
 		if modeService, ok := h.checkinService.(CheckinModeAPIService); ok {
 			var version string
 			if raw, present := payload["policy_version"]; present {
@@ -195,14 +200,15 @@ func parseCheckinModeBody(c *gin.Context) (map[string]json.RawMessage, service.C
 			}
 		}
 	}
-	var mode service.CheckinMode
-	if err := json.Unmarshal(rawMode, &mode); err != nil {
+	var rawModeValue string
+	if err := json.Unmarshal(rawMode, &rawModeValue); err != nil {
 		return nil, "", errors.New("mode must be a string")
 	}
+	mode := service.CheckinMode(strings.TrimSpace(rawModeValue))
 	switch mode {
-	case service.CheckinModeDirect, service.CheckinModeNormal, service.CheckinModeSuper:
+	case service.CheckinModeNormal, service.CheckinModeSuper, service.CheckinModeDirect, service.CheckinModeDirectAuto:
 		return payload, mode, nil
 	default:
-		return nil, "", errors.New("mode must be direct, normal, or super")
+		return nil, "", errors.New("mode must be direct or direct-auto")
 	}
 }

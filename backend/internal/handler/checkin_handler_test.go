@@ -76,6 +76,35 @@ func (s *checkinAPIServiceStub) CheckInAtomic(ctx context.Context, _ int64, clai
 	return s.checkin, nil
 }
 
+func TestCheckinHandler_RetiredModesReturnStableBusinessError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := service.DefaultIdempotencyConfig()
+	cfg.ObserveOnly = false
+	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(
+		newUserMemoryIdempotencyRepoStub(),
+		cfg,
+	))
+	t.Cleanup(func() { service.SetDefaultIdempotencyCoordinator(nil) })
+
+	stub := &checkinAPIServiceStub{}
+	h := NewCheckinHandler(stub)
+	router := gin.New()
+	router.Use(withUserSubject(42))
+	router.POST("/api/v1/user/check-in", h.CheckIn)
+
+	for _, mode := range []string{"normal", "super"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/user/check-in", bytes.NewBufferString(`{"mode":"`+mode+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Idempotency-Key", "retired-"+mode)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, req)
+
+		require.Equal(t, http.StatusConflict, recorder.Code, mode)
+		require.Contains(t, recorder.Body.String(), `"reason":"CHECKIN_MODE_REMOVED"`, mode)
+	}
+	require.Zero(t, stub.checkinCalls)
+}
+
 func TestCheckinHandler_GetStatusAndPostReplay(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	now := time.Date(2026, time.July, 13, 16, 0, 0, 0, time.UTC)

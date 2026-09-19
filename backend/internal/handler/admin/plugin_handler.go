@@ -215,8 +215,8 @@ func (h *PluginHandler) ServeUIAsset(c *gin.Context) {
 		c.Status(http.StatusGone)
 		return
 	}
-	if h.permissions != nil && h.permissions.EnabledInEnforceMode() {
-		allowed, authErr := h.permissions.CheckPermission(c.Request.Context(), principal, "plugins.execute", map[string]any{"plugin_id": pluginID, "plugins_ids": pluginID, "id": pluginID})
+	if h.permissions != nil {
+		allowed, authErr := h.permissions.AuthorizeRequest(c.Request.Context(), principal, "plugins.execute", map[string]any{"plugin_id": pluginID, "plugins_ids": pluginID, "id": pluginID})
 		if authErr != nil || !allowed {
 			c.Status(http.StatusGone)
 			return

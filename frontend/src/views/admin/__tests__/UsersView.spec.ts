@@ -18,7 +18,7 @@ const {
   getBatchUsersUsage: vi.fn(),
   listEnabledDefinitions: vi.fn(),
   getBatchUserAttributes: vi.fn(),
-  authState: { user: null as { role: 'admin' | 'user' | 'super_admin'; permission_mode?: 'disabled' | 'shadow' | 'enforce'; permissions?: string[] } | null },
+  authState: { user: null as { role: 'admin' | 'user' | 'super_admin'; permission_mode?: 'disabled' | 'enforce'; permissions?: string[] } | null },
   refreshUser: vi.fn(),
 }))
 
@@ -49,8 +49,9 @@ vi.mock('@/stores/auth', () => ({
     canAdmin: (permission: string) => {
       const user = authState.user
       if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) return false
-      if (user.role === 'super_admin') return true
-      return user.permission_mode === 'enforce' && user.permissions?.includes(permission) === true
+      if (permission.startsWith('oidc.')) return user.permissions?.includes(permission) === true
+      if (user.role === 'super_admin' || user.permission_mode !== 'enforce') return true
+      return user.permissions?.includes(permission) === true
     },
     refreshUser,
   }),
@@ -398,8 +399,8 @@ describe('admin UsersView', () => {
     expect(wrapper.get('[data-test="selected-keys"]').text()).toBe('')
   })
 
-  it('keeps user-management writes disabled when permission enforcement is off', async () => {
-    authState.user = { role: 'admin', permission_mode: 'shadow', permissions: [] }
+  it('keeps user-management writes enabled for a traditional admin when enforcement is off', async () => {
+    authState.user = { role: 'admin', permission_mode: 'disabled', permissions: [] }
     refreshUser.mockReset()
     refreshUser.mockResolvedValue(authState.user)
 
@@ -432,9 +433,9 @@ describe('admin UsersView', () => {
     })
     await flushPromises()
 
-    expect(wrapper.get('[data-test="user-write-access-state"]').text()).toContain('modeOff')
-    expect(wrapper.get('[data-test="create-user"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.get('[data-test="edit-user"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="user-write-access-state"]').text()).toContain('admin.users.permissions.ready')
+    expect(wrapper.get('[data-test="create-user"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-test="edit-user"]').attributes('disabled')).toBeUndefined()
   })
 
   it('keeps missing permission metadata unknown instead of treating it as mode-off', async () => {

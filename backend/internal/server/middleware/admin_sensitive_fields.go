@@ -31,30 +31,19 @@ func adminRequestScope(c *gin.Context) map[string]any {
 	return scope
 }
 
-func adminSuperOnly(permission string) bool {
-	return strings.HasPrefix(permission, "security.") || strings.Contains(permission, "credentials.") || permission == "system.settings.manage"
-}
-
 func authorizeAdminSensitiveFields(c *gin.Context, svc *service.AdminPermissionService, basePermission string) bool {
 	principal, ok := GetAdminPrincipalFromContext(c)
-	if !ok {
+	if !ok || principal == nil || svc == nil {
 		AbortWithError(c, 403, "PERMISSION_DENIED", "Permission denied")
 		return false
 	}
 	check := func(permission string) bool {
-		if adminSuperOnly(permission) && (!principal.IsSuperAdmin() || principal.Kind == service.AdminPrincipalKindAPIKey) {
-			AbortWithError(c, 403, "SUPER_ADMIN_REQUIRED", "Super administrator identity required")
-			return false
-		}
-		allowed, err := svc.CheckPermission(c.Request.Context(), principal, permission, adminRequestScope(c))
+		allowed, err := svc.AuthorizeRequest(c.Request.Context(), principal, permission, adminRequestScope(c))
 		if err != nil || !allowed {
 			AbortWithError(c, 403, "PERMISSION_DENIED", "Permission denied for sensitive field")
 			return false
 		}
 		return true
-	}
-	if adminSuperOnly(basePermission) && !check(basePermission) {
-		return false
 	}
 	path, method := c.FullPath(), c.Request.Method
 	mutates := method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete

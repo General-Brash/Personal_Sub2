@@ -3,7 +3,7 @@
     <div class="space-y-4">
       <div class="rounded-lg border border-primary-200 bg-primary-50 p-4 text-sm leading-6 text-primary-900 dark:border-primary-900/60 dark:bg-primary-950/30 dark:text-primary-100">
         <p>开启后，进入站点时自动按<b>直接领取</b>完成本周期签到。</p>
-        <p class="mt-2">自动模式不参与普通/超级博弈；本次临时奖励手续费为 <b>{{ formatBpsAsPercent(feeBps) }}</b>，从临时基础奖内扣除，不额外扣永久余额。永久基础奖不变。</p>
+        <p class="mt-2">自动签到使用直接领取规则；本次临时奖励手续费为 <b>{{ formatBpsAsPercent(feeBps) }}</b>，从临时基础奖内扣除，不额外扣永久余额。永久基础奖不变。</p>
         <p class="mt-2">可随时关闭。费率或收费对象变化时，本同意失效并要求重新确认。</p>
       </div>
       <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-3 text-sm text-gray-700 dark:border-dark-600 dark:text-gray-200">
