@@ -573,7 +573,3 @@ func (t *sqlNullTime) Scan(value any) error {
 		return fmt.Errorf("unsupported scan type %T", value)
 	}
 }
-
-func stringPtr(v string) *string {
-	return &v
-}
