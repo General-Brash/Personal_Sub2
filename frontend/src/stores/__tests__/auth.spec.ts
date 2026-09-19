@@ -33,6 +33,9 @@ const fakeUser = {
   allowed_groups: null,
   created_at: '2024-01-01',
   updated_at: '2024-01-01',
+  // The store normalizes any non-enforce/legacy mode to 'disabled' on load, so
+  // the persisted/refreshed user always carries the normalized effective mode.
+  permission_mode: 'disabled' as const,
 }
 
 const fakeAdminUser = {

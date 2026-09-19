@@ -93,7 +93,7 @@ let expiryTimer: ReturnType<typeof setTimeout> | undefined
 
 const canWrite = computed(() => {
   const cap = entitlement.value?.capabilities
-  return cap?.mode === 'enforce' && cap.writes_enabled === true && cap.can_write === true
+  return cap?.writes_enabled === true && cap?.can_write === true
 })
 const canPreview = computed(() => props.show && !!entitlement.value && !!catalog.value && !loading.value && !catalogLoading.value && !catalogError.value && !applying.value)
 const canApply = computed(() => props.show && canWrite.value && !loading.value && !catalogLoading.value && !loadError.value && !catalogError.value && !pendingSubmission.value && !applying.value && !previewLoading.value && !!pendingTier.value && !!reason.value.trim() && !!requestId.value &&
@@ -106,8 +106,9 @@ const premiumPolicyLabel = computed(() => {
 const readOnlyReason = computed(() => {
   if (loading.value) return '正在核验当前权益与写入能力。'
   const cap = entitlement.value?.capabilities
-  if (!cap || !['enforce', 'shadow', 'disabled'].includes(cap.mode) || typeof cap.can_write !== 'boolean' || typeof cap.writes_enabled !== 'boolean') return '写入能力未知；不会将缺失能力信息视为已关闭 enforce 或已获得权限。'
-  if (cap.mode !== 'enforce') return '权限 enforce 未开启：可按读取权限预览，但不能应用赋级。'
+  if (!cap || typeof cap.can_write !== 'boolean' || typeof cap.writes_enabled !== 'boolean') return '写入能力未知；不会将缺失能力信息视为已获得权限。'
+  if (cap.can_write !== true) return '当前管理员没有 users.entitlement.manage 写入能力。'
+  if (cap.writes_enabled !== true) return '后端未开启该类写入。'
   return '当前管理员没有 users.entitlement.manage 写入能力。'
 })
 function statusOf(error: unknown): number | undefined { const value = error as { status?: number; response?: { status?: number } }; return value?.response?.status ?? value?.status }

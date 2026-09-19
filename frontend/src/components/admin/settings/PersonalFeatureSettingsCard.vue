@@ -33,7 +33,12 @@ let alive = true, sequence = 0
 type AccessState = 'loading' | 'unknown' | 'forbidden' | 'ready'
 const accessState = computed<AccessState>(() => {
   if (loading.value || permissionState.value === 'loading') return 'loading'
-  if (permissionState.value !== 'ready' || !auth.user) return 'unknown'
+  const currentUser = auth.user
+  if (permissionState.value !== 'ready' || !currentUser) return 'unknown'
+  // Under enforce, trustworthy granular permission metadata must be present (a
+  // super admin is always trusted). Missing metadata is unknown, not forbidden;
+  // in legacy/disabled mode canAdmin keeps traditional-admin writes available.
+  if (currentUser.permission_mode === 'enforce' && currentUser.role !== 'super_admin' && !Array.isArray(currentUser.permissions)) return 'unknown'
   return auth.canAdmin('system.settings.manage') ? 'ready' : 'forbidden'
 })
 const canEdit = computed(() => accessState.value === 'ready' && !saving.value && !requiresReload.value && !!policy.value)

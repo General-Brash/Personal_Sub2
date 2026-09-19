@@ -433,7 +433,7 @@ describe('admin UsersView', () => {
     })
     await flushPromises()
 
-    expect(wrapper.get('[data-test="user-write-access-state"]').text()).toContain('admin.users.permissions.ready')
+    expect(wrapper.find('[data-test="user-write-access-state"]').exists()).toBe(false)
     expect(wrapper.get('[data-test="create-user"]').attributes('disabled')).toBeUndefined()
     expect(wrapper.get('[data-test="edit-user"]').attributes('disabled')).toBeUndefined()
   })

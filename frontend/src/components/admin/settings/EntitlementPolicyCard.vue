@@ -50,16 +50,16 @@ const pending = ref<PendingPolicy | null>(null), outcomeUnknown = ref(false)
 const storageKey = computed(() => authStore.user?.id ? `sub2:entitlement-policy-pending:v1:${authStore.user.id}` : null)
 let alive = true, loadSequence = 0
 let controller: AbortController | null = null
-const canWrite = computed(() => catalog.value?.capabilities?.mode === 'enforce' && catalog.value.capabilities.writes_enabled === true && catalog.value.capabilities.can_write === true)
+const canWrite = computed(() => catalog.value?.capabilities?.writes_enabled === true && catalog.value?.capabilities?.can_write === true)
 const canEdit = computed(() => canWrite.value && !loading.value && !saving.value && !pending.value && !requiresReload.value)
 const selectedPolicy = computed(() => catalog.value?.tiers?.find(item => item.tier === form.value?.tier))
 const hasEdits = computed(() => !!form.value && !!selectedPolicy.value && JSON.stringify(form.value) !== JSON.stringify(selectedPolicy.value))
 const capabilityMessage = computed(() => {
   if (loading.value) return '正在读取政策并核验写入能力。'
   const cap = catalog.value?.capabilities
-  if (!cap || !['enforce', 'shadow', 'disabled'].includes(cap.mode) || typeof cap.can_write !== 'boolean' || typeof cap.writes_enabled !== 'boolean') return '写入能力未知，请先读取政策；不会把能力缺失当作 enforce 已关闭。'
-  if (cap.mode !== 'enforce') return 'enforce 未开启：政策只读，不能保存或启停。'
-  if (!canWrite.value) return '当前没有 users.entitlement.manage 写入权限。'
+  if (!cap || typeof cap.can_write !== 'boolean' || typeof cap.writes_enabled !== 'boolean') return '写入能力未知，请先读取政策；不会把能力缺失当作已获得写入权限。'
+  if (cap.can_write !== true) return '当前没有 users.entitlement.manage 写入权限。'
+  if (cap.writes_enabled !== true) return '后端未开启该类写入。'
   if (requiresReload.value) return '状态已变化，需重新读取后确认；不会自动覆盖。'
   return '已核验 users.entitlement.manage 写入能力。'
 })

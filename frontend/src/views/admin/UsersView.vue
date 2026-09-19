@@ -944,6 +944,17 @@ const canUserMutation = (permission: UserMutationPermission): boolean => {
   return authStore.canAdmin(permission)
 }
 
+// Only trust the permission metadata once the effective mode is known. Under
+// enforce a non-super-admin must carry an explicit permissions array; a missing
+// mode or array means we cannot decide, so surface "unknown" rather than
+// silently treating it as a disabled/traditional admin.
+const hasTrustedPermissionMetadata = (currentUser: { role?: string; permission_mode?: string; permissions?: unknown } | null | undefined): boolean => {
+  if (!currentUser) return false
+  if (currentUser.permission_mode !== 'disabled' && currentUser.permission_mode !== 'enforce') return false
+  if (currentUser.permission_mode === 'enforce' && currentUser.role !== 'super_admin' && !Array.isArray(currentUser.permissions)) return false
+  return true
+}
+
 const userWriteAccessState = computed<UserWriteAccessState>(() => {
   if (permissionLoadState.value === 'loading') return 'loading'
   if (permissionLoadState.value === 'unknown') return 'unknown'
@@ -985,7 +996,7 @@ const loadUserManagementAccess = async (): Promise<void> => {
   try {
     const currentUser = await authStore.refreshUser()
     if (request !== permissionRequestSeq) return
-    permissionLoadState.value = currentUser ? 'ready' : 'unknown'
+    permissionLoadState.value = hasTrustedPermissionMetadata(currentUser) ? 'ready' : 'unknown'
   } catch (error) {
     if (request !== permissionRequestSeq) return
     permissionLoadState.value = 'unknown'

@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"net/url"
@@ -155,7 +157,7 @@ func (s *OIDCProviderService) BeginAuthorization(ctx context.Context, input OIDC
 	if !validOpaque(input.State, 8, 1024) || !validOpaque(input.Nonce, 8, 512) {
 		return nil, ErrOIDCInvalidRequest
 	}
-	if len(input.CodeChallenge) < 43 || len(input.CodeChallenge) > 128 || input.CodeChallengeMethod != OIDCCodeChallengeS256 {
+	if !validOIDCPKCEChallenge(input.CodeChallenge) || input.CodeChallengeMethod != OIDCCodeChallengeS256 {
 		return nil, ErrOIDCInvalidRequest
 	}
 	if input.Display != "" && !contains([]string{"page", "popup", "touch", "wap"}, input.Display) {
@@ -459,7 +461,7 @@ func (s *OIDCProviderService) TokenCode(ctx context.Context, clientID, secret, c
 	if err != nil {
 		return nil, err
 	}
-	if !validOpaque(code, 32, 512) || !validOpaque(verifier, 43, 128) || strings.TrimSpace(redirectURI) == "" || !exactString(client.RedirectURIs, redirectURI) {
+	if !validOpaque(code, 32, 512) || !validOIDCPKCEVerifier(verifier) || strings.TrimSpace(redirectURI) == "" || !exactString(client.RedirectURIs, redirectURI) {
 		return nil, ErrOIDCInvalidGrant
 	}
 	codeRecord, err := s.repo.GetAuthorizationCode(ctx, oidcDigest(code), time.Now().UTC())
@@ -906,6 +908,25 @@ func trustedOIDCConsentSkipAllowed(prompt string, trusted bool) bool {
 	return trusted && !contains(strings.Fields(prompt), "consent")
 }
 
+func validOIDCPKCEChallenge(raw string) bool {
+	if len(raw) != 43 {
+		return false
+	}
+	decoded, err := base64.RawURLEncoding.Strict().DecodeString(raw)
+	return err == nil && len(decoded) == sha256.Size
+}
+
+func validOIDCPKCEVerifier(raw string) bool {
+	if len(raw) < 43 || len(raw) > 128 {
+		return false
+	}
+	for _, r := range raw {
+		if !strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~", r) {
+			return false
+		}
+	}
+	return true
+}
 func validOIDCRevocationToken(raw string) bool {
 	return validOpaque(raw, 1, 512)
 }

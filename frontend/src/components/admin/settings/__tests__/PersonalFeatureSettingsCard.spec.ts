@@ -49,13 +49,14 @@ describe('Personal settings write capability', () => {
     expect(wrapper.get('[data-testid="personal-settings-save"]').attributes('disabled')).toBeDefined()
     expect(client.put).toHaveBeenCalledTimes(1)
   })
-  it.each(['disabled', 'shadow'])('keeps writes disabled during %s migration mode', async mode => {
+  it.each(['disabled', 'shadow'])('keeps traditional-admin writes available when enforcement is %s', async mode => {
     auth.user.permission_mode = mode
     const wrapper = render(); await flushPromises()
     const save = wrapper.get('[data-testid="personal-settings-save"]')
-    expect(save.attributes('disabled')).toBeDefined()
-    await save.trigger('click')
-    expect(client.put).not.toHaveBeenCalled()
+    expect(save.attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('fieldset').attributes('disabled')).toBeUndefined()
+    await save.trigger('click'); await flushPromises()
+    expect(client.put).toHaveBeenCalledTimes(1)
   })
   it('sends the displayed version and never retries stale writes silently', async () => {
     client.put.mockRejectedValueOnce({ status: 409, code: 'CHECKIN_POLICY_VERSION_STALE' })

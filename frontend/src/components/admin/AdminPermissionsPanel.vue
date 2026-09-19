@@ -77,7 +77,7 @@ const reason = ref('')
 const canWrite = computed(() => state.value?.capabilities?.can_write === true)
 const readOnlyReason = computed(() => {
   const capability = state.value?.capabilities
-  if (!capability || capability.mode !== 'enforce') return '权限 enforce 未开启，当前仅允许查看，所有授权与撤销保持只读。'
+  if (!capability || typeof capability.can_write !== 'boolean') return '写入能力未知；请重新读取，不会将缺失能力视为已获得权限。'
   return capability.deny_reason === 'permission_denied' ? '当前管理员没有 security.permissions.grant 权限。' : '当前操作不可写。'
 })
 const grantOf = (permission: string) => state.value?.grants.find(item => item.permission === permission)
