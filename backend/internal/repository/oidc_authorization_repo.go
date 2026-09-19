@@ -265,18 +265,6 @@ func ensureOIDCSubjectTx(ctx context.Context, tx *sql.Tx, userID int64) (string,
 	return subject, nil
 }
 
-func scanOIDCUser(row *sql.Row) (*service.OIDCUserRecord, error) {
-	var out service.OIDCUserRecord
-	var deleted sql.NullTime
-	if err := row.Scan(&out.ID, &out.Email, &out.Username, &out.Role, &out.Status, &deleted, &out.Subject); err != nil {
-		return nil, err
-	}
-	if deleted.Valid {
-		out.DeletedAt = &deleted.Time
-	}
-	return &out, nil
-}
-
 func (r *oidcRepository) GetUser(ctx context.Context, userID int64) (*service.OIDCUserRecord, error) {
 	if err := r.ensureDB(); err != nil {
 		return nil, err

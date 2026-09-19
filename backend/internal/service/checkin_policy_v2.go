@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -154,23 +153,6 @@ func (p DailyCheckinPolicyV2) Validate() error {
 		if p.PendingRefresh.EffectiveAt.IsZero() {
 			return ErrDailyCheckinPolicyInvalid
 		}
-	}
-	return nil
-}
-
-func validateCheckinV2LedgerAmount(amount float64) error {
-	if amount < 0 || math.Abs(amount*1e8-math.Round(amount*1e8)) > 1e-6 {
-		return ErrDailyCheckinPolicyInvalid
-	}
-	if _, err := normalizeLedgerAmount(amount); err != nil {
-		return ErrDailyCheckinPolicyInvalid
-	}
-	return nil
-}
-
-func validateCheckinRandomRange(minBps, maxBps int) error {
-	if minBps <= 0 || minBps > maxBps || maxBps > checkinMaxMultiplierBps {
-		return ErrDailyCheckinPolicyInvalid
 	}
 	return nil
 }

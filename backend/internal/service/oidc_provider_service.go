@@ -950,10 +950,3 @@ func validateOIDCRedirect(raw string) error {
 	}
 	return nil
 }
-func mustSessionID(ctx context.Context, repo OIDCProviderRepository, raw string) int64 {
-	session, err := repo.GetBrowserSession(ctx, oidcDigest(raw), time.Now().UTC())
-	if err != nil || session == nil {
-		return 0
-	}
-	return session.ID
-}

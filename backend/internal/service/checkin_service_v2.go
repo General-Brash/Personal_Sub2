@@ -4,10 +4,8 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -414,94 +412,6 @@ func floor8(value float64) float64 {
 func checkinBasisPointAmount(value float64, bps int) float64 {
 	result, _ := decimal.NewFromFloat(value).Mul(decimal.NewFromInt(int64(bps))).Div(decimal.NewFromInt(10000)).Truncate(8).Float64()
 	return result
-}
-
-func secureCheckinMultiplier(read func([]byte) (int, error), minBps, maxBps int) (int, error) {
-	if err := validateCheckinRandomRange(minBps, maxBps); err != nil {
-		return 0, err
-	}
-	if minBps == maxBps {
-		return minBps, nil
-	}
-	if read == nil {
-		read = cryptorand.Read
-	}
-	span := int64(maxBps - minBps + 1)
-	// crypto/rand.Int needs an io.Reader. Keep a small adapter so tests can
-	// inject a deterministic reader without exposing random material.
-	randomValue, err := randIntWithReader(read, big.NewInt(span))
-	if err != nil {
-		return 0, err
-	}
-	return minBps + int(randomValue), nil
-}
-
-type checkinByteReader struct {
-	read func([]byte) (int, error)
-}
-
-func (r checkinByteReader) Read(p []byte) (int, error) { return r.read(p) }
-
-func randIntWithReader(read func([]byte) (int, error), max *big.Int) (int64, error) {
-	if max == nil || max.Sign() <= 0 {
-		return 0, ErrCheckinRandomUnavailable
-	}
-	value, err := cryptorand.Int(checkinByteReader{read: read}, max)
-	if err != nil {
-		return 0, err
-	}
-	return value.Int64(), nil
-}
-
-func checkinRandomRuleVersion(mode, version string, minBps, maxBps int) string {
-	return fmt.Sprintf("checkin-random-v1:%s:%s:%d-%d", strings.TrimSpace(mode), strings.TrimSpace(version), minBps, maxBps)
-}
-
-func applySuperCheckinCost(ctx context.Context, tx *sql.Tx, userID int64, cost float64, periodID string, now time.Time) error {
-	if cost <= 0 {
-		return ErrDailyCheckinPolicyInvalid
-	}
-	balance, debt, dueAt, err := lockBankUser(ctx, tx, userID)
-	if err != nil {
-		return err
-	}
-	bankPolicy, err := loadBankPolicy(ctx, tx)
-	if err != nil {
-		return err
-	}
-	if _, _, _, err := reconcileBankDebtLocked(ctx, tx, userID, balance, debt, dueAt, bankPolicy, now); err != nil {
-		return err
-	}
-	balance, debt, _, err = lockBankUser(ctx, tx, userID)
-	if err != nil {
-		return err
-	}
-	if balance < 0 || balance+ledgerAmountEpsilon < cost {
-		return ErrCheckinPermanentFunds
-	}
-	var balanceAfter float64
-	if err := tx.QueryRowContext(ctx, `
-UPDATE users SET balance = balance - $1, updated_at = clock_timestamp()
-WHERE id = $2 AND deleted_at IS NULL AND balance >= $1
-RETURNING balance`, formatLedgerAmount(cost), userID).Scan(&balanceAfter); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrCheckinPermanentFunds
-		}
-		return fmt.Errorf("deduct super checkin cost: %w", err)
-	}
-	metadata, _ := json.Marshal(map[string]any{
-		"business_period_id": periodID,
-		"cost":               formatLedgerAmount(cost),
-	})
-	if _, err := tx.ExecContext(ctx, `
-INSERT INTO bank_ledger
-    (user_id, operation, permanent_delta, temporary_delta, debt_delta, debt_before, debt_after, metadata)
-VALUES ($1, 'checkin_super_cost', $2, 0, 0, $3, $3, $4)`,
-		userID, formatLedgerAmount(-cost), formatLedgerAmount(debt), metadata); err != nil {
-		return fmt.Errorf("record super checkin cost: %w", err)
-	}
-	_ = balanceAfter
-	return nil
 }
 
 func (s *CheckinService) getStatusV2(ctx context.Context, userID int64, requestedMonth string) (*CheckinStatus, error) {
