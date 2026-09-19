@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.1.178`. This integration line is released as `v0.1.178-P1`.
+Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.2.1`. This integration line is released as `v0.2.1-p4`.
 
 English | [中文](README_CN.md) | [日本語](README_JA.md)
 
@@ -10,10 +10,12 @@ English | [中文](README_CN.md) | [日本語](README_JA.md)
 - **Daily check-in**: Issues configurable temporary-credit rewards and provides check-in status and history.
 - **Bank workflows**: Supports temporary-credit advances and exchanges from permanent balance to temporary credit, with configurable limits, settlement rules, and ledger records.
 - **Security-audit secondary review**: Improves ASCII keyword-boundary matching and can send matched content to the independent `intent-classifier` service. It supports `off`, `shadow`, and `enforce` modes, plus model-package validation, activation, and rollback.
+- **OIDC provider and SSO**: Adds administrator-managed OIDC provider configuration, signed authorization flows, consent and revocation handling, CSRF protection, and session safeguards for browser-based SSO.
+- **Permission and check-in hardening**: Aligns administrator permissions across sensitive routes and retires the legacy randomized check-in modes; new check-ins use the supported direct and direct-auto paths while historical records remain readable.
 
 Production model weights are not included. Before enabling model-backed secondary review, prepare and activate a package as described in [`MODEL_PACKAGE.md`](services/intent-classifier/MODEL_PACKAGE.md).
 
-## Official v0.1.178 Integration
+## Official v0.2.1 Integration
 
 - **Upstream URL safety**: Validates client-controlled OpenAI Responses subpaths, Gemini model/action paths, and Grok video request IDs before forwarding, rejecting path fragments that could alter upstream URL structure.
 - **Runtime pricing and billing**: Docker and GoReleaser image builds now carry fallback pricing resources at runtime; GPT-5.6 Luna/Terra rates and GLM-5.2 fallback pricing are corrected.
@@ -21,6 +23,7 @@ Production model weights are not included. Before enabling model-backed secondar
 - **Proxy stream-circuit resilience**: OpenAI proxy disconnect quarantine now fails open when every candidate shares a quarantined proxy, collapses burst disconnects into one event, and provides an explicit disable switch.
 - **Routing and scheduling correctness**: Composite groups expose their configured concrete model platforms while ordinary group isolation remains intact, and token refresh skips unschedulable accounts.
 - **Protocol and UI fixes**: Generates standards-compliant SMTP messages, improves Anthropic classifier/count-token compatibility and Qwen3Guard auxiliary-field handling, and corrects subscription expiry labels and long plan-title display.
+- **P4 release baseline**: Includes the current OIDC, permission, check-in, and integration fixes from the `v0.2.1-p4` release line.
 
 ## Installation and Upgrade
 
@@ -53,7 +56,7 @@ See [`deploy/`](deploy/) for deployment files and runtime settings. For containe
 
 ## Build from Source
 
-Requirements: Go 1.26.5, Node.js 20+, pnpm 9, PostgreSQL, and Redis.
+Requirements: Go 1.27.0, Node.js 20+, pnpm 9, PostgreSQL, and Redis.
 
 ```bash
 git clone https://github.com/General-Brash/Personal_Sub2.git
