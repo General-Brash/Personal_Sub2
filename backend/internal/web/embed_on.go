@@ -360,6 +360,8 @@ func shouldBypassEmbeddedFrontend(path string) bool {
 		strings.HasPrefix(trimmed, "/backend-api/") ||
 		strings.HasPrefix(trimmed, "/antigravity/") ||
 		strings.HasPrefix(trimmed, "/setup/") ||
+		strings.HasPrefix(trimmed, "/oauth/") ||                       // OIDC 浏览器事务与令牌端点
+		trimmed == "/.well-known/openid-configuration" ||              // OIDC Discovery
 		trimmed == "/health" ||
 		trimmed == "/models" ||
 		trimmed == "/responses" ||

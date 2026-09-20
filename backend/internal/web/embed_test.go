@@ -689,6 +689,32 @@ func TestEmbeddedFrontendBypassesBareVideoAPIRoutes(t *testing.T) {
 	}
 }
 
+func TestEmbeddedFrontendBypassesOIDCRoutes(t *testing.T) {
+	// OIDC Discovery 与 OAuth 端点必须放行给已注册的 handler，
+	// 而不能被 SPA 兜底中间件吞掉返回 index.html。
+	for _, path := range []string{
+		"/.well-known/openid-configuration",
+		"/oauth/authorize",
+		"/oauth/login",
+		"/oauth/consent",
+		"/oauth/token",
+		"/oauth/userinfo",
+		"/oauth/jwks",
+		"/oauth/revoke",
+	} {
+		require.True(t, shouldBypassEmbeddedFrontend(path), "expected bypass for path=%s", path)
+	}
+
+	// 反例：非 OIDC 的相似路径应交给前端处理，不被误放行。
+	for _, path := range []string{
+		"/oauth-callback",
+		"/.well-known/security.txt",
+		"/oauth",
+	} {
+		require.False(t, shouldBypassEmbeddedFrontend(path), "expected no bypass for path=%s", path)
+	}
+}
+
 func TestNewFrontendServer(t *testing.T) {
 	t.Run("creates_server_successfully", func(t *testing.T) {
 		provider := &mockSettingsProvider{
