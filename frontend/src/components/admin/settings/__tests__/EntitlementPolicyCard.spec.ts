@@ -4,12 +4,17 @@ import EntitlementPolicyCard from '../EntitlementPolicyCard.vue'
 const api = vi.hoisted(() => ({ getEntitlementCatalog: vi.fn(), updateEntitlementPolicy: vi.fn() }))
 vi.mock('@/api/adminEntitlements', () => api)
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 1 } }) }))
+vi.mock('vue-i18n', async () => {
+  const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
+  return { ...actual, useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => (params ? `${key} ${Object.values(params).join(' ')}` : key) }) }
+})
 let premium: any, capabilities: any
 let wrappers: VueWrapper[] = []
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value))
 const catalog = () => ({ tiers: [{ tier: 'standard', display_name: 'Standard', enabled: true, version: 1, groups: [] }, copy(premium)], capabilities })
 function render() { const wrapper = mount(EntitlementPolicyCard); wrappers.push(wrapper); return wrapper }
-async function load(wrapper: VueWrapper) { await wrapper.get('[data-testid="policy-load"]').trigger('click'); await flushPromises() }
+// onMounted auto-loads the catalog now; the manual "reload" button remains but tests only need to await the mount-time load.
+async function load(_wrapper: VueWrapper) { await flushPromises() }
 beforeEach(() => {
   vi.resetAllMocks(); sessionStorage.clear()
   premium = { tier: 'premium', display_name: 'Premium', enabled: false, version: 3, groups: [{ group_id: 1, source: 'tier' }] }
@@ -27,12 +32,12 @@ describe('P3.5 policy lifecycle', () => {
     expect(wrapper.get('[data-testid="policy-toggle"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="policy-save"]').trigger('click'); await flushPromises()
     expect(api.updateEntitlementPolicy.mock.calls[0][0]).toMatchObject({ enabled: false, expected_version: 3, display_name: 'Preferred', request_id: expect.any(String) })
-    expect(wrapper.get('[data-testid="policy-status"]').text()).toContain('未自动迁移用户')
+    expect(wrapper.get('[data-testid="policy-status"]').text()).toContain('entitlementPolicy.savedNotice')
     await wrapper.get('[data-testid="policy-reason"]').setValue('enable policy')
     await wrapper.get('[data-testid="policy-toggle"]').trigger('click'); await flushPromises()
     expect(api.updateEntitlementPolicy.mock.calls[1][0]).toMatchObject({ enabled: true, expected_version: 4, reason: 'enable policy' })
     expect(api.updateEntitlementPolicy.mock.calls[0][0].request_id).not.toBe(api.updateEntitlementPolicy.mock.calls[1][0].request_id)
-    expect(wrapper.get('[data-testid="policy-status"]').text()).toContain('已启用')
+    expect(wrapper.get('[data-testid="policy-status"]').text()).toContain('entitlementPolicy.enabled')
   })
 
   it.each(['missing', 'forbidden', 'mode-off'])('does not write when capability is %s', async state => {
@@ -40,7 +45,7 @@ describe('P3.5 policy lifecycle', () => {
     const wrapper = render(); await load(wrapper)
     await wrapper.get('[data-testid="policy-reason"]').setValue('reason')
     expect(wrapper.get('[data-testid="policy-save"]').attributes('disabled')).toBeDefined()
-    if (state === 'missing') expect(wrapper.text()).toContain('写入能力未知')
+    if (state === 'missing') expect(wrapper.text()).toContain('entitlementPolicy.cap.unknown')
     expect(api.updateEntitlementPolicy).not.toHaveBeenCalled()
   })
 
@@ -61,7 +66,7 @@ describe('P3.5 policy lifecycle', () => {
     api.getEntitlementCatalog.mockRejectedValueOnce({ status: 503 })
     await wrapper.get('[data-testid="policy-reason"]').setValue('reason')
     await wrapper.get('[data-testid="policy-save"]').trigger('click'); await flushPromises()
-    expect(wrapper.get('[data-testid="policy-status"]').text()).toContain('保存成功，但刷新失败')
+    expect(wrapper.get('[data-testid="policy-status"]').text()).toContain('entitlementPolicy.savedRefreshFailed')
     expect(wrapper.find('[data-testid="policy-retry"]').exists()).toBe(false)
   })
 
@@ -71,7 +76,7 @@ describe('P3.5 policy lifecycle', () => {
     await wrapper.get('[data-testid="policy-reason"]').setValue('reason')
     await wrapper.get('[data-testid="policy-save"]').trigger('click'); await flushPromises()
     expect(wrapper.get('[data-testid="policy-save"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('未自动覆盖')
+    expect(wrapper.text()).toContain('entitlementPolicy.err.casConflict')
     expect(api.updateEntitlementPolicy).toHaveBeenCalledTimes(1)
   })
 })

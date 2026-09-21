@@ -36,19 +36,7 @@ type bankAmountRequest struct {
 }
 
 type bankExchangeRequest struct {
-	Amount        string                                 `json:"amount"`
-	PolicyVersion int64                                  `json:"policy_version,omitempty"`
-	Quote         *service.BankExchangeQuoteConfirmation `json:"quote,omitempty"`
-}
-
-type bankExchangeConfirmedService interface {
-	ExchangeAtomicConfirmed(
-		ctx context.Context,
-		userID int64,
-		permanentAmount float64,
-		confirmation service.BankExchangeConfirmation,
-		claim *service.IdempotencyAtomicClaim,
-	) (*service.BankExchangeResult, error)
+	Amount string `json:"amount"`
 }
 
 type bankRepayRequest struct {
@@ -122,7 +110,7 @@ func (h *BankHandler) Exchange(c *gin.Context) {
 	}
 	req, err := decodeBankExchangeRequest(c)
 	if err != nil {
-		response.ErrorFrom(c, service.ErrBankExchangeExpiryPolicyInvalid)
+		response.ErrorFrom(c, service.ErrBankAmountInvalid)
 		return
 	}
 	amount, err := service.ParseStrictPositiveLedgerAmount(req.Amount)
@@ -130,17 +118,7 @@ func (h *BankHandler) Exchange(c *gin.Context) {
 		response.ErrorFrom(c, service.ErrBankAmountInvalid)
 		return
 	}
-	confirmation := service.BankExchangeConfirmation{
-		PolicyVersion: req.PolicyVersion,
-		Quote:         req.Quote,
-	}
 	executeUserAtomicIdempotentJSON(c, "user.bank.exchange", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context, claim *service.IdempotencyAtomicClaim) (any, error) {
-		if confirmedService, ok := h.service.(bankExchangeConfirmedService); ok {
-			return confirmedService.ExchangeAtomicConfirmed(ctx, subject.UserID, amount, confirmation, claim)
-		}
-		if req.PolicyVersion != 0 || req.Quote != nil {
-			return nil, service.ErrBankExchangeExpiryPolicyVersionRequired
-		}
 		return h.service.ExchangeAtomic(ctx, subject.UserID, amount, claim)
 	})
 }

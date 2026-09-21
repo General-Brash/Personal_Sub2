@@ -384,62 +384,6 @@
               </div>
             </div>
             <div
-              data-test="exchange-expiry-summary"
-              class="rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/60 dark:bg-amber-950/20 sm:p-4"
-            >
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p class="text-sm font-semibold text-amber-900 dark:text-amber-200">{{ t('bank.exchange.expiryTitle') }}</p>
-                  <p v-if="exchangeExpiryPolicy?.enabled" class="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
-                    {{ t('bank.exchange.expiryRule', {
-                      time: exchangeExpiryPolicy.local_time,
-                      timezone: exchangeExpiryPolicy.timezone,
-                      fee: exchangeExpiryPolicy.fee_rate,
-                    }) }}
-                  </p>
-                  <p v-else class="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300">{{ t('bank.exchange.expiryDisabled') }}</p>
-                </div>
-                <span v-if="exchangeExpiryPolicy?.enabled" class="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  {{ t('bank.exchange.policyVersion', { version: exchangeExpiryPolicy.policy_version }) }}
-                </span>
-              </div>
-              <p v-if="exchangeExpiryPolicy?.enabled" data-test="exchange-refund-preview" class="mt-3 text-xs text-amber-900 dark:text-amber-200">
-                {{ t('bank.exchange.refundPreview', { principal: formatAmount(exchangeAmount || '0'), fee: formatAmount(estimatedExchangeRefund.fee), net: formatAmount(estimatedExchangeRefund.net) }) }}
-              </p>
-              <div v-if="exchangeExpiryPolicy?.enabled && exchangeCommitments.length" class="mt-3 space-y-2">
-                <p class="text-xs font-medium text-amber-900 dark:text-amber-200">{{ t('bank.exchange.commitmentsTitle') }}</p>
-                <div v-for="commitment in exchangeCommitments" :key="commitment.grant_id" class="rounded-md bg-white/70 p-2 text-xs dark:bg-dark-900/40">
-                  <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="font-mono text-gray-700 dark:text-gray-200">#{{ commitment.grant_id }}</span>
-                    <span class="text-gray-500 dark:text-gray-400">{{ t('bank.exchange.commitmentExpires', { date: formatDateTime(commitment.expires_at) }) }}</span>
-                  </div>
-                  <p class="mt-1 font-mono text-gray-600 dark:text-gray-300">
-                    {{ t('bank.exchange.commitmentSettlement', {
-                      remaining: formatAmount(commitment.remaining_temporary),
-                      fee: formatAmount(commitment.fee_estimate),
-                      net: formatAmount(commitment.net_refund_estimate),
-                    }) }}
-                  </p>
-                </div>
-              </div>
-              <div v-if="exchangeExpiryPolicy?.enabled && exchangeSettlements.length" class="mt-3 space-y-2">
-                <p class="text-xs font-medium text-amber-900 dark:text-amber-200">{{ t('bank.exchange.settlementsTitle') }}</p>
-                <div v-for="settlement in exchangeSettlements.slice(0, 5)" :key="settlement.id" class="rounded-md bg-white/70 p-2 text-xs dark:bg-dark-900/40">
-                  <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="font-mono text-gray-700 dark:text-gray-200">#{{ settlement.grant_id }}</span>
-                    <span class="text-gray-500 dark:text-gray-400">{{ formatDateTime(settlement.settled_at) }}</span>
-                  </div>
-                  <p class="mt-1 font-mono text-gray-600 dark:text-gray-300">
-                    {{ t('bank.exchange.settlementAmounts', {
-                      remaining: formatAmount(settlement.expired_remaining),
-                      fee: formatAmount(settlement.fee_amount),
-                      net: formatAmount(settlement.net_refund),
-                    }) }}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div
               data-test="exchange-flow-grid"
               class="grid grid-cols-1 items-stretch gap-3 min-[390px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[390px]:gap-2 sm:gap-4"
             >
@@ -737,6 +681,7 @@
             <p class="input-hint mt-1.5">{{ t('bank.settings.earlyPermanentRatioHint') }}</p>
           </div>
         </div>
+
         <p v-if="settingsError" data-test="settings-error" class="input-error-text">{{ settingsError }}</p>
       </form>
       <template #footer>
@@ -899,9 +844,6 @@ const repaySourceBalance = computed(() => repaySource.value === 'temporary'
 const hasInvalidRepaySourceBalance = computed(() => Boolean(
   status.value && parseScaledAmount(repaySourceBalance.value) === null,
 ))
-const exchangeExpiryPolicy = computed(() => status.value?.exchange_expiry_policy ?? null)
-const exchangeCommitments = computed(() => status.value?.exchange_commitments ?? [])
-const exchangeSettlements = computed(() => status.value?.exchange_settlements ?? [])
 const activeBankModeIcon = computed<'download' | 'swap' | 'dollar'>(() => activeBankMode.value === 'advance' ? 'download' : activeBankMode.value === 'exchange' ? 'swap' : 'dollar')
 const activeBankModeTitle = computed(() => activeBankMode.value === 'advance' ? t('bank.advance.title') : activeBankMode.value === 'exchange' ? t('bank.exchange.title') : t('bank.repay.title'))
 const activeBankModeDescription = computed(() => activeBankMode.value === 'advance'
@@ -1066,11 +1008,6 @@ const estimatedTemporaryAmount = computed(() => calculateTieredExchange(
   exchangeAmount.value,
   status.value?.exchange_progress?.permanent_exchanged_today ?? zeroAmount,
   exchangeTiers.value,
-))
-
-const estimatedExchangeRefund = computed(() => calculateFullUnusedRefund(
-  exchangeAmount.value,
-  exchangeExpiryPolicy.value?.fee_bps ?? 0,
 ))
 
 const activeRepayRatio = computed(() => status.value?.policy[
@@ -1503,15 +1440,6 @@ function deltaClass(value: string, debt = false): string {
   return positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
 }
 
-function calculateFullUnusedRefund(principal: string, feeBps: number): { fee: string; net: string } {
-  const principalScaled = parseScaledAmount(principal)
-  if (principalScaled === null || principalScaled <= 0n || feeBps < 0 || feeBps > 10000) {
-    return { fee: zeroAmount, net: zeroAmount }
-  }
-  const fee = (principalScaled * BigInt(feeBps)) / 10000n
-  return { fee: formatScaledAmount(fee), net: formatScaledAmount(principalScaled - fee) }
-}
-
 function multiplyAmounts(left: string, right: string | undefined): string {
   const leftAmount = parseScaledAmount(left)
   const rightAmount = parseScaledAmount(right)
@@ -1571,7 +1499,6 @@ function operationLabel(operation: string): string {
   const key = ({
     advance: 'bank.operations.advance',
     exchange: 'bank.operations.exchange',
-    exchange_expiry_refund: 'bank.operations.exchangeExpiryRefund',
     debt_offset: 'bank.operations.debtOffset',
     permanent_settlement: 'bank.operations.permanentSettlement',
     unused_advance_repayment: 'bank.operations.unusedAdvanceRepayment',

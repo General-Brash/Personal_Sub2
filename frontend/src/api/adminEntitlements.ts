@@ -31,6 +31,10 @@ export interface EntitlementTierGroupPolicy {
   group_id: number
   rate_multiplier?: number | null
   source: string
+  // Read-only enrichment joined from the channel group; never written back.
+  group_name?: string
+  group_platform?: string
+  group_default_rate?: number | null
 }
 
 export interface EntitlementTierPolicy {

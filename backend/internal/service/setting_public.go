@@ -245,6 +245,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAdminOpsEnabled,
 		SettingKeyModelPlazaEnabled,
 		SettingKeyModelPlazaRequireAuth,
+		"model_plaza_v2_enabled",
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeyAllowUserViewErrorRequests,
@@ -383,6 +384,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 
 		ModelPlazaEnabled:     settings[SettingKeyModelPlazaEnabled] == "true",
 		ModelPlazaRequireAuth: settings[SettingKeyModelPlazaRequireAuth] == "true",
+		// Engine-selection switch: default ON (opt-out), only explicit false disables.
+		ModelPlazaV2Enabled: !isFalseSettingValue(settings["model_plaza_v2_enabled"]),
 
 		AffiliateEnabled: settings[SettingKeyAffiliateEnabled] == "true",
 
@@ -651,6 +654,7 @@ type PublicSettingsInjectionPayload struct {
 	AdminOpsEnabled               bool `json:"admin_ops_enabled"`
 	ModelPlazaEnabled             bool `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth         bool `json:"model_plaza_require_auth"`
+	ModelPlazaV2Enabled           bool `json:"model_plaza_v2_enabled"`
 	AffiliateEnabled              bool `json:"affiliate_enabled"`
 	RiskControlEnabled            bool `json:"risk_control_enabled"`
 	AllowUserViewErrorRequests    bool `json:"allow_user_view_error_requests"`
@@ -741,6 +745,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AdminOpsEnabled:                      settings.AdminOpsEnabled,
 		ModelPlazaEnabled:                    settings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth:                settings.ModelPlazaRequireAuth,
+		ModelPlazaV2Enabled:                  settings.ModelPlazaV2Enabled,
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,
 		AllowUserViewErrorRequests:           settings.AllowUserViewErrorRequests,

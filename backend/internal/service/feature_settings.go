@@ -24,7 +24,10 @@ func featureSettingKeys() []string {
 	return []string{"model_plaza_v2_enabled", SettingKeyPlayerInvitationsEnabled, SettingKeyPlayerInvitationTTLSeconds, SettingKeyTemporaryCreditSourceExpiry}
 }
 func parsePersonalFeatureSettings(values map[string]string) (PersonalFeatureSettings, error) {
-	p := PersonalFeatureSettings{SourceExpiry: map[string]string{"checkin": "00:00", "admin_grant": "00:00"}}
+	// ModelPlazaV2Enabled is an engine-selection switch defaulting ON (V2 is the
+	// default plaza engine); only an explicit "false" below flips it off. Other
+	// opt-in features keep their zero-value (false) default.
+	p := PersonalFeatureSettings{ModelPlazaV2Enabled: true, SourceExpiry: map[string]string{"checkin": "00:00", "admin_grant": "00:00"}}
 	for _, entry := range []struct {
 		key  string
 		dest *bool

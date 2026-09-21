@@ -634,7 +634,12 @@ func normalizeTierGroups(groups []service.EntitlementTierGroupPolicy) ([]service
 }
 
 func (r *entitlementRepository) tierGroupPolicies(ctx context.Context, db entitlementQueryer, tier string) (policies []service.EntitlementTierGroupPolicy, err error) {
-	rows, err := db.QueryContext(ctx, `SELECT group_id, rate_multiplier, source FROM entitlement_tier_groups WHERE tier = $1 ORDER BY group_id`, tier)
+	rows, err := db.QueryContext(ctx, `
+SELECT etg.group_id, etg.rate_multiplier, etg.source, g.name, g.platform, g.rate_multiplier::double precision
+FROM entitlement_tier_groups etg
+LEFT JOIN groups g ON g.id = etg.group_id AND g.deleted_at IS NULL
+WHERE etg.tier = $1
+ORDER BY etg.group_id`, tier)
 	if err != nil {
 		return nil, fmt.Errorf("list entitlement tier groups: %w", err)
 	}
@@ -648,13 +653,24 @@ func scanTierGroupPolicies(rows *sql.Rows) ([]service.EntitlementTierGroupPolicy
 	out := []service.EntitlementTierGroupPolicy{}
 	for rows.Next() {
 		var group service.EntitlementTierGroupPolicy
-		var rate sql.NullFloat64
-		if err := rows.Scan(&group.GroupID, &rate, &group.Source); err != nil {
+		var rate, groupDefaultRate sql.NullFloat64
+		var groupName, groupPlatform sql.NullString
+		if err := rows.Scan(&group.GroupID, &rate, &group.Source, &groupName, &groupPlatform, &groupDefaultRate); err != nil {
 			return nil, err
 		}
 		if rate.Valid {
 			value := rate.Float64
 			group.RateMultiplier = &value
+		}
+		if groupName.Valid {
+			group.GroupName = groupName.String
+		}
+		if groupPlatform.Valid {
+			group.GroupPlatform = groupPlatform.String
+		}
+		if groupDefaultRate.Valid {
+			value := groupDefaultRate.Float64
+			group.GroupDefaultRate = &value
 		}
 		out = append(out, group)
 	}

@@ -83,14 +83,26 @@ func (s *GatewayService) ResolveDynamicPriceFactor(ctx context.Context, input Dy
 	return &DynamicPriceFactor{Factor: status.Factor, Source: "committed_usage", Version: strconv.FormatInt(status.PolicyVersion, 10), Details: details}, nil
 }
 
+// IsModelPlazaV2Enabled reports whether the V2 catalog engine is selected.
+// This is an engine-selection switch (not the plaza's master gate), so it
+// defaults ON: absent / empty / unparseable → true. Only an explicit "false"
+// disables V2 and falls the frontend back to the legacy plaza. The plaza's
+// master visibility remains governed by model_plaza_enabled (fail-closed).
 func (s *SettingService) IsModelPlazaV2Enabled(ctx context.Context) bool {
 	if s == nil || s.settingRepo == nil {
-		return false
+		return true
 	}
 	values, err := s.settingRepo.GetMultiple(ctx, []string{"model_plaza_v2_enabled"})
 	if err != nil {
-		return false
+		return true
 	}
-	enabled, err := strconv.ParseBool(values["model_plaza_v2_enabled"])
-	return err == nil && enabled
+	raw, ok := values["model_plaza_v2_enabled"]
+	if !ok || raw == "" {
+		return true
+	}
+	enabled, err := strconv.ParseBool(raw)
+	if err != nil {
+		return true
+	}
+	return enabled
 }

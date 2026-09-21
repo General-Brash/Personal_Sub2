@@ -1,5 +1,11 @@
 <template>
   <div class="space-y-5">
+    <!-- 全局价格说明(管理员配置,Markdown;与 legacy 广场同源) -->
+    <div
+      v-if="descriptionHtml"
+      class="plaza-description rounded-2xl border border-gray-100 bg-white px-5 py-4 text-sm shadow-card dark:border-dark-700/50 dark:bg-dark-800/50"
+      v-html="descriptionHtml"
+    ></div>
     <div v-if="loading" class="card p-6 text-center text-sm text-gray-500 dark:text-gray-400">
       {{ locale === 'zh' ? '正在加载模型目录…' : 'Loading model catalog…' }}
     </div>
@@ -9,8 +15,24 @@
     <div v-else-if="!models.length" class="card p-6 text-center text-sm text-gray-500 dark:text-gray-400">
       {{ locale === 'zh' ? '暂无可用模型。' : 'No models are available.' }}
     </div>
-    <div v-else class="grid gap-4 lg:grid-cols-2">
-      <article v-for="model in models" :key="`${model.platform}:${model.model_id}`" class="card min-w-0 p-5">
+    <template v-else>
+      <!-- 筛选区:平台 → 分组 → 倍率 → 模型名搜索(纯前端过滤) -->
+      <PlazaFilterBar
+        :platforms="platforms"
+        :groups="groupOptions"
+        :rates="rates"
+        :platform="selectedPlatform"
+        :group-id="selectedGroupId"
+        :rate="selectedRate"
+        :search="searchQuery"
+        @update:platform="selectedPlatform = $event"
+        @update:group-id="selectedGroupId = $event"
+        @update:rate="selectedRate = $event"
+        @update:search="searchQuery = $event"
+      />
+
+      <div v-if="filteredModels.length" class="grid gap-4 lg:grid-cols-2">
+      <article v-for="model in filteredModels" :key="`${model.platform}:${model.model_id}`" class="card min-w-0 p-5">
         <div class="flex min-w-0 items-start justify-between gap-3">
           <div class="min-w-0">
             <h2 class="break-words text-base font-semibold text-gray-900 dark:text-white">{{ model.display_name || model.model_id }}</h2>
@@ -71,9 +93,12 @@
               <span v-if="choice.price_quote.dynamic_factor.details.next_threshold"> · 下一档 {{ choice.price_quote.dynamic_factor.details.next_threshold }}</span>
               <span v-if="choice.price_quote.dynamic_factor.details.reset_at" class="block">重置 {{ formatDate(choice.price_quote.dynamic_factor.details.reset_at) }}；已接纳请求不回算。</span>
             </div>
-            <div v-if="choice.price_quote?.effective_rate_multiplier != null || choice.price_quote?.channel_time_multiplier != null || choice.price_quote?.image_rate_independent" class="mt-3 flex flex-wrap gap-2 text-[11px]">
+            <div v-if="choice.price_quote?.effective_rate_multiplier != null || choice.price_quote?.channel_time_multiplier != null || choice.price_quote?.image_rate_independent || choice.price_quote?.rate_source" class="mt-3 flex flex-wrap gap-2 text-[11px]">
               <span v-if="choice.price_quote?.effective_rate_multiplier != null" class="rounded bg-primary-50 px-2 py-1 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
                 {{ locale === 'zh' ? '生效倍率' : 'Effective rate' }} ×{{ formatMultiplier(choice.price_quote.effective_rate_multiplier) }}
+              </span>
+              <span v-if="rateSourceLabel(choice.price_quote?.rate_source)" class="rounded bg-gray-100 px-2 py-1 text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+                {{ locale === 'zh' ? '来源' : 'Source' }}: {{ rateSourceLabel(choice.price_quote?.rate_source) }}
               </span>
               <span v-if="choice.price_quote?.peak_rate_multiplier != null" class="rounded bg-primary-50 px-2 py-1 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">{{locale==='zh'?'高峰因子':'Peak factor'}} ×{{formatMultiplier(choice.price_quote.peak_rate_multiplier)}}</span>
               <span v-if="choice.price_quote?.channel_time_multiplier != null" class="rounded bg-cyan-50 px-2 py-1 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300">
@@ -98,14 +123,21 @@
           </div>
         </div>
       </article>
-    </div>
+      </div>
+      <div v-else class="card p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+        {{ locale === 'zh' ? '筛选后无匹配模型。' : 'No models match the current filters.' }}
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ModelPlazaAvailabilityState, ModelPlazaV2PriceCondition, ModelPlazaV2Response } from '@/api/modelPlaza'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import PlazaFilterBar from './PlazaFilterBar.vue'
+import type { ModelPlazaAvailabilityState, ModelPlazaV2GroupChoice, ModelPlazaV2Model, ModelPlazaV2PriceCondition, ModelPlazaV2Response } from '@/api/modelPlaza'
 
 const props = defineProps<{
   response: ModelPlazaV2Response | null
@@ -115,6 +147,75 @@ const props = defineProps<{
 
 const { locale } = useI18n()
 const models = computed(() => props.response?.models ?? [])
+
+const selectedPlatform = ref<string>('all')
+const selectedGroupId = ref<number | 'all'>('all')
+const selectedRate = ref<number | 'all'>('all')
+const searchQuery = ref('')
+
+// 全局价格说明:与 legacy 广场同源(marked + DOMPurify)。
+const descriptionHtml = computed(() => {
+  const md = props.response?.description?.trim()
+  if (!md) return ''
+  return DOMPurify.sanitize(marked.parse(md) as string)
+})
+
+// 分组维度的生效倍率:报价缺失(null)兜底为 1,避免出现 nullx 档位。
+function choiceRate(choice: ModelPlazaV2GroupChoice): number {
+  return choice.price_quote?.effective_rate_multiplier ?? 1
+}
+
+// 从所有模型的 user_group_choices 聚合出 FilterBar 需要的分组选项(按 id 去重)。
+const groupOptions = computed(() => {
+  const map = new Map<number, { id: number; name: string; platform: string; rate: number }>()
+  for (const model of models.value) {
+    for (const choice of model.user_group_choices ?? []) {
+      if (!map.has(choice.group_id)) {
+        map.set(choice.group_id, {
+          id: choice.group_id,
+          name: choice.group_name || `#${choice.group_id}`,
+          platform: choice.platform,
+          rate: choiceRate(choice)
+        })
+      }
+    }
+  }
+  return [...map.values()]
+})
+
+const platforms = computed(() =>
+  [...new Set(groupOptions.value.map((g) => g.platform).filter(Boolean))].sort()
+)
+
+const rates = computed(() =>
+  [...new Set(groupOptions.value.map((g) => g.rate))].sort((a, b) => a - b)
+)
+
+// 数据刷新后选中的倍率/分组可能不复存在,重置为全部。
+watch(rates, (list) => {
+  if (selectedRate.value !== 'all' && !list.includes(selectedRate.value)) selectedRate.value = 'all'
+})
+watch(groupOptions, (list) => {
+  if (selectedGroupId.value !== 'all' && !list.some((g) => g.id === selectedGroupId.value)) selectedGroupId.value = 'all'
+})
+
+// 平台/分组/倍率维度按 choice 命中即保留该模型;再按模型名(display_name/model_id)搜索过滤。
+function choiceMatches(choice: ModelPlazaV2GroupChoice): boolean {
+  if (selectedPlatform.value !== 'all' && choice.platform !== selectedPlatform.value) return false
+  if (selectedGroupId.value !== 'all' && choice.group_id !== selectedGroupId.value) return false
+  if (selectedRate.value !== 'all' && choiceRate(choice) !== selectedRate.value) return false
+  return true
+}
+
+const filteredModels = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  return models.value.filter((model: ModelPlazaV2Model) => {
+    const hasChoice = (model.user_group_choices ?? []).some(choiceMatches)
+    if (!hasChoice) return false
+    if (!q) return true
+    return (model.display_name || '').toLowerCase().includes(q) || model.model_id.toLowerCase().includes(q)
+  })
+})
 
 function stateLabel(state: ModelPlazaAvailabilityState): string {
   const zh: Record<ModelPlazaAvailabilityState, string> = {
@@ -155,6 +256,22 @@ function formatMultiplier(value: number): string {
   return Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'
 }
 
+// 生效倍率的来源层:用户覆盖 / 消费权益(tier) / 分组默认。留空或未知不展示徽标。
+function rateSourceLabel(source: string | undefined): string {
+  if (!source) return ''
+  const zh: Record<string, string> = {
+    user_override: '用户专属',
+    entitlement_tier: '权益等级',
+    group_default: '分组默认'
+  }
+  const en: Record<string, string> = {
+    user_override: 'User override',
+    entitlement_tier: 'Entitlement tier',
+    group_default: 'Group default'
+  }
+  return (locale.value === 'zh' ? zh : en)[source] ?? source
+}
+
 function conditionSummary(condition: ModelPlazaV2PriceCondition): string {
   const parts: string[] = []
   if (condition.input_per_million != null) parts.push(`in $${formatPrice(condition.input_per_million)}`)
@@ -163,3 +280,44 @@ function conditionSummary(condition: ModelPlazaV2PriceCondition): string {
   return parts.join(' · ') || (locale.value === 'zh' ? '条件价' : 'Conditional price')
 }
 </script>
+
+<style scoped>
+.plaza-description {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.plaza-description :deep(h1),
+.plaza-description :deep(h2),
+.plaza-description :deep(h3) {
+  @apply mb-2 mt-3 font-semibold text-gray-900 first:mt-0 dark:text-white;
+}
+
+.plaza-description :deep(p) {
+  @apply mb-2 text-gray-700 last:mb-0 dark:text-dark-200;
+}
+
+.plaza-description :deep(a) {
+  @apply text-primary-600 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300;
+}
+
+.plaza-description :deep(ul) {
+  @apply mb-2 list-disc pl-5;
+}
+
+.plaza-description :deep(ol) {
+  @apply mb-2 list-decimal pl-5;
+}
+
+.plaza-description :deep(li) {
+  @apply mb-0.5 text-gray-700 dark:text-dark-200;
+}
+
+.plaza-description :deep(code) {
+  @apply rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-dark-800;
+}
+
+.plaza-description :deep(blockquote) {
+  @apply my-2 border-l-4 border-gray-300 pl-3 text-gray-600 dark:border-dark-600 dark:text-dark-300;
+}
+</style>

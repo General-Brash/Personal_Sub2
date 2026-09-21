@@ -11,7 +11,10 @@ func TestPersonalFeatureDefaultsAndRequiredActivationContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.ModelPlazaV2Enabled || p.PlayerInvitationsEnabled || p.SourceExpiry["checkin"] != "00:00" {
+	if !p.ModelPlazaV2Enabled {
+		t.Fatal("model plaza v2 engine must default on (engine-selection switch)")
+	}
+	if p.PlayerInvitationsEnabled || p.SourceExpiry["checkin"] != "00:00" {
 		t.Fatal("new features must default off and preserve expiry")
 	}
 	p.PlayerInvitationsEnabled = true

@@ -882,10 +882,16 @@ describe('BankView', () => {
     expect(exchangePanel.attributes('aria-hidden')).toBe('false')
     expect(document.activeElement).toBe(exchangeTab.element)
 
-    await exchangeTab.trigger('keydown', { key: 'End' })
+    await exchangeTab.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(repayTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(repayTab.element)
+
+    await repayTab.trigger('keydown', { key: 'End' })
     await flushPromises()
     expect(repayTab.attributes('aria-selected')).toBe('true')
     expect(repayPanel.attributes('aria-labelledby')).toBe(repayTab.attributes('id'))
+    expect(repayPanel.attributes('aria-hidden')).toBe('false')
     expect(document.activeElement).toBe(repayTab.element)
 
     await repayTab.trigger('keydown', { key: 'ArrowRight' })

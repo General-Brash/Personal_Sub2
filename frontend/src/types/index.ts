@@ -289,6 +289,7 @@ export interface PublicSettings {
   admin_ops_enabled?: boolean
   model_plaza_enabled: boolean
   model_plaza_require_auth: boolean
+  model_plaza_v2_enabled?: boolean
   plugin_management_enabled?: boolean
   service_quota_enabled: boolean
   affiliate_enabled: boolean

@@ -606,10 +606,6 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.GET("/bank", h.Admin.Bank.GetPolicy)
 		adminSettings.PUT("/bank", h.Admin.Bank.UpdatePolicy)
 		adminSettings.GET("/bank/transactions", h.Admin.Bank.ListTransactions)
-		if h.Admin.BankExchangeExpiry != nil {
-			adminSettings.GET("/bank/exchange-expiry", h.Admin.BankExchangeExpiry.GetPolicy)
-			adminSettings.PUT("/bank/exchange-expiry", h.Admin.BankExchangeExpiry.UpdatePolicy)
-		}
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)

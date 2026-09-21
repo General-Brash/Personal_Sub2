@@ -41,6 +41,11 @@ type EntitlementTierGroupPolicy struct {
 	GroupID        int64    `json:"group_id"`
 	RateMultiplier *float64 `json:"rate_multiplier,omitempty"`
 	Source         string   `json:"source"`
+	// Read-only enrichment joined from the channel groups table for display.
+	// Never persisted or included in the idempotency fingerprint.
+	GroupName        string   `json:"group_name,omitempty"`
+	GroupPlatform    string   `json:"group_platform,omitempty"`
+	GroupDefaultRate *float64 `json:"group_default_rate,omitempty"`
 }
 
 type EntitlementTierPolicy struct {
