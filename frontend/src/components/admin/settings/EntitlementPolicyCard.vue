@@ -18,7 +18,17 @@
         <p class="text-sm font-medium">{{ t('admin.settings.entitlementPolicy.tierSummary', { tier: form.tier, status: form.enabled ? t('admin.settings.entitlementPolicy.enabled') : t('admin.settings.entitlementPolicy.disabled'), version: form.version, groups: form.groups?.map(group => group.group_id).join(', ') || t('admin.settings.entitlementPolicy.noGroups') }) }}</p>
         <label class="block"><span class="input-label">{{ t('admin.settings.entitlementPolicy.displayName') }}</span><input v-model="form.display_name" :disabled="!canEdit" class="input" /></label>
         <div v-for="(group, index) in form.groups" :key="index" class="grid grid-cols-[1fr_1fr_auto] gap-2">
-          <label><span class="input-label">{{ t('admin.settings.entitlementPolicy.groupIdLabel') }}</span><input v-model.number="group.group_id" type="number" min="1" :disabled="!canEdit" class="input" /></label>
+          <label>
+            <span class="input-label">{{ t('admin.settings.entitlementPolicy.groupIdLabel') }}</span>
+            <input v-model.number="group.group_id" type="number" min="1" :disabled="!canEdit" class="input" />
+            <span class="mt-1 flex items-center gap-1.5 text-xs" :class="group.group_name ? platformColorClass(group.group_platform) : 'text-amber-600'">
+              <template v-if="group.group_name">
+                <PlatformIcon :platform="group.group_platform as GroupPlatform" size="xs" :title="t('admin.settings.entitlementPolicy.groupPlatformLabel')" />
+                <span class="font-medium text-gray-900 dark:text-white" :title="t('admin.settings.entitlementPolicy.groupNameLabel')">{{ group.group_name }}</span>
+              </template>
+              <template v-else>{{ t('admin.settings.entitlementPolicy.groupDeleted') }}</template>
+            </span>
+          </label>
           <label><span class="input-label">{{ t('admin.settings.entitlementPolicy.rateLabel') }}</span><input v-model.number="group.rate_multiplier" type="number" min="0" max="1000" step="0.01" :disabled="!canEdit" class="input" /><span class="mt-1 block text-xs text-gray-500">{{ groupSourceHint(group) }}</span></label>
           <button type="button" class="btn btn-secondary self-end" :disabled="!canEdit" @click="form.groups.splice(index, 1)">{{ t('admin.settings.entitlementPolicy.remove') }}</button>
         </div>
@@ -42,6 +52,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { getEntitlementCatalog, updateEntitlementPolicy, type EntitlementCatalog, type EntitlementTierPolicy, type EntitlementTierGroupPolicy, type EntitlementPolicyUpdate } from '@/api/adminEntitlements'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import type { GroupPlatform } from '@/types'
 
 interface PendingPolicy { input: EntitlementPolicyUpdate; storageKey: string | null }
 const { t } = useI18n()
@@ -73,9 +85,17 @@ const groupError = computed(() => {
   return ''
 })
 function groupSourceHint(group: EntitlementTierGroupPolicy): string {
-  return typeof group.rate_multiplier === 'number'
-    ? t('admin.settings.entitlementPolicy.sourceTierCustom', { rate: group.rate_multiplier })
-    : t('admin.settings.entitlementPolicy.sourceGroupDefault')
+  if (typeof group.rate_multiplier === 'number') return t('admin.settings.entitlementPolicy.sourceTierCustom', { rate: group.rate_multiplier })
+  if (typeof group.group_default_rate === 'number') return t('admin.settings.entitlementPolicy.sourceGroupDefaultWithRate', { rate: group.group_default_rate })
+  return t('admin.settings.entitlementPolicy.sourceGroupDefault')
+}
+function platformColorClass(platform?: string): string {
+  switch (platform) {
+    case 'anthropic': return 'text-orange-700 dark:text-orange-400'
+    case 'openai': return 'text-emerald-700 dark:text-emerald-400'
+    case 'antigravity': return 'text-purple-700 dark:text-purple-400'
+    default: return 'text-blue-700 dark:text-blue-400'
+  }
 }
 const canSubmit = computed(() => canEdit.value && !!form.value && !!reason.value.trim() && !groupError.value)
 function choose(item: EntitlementTierPolicy) {
@@ -119,7 +139,7 @@ async function load(): Promise<boolean> {
 function startWrite(enabled: boolean, content: EntitlementTierPolicy) {
   const input: EntitlementPolicyUpdate = {
     tier: content.tier, display_name: content.display_name.trim(), enabled, expected_version: content.version,
-    groups: content.groups.map(group => ({ ...group, rate_multiplier: typeof group.rate_multiplier === 'number' ? group.rate_multiplier : null })),
+    groups: content.groups.map(group => ({ group_id: group.group_id, source: group.source, rate_multiplier: typeof group.rate_multiplier === 'number' ? group.rate_multiplier : null })),
     reason: reason.value.trim(), request_id: crypto.randomUUID(),
   }
   pending.value = { input, storageKey: storageKey.value }; store(pending.value)

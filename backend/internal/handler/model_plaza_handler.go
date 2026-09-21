@@ -286,8 +286,10 @@ func (h *ModelPlazaHandler) GetV2(c *gin.Context) {
 	// (its own gate is modelPlazaV2Enabled + model_plaza_v2_enabled above).
 	// require_auth remains a shared plaza-level policy read from the same
 	// runtime setting so anonymous access rules match the legacy plaza.
+	var description string
 	if h.settingService != nil {
 		rt := h.settingService.GetModelPlazaRuntime(c.Request.Context())
+		description = rt.Description
 		if rt.RequireAuth {
 			if _, authed := middleware.GetAuthSubjectFromContext(c); !authed {
 				response.Unauthorized(c, "Authentication required")
@@ -416,7 +418,7 @@ func (h *ModelPlazaHandler) GetV2(c *gin.Context) {
 		}
 		out = append(out, model)
 	}
-	response.Success(c, modelPlazaV2Response{Models: out, GeneratedAt: time.Now().UTC()})
+	response.Success(c, modelPlazaV2Response{Models: out, GeneratedAt: time.Now().UTC(), Description: description})
 }
 
 func (h *ModelPlazaHandler) resolveV2Access(c *gin.Context, subject middleware.AuthSubject, authed bool) (service.ModelAccessInput, error) {
@@ -539,6 +541,8 @@ func cloneModelPlazaStringMap(value map[string]string) map[string]string {
 type modelPlazaV2Response struct {
 	Models      []modelPlazaV2Model `json:"models"`
 	GeneratedAt time.Time           `json:"generated_at"`
+	// Description 为管理员配置的全局价格说明（Markdown），与 legacy 广场同源。
+	Description string `json:"description,omitempty"`
 }
 
 type modelPlazaV2Model struct {

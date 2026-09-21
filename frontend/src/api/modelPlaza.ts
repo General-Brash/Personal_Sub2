@@ -186,6 +186,8 @@ export interface ModelPlazaV2Model {
 export interface ModelPlazaV2Response {
   models: ModelPlazaV2Model[]
   generated_at: string
+  /** 管理员配置的全局价格说明（Markdown）。 */
+  description?: string
 }
 
 /** Fetch the versioned independent catalog. Route registration is owned by the integrator. */

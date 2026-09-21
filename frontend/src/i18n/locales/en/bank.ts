@@ -3,8 +3,6 @@ export default {
     title: 'Store',
     description: 'Buy credit products and subscription plans.',
     sections: {
-      bank: 'Bank',
-      currency: 'Credit',
       subscription: 'Subscriptions',
     },
     actions: {
