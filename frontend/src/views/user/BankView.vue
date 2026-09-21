@@ -384,62 +384,6 @@
               </div>
             </div>
             <div
-              data-test="exchange-expiry-summary"
-              class="rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/60 dark:bg-amber-950/20 sm:p-4"
-            >
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p class="text-sm font-semibold text-amber-900 dark:text-amber-200">{{ t('bank.exchange.expiryTitle') }}</p>
-                  <p v-if="exchangeExpiryPolicy?.enabled" class="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
-                    {{ t('bank.exchange.expiryRule', {
-                      time: exchangeExpiryPolicy.local_time,
-                      timezone: exchangeExpiryPolicy.timezone,
-                      fee: exchangeExpiryPolicy.fee_rate,
-                    }) }}
-                  </p>
-                  <p v-else class="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300">{{ t('bank.exchange.expiryDisabled') }}</p>
-                </div>
-                <span v-if="exchangeExpiryPolicy?.enabled" class="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  {{ t('bank.exchange.policyVersion', { version: exchangeExpiryPolicy.policy_version }) }}
-                </span>
-              </div>
-              <p v-if="exchangeExpiryPolicy?.enabled" data-test="exchange-refund-preview" class="mt-3 text-xs text-amber-900 dark:text-amber-200">
-                {{ t('bank.exchange.refundPreview', { principal: formatAmount(exchangeAmount || '0'), fee: formatAmount(estimatedExchangeRefund.fee), net: formatAmount(estimatedExchangeRefund.net) }) }}
-              </p>
-              <div v-if="exchangeExpiryPolicy?.enabled && exchangeCommitments.length" class="mt-3 space-y-2">
-                <p class="text-xs font-medium text-amber-900 dark:text-amber-200">{{ t('bank.exchange.commitmentsTitle') }}</p>
-                <div v-for="commitment in exchangeCommitments" :key="commitment.grant_id" class="rounded-md bg-white/70 p-2 text-xs dark:bg-dark-900/40">
-                  <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="font-mono text-gray-700 dark:text-gray-200">#{{ commitment.grant_id }}</span>
-                    <span class="text-gray-500 dark:text-gray-400">{{ t('bank.exchange.commitmentExpires', { date: formatDateTime(commitment.expires_at) }) }}</span>
-                  </div>
-                  <p class="mt-1 font-mono text-gray-600 dark:text-gray-300">
-                    {{ t('bank.exchange.commitmentSettlement', {
-                      remaining: formatAmount(commitment.remaining_temporary),
-                      fee: formatAmount(commitment.fee_estimate),
-                      net: formatAmount(commitment.net_refund_estimate),
-                    }) }}
-                  </p>
-                </div>
-              </div>
-              <div v-if="exchangeExpiryPolicy?.enabled && exchangeSettlements.length" class="mt-3 space-y-2">
-                <p class="text-xs font-medium text-amber-900 dark:text-amber-200">{{ t('bank.exchange.settlementsTitle') }}</p>
-                <div v-for="settlement in exchangeSettlements.slice(0, 5)" :key="settlement.id" class="rounded-md bg-white/70 p-2 text-xs dark:bg-dark-900/40">
-                  <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="font-mono text-gray-700 dark:text-gray-200">#{{ settlement.grant_id }}</span>
-                    <span class="text-gray-500 dark:text-gray-400">{{ formatDateTime(settlement.settled_at) }}</span>
-                  </div>
-                  <p class="mt-1 font-mono text-gray-600 dark:text-gray-300">
-                    {{ t('bank.exchange.settlementAmounts', {
-                      remaining: formatAmount(settlement.expired_remaining),
-                      fee: formatAmount(settlement.fee_amount),
-                      net: formatAmount(settlement.net_refund),
-                    }) }}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div
               data-test="exchange-flow-grid"
               class="grid grid-cols-1 items-stretch gap-3 min-[390px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[390px]:gap-2 sm:gap-4"
             >
@@ -670,12 +614,11 @@
         <button type="button" class="btn btn-secondary" @click="loadSettings">{{ t('bank.actions.reload') }}</button>
       </div>
       <form v-else class="space-y-5" @submit.prevent="saveSettings">
-        <div role="tablist" aria-orientation="horizontal" :aria-label="t('bank.settings.title')" class="relative grid min-h-11 grid-cols-4 overflow-hidden rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
-          <span aria-hidden="true" class="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-white shadow-sm transition-transform dark:bg-dark-800" :style="{ width: 'calc(25% - 0.125rem)', transform: `translateX(${activeSettingsSection === 'advance' ? '0' : activeSettingsSection === 'exchange' ? '100%' : activeSettingsSection === 'repay' ? '200%' : '300%'})` }" />
+        <div role="tablist" aria-orientation="horizontal" :aria-label="t('bank.settings.title')" class="relative grid min-h-11 grid-cols-3 overflow-hidden rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
+          <span aria-hidden="true" class="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-white shadow-sm transition-transform dark:bg-dark-800" :style="{ width: 'calc(33.333333% - 0.166667rem)', transform: `translateX(${activeSettingsSection === 'advance' ? '0' : activeSettingsSection === 'exchange' ? '100%' : '200%'})` }" />
           <button id="bank-settings-tab-advance" ref="advanceSettingsTab" type="button" role="tab" data-test="settings-section-advance" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'advance' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'advance'" :tabindex="activeSettingsSection === 'advance' ? 0 : -1" aria-controls="bank-settings-panel-advance" @keydown="handleSettingsSectionKeydown($event, 'advance')" @click="selectSettingsSection('advance')">{{ t('bank.advance.title') }}</button>
           <button id="bank-settings-tab-exchange" ref="exchangeSettingsTab" type="button" role="tab" data-test="settings-section-exchange" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'exchange' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'exchange'" :tabindex="activeSettingsSection === 'exchange' ? 0 : -1" aria-controls="bank-settings-panel-exchange" @keydown="handleSettingsSectionKeydown($event, 'exchange')" @click="selectSettingsSection('exchange')">{{ t('bank.exchange.title') }}</button>
           <button id="bank-settings-tab-repay" ref="repaySettingsTab" type="button" role="tab" data-test="settings-section-repay" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'repay' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'repay'" :tabindex="activeSettingsSection === 'repay' ? 0 : -1" aria-controls="bank-settings-panel-repay" @keydown="handleSettingsSectionKeydown($event, 'repay')" @click="selectSettingsSection('repay')">{{ t('bank.repay.title') }}</button>
-          <button id="bank-settings-tab-expiry" ref="expirySettingsTab" type="button" role="tab" data-test="settings-section-expiry" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'expiry' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'expiry'" :tabindex="activeSettingsSection === 'expiry' ? 0 : -1" aria-controls="bank-settings-panel-expiry" @keydown="handleSettingsSectionKeydown($event, 'expiry')" @click="selectSettingsSection('expiry')">{{ t('bank.adminExchangeExpiry.title') }}</button>
         </div>
 
         <div id="bank-settings-panel-advance" v-show="activeSettingsSection === 'advance'" role="tabpanel" aria-labelledby="bank-settings-tab-advance" :aria-hidden="activeSettingsSection !== 'advance'" class="space-y-5">
@@ -739,9 +682,6 @@
           </div>
         </div>
 
-        <div id="bank-settings-panel-expiry" v-show="activeSettingsSection === 'expiry'" role="tabpanel" aria-labelledby="bank-settings-tab-expiry" :aria-hidden="activeSettingsSection !== 'expiry'">
-          <BankExchangeExpirySettings />
-        </div>
         <p v-if="settingsError" data-test="settings-error" class="input-error-text">{{ settingsError }}</p>
       </form>
       <template #footer>
@@ -785,7 +725,6 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
-import BankExchangeExpirySettings from '@/components/finance/BankExchangeExpirySettings.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
@@ -868,12 +807,11 @@ const settingsLoading = ref(false)
 const settingsLoadFailed = ref(false)
 const settingsSaving = ref(false)
 const settingsError = ref('')
-type SettingsSection = 'advance' | 'exchange' | 'repay' | 'expiry'
+type SettingsSection = 'advance' | 'exchange' | 'repay'
 const activeSettingsSection = ref<SettingsSection>('advance')
 const advanceSettingsTab = ref<HTMLButtonElement | null>(null)
 const exchangeSettingsTab = ref<HTMLButtonElement | null>(null)
 const repaySettingsTab = ref<HTMLButtonElement | null>(null)
-const expirySettingsTab = ref<HTMLButtonElement | null>(null)
 const loadedPolicyHadTiers = ref(false)
 const tiersDirty = ref(false)
 const settingsExactValues = {} as Record<SettingsAmountField, string>
@@ -906,9 +844,6 @@ const repaySourceBalance = computed(() => repaySource.value === 'temporary'
 const hasInvalidRepaySourceBalance = computed(() => Boolean(
   status.value && parseScaledAmount(repaySourceBalance.value) === null,
 ))
-const exchangeExpiryPolicy = computed(() => status.value?.exchange_expiry_policy ?? null)
-const exchangeCommitments = computed(() => status.value?.exchange_commitments ?? [])
-const exchangeSettlements = computed(() => status.value?.exchange_settlements ?? [])
 const activeBankModeIcon = computed<'download' | 'swap' | 'dollar'>(() => activeBankMode.value === 'advance' ? 'download' : activeBankMode.value === 'exchange' ? 'swap' : 'dollar')
 const activeBankModeTitle = computed(() => activeBankMode.value === 'advance' ? t('bank.advance.title') : activeBankMode.value === 'exchange' ? t('bank.exchange.title') : t('bank.repay.title'))
 const activeBankModeDescription = computed(() => activeBankMode.value === 'advance'
@@ -1073,11 +1008,6 @@ const estimatedTemporaryAmount = computed(() => calculateTieredExchange(
   exchangeAmount.value,
   status.value?.exchange_progress?.permanent_exchanged_today ?? zeroAmount,
   exchangeTiers.value,
-))
-
-const estimatedExchangeRefund = computed(() => calculateFullUnusedRefund(
-  exchangeAmount.value,
-  exchangeExpiryPolicy.value?.fee_bps ?? 0,
 ))
 
 const activeRepayRatio = computed(() => status.value?.policy[
@@ -1510,15 +1440,6 @@ function deltaClass(value: string, debt = false): string {
   return positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
 }
 
-function calculateFullUnusedRefund(principal: string, feeBps: number): { fee: string; net: string } {
-  const principalScaled = parseScaledAmount(principal)
-  if (principalScaled === null || principalScaled <= 0n || feeBps < 0 || feeBps > 10000) {
-    return { fee: zeroAmount, net: zeroAmount }
-  }
-  const fee = (principalScaled * BigInt(feeBps)) / 10000n
-  return { fee: formatScaledAmount(fee), net: formatScaledAmount(principalScaled - fee) }
-}
-
 function multiplyAmounts(left: string, right: string | undefined): string {
   const leftAmount = parseScaledAmount(left)
   const rightAmount = parseScaledAmount(right)
@@ -1578,7 +1499,6 @@ function operationLabel(operation: string): string {
   const key = ({
     advance: 'bank.operations.advance',
     exchange: 'bank.operations.exchange',
-    exchange_expiry_refund: 'bank.operations.exchangeExpiryRefund',
     debt_offset: 'bank.operations.debtOffset',
     permanent_settlement: 'bank.operations.permanentSettlement',
     unused_advance_repayment: 'bank.operations.unusedAdvanceRepayment',
@@ -1718,9 +1638,7 @@ function selectSettingsSection(section: SettingsSection, focusTab = false): void
       ? advanceSettingsTab.value
       : section === 'exchange'
         ? exchangeSettingsTab.value
-        : section === 'repay'
-          ? repaySettingsTab.value
-          : expirySettingsTab.value
+        : repaySettingsTab.value
     tab?.focus()
   })
 }
@@ -1733,10 +1651,10 @@ function handleSettingsSectionKeydown(event: KeyboardEvent, currentSection: Sett
   }
 
   let nextSection: SettingsSection | null = null
-  const sections: SettingsSection[] = ['advance', 'exchange', 'repay', 'expiry']
+  const sections: SettingsSection[] = ['advance', 'exchange', 'repay']
   const currentIndex = sections.indexOf(currentSection)
   if (event.key === 'Home') nextSection = 'advance'
-  else if (event.key === 'End') nextSection = 'expiry'
+  else if (event.key === 'End') nextSection = 'repay'
   else if (event.key === 'ArrowRight') nextSection = sections[(currentIndex + 1) % sections.length]
   else if (event.key === 'ArrowLeft') nextSection = sections[(currentIndex - 1 + sections.length) % sections.length]
   if (!nextSection) return

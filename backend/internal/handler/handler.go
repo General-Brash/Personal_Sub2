@@ -11,7 +11,6 @@ type AdminHandlers struct {
 	User                   *admin.UserHandler
 	TemporaryCredit        *admin.TemporaryCreditHandler
 	Bank                   *admin.BankHandler
-	BankExchangeExpiry     *admin.BankExchangeExpiryHandler
 	Group                  *admin.GroupHandler
 	Account                *admin.AccountHandler
 	Announcement           *admin.AnnouncementHandler

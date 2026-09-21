@@ -15,7 +15,6 @@ func ProvideAdminHandlers(
 	userHandler *admin.UserHandler,
 	temporaryCreditHandler *admin.TemporaryCreditHandler,
 	bankHandler *admin.BankHandler,
-	bankExchangeExpiryHandler *admin.BankExchangeExpiryHandler,
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
 	announcementHandler *admin.AnnouncementHandler,
@@ -62,7 +61,6 @@ func ProvideAdminHandlers(
 		User:                   userHandler,
 		TemporaryCredit:        temporaryCreditHandler,
 		Bank:                   bankHandler,
-		BankExchangeExpiry:     bankExchangeExpiryHandler,
 		Group:                  groupHandler,
 		Account:                accountHandler,
 		Announcement:           announcementHandler,
@@ -190,10 +188,6 @@ func ProvideBankHandler(bankService *service.BankService) *BankHandler {
 	return NewBankHandler(bankService)
 }
 
-func ProvideAdminBankExchangeExpiryHandler(bankService *service.BankService) *admin.BankExchangeExpiryHandler {
-	return admin.NewBankExchangeExpiryHandler(bankService)
-}
-
 func ProvideAdminBankHandler(bankService *service.BankService) *admin.BankHandler {
 	return admin.NewBankHandler(bankService)
 }
@@ -317,7 +311,6 @@ var ProviderSet = wire.NewSet(
 	admin.NewUserHandler,
 	ProvideAdminTemporaryCreditHandler,
 	ProvideAdminBankHandler,
-	ProvideAdminBankExchangeExpiryHandler,
 	admin.NewGroupHandler,
 	admin.ProvideAccountHandler,
 	admin.NewAnnouncementHandler,
