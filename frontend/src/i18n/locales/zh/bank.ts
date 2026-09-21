@@ -3,7 +3,6 @@ export default {
     title: '商城',
     description: '购买货币商品与订阅套餐。',
     sections: {
-      store: '商店',
       bank: '银行',
       currency: '货币',
       subscription: '订阅',

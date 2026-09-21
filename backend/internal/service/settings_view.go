@@ -416,6 +416,10 @@ type PublicSettings struct {
 	// Model Plaza feature (public group/model pricing showcase)
 	ModelPlazaEnabled     bool `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth bool `json:"model_plaza_require_auth"`
+	// ModelPlazaV2Enabled selects the V2 catalog engine (default ON). Read-only
+	// mirror of the personal-features switch, surfaced so the frontend can render
+	// V2 by default and fall back to the legacy plaza only on explicit false.
+	ModelPlazaV2Enabled bool `json:"model_plaza_v2_enabled"`
 
 	// Affiliate (邀请返利) feature toggle
 	AffiliateEnabled bool `json:"affiliate_enabled"`

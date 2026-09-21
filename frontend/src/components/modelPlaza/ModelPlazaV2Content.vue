@@ -71,9 +71,12 @@
               <span v-if="choice.price_quote.dynamic_factor.details.next_threshold"> · 下一档 {{ choice.price_quote.dynamic_factor.details.next_threshold }}</span>
               <span v-if="choice.price_quote.dynamic_factor.details.reset_at" class="block">重置 {{ formatDate(choice.price_quote.dynamic_factor.details.reset_at) }}；已接纳请求不回算。</span>
             </div>
-            <div v-if="choice.price_quote?.effective_rate_multiplier != null || choice.price_quote?.channel_time_multiplier != null || choice.price_quote?.image_rate_independent" class="mt-3 flex flex-wrap gap-2 text-[11px]">
+            <div v-if="choice.price_quote?.effective_rate_multiplier != null || choice.price_quote?.channel_time_multiplier != null || choice.price_quote?.image_rate_independent || choice.price_quote?.rate_source" class="mt-3 flex flex-wrap gap-2 text-[11px]">
               <span v-if="choice.price_quote?.effective_rate_multiplier != null" class="rounded bg-primary-50 px-2 py-1 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
                 {{ locale === 'zh' ? '生效倍率' : 'Effective rate' }} ×{{ formatMultiplier(choice.price_quote.effective_rate_multiplier) }}
+              </span>
+              <span v-if="rateSourceLabel(choice.price_quote?.rate_source)" class="rounded bg-gray-100 px-2 py-1 text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+                {{ locale === 'zh' ? '来源' : 'Source' }}: {{ rateSourceLabel(choice.price_quote?.rate_source) }}
               </span>
               <span v-if="choice.price_quote?.peak_rate_multiplier != null" class="rounded bg-primary-50 px-2 py-1 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">{{locale==='zh'?'高峰因子':'Peak factor'}} ×{{formatMultiplier(choice.price_quote.peak_rate_multiplier)}}</span>
               <span v-if="choice.price_quote?.channel_time_multiplier != null" class="rounded bg-cyan-50 px-2 py-1 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300">
@@ -153,6 +156,22 @@ function formatDate(value: string): string {
 
 function formatMultiplier(value: number): string {
   return Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'
+}
+
+// 生效倍率的来源层:用户覆盖 / 消费权益(tier) / 分组默认。留空或未知不展示徽标。
+function rateSourceLabel(source: string | undefined): string {
+  if (!source) return ''
+  const zh: Record<string, string> = {
+    user_override: '用户专属',
+    entitlement_tier: '权益等级',
+    group_default: '分组默认'
+  }
+  const en: Record<string, string> = {
+    user_override: 'User override',
+    entitlement_tier: 'Entitlement tier',
+    group_default: 'Group default'
+  }
+  return (locale.value === 'zh' ? zh : en)[source] ?? source
 }
 
 function conditionSummary(condition: ModelPlazaV2PriceCondition): string {

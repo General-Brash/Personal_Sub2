@@ -444,6 +444,7 @@ type PublicSettings struct {
 
 	ModelPlazaEnabled     bool `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth bool `json:"model_plaza_require_auth"`
+	ModelPlazaV2Enabled   bool `json:"model_plaza_v2_enabled"`
 
 	AffiliateEnabled bool `json:"affiliate_enabled"`
 

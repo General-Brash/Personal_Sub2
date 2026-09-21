@@ -670,11 +670,12 @@
         <button type="button" class="btn btn-secondary" @click="loadSettings">{{ t('bank.actions.reload') }}</button>
       </div>
       <form v-else class="space-y-5" @submit.prevent="saveSettings">
-        <div role="tablist" aria-orientation="horizontal" :aria-label="t('bank.settings.title')" class="relative grid min-h-11 grid-cols-3 overflow-hidden rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
-          <span aria-hidden="true" class="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-white shadow-sm transition-transform dark:bg-dark-800" :style="{ width: 'calc(33.333333% - 0.166667rem)', transform: `translateX(${activeSettingsSection === 'advance' ? '0' : activeSettingsSection === 'exchange' ? '100%' : '200%'})` }" />
+        <div role="tablist" aria-orientation="horizontal" :aria-label="t('bank.settings.title')" class="relative grid min-h-11 grid-cols-4 overflow-hidden rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
+          <span aria-hidden="true" class="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-white shadow-sm transition-transform dark:bg-dark-800" :style="{ width: 'calc(25% - 0.125rem)', transform: `translateX(${activeSettingsSection === 'advance' ? '0' : activeSettingsSection === 'exchange' ? '100%' : activeSettingsSection === 'repay' ? '200%' : '300%'})` }" />
           <button id="bank-settings-tab-advance" ref="advanceSettingsTab" type="button" role="tab" data-test="settings-section-advance" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'advance' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'advance'" :tabindex="activeSettingsSection === 'advance' ? 0 : -1" aria-controls="bank-settings-panel-advance" @keydown="handleSettingsSectionKeydown($event, 'advance')" @click="selectSettingsSection('advance')">{{ t('bank.advance.title') }}</button>
           <button id="bank-settings-tab-exchange" ref="exchangeSettingsTab" type="button" role="tab" data-test="settings-section-exchange" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'exchange' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'exchange'" :tabindex="activeSettingsSection === 'exchange' ? 0 : -1" aria-controls="bank-settings-panel-exchange" @keydown="handleSettingsSectionKeydown($event, 'exchange')" @click="selectSettingsSection('exchange')">{{ t('bank.exchange.title') }}</button>
           <button id="bank-settings-tab-repay" ref="repaySettingsTab" type="button" role="tab" data-test="settings-section-repay" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'repay' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'repay'" :tabindex="activeSettingsSection === 'repay' ? 0 : -1" aria-controls="bank-settings-panel-repay" @keydown="handleSettingsSectionKeydown($event, 'repay')" @click="selectSettingsSection('repay')">{{ t('bank.repay.title') }}</button>
+          <button id="bank-settings-tab-expiry" ref="expirySettingsTab" type="button" role="tab" data-test="settings-section-expiry" class="relative z-10 px-2 py-2 text-sm font-medium" :class="activeSettingsSection === 'expiry' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'" :aria-selected="activeSettingsSection === 'expiry'" :tabindex="activeSettingsSection === 'expiry' ? 0 : -1" aria-controls="bank-settings-panel-expiry" @keydown="handleSettingsSectionKeydown($event, 'expiry')" @click="selectSettingsSection('expiry')">{{ t('bank.adminExchangeExpiry.title') }}</button>
         </div>
 
         <div id="bank-settings-panel-advance" v-show="activeSettingsSection === 'advance'" role="tabpanel" aria-labelledby="bank-settings-tab-advance" :aria-hidden="activeSettingsSection !== 'advance'" class="space-y-5">
@@ -737,6 +738,10 @@
             <p class="input-hint mt-1.5">{{ t('bank.settings.earlyPermanentRatioHint') }}</p>
           </div>
         </div>
+
+        <div id="bank-settings-panel-expiry" v-show="activeSettingsSection === 'expiry'" role="tabpanel" aria-labelledby="bank-settings-tab-expiry" :aria-hidden="activeSettingsSection !== 'expiry'">
+          <BankExchangeExpirySettings />
+        </div>
         <p v-if="settingsError" data-test="settings-error" class="input-error-text">{{ settingsError }}</p>
       </form>
       <template #footer>
@@ -780,6 +785,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
+import BankExchangeExpirySettings from '@/components/finance/BankExchangeExpirySettings.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
@@ -862,11 +868,12 @@ const settingsLoading = ref(false)
 const settingsLoadFailed = ref(false)
 const settingsSaving = ref(false)
 const settingsError = ref('')
-type SettingsSection = 'advance' | 'exchange' | 'repay'
+type SettingsSection = 'advance' | 'exchange' | 'repay' | 'expiry'
 const activeSettingsSection = ref<SettingsSection>('advance')
 const advanceSettingsTab = ref<HTMLButtonElement | null>(null)
 const exchangeSettingsTab = ref<HTMLButtonElement | null>(null)
 const repaySettingsTab = ref<HTMLButtonElement | null>(null)
+const expirySettingsTab = ref<HTMLButtonElement | null>(null)
 const loadedPolicyHadTiers = ref(false)
 const tiersDirty = ref(false)
 const settingsExactValues = {} as Record<SettingsAmountField, string>
@@ -1711,7 +1718,9 @@ function selectSettingsSection(section: SettingsSection, focusTab = false): void
       ? advanceSettingsTab.value
       : section === 'exchange'
         ? exchangeSettingsTab.value
-        : repaySettingsTab.value
+        : section === 'repay'
+          ? repaySettingsTab.value
+          : expirySettingsTab.value
     tab?.focus()
   })
 }
@@ -1724,10 +1733,10 @@ function handleSettingsSectionKeydown(event: KeyboardEvent, currentSection: Sett
   }
 
   let nextSection: SettingsSection | null = null
-  const sections: SettingsSection[] = ['advance', 'exchange', 'repay']
+  const sections: SettingsSection[] = ['advance', 'exchange', 'repay', 'expiry']
   const currentIndex = sections.indexOf(currentSection)
   if (event.key === 'Home') nextSection = 'advance'
-  else if (event.key === 'End') nextSection = 'repay'
+  else if (event.key === 'End') nextSection = 'expiry'
   else if (event.key === 'ArrowRight') nextSection = sections[(currentIndex + 1) % sections.length]
   else if (event.key === 'ArrowLeft') nextSection = sections[(currentIndex - 1 + sections.length) % sections.length]
   if (!nextSection) return

@@ -49,15 +49,30 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {}, hash: '' }),
 }))
 
-vi.mock('@/api/bank', () => ({
-  exchangePermanentForTemporary,
-  getBankLedger,
-  getBankSettings,
-  getBankStatus,
-  requestBankAdvance,
-  repayBankDebt,
-  updateBankSettings,
-}))
+vi.mock('@/api/bank', () => {
+  const bankExchangeExpiryPolicy = {
+    enabled: false,
+    fee_bps: 1000,
+    fee_rate: '10.00%',
+    timezone: 'UTC',
+    local_time: '00:00',
+    policy_version: 1,
+    updated_at: '2026-01-01T00:00:00Z',
+    default_fee_bps: 1000,
+    new_grants_only: true,
+  }
+  return {
+    exchangePermanentForTemporary,
+    getBankLedger,
+    getBankSettings,
+    getBankStatus,
+    requestBankAdvance,
+    repayBankDebt,
+    updateBankSettings,
+    getBankExchangeExpirySettings: vi.fn().mockResolvedValue(bankExchangeExpiryPolicy),
+    updateBankExchangeExpirySettings: vi.fn().mockResolvedValue(bankExchangeExpiryPolicy),
+  }
+})
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ ...appState, showError, showSuccess }),
@@ -851,9 +866,10 @@ describe('BankView', () => {
     const advanceTab = wrapper.get('[data-test="settings-section-advance"]')
     const exchangeTab = wrapper.get('[data-test="settings-section-exchange"]')
     const repayTab = wrapper.get('[data-test="settings-section-repay"]')
+    const expiryTab = wrapper.get('[data-test="settings-section-expiry"]')
     const advancePanel = wrapper.get(`#${advanceTab.attributes('aria-controls')}`)
     const exchangePanel = wrapper.get(`#${exchangeTab.attributes('aria-controls')}`)
-    const repayPanel = wrapper.get(`#${repayTab.attributes('aria-controls')}`)
+    const expiryPanel = wrapper.get(`#${expiryTab.attributes('aria-controls')}`)
     const exchangeElement = exchangeTab.element as HTMLElement
 
     expect(advanceTab.attributes('role')).toBe('tab')
@@ -882,21 +898,27 @@ describe('BankView', () => {
     expect(exchangePanel.attributes('aria-hidden')).toBe('false')
     expect(document.activeElement).toBe(exchangeTab.element)
 
-    await exchangeTab.trigger('keydown', { key: 'End' })
+    await exchangeTab.trigger('keydown', { key: 'ArrowRight' })
     await flushPromises()
     expect(repayTab.attributes('aria-selected')).toBe('true')
-    expect(repayPanel.attributes('aria-labelledby')).toBe(repayTab.attributes('id'))
     expect(document.activeElement).toBe(repayTab.element)
 
-    await repayTab.trigger('keydown', { key: 'ArrowRight' })
+    await repayTab.trigger('keydown', { key: 'End' })
+    await flushPromises()
+    expect(expiryTab.attributes('aria-selected')).toBe('true')
+    expect(expiryPanel.attributes('aria-labelledby')).toBe(expiryTab.attributes('id'))
+    expect(expiryPanel.attributes('aria-hidden')).toBe('false')
+    expect(document.activeElement).toBe(expiryTab.element)
+
+    await expiryTab.trigger('keydown', { key: 'ArrowRight' })
     await flushPromises()
     expect(advanceTab.attributes('aria-selected')).toBe('true')
 
     await advanceTab.trigger('keydown', { key: 'ArrowLeft' })
     await flushPromises()
-    expect(repayTab.attributes('aria-selected')).toBe('true')
+    expect(expiryTab.attributes('aria-selected')).toBe('true')
 
-    await repayTab.trigger('keydown', { key: 'Home' })
+    await expiryTab.trigger('keydown', { key: 'Home' })
     await flushPromises()
     expect(advanceTab.attributes('aria-selected')).toBe('true')
     expect(document.activeElement).toBe(advanceTab.element)

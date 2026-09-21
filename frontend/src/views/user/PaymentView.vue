@@ -59,7 +59,6 @@
                 </p>
               </div>
             </div>
-            <PaymentUtilityLinks />
             <section v-if="currencyProducts.length" class="card p-5 sm:p-6" data-test="currency-products">
               <div class="mb-4">
                 <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('commerce.currencyProducts.title') }}</h2>
@@ -399,7 +398,6 @@ import {
 import { platformAccentBarClass, platformBadgeLightClass, platformBadgeClass, platformTextClass, platformLabel } from '@/utils/platformColors'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
-import PaymentUtilityLinks from '@/components/payment/PaymentUtilityLinks.vue'
 import ProductPurchaseConfirmDialog from '@/components/payment/ProductPurchaseConfirmDialog.vue'
 import PurchaseLimitBadge from '@/components/payment/PurchaseLimitBadge.vue'
 import Icon from '@/components/icons/Icon.vue'

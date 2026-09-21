@@ -281,12 +281,13 @@ func (h *ModelPlazaHandler) GetV2(c *gin.Context) {
 		response.NotFound(c, "Model plaza v2 is not enabled")
 		return
 	}
+	// V2 is decoupled from the legacy plaza's master switch: it must stay
+	// reachable when model_plaza_enabled is off but the V2 engine is on
+	// (its own gate is modelPlazaV2Enabled + model_plaza_v2_enabled above).
+	// require_auth remains a shared plaza-level policy read from the same
+	// runtime setting so anonymous access rules match the legacy plaza.
 	if h.settingService != nil {
 		rt := h.settingService.GetModelPlazaRuntime(c.Request.Context())
-		if !rt.Enabled {
-			response.NotFound(c, "Model plaza is not enabled")
-			return
-		}
 		if rt.RequireAuth {
 			if _, authed := middleware.GetAuthSubjectFromContext(c); !authed {
 				response.Unauthorized(c, "Authentication required")

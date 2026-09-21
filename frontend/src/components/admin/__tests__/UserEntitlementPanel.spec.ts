@@ -5,6 +5,10 @@ import UserEntitlementPanel from '../UserEntitlementPanel.vue'
 const api = vi.hoisted(() => ({ getUserEntitlement: vi.fn(), getEntitlementCatalog: vi.fn(), previewEntitlementChange: vi.fn(), applyEntitlementChange: vi.fn(), updateUserEntitlement: vi.fn() }))
 vi.mock('@/api/adminEntitlements', () => api)
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 1 } }) }))
+vi.mock('vue-i18n', async () => {
+  const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
+  return { ...actual, useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => (params ? `${key} ${Object.values(params).join(' ')}` : key) }) }
+})
 const cap = { mode: 'enforce', writes_enabled: true, can_write: true }
 const entitlement = (id = 7) => ({ user_id: id, tier: 'standard', tier_enabled: true, version: 1, sources: [], manual_groups: [], subscription_groups: [], tier_groups: [], allowed_groups: [], default_rates: {}, capabilities: { ...cap } })
 const catalog = () => ({ tiers: [{ tier: 'standard', enabled: true, version: 1, groups: [] }, { tier: 'premium', enabled: true, version: 3, groups: [] }], capabilities: { ...cap } })
@@ -32,16 +36,16 @@ describe('P3.5 entitlement panel contracts', () => {
     api.getUserEntitlement.mockResolvedValue({ ...entitlement(), sources: null, manual_groups: null, subscription_groups: null, capabilities: { ...cap, can_write: false } })
     api.getEntitlementCatalog.mockRejectedValue({ status: 403 })
     const wrapper = render(); await flushPromises()
-    expect(wrapper.text()).toContain('默认 standard')
-    expect(wrapper.text()).toContain('已成功读取的基础权益仍可查看')
-    expect(wrapper.text()).toContain('没有等级政策目录读取权限')
+    expect(wrapper.text()).toContain('userEntitlement.defaultStandard')
+    expect(wrapper.text()).toContain('userEntitlement.catalogErrorSuffix')
+    expect(wrapper.text()).toContain('userEntitlement.err.catalogForbidden')
     expect(wrapper.find('[data-testid="entitlement-apply"]').exists()).toBe(false)
   })
 
   it('does not describe missing capabilities as mode-off', async () => {
     api.getUserEntitlement.mockResolvedValue({ ...entitlement(), capabilities: undefined })
     const wrapper = render(); await flushPromises()
-    expect(wrapper.text()).toContain('写入能力未知')
+    expect(wrapper.text()).toContain('userEntitlement.ro.unknown')
     expect(wrapper.text()).not.toContain('权限 enforce 未开启')
   })
 
@@ -76,7 +80,7 @@ describe('P3.5 entitlement panel contracts', () => {
   it('allows a disabled policy preview but never applies it', async () => {
     api.previewEntitlementChange.mockResolvedValue({ ...preview(), policy_enabled: false, affected_user_ids: null, already_at_tier: null })
     const wrapper = render(); await readyToApply(wrapper)
-    expect(wrapper.text()).toContain('本次预览只读，不可应用')
+    expect(wrapper.text()).toContain('userEntitlement.previewDisabled')
     expect(wrapper.get('[data-testid="entitlement-apply"]').attributes('disabled')).toBeDefined()
     expect(api.updateUserEntitlement).not.toHaveBeenCalled()
   })
@@ -86,13 +90,13 @@ describe('P3.5 entitlement panel contracts', () => {
     const wrapper = render(); await readyToApply(wrapper)
     await wrapper.get('[data-testid="entitlement-apply"]').trigger('click'); await flushPromises()
     const original = [...api.updateUserEntitlement.mock.calls[0]]
-    expect(wrapper.text()).toContain('原请求结果未知')
+    expect(wrapper.text()).toContain('userEntitlement.pendingUnknown')
     expect(wrapper.get('[data-testid="entitlement-reason"]').attributes('disabled')).toBeDefined()
     expect(sessionStorage.getItem('sub2:entitlement-pending:v1:1')).toContain(original[3])
     api.getUserEntitlement.mockRejectedValueOnce({ status: 503 })
     await wrapper.get('[data-testid="entitlement-retry"]').trigger('click'); await flushPromises()
     expect(api.updateUserEntitlement.mock.calls[1]).toEqual(original)
-    expect(wrapper.get('[data-testid="entitlement-status"]').text()).toContain('保存成功，但刷新失败')
+    expect(wrapper.get('[data-testid="entitlement-status"]').text()).toContain('userEntitlement.savedRefreshFailed')
     expect(wrapper.find('[data-testid="entitlement-retry"]').exists()).toBe(false)
     expect(sessionStorage.getItem('sub2:entitlement-pending:v1:1')).toBeNull()
     expect(wrapper.emitted('changed')).toHaveLength(1)
@@ -105,7 +109,7 @@ describe('P3.5 entitlement panel contracts', () => {
     const original = [...api.updateUserEntitlement.mock.calls[0]]
     first.unmount(); wrappers = []
     const reopened = render(); await flushPromises()
-    expect(reopened.text()).toContain('原请求结果未知')
+    expect(reopened.text()).toContain('userEntitlement.pendingUnknown')
     await reopened.get('[data-testid="entitlement-retry"]').trigger('click'); await flushPromises()
     expect(api.updateUserEntitlement.mock.calls[1]).toEqual(original)
   })
@@ -114,7 +118,7 @@ describe('P3.5 entitlement panel contracts', () => {
     api.updateUserEntitlement.mockRejectedValueOnce({ status: 403 })
     const wrapper = render(); await readyToApply(wrapper)
     await wrapper.get('[data-testid="entitlement-apply"]').trigger('click'); await flushPromises()
-    expect(wrapper.text()).toContain('当前无写入权限')
+    expect(wrapper.text()).toContain('userEntitlement.err.writeForbidden')
     expect(wrapper.find('[data-testid="entitlement-retry"]').exists()).toBe(false)
     expect(sessionStorage.getItem('sub2:entitlement-pending:v1:1')).toBeNull()
   })
