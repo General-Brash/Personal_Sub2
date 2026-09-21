@@ -181,6 +181,22 @@
               @update:model-value="emit('update:adminOpsEnabled', $event)"
             />
           </div>
+
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.plugins.title') }}
+              </p>
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.plugins.description') }}
+              </p>
+            </div>
+            <Toggle
+              :model-value="pluginManagementEnabled"
+              :aria-label="t('admin.plugins.title')"
+              @update:model-value="emit('update:pluginManagementEnabled', $event)"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -203,6 +219,7 @@ defineProps<{
   adminBankTransactionsEnabled: boolean
   adminAuditLogsEnabled: boolean
   adminOpsEnabled: boolean
+  pluginManagementEnabled: boolean
 }>()
 
 const emit = defineEmits<{
@@ -216,6 +233,7 @@ const emit = defineEmits<{
   (event: 'update:adminBankTransactionsEnabled', value: boolean): void
   (event: 'update:adminAuditLogsEnabled', value: boolean): void
   (event: 'update:adminOpsEnabled', value: boolean): void
+  (event: 'update:pluginManagementEnabled', value: boolean): void
 }>()
 
 const { t } = useI18n()

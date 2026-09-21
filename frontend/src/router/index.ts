@@ -969,7 +969,7 @@ router.beforeEach(async (to, _from, next) => {
       }
       const plazaSettings = appStore.cachedPublicSettings
       // 仅在设置成功加载且明确为 false 时拦截(瞬时加载失败视为未知,由后端 404 兜底)
-      if (appStore.publicSettingsLoaded && plazaSettings?.model_plaza_enabled === false) {
+      if (appStore.publicSettingsLoaded && plazaSettings?.model_plaza_v2_enabled === false) {
         next(
           authStore.isAuthenticated
             ? authStore.isAdmin

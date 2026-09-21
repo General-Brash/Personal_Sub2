@@ -84,6 +84,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyAdminBankTransactionsEnabled:              "true",
 		SettingKeyAdminAuditLogsEnabled:                     "true",
 		SettingKeyAdminOpsEnabled:                           "true",
+		SettingKeyPluginManagementEnabled:                   "true",
 		SettingKeyWeChatConnectEnabled:                      "false",
 		SettingKeyWeChatConnectAppID:                        "",
 		SettingKeyWeChatConnectAppSecret:                    "",
@@ -836,6 +837,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.AdminBankTransactionsEnabled = !isFalseSettingValue(settings[SettingKeyAdminBankTransactionsEnabled])
 	result.AdminAuditLogsEnabled = !isFalseSettingValue(settings[SettingKeyAdminAuditLogsEnabled])
 	result.AdminOpsEnabled = !isFalseSettingValue(settings[SettingKeyAdminOpsEnabled])
+	result.PluginManagementEnabled = !isFalseSettingValue(settings[SettingKeyPluginManagementEnabled])
 
 	// Model plaza feature (default: disabled; strict true)
 	result.ModelPlazaEnabled = settings[SettingKeyModelPlazaEnabled] == "true"

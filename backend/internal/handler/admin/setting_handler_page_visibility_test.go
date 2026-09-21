@@ -25,6 +25,7 @@ type pageVisibilityResponse struct {
 		AdminBankTransactionsEnabled  bool `json:"admin_bank_transactions_enabled"`
 		AdminAuditLogsEnabled         bool `json:"admin_audit_logs_enabled"`
 		AdminOpsEnabled               bool `json:"admin_ops_enabled"`
+		PluginManagementEnabled       bool `json:"plugin_management_enabled"`
 	} `json:"data"`
 }
 
@@ -40,6 +41,7 @@ func TestSettingHandler_GetSettings_ExposesPageVisibility(t *testing.T) {
 		service.SettingKeyAdminBankTransactionsEnabled:  "true",
 		service.SettingKeyAdminAuditLogsEnabled:         "false",
 		service.SettingKeyAdminOpsEnabled:               "true",
+		service.SettingKeyPluginManagementEnabled:       "true",
 	}}
 	handler := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), nil, nil, nil, nil, nil, nil)
 
@@ -62,6 +64,7 @@ func TestSettingHandler_GetSettings_ExposesPageVisibility(t *testing.T) {
 	require.True(t, resp.Data.AdminBankTransactionsEnabled)
 	require.False(t, resp.Data.AdminAuditLogsEnabled)
 	require.True(t, resp.Data.AdminOpsEnabled)
+	require.True(t, resp.Data.PluginManagementEnabled)
 }
 
 func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testing.T) {
@@ -77,6 +80,7 @@ func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testin
 		service.SettingKeyAdminBankTransactionsEnabled:  "true",
 		service.SettingKeyAdminAuditLogsEnabled:         "true",
 		service.SettingKeyAdminOpsEnabled:               "true",
+		service.SettingKeyPluginManagementEnabled:       "true",
 	}}
 	handler := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), nil, nil, nil, nil, nil, nil)
 	body, err := json.Marshal(map[string]any{
@@ -105,6 +109,7 @@ func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testin
 	require.Equal(t, "true", repo.values[service.SettingKeyAdminBankTransactionsEnabled])
 	require.Equal(t, "false", repo.values[service.SettingKeyAdminAuditLogsEnabled])
 	require.Equal(t, "true", repo.values[service.SettingKeyAdminOpsEnabled])
+	require.Equal(t, "true", repo.values[service.SettingKeyPluginManagementEnabled])
 
 	var resp pageVisibilityResponse
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
@@ -118,6 +123,7 @@ func TestSettingHandler_UpdateSettings_MergesAndPersistsPageVisibility(t *testin
 	require.True(t, resp.Data.AdminBankTransactionsEnabled)
 	require.False(t, resp.Data.AdminAuditLogsEnabled)
 	require.True(t, resp.Data.AdminOpsEnabled)
+	require.True(t, resp.Data.PluginManagementEnabled)
 }
 
 func TestDiffSettings_IncludesPageVisibility(t *testing.T) {
@@ -131,6 +137,7 @@ func TestDiffSettings_IncludesPageVisibility(t *testing.T) {
 		AdminBankTransactionsEnabled:  true,
 		AdminAuditLogsEnabled:         true,
 		AdminOpsEnabled:               true,
+		PluginManagementEnabled:       true,
 	}
 	after := &service.SystemSettings{}
 
@@ -146,5 +153,6 @@ func TestDiffSettings_IncludesPageVisibility(t *testing.T) {
 		"admin_bank_transactions_enabled",
 		"admin_audit_logs_enabled",
 		"admin_ops_enabled",
+		"plugin_management_enabled",
 	}, changed)
 }

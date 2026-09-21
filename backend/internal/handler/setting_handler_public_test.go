@@ -95,6 +95,7 @@ func TestSettingHandler_GetPublicSettings_ExposesPageVisibility(t *testing.T) {
 		service.SettingKeyAdminBankTransactionsEnabled:  "true",
 		service.SettingKeyAdminAuditLogsEnabled:         "false",
 		service.SettingKeyAdminOpsEnabled:               "true",
+		service.SettingKeyPluginManagementEnabled:       "true",
 	}}
 	h := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), "test-version")
 
@@ -117,6 +118,7 @@ func TestSettingHandler_GetPublicSettings_ExposesPageVisibility(t *testing.T) {
 			AdminBankTransactionsEnabled  bool `json:"admin_bank_transactions_enabled"`
 			AdminAuditLogsEnabled         bool `json:"admin_audit_logs_enabled"`
 			AdminOpsEnabled               bool `json:"admin_ops_enabled"`
+			PluginManagementEnabled       bool `json:"plugin_management_enabled"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
@@ -130,6 +132,7 @@ func TestSettingHandler_GetPublicSettings_ExposesPageVisibility(t *testing.T) {
 	require.True(t, resp.Data.AdminBankTransactionsEnabled)
 	require.False(t, resp.Data.AdminAuditLogsEnabled)
 	require.True(t, resp.Data.AdminOpsEnabled)
+	require.True(t, resp.Data.PluginManagementEnabled)
 }
 
 func TestSettingHandler_GetPublicSettings_ExposesTencentCaptchaConfiguration(t *testing.T) {

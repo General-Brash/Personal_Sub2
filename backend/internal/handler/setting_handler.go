@@ -121,6 +121,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		AdminBankTransactionsEnabled:  settings.AdminBankTransactionsEnabled,
 		AdminAuditLogsEnabled:         settings.AdminAuditLogsEnabled,
 		AdminOpsEnabled:               settings.AdminOpsEnabled,
+		PluginManagementEnabled:       settings.PluginManagementEnabled,
 
 		ModelPlazaEnabled:     settings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth: settings.ModelPlazaRequireAuth,

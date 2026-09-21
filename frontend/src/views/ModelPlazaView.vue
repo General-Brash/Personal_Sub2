@@ -32,16 +32,9 @@ const authStore = useAuthStore()
 
 // embedded=1 但未登录(如转发的链接)自动降级为独立形态。
 const isEmbedded = computed(() => route.query.embedded === '1' && authStore.isAuthenticated)
-// V2 是默认形态(newapi 式单一广场)。回退旧广场的两种情况:
-//   1. ?plaza_legacy=1 临时逃生开关(旧广场正式下线前保留);
-//   2. 管理端显式关闭 V2 引擎(model_plaza_v2_enabled === false)。
-// 公开设置经 SSR 注入在 mount 前同步命中,缺省(undefined)视为开启(opt-out)。
-// ?plaza_v2=1 保留为显式强制 V2(灰度/测试),优先级高于设置但低于 legacy 逃生。
-const useV2 = computed(() => {
-  if (route.query.plaza_legacy === '1') return false
-  if (route.query.plaza_v2 === '1') return true
-  return appStore.cachedPublicSettings?.model_plaza_v2_enabled !== false
-})
+// V2 已彻底接管模型广场,恒为默认形态(newapi 式单一广场)。
+// 仅保留 ?plaza_legacy=1 逃生开关回退旧广场(旧广场正式下线前保留)。
+const useV2 = computed(() => route.query.plaza_legacy !== '1')
 
 const data = ref<ModelPlazaResponse | null>(null)
 const v2Data = ref<ModelPlazaV2Response | null>(null)
