@@ -15,29 +15,28 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/redis/go-redis/v9"
 )
 
 // oidcSSOCodeTTL 是跨域 SSO 一次性凭证的有效期（含一次性消费标记的过期）。
 const oidcSSOCodeTTL = 60 * time.Second
 
 type OIDCProviderService struct {
-	repo       OIDCProviderRepository
-	users      UserRepository
-	totp       *TotpService
-	cfg        *config.Config
-	protector  *oidcProtector
-	signing    *OIDCSigningService
-	loginGuard *oidcLoginAttemptGuard
-	redis      *redis.Client
+	repo         OIDCProviderRepository
+	users        UserRepository
+	totp         *TotpService
+	cfg          *config.Config
+	protector    *oidcProtector
+	signing      *OIDCSigningService
+	loginGuard   *oidcLoginAttemptGuard
+	ssoCodeCache OIDCSSOCodeCache
 }
 
-func NewOIDCProviderService(repo OIDCProviderRepository, users UserRepository, totp *TotpService, signing *OIDCSigningService, cfg *config.Config, redisClient *redis.Client) *OIDCProviderService {
+func NewOIDCProviderService(repo OIDCProviderRepository, users UserRepository, totp *TotpService, signing *OIDCSigningService, cfg *config.Config, ssoCodeCache OIDCSSOCodeCache) *OIDCProviderService {
 	var protector *oidcProtector
 	if cfg != nil && cfg.OIDCProvider.EncryptionKey != "" {
 		protector, _ = newOIDCProtector(cfg)
 	}
-	return &OIDCProviderService{repo: repo, users: users, totp: totp, signing: signing, cfg: cfg, protector: protector, loginGuard: newOIDCLoginAttemptGuard(), redis: redisClient}
+	return &OIDCProviderService{repo: repo, users: users, totp: totp, signing: signing, cfg: cfg, protector: protector, loginGuard: newOIDCLoginAttemptGuard(), ssoCodeCache: ssoCodeCache}
 }
 
 func (s *OIDCProviderService) enabled() error {
@@ -1080,10 +1079,10 @@ func (s *OIDCProviderService) RedeemSSOCode(ctx context.Context, code, handle st
 	if err != nil || time.Now().UTC().Unix() > expUnix {
 		return 0, ErrOIDCInvalidRequest
 	}
-	if s.redis != nil {
-		ok, rErr := s.redis.SetNX(ctx, "oidc:sso:consumed:"+oidcFingerprint(plain), "1", oidcSSOCodeTTL).Result()
-		if rErr != nil {
-			return 0, rErr
+	if s.ssoCodeCache != nil {
+		ok, cErr := s.ssoCodeCache.ConsumeOnce(ctx, oidcFingerprint(plain), oidcSSOCodeTTL)
+		if cErr != nil {
+			return 0, cErr
 		}
 		if !ok {
 			return 0, ErrOIDCInvalidRequest

@@ -7,11 +7,27 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
 )
 
 const ssoTestEncryptionKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+
+// fakeSSOCodeCache 是 OIDCSSOCodeCache 的内存实现，用于隔离测试一次性消费语义，
+// 避免 service 层测试直接依赖 redis。
+type fakeSSOCodeCache struct {
+	consumed map[string]bool
+}
+
+func newFakeSSOCodeCache() *fakeSSOCodeCache {
+	return &fakeSSOCodeCache{consumed: map[string]bool{}}
+}
+
+func (c *fakeSSOCodeCache) ConsumeOnce(_ context.Context, fingerprint string, _ time.Duration) (bool, error) {
+	if c.consumed[fingerprint] {
+		return false, nil
+	}
+	c.consumed[fingerprint] = true
+	return true, nil
+}
 
 // precheckUserRepo 是 LoginPrecheck 测试用的最小 UserRepository：按邮箱返回预置用户。
 type precheckUserRepo struct {
@@ -50,14 +66,14 @@ func TestLoginPrecheck_ConsistentResponses(t *testing.T) {
 	}
 }
 
-func newSSOTestService(t *testing.T, rdb *redis.Client) *OIDCProviderService {
+func newSSOTestService(t *testing.T, cache OIDCSSOCodeCache) *OIDCProviderService {
 	t.Helper()
 	cfg := &config.Config{OIDCProvider: config.OIDCProviderConfig{
 		Enabled:       true,
 		EncryptionKey: ssoTestEncryptionKey,
 		SecretPepper:  "runtime-secret-pepper-abcdefghijklmnopqrstuvwxyz",
 	}}
-	svc := NewOIDCProviderService(nil, nil, nil, nil, cfg, rdb)
+	svc := NewOIDCProviderService(nil, nil, nil, nil, cfg, cache)
 	if svc.protector == nil {
 		t.Fatal("protector must be initialised for SSO tests")
 	}
@@ -121,18 +137,14 @@ func TestRedeemSSOCode_TamperedRejected(t *testing.T) {
 }
 
 func TestRedeemSSOCode_OneTimeConsumption(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = rdb.Close() })
-
-	svc := newSSOTestService(t, rdb)
+	svc := newSSOTestService(t, newFakeSSOCodeCache())
 	const handle = "tx-handle-abc"
 	code := craftSSOCode(t, svc, 77, handle, time.Now().UTC().Add(30*time.Second).Unix())
 
 	if _, err := svc.RedeemSSOCode(context.Background(), code, handle); err != nil {
 		t.Fatalf("first redemption must succeed: %v", err)
 	}
-	// 二次核销同一 code：Redis 已标记消费，必须被拒绝（防重放）。
+	// 二次核销同一 code：缓存已标记消费，必须被拒绝（防重放）。
 	if _, err := svc.RedeemSSOCode(context.Background(), code, handle); err == nil {
 		t.Fatal("second redemption of the same code must be rejected")
 	}
