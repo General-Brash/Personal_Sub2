@@ -17,22 +17,26 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 )
 
+// oidcSSOCodeTTL 是跨域 SSO 一次性凭证的有效期（含一次性消费标记的过期）。
+const oidcSSOCodeTTL = 60 * time.Second
+
 type OIDCProviderService struct {
-	repo       OIDCProviderRepository
-	users      UserRepository
-	totp       *TotpService
-	cfg        *config.Config
-	protector  *oidcProtector
-	signing    *OIDCSigningService
-	loginGuard *oidcLoginAttemptGuard
+	repo         OIDCProviderRepository
+	users        UserRepository
+	totp         *TotpService
+	cfg          *config.Config
+	protector    *oidcProtector
+	signing      *OIDCSigningService
+	loginGuard   *oidcLoginAttemptGuard
+	ssoCodeCache OIDCSSOCodeCache
 }
 
-func NewOIDCProviderService(repo OIDCProviderRepository, users UserRepository, totp *TotpService, signing *OIDCSigningService, cfg *config.Config) *OIDCProviderService {
+func NewOIDCProviderService(repo OIDCProviderRepository, users UserRepository, totp *TotpService, signing *OIDCSigningService, cfg *config.Config, ssoCodeCache OIDCSSOCodeCache) *OIDCProviderService {
 	var protector *oidcProtector
 	if cfg != nil && cfg.OIDCProvider.EncryptionKey != "" {
 		protector, _ = newOIDCProtector(cfg)
 	}
-	return &OIDCProviderService{repo: repo, users: users, totp: totp, signing: signing, cfg: cfg, protector: protector, loginGuard: newOIDCLoginAttemptGuard()}
+	return &OIDCProviderService{repo: repo, users: users, totp: totp, signing: signing, cfg: cfg, protector: protector, loginGuard: newOIDCLoginAttemptGuard(), ssoCodeCache: ssoCodeCache}
 }
 
 func (s *OIDCProviderService) enabled() error {
@@ -371,12 +375,23 @@ func (s *OIDCProviderService) AuthenticateTransactionWithSession(ctx context.Con
 		}
 		amr += " " + OIDCSessionAMRTOTP
 	}
+	rawSession, err := s.establishBrowserSession(ctx, transaction, user.ID, amr, currentSessionHandle)
+	if err != nil {
+		return "", err
+	}
+	s.loginGuard.success(attemptKey, time.Now().UTC())
+	return rawSession, nil
+}
+
+// establishBrowserSession 建立新的浏览器会话、按需轮换旧会话，并把授权事务标记为已认证，
+// 返回新的 raw session handle。密码登录与跨域 SSO 共用此逻辑（不含登录限流的成功计数）。
+func (s *OIDCProviderService) establishBrowserSession(ctx context.Context, transaction *OIDCTransactionRecord, userID int64, amr, currentSessionHandle string) (string, error) {
 	now := time.Now().UTC()
 	rawSession, err := oidcRandomToken(32)
 	if err != nil {
 		return "", err
 	}
-	if err := s.repo.CreateBrowserSession(ctx, oidcDigest(rawSession), user.ID, now, amr, now.Add(s.cfg.OIDCProvider.BrowserSessionIdleTTL()), now.Add(s.cfg.OIDCProvider.BrowserSessionAbsoluteTTL())); err != nil {
+	if err := s.repo.CreateBrowserSession(ctx, oidcDigest(rawSession), userID, now, amr, now.Add(s.cfg.OIDCProvider.BrowserSessionIdleTTL()), now.Add(s.cfg.OIDCProvider.BrowserSessionAbsoluteTTL())); err != nil {
 		return "", err
 	}
 	if currentSessionHandle != "" {
@@ -397,13 +412,12 @@ func (s *OIDCProviderService) AuthenticateTransactionWithSession(ctx context.Con
 		}
 	}
 	session, err := s.repo.GetBrowserSession(ctx, oidcDigest(rawSession), now)
-	if err != nil || session == nil || session.UserID != user.ID || session.SessionVersion <= 0 {
+	if err != nil || session == nil || session.UserID != userID || session.SessionVersion <= 0 {
 		return "", ErrOIDCLoginRequired
 	}
-	if err := s.repo.SetTransactionAuthenticated(ctx, transaction.ID, session.ID, user.ID, session.AuthTime); err != nil {
+	if err := s.repo.SetTransactionAuthenticated(ctx, transaction.ID, session.ID, userID, session.AuthTime); err != nil {
 		return "", err
 	}
-	s.loginGuard.success(attemptKey, now)
 	return rawSession, nil
 }
 
@@ -949,4 +963,147 @@ func validateOIDCRedirect(raw string) error {
 		return ErrOIDCInvalidRequest
 	}
 	return nil
+}
+
+// OIDCConsentView 授权确认页展示所需的只读信息。
+type OIDCConsentView struct {
+	ClientName  string
+	ClientOwner string
+	Scopes      []string
+	UserEmail   string
+	UserName    string
+}
+
+// LoadConsentView 汇总授权确认页展示数据：接入应用名/负责人、请求的 scope 列表、
+// 以及当前登录用户身份。优先取事务上已认证用户，回退到浏览器会话。
+func (s *OIDCProviderService) LoadConsentView(ctx context.Context, handle, sessionHandle string) (*OIDCConsentView, error) {
+	transaction, err := s.repo.GetAuthorizationTransaction(ctx, oidcDigest(handle), time.Now().UTC())
+	if err != nil {
+		return nil, ErrOIDCInvalidRequest
+	}
+	client, err := s.repo.GetClientByID(ctx, transaction.ClientPK)
+	if err != nil {
+		return nil, ErrOIDCInvalidClient
+	}
+	view := &OIDCConsentView{
+		ClientName:  client.Name,
+		ClientOwner: client.Owner,
+		Scopes:      strings.Fields(transaction.ScopeSnapshot),
+	}
+	if transaction.UserID != nil && *transaction.UserID != 0 {
+		if user, uErr := s.repo.GetUser(ctx, *transaction.UserID); uErr == nil && user != nil {
+			view.UserEmail = user.Email
+			view.UserName = user.Username
+			return view, nil
+		}
+	}
+	if sessionHandle != "" {
+		if _, user, sErr := s.loadSession(ctx, sessionHandle); sErr == nil && user != nil {
+			view.UserEmail = user.Email
+			view.UserName = user.Username
+		}
+	}
+	return view, nil
+}
+
+// LoginPrecheck 判断某邮箱在登录第二步是否需要 TOTP。
+// 为避免账号枚举，对不存在/未激活用户返回 false（与"未启用 2FA"一致），
+// 仅当用户存在、激活且个人开启了 2FA 时返回 true。
+// attemptKey 命中登录限流时同样返回 false（不泄露 2FA 状态，仅退回密码页）。
+func (s *OIDCProviderService) LoginPrecheck(ctx context.Context, email, attemptKey string) bool {
+	if _, blocked := s.loginGuard.check(attemptKey, time.Now().UTC()); blocked {
+		return false
+	}
+	user, err := s.users.GetByEmail(ctx, strings.TrimSpace(email))
+	if err != nil || user == nil || !user.IsActive() {
+		return false
+	}
+	return user.TotpEnabled
+}
+
+// IssueSSOCode 为主面板已登录用户签发一次性跨域 SSO 凭证，绑定 user_id + 授权事务摘要，
+// 60s 过期。凭证由 protector 加密签名（不可伪造），供主面板引导页换取 auth 子域会话。
+// 仅当事务有效且尚未认证、用户存在且激活时签发。
+func (s *OIDCProviderService) IssueSSOCode(ctx context.Context, userID int64, handle string) (string, error) {
+	if err := s.RequireActiveSigningKey(ctx); err != nil {
+		return "", err
+	}
+	if s.protector == nil {
+		return "", ErrOIDCInvalidRequest
+	}
+	if userID <= 0 || strings.TrimSpace(handle) == "" {
+		return "", ErrOIDCInvalidRequest
+	}
+	transaction, err := s.repo.GetAuthorizationTransaction(ctx, oidcDigest(handle), time.Now().UTC())
+	if err != nil {
+		return "", ErrOIDCInvalidRequest
+	}
+	if transaction.UserID != nil && *transaction.UserID != 0 {
+		return "", ErrOIDCInvalidRequest
+	}
+	user, err := s.repo.GetUser(ctx, userID)
+	if err != nil || user == nil || user.Status != StatusActive || user.DeletedAt != nil {
+		return "", ErrOIDCUserInactive
+	}
+	exp := time.Now().UTC().Add(oidcSSOCodeTTL).Unix()
+	payload := strconv.FormatInt(userID, 10) + "|" + oidcDigest(handle) + "|" + strconv.FormatInt(exp, 10)
+	code, _, err := s.protector.seal(payload, "sso-code", oidcDigest(handle))
+	if err != nil {
+		return "", err
+	}
+	return code, nil
+}
+
+// RedeemSSOCode 校验并一次性消费跨域 SSO 凭证，返回其绑定的 user_id。
+// 校验：签名有效、事务摘要匹配、未过期；随后用 Redis SETNX 标记消费，防止重放。
+func (s *OIDCProviderService) RedeemSSOCode(ctx context.Context, code, handle string) (int64, error) {
+	if s.protector == nil {
+		return 0, ErrOIDCInvalidRequest
+	}
+	plain, err := s.protector.open(strings.TrimSpace(code), "sso-code", oidcDigest(handle))
+	if err != nil {
+		return 0, ErrOIDCInvalidRequest
+	}
+	parts := strings.Split(plain, "|")
+	if len(parts) != 3 {
+		return 0, ErrOIDCInvalidRequest
+	}
+	userID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || userID <= 0 {
+		return 0, ErrOIDCInvalidRequest
+	}
+	if subtle.ConstantTimeCompare([]byte(parts[1]), []byte(oidcDigest(handle))) != 1 {
+		return 0, ErrOIDCInvalidRequest
+	}
+	expUnix, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil || time.Now().UTC().Unix() > expUnix {
+		return 0, ErrOIDCInvalidRequest
+	}
+	if s.ssoCodeCache != nil {
+		ok, cErr := s.ssoCodeCache.ConsumeOnce(ctx, oidcFingerprint(plain), oidcSSOCodeTTL)
+		if cErr != nil {
+			return 0, cErr
+		}
+		if !ok {
+			return 0, ErrOIDCInvalidRequest
+		}
+	}
+	return userID, nil
+}
+
+// EstablishBrowserSessionForUser 为已由主站鉴权的用户建立 OIDC 浏览器会话（跳过密码/TOTP 校验），
+// 并把当前授权事务标记为已认证。返回新的 raw session handle，供 handler 种入会话 cookie。
+func (s *OIDCProviderService) EstablishBrowserSessionForUser(ctx context.Context, handle string, userID int64, currentSessionHandle string) (string, error) {
+	if err := s.RequireActiveSigningKey(ctx); err != nil {
+		return "", err
+	}
+	transaction, err := s.repo.GetAuthorizationTransaction(ctx, oidcDigest(handle), time.Now().UTC())
+	if err != nil {
+		return "", ErrOIDCInvalidRequest
+	}
+	user, err := s.repo.GetUser(ctx, userID)
+	if err != nil || user == nil || user.Status != StatusActive || user.DeletedAt != nil {
+		return "", ErrOIDCUserInactive
+	}
+	return s.establishBrowserSession(ctx, transaction, user.ID, OIDCSessionAMRPassword, currentSessionHandle)
 }

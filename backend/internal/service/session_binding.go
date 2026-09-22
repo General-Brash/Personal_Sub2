@@ -9,27 +9,28 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
-// ErrSessionBindingMismatch 会话绑定的 IP/UA 发生变化，会话已失效。
+// ErrSessionBindingMismatch 会话绑定的 User-Agent 发生变化，会话已失效。
 var ErrSessionBindingMismatch = infraerrors.Unauthorized("SESSION_BINDING_MISMATCH", "session network fingerprint changed, please login again")
 
-// SessionBinding 会话指纹：登录时的客户端 IP 与 User-Agent。
-// 会话绑定开启时，两者任一变化即导致会话失效（防止凭证被盗后异地重放）。
+// SessionBinding 会话指纹：客户端 IP 与 User-Agent。
+// 会话绑定开启时，仅 User-Agent 变化会导致会话失效；IP 变化被忽略
+// （避免移动网络 / 多出口 IP 频繁切换导致登录后立即掉线）。
+// IP 字段仍保留，供审计等其它用途使用，不参与指纹哈希。
 type SessionBinding struct {
 	IP        string
 	UserAgent string
 }
 
-// Hash 计算绑定指纹哈希（IP 与 UA 合并，任一变化哈希即变化）。
+// Hash 计算绑定指纹哈希（仅基于 User-Agent；IP 不参与，故 IP 变化不影响哈希）。
 func (b *SessionBinding) Hash() string {
 	if b == nil {
 		return ""
 	}
-	ip := strings.TrimSpace(b.IP)
 	ua := strings.TrimSpace(b.UserAgent)
-	if ip == "" && ua == "" {
+	if ua == "" {
 		return ""
 	}
-	sum := sha256.Sum256([]byte(ip + "\n" + ua))
+	sum := sha256.Sum256([]byte(ua))
 	return hex.EncodeToString(sum[:16])
 }
 

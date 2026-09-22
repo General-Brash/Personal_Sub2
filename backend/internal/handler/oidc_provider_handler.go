@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"html"
 	"mime"
 	"net/http"
 	"net/url"
@@ -69,7 +68,7 @@ func (h *OIDCProviderHandler) Authorize(c *gin.Context) {
 	}
 	h.setCookie(c, h.cfg.OIDCProvider.Cookie.TransactionName, result.TransactionHandle, true, 300)
 	if result.NeedsLogin {
-		h.renderLogin(c, result.TransactionHandle)
+		h.beginLogin(c, result.TransactionHandle)
 		return
 	}
 	if result.NeedsConsent {
@@ -79,36 +78,70 @@ func (h *OIDCProviderHandler) Authorize(c *gin.Context) {
 	h.redirectSuccess(c, result)
 }
 
-func (h *OIDCProviderHandler) LoginPage(c *gin.Context) {
+// beginLogin 把授权登录入口恒收敛到主面板 SSO：跳转到主面板 SSO 引导页，
+// 复用主站登录态实现免密授权。auth 子域不再有密码登录入口；未配置
+// server.frontend_url 时无法引导登录，明确报错，不再降级到密码登录。
+func (h *OIDCProviderHandler) beginLogin(c *gin.Context, tx string) {
+	base := strings.TrimSpace(h.cfg.Server.FrontendURL)
+	if base == "" {
+		h.localError(c, service.ErrOIDCProviderMisconfigured)
+		return
+	}
+	h.noStore(c)
+	target := strings.TrimRight(base, "/") + "/oauth/sso-bridge?tx=" + url.QueryEscape(tx)
+	c.Redirect(http.StatusFound, target)
+}
+
+// SSOAuthorize 运行在主面板 host（JWT 鉴权）：为已登录用户签发一次性 SSO code，
+// 并返回固定指向 auth 子域 sso-callback 的回跳 URL（回跳目标服务端固定，杜绝开放重定向）。
+func (h *OIDCProviderHandler) SSOAuthorize(c *gin.Context) {
 	if !h.providerReady(c) {
 		return
 	}
-	tx := c.Query("tx")
-	if tx == "" {
-		tx = h.readCookie(c, h.cfg.OIDCProvider.Cookie.TransactionName)
+	subject, ok := servermiddleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		h.localError(c, service.ErrOIDCLoginRequired)
+		return
 	}
-	if tx == "" {
+	var body struct {
+		Tx string `json:"tx"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
 		h.localError(c, service.ErrOIDCInvalidRequest)
 		return
 	}
-	h.renderLogin(c, tx)
+	tx := strings.TrimSpace(body.Tx)
+	code, err := h.service.IssueSSOCode(c.Request.Context(), subject.UserID, tx)
+	if err != nil {
+		h.localError(c, err)
+		return
+	}
+	h.noStore(c)
+	redirectURL := service.OIDCProviderIssuer + "/oauth/sso-callback?code=" + url.QueryEscape(code) + "&tx=" + url.QueryEscape(tx)
+	c.JSON(http.StatusOK, gin.H{"redirect_url": redirectURL})
 }
 
-func (h *OIDCProviderHandler) LoginSubmit(c *gin.Context) {
+// SSOCallback 运行在 auth 子域：校验并消费主面板签发的 SSO code，为对应用户建立浏览器会话，
+// 随后继续授权流程（进入 consent 或直接回跳）。
+func (h *OIDCProviderHandler) SSOCallback(c *gin.Context) {
 	if !h.providerReady(c) {
 		return
 	}
-	if !h.checkCSRF(c, c.PostForm("tx"), "login") {
-		h.localError(c, service.ErrOIDCCSRFFailed)
+	tx := strings.TrimSpace(c.Query("tx"))
+	code := strings.TrimSpace(c.Query("code"))
+	if tx == "" || code == "" {
+		h.localError(c, service.ErrOIDCInvalidRequest)
 		return
 	}
-	tx := strings.TrimSpace(c.PostForm("tx"))
-	email := strings.TrimSpace(c.PostForm("email"))
-	attemptKey := servermiddleware.SecurityClientIP(c) + "|" + strings.ToLower(email)
-	currentSession := h.readCookie(c, h.cfg.OIDCProvider.Cookie.SessionName)
-	session, err := h.service.AuthenticateTransactionWithSession(c.Request.Context(), tx, email, c.PostForm("password"), c.PostForm("totp_code"), currentSession, attemptKey)
+	userID, err := h.service.RedeemSSOCode(c.Request.Context(), code, tx)
 	if err != nil {
-		h.renderLoginError(c, tx, err)
+		h.localError(c, err)
+		return
+	}
+	currentSession := h.readCookie(c, h.cfg.OIDCProvider.Cookie.SessionName)
+	session, err := h.service.EstablishBrowserSessionForUser(c.Request.Context(), tx, userID, currentSession)
+	if err != nil {
+		h.localError(c, err)
 		return
 	}
 	h.setCookie(c, h.cfg.OIDCProvider.Cookie.SessionName, session, true, h.cfg.OIDCProvider.BrowserSessionAbsoluteTTLSeconds)
@@ -119,6 +152,13 @@ func (h *OIDCProviderHandler) LoginSubmit(c *gin.Context) {
 	}
 	if result.ErrorCode != "" {
 		h.redirectError(c, result)
+		return
+	}
+	// 循环保护：SSO 回跳并建会话后正常已满足 max_age，不应再需要登录。
+	// 极端情况下（如 max_age=0 / 时钟漂移）若仍 NeedsLogin，明确报错终止，
+	// 绝不二次跳转 sso-bridge，避免 sso-bridge↔callback 死循环。
+	if result.NeedsLogin {
+		h.localError(c, service.ErrOIDCTemporarilyUnavailable)
 		return
 	}
 	if result.NeedsConsent {
@@ -343,21 +383,24 @@ func (h *OIDCProviderHandler) checkCSRF(c *gin.Context, tx, action string) bool 
 	cookie := h.readCookie(c, "__Host-sub2_oidc_csrf")
 	return h.service.ValidCSRF(tx, action, supplied, cookie)
 }
-func (h *OIDCProviderHandler) renderLogin(c *gin.Context, tx string) {
-	token := h.service.CSRFToken(tx, "login")
-	h.setCookie(c, "__Host-sub2_oidc_csrf", token, false, 300)
-	h.noStore(c)
-	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(fmt.Sprintf(`<html><body><h1>Sign in</h1><form method="post" action="/oauth/login"><input type="hidden" name="tx" value="%s"><input type="hidden" name="csrf" value="%s"><label>Email <input name="email" type="email" autocomplete="username"></label><label>Password <input name="password" type="password" autocomplete="current-password"></label><label>TOTP <input name="totp_code" inputmode="numeric" autocomplete="one-time-code"></label><button type="submit">Continue</button></form></body></html>`, html.EscapeString(tx), html.EscapeString(token))))
-}
-func (h *OIDCProviderHandler) renderLoginError(c *gin.Context, tx string, err error) {
-	c.Header("X-OIDC-Login-Error", tokenErrorCode(err))
-	h.renderLogin(c, tx)
-}
 func (h *OIDCProviderHandler) renderConsent(c *gin.Context, tx string) {
 	token := h.service.CSRFToken(tx, "consent")
 	h.setCookie(c, "__Host-sub2_oidc_csrf", token, false, 300)
 	h.noStore(c)
-	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(fmt.Sprintf(`<html><body><h1>Authorize</h1><p>Approve the requested first-party scopes?</p><form method="post" action="/oauth/consent"><input type="hidden" name="tx" value="%s"><input type="hidden" name="csrf" value="%s"><button name="decision" value="approve">Approve</button><button name="decision" value="deny">Deny</button></form></body></html>`, html.EscapeString(tx), html.EscapeString(token))))
+	view, err := h.service.LoadConsentView(c.Request.Context(), tx, h.readCookie(c, h.cfg.OIDCProvider.Cookie.SessionName))
+	if err != nil {
+		h.localError(c, err)
+		return
+	}
+	h.renderTemplate(c, "oidc_consent", oidcConsentViewData{
+		Tx:          tx,
+		CSRF:        token,
+		ClientName:  view.ClientName,
+		ClientOwner: view.ClientOwner,
+		Scopes:      oidcScopeItems(view.Scopes),
+		UserEmail:   view.UserEmail,
+		UserName:    view.UserName,
+	})
 }
 func (h *OIDCProviderHandler) redirectSuccess(c *gin.Context, result *service.OIDCAuthorizeResult) {
 	h.noStore(c)
@@ -472,7 +515,7 @@ func statusForLocalError(err error) int {
 	switch {
 	case errors.Is(err, service.ErrOIDCProviderDisabled):
 		return http.StatusNotFound
-	case errors.Is(err, service.ErrOIDCKeyUnavailable), errors.Is(err, service.ErrOIDCTemporarilyUnavailable):
+	case errors.Is(err, service.ErrOIDCKeyUnavailable), errors.Is(err, service.ErrOIDCTemporarilyUnavailable), errors.Is(err, service.ErrOIDCProviderMisconfigured):
 		return http.StatusServiceUnavailable
 	case errors.Is(err, service.ErrOIDCServerError):
 		return http.StatusInternalServerError
@@ -509,7 +552,7 @@ func tokenErrorCode(err error) string {
 		return "login_required"
 	case errors.Is(err, service.ErrOIDCConsentRequired):
 		return "consent_required"
-	case errors.Is(err, service.ErrOIDCProviderDisabled), errors.Is(err, service.ErrOIDCKeyUnavailable):
+	case errors.Is(err, service.ErrOIDCProviderDisabled), errors.Is(err, service.ErrOIDCKeyUnavailable), errors.Is(err, service.ErrOIDCProviderMisconfigured):
 		return "temporarily_unavailable"
 	default:
 		return "server_error"

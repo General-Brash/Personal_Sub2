@@ -161,15 +161,21 @@ func TestSessionBindingHash(t *testing.T) {
 		t.Fatalf("non-empty binding must produce non-empty hash")
 	}
 
-	// IP 变化 → 哈希变化。
+	// IP 变化 → 哈希不变（仅绑定 UA，忽略 IP，避免多出口 IP 掉线）。
 	c := &SessionBinding{IP: "5.6.7.8", UserAgent: "Mozilla/5.0"}
-	if a.Hash() == c.Hash() {
-		t.Fatalf("changing IP must change hash")
+	if a.Hash() != c.Hash() {
+		t.Fatalf("changing IP only must NOT change hash")
 	}
 	// UA 变化 → 哈希变化。
 	d := &SessionBinding{IP: "1.2.3.4", UserAgent: "curl/8.0"}
 	if a.Hash() == d.Hash() {
 		t.Fatalf("changing UA must change hash")
+	}
+
+	// 仅有 IP、无 UA → 空哈希（UA 缺失即放行）。
+	ipOnly := &SessionBinding{IP: "1.2.3.4"}
+	if ipOnly.Hash() != "" {
+		t.Fatalf("binding without UA must hash to empty string")
 	}
 
 	// 空指纹 → 空哈希（旧 token 兼容）。

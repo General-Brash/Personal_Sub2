@@ -358,6 +358,13 @@ export default {
       completing: 'Completing registration…',
       completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
     },
+    ssoBridge: {
+      title: 'Redirecting for authorization',
+      processing: 'Completing single sign-on authorization, please wait…',
+      invalidRequest: 'Invalid authorization request: a required parameter is missing.',
+      failed: 'Authorization failed. Please return to login and try again.',
+      backToLogin: 'Back to Login'
+    },
     oauthFlow: {
       profileDetailsTitle: 'Use {providerName} profile details',
       profileDetailsDescription: 'Choose whether to apply the nickname or avatar from {providerName} to this account.',

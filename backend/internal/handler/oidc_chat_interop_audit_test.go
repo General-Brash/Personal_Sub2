@@ -83,7 +83,7 @@ func TestOIDCChatInteropAuditProviderDefaultsAndFrozenConfig(t *testing.T) {
 
 func TestOIDCChatInteropAuditDisabledProviderFailsClosedWithoutState(t *testing.T) {
 	cfg := &config.Config{}
-	svc := service.NewOIDCProviderService(nil, nil, nil, nil, cfg)
+	svc := service.NewOIDCProviderService(nil, nil, nil, nil, cfg, nil)
 	if svc.ProviderEnabled() {
 		t.Fatal("zero-value provider configuration must remain disabled")
 	}

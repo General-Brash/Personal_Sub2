@@ -46,6 +46,9 @@ var (
 	ErrOIDCReplayDetected           = errors.New("oidc refresh replay detected")
 	ErrOIDCUserInactive             = errors.New("oidc user inactive")
 	ErrOIDCCSRFFailed               = errors.New("oidc csrf validation failed")
+	// ErrOIDCProviderMisconfigured 表示授权登录入口已收敛到主面板 SSO，但
+	// server.frontend_url 未配置，无法引导登录（不再降级到密码登录）。
+	ErrOIDCProviderMisconfigured = errors.New("oidc provider misconfigured")
 )
 
 type OIDCClientRecord struct {
@@ -236,6 +239,14 @@ type OIDCProviderRepository interface {
 	GetActiveSigningKey(ctx context.Context, now time.Time) (*OIDCSigningKeyRecord, error)
 	CreateSigningKey(ctx context.Context, input OIDCSigningKeyCreateInput) error
 	SetSigningKeyStatus(ctx context.Context, kid, status string, actorID int64, reason string) error
+}
+
+// OIDCSSOCodeCache 记录跨域 SSO 一次性凭证的消费标记，用于防重放。
+// 由 repository 层用 Redis 实现，避免 service 层直接依赖 redis。
+type OIDCSSOCodeCache interface {
+	// ConsumeOnce 尝试把 fingerprint 标记为已消费：首次消费返回 true，
+	// 重复消费返回 false；ttl 控制该标记的过期时间。
+	ConsumeOnce(ctx context.Context, fingerprint string, ttl time.Duration) (bool, error)
 }
 
 type OIDCClientCreateInput struct {
