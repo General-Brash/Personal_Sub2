@@ -60,6 +60,7 @@ func TestSettingService_InitializeDefaultSettings_PageVisibilityDefaultsToEnable
 	require.Equal(t, "true", repo.updates[SettingKeyAdminBankTransactionsEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyAdminAuditLogsEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyAdminOpsEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyPluginManagementEnabled])
 }
 
 func TestSettingService_GetAllSettings_PageVisibilityDefaultsToEnabledWhenMissing(t *testing.T) {
@@ -76,6 +77,7 @@ func TestSettingService_GetAllSettings_PageVisibilityDefaultsToEnabledWhenMissin
 	require.True(t, settings.AdminBankTransactionsEnabled)
 	require.True(t, settings.AdminAuditLogsEnabled)
 	require.True(t, settings.AdminOpsEnabled)
+	require.True(t, settings.PluginManagementEnabled)
 }
 
 func TestSettingService_GetAllSettings_PageVisibilityHonorsExplicitFalse(t *testing.T) {
@@ -89,6 +91,7 @@ func TestSettingService_GetAllSettings_PageVisibilityHonorsExplicitFalse(t *test
 		SettingKeyAdminBankTransactionsEnabled:  "false",
 		SettingKeyAdminAuditLogsEnabled:         "false",
 		SettingKeyAdminOpsEnabled:               "false",
+		SettingKeyPluginManagementEnabled:       "false",
 	}}, &config.Config{})
 
 	settings, err := svc.GetAllSettings(context.Background())
@@ -102,6 +105,7 @@ func TestSettingService_GetAllSettings_PageVisibilityHonorsExplicitFalse(t *test
 	require.False(t, settings.AdminBankTransactionsEnabled)
 	require.False(t, settings.AdminAuditLogsEnabled)
 	require.False(t, settings.AdminOpsEnabled)
+	require.False(t, settings.PluginManagementEnabled)
 }
 
 func TestSettingService_UpdateSettings_PersistsPageVisibility(t *testing.T) {
@@ -118,6 +122,7 @@ func TestSettingService_UpdateSettings_PersistsPageVisibility(t *testing.T) {
 		AdminBankTransactionsEnabled:  true,
 		AdminAuditLogsEnabled:         false,
 		AdminOpsEnabled:               true,
+		PluginManagementEnabled:       true,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "false", repo.updates[SettingKeyUserChannelStatusEnabled])
@@ -129,6 +134,7 @@ func TestSettingService_UpdateSettings_PersistsPageVisibility(t *testing.T) {
 	require.Equal(t, "true", repo.updates[SettingKeyAdminBankTransactionsEnabled])
 	require.Equal(t, "false", repo.updates[SettingKeyAdminAuditLogsEnabled])
 	require.Equal(t, "true", repo.updates[SettingKeyAdminOpsEnabled])
+	require.Equal(t, "true", repo.updates[SettingKeyPluginManagementEnabled])
 }
 
 func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse(t *testing.T) {
@@ -146,6 +152,7 @@ func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse
 		require.True(t, settings.AdminBankTransactionsEnabled)
 		require.True(t, settings.AdminAuditLogsEnabled)
 		require.True(t, settings.AdminOpsEnabled)
+		require.True(t, settings.PluginManagementEnabled)
 	})
 
 	t.Run("explicit false disables each page", func(t *testing.T) {
@@ -159,6 +166,7 @@ func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse
 			SettingKeyAdminBankTransactionsEnabled:  "false",
 			SettingKeyAdminAuditLogsEnabled:         "false",
 			SettingKeyAdminOpsEnabled:               "false",
+			SettingKeyPluginManagementEnabled:       "false",
 		}}, &config.Config{})
 
 		settings, err := svc.GetPublicSettings(context.Background())
@@ -172,6 +180,7 @@ func TestSettingService_GetPublicSettings_PageVisibilityDefaultsAndExplicitFalse
 		require.False(t, settings.AdminBankTransactionsEnabled)
 		require.False(t, settings.AdminAuditLogsEnabled)
 		require.False(t, settings.AdminOpsEnabled)
+		require.False(t, settings.PluginManagementEnabled)
 	})
 }
 
@@ -186,6 +195,7 @@ func TestSettingService_GetPublicSettingsForInjection_IncludesPageVisibility(t *
 		SettingKeyAdminBankTransactionsEnabled:  "false",
 		SettingKeyAdminAuditLogsEnabled:         "false",
 		SettingKeyAdminOpsEnabled:               "false",
+		SettingKeyPluginManagementEnabled:       "false",
 	}}, &config.Config{})
 
 	raw, err := svc.GetPublicSettingsForInjection(context.Background())
@@ -201,4 +211,5 @@ func TestSettingService_GetPublicSettingsForInjection_IncludesPageVisibility(t *
 	require.False(t, payload.AdminBankTransactionsEnabled)
 	require.False(t, payload.AdminAuditLogsEnabled)
 	require.False(t, payload.AdminOpsEnabled)
+	require.False(t, payload.PluginManagementEnabled)
 }

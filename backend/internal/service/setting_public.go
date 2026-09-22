@@ -243,6 +243,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAdminBankTransactionsEnabled,
 		SettingKeyAdminAuditLogsEnabled,
 		SettingKeyAdminOpsEnabled,
+		SettingKeyPluginManagementEnabled,
 		SettingKeyModelPlazaEnabled,
 		SettingKeyModelPlazaRequireAuth,
 		"model_plaza_v2_enabled",
@@ -381,6 +382,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		AdminBankTransactionsEnabled:  !isFalseSettingValue(settings[SettingKeyAdminBankTransactionsEnabled]),
 		AdminAuditLogsEnabled:         !isFalseSettingValue(settings[SettingKeyAdminAuditLogsEnabled]),
 		AdminOpsEnabled:               !isFalseSettingValue(settings[SettingKeyAdminOpsEnabled]),
+		PluginManagementEnabled:       !isFalseSettingValue(settings[SettingKeyPluginManagementEnabled]),
 
 		ModelPlazaEnabled:     settings[SettingKeyModelPlazaEnabled] == "true",
 		ModelPlazaRequireAuth: settings[SettingKeyModelPlazaRequireAuth] == "true",
@@ -652,6 +654,7 @@ type PublicSettingsInjectionPayload struct {
 	AdminBankTransactionsEnabled  bool `json:"admin_bank_transactions_enabled"`
 	AdminAuditLogsEnabled         bool `json:"admin_audit_logs_enabled"`
 	AdminOpsEnabled               bool `json:"admin_ops_enabled"`
+	PluginManagementEnabled       bool `json:"plugin_management_enabled"`
 	ModelPlazaEnabled             bool `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth         bool `json:"model_plaza_require_auth"`
 	ModelPlazaV2Enabled           bool `json:"model_plaza_v2_enabled"`
@@ -743,6 +746,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AdminBankTransactionsEnabled:         settings.AdminBankTransactionsEnabled,
 		AdminAuditLogsEnabled:                settings.AdminAuditLogsEnabled,
 		AdminOpsEnabled:                      settings.AdminOpsEnabled,
+		PluginManagementEnabled:              settings.PluginManagementEnabled,
 		ModelPlazaEnabled:                    settings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth:                settings.ModelPlazaRequireAuth,
 		ModelPlazaV2Enabled:                  settings.ModelPlazaV2Enabled,

@@ -373,6 +373,7 @@ const (
 	SettingKeyAdminBankTransactionsEnabled  = "admin_bank_transactions_enabled"
 	SettingKeyAdminAuditLogsEnabled         = "admin_audit_logs_enabled"
 	SettingKeyAdminOpsEnabled               = "admin_ops_enabled"
+	SettingKeyPluginManagementEnabled       = "plugin_management_enabled"
 
 	// 默认配置
 	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量

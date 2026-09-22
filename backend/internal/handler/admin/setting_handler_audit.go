@@ -603,6 +603,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AdminOpsEnabled != after.AdminOpsEnabled {
 		changed = append(changed, "admin_ops_enabled")
 	}
+	if before.PluginManagementEnabled != after.PluginManagementEnabled {
+		changed = append(changed, "plugin_management_enabled")
+	}
 	if before.ModelPlazaEnabled != after.ModelPlazaEnabled {
 		changed = append(changed, "model_plaza_enabled")
 	}

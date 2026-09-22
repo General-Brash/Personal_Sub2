@@ -159,9 +159,12 @@ FROM daily_checkin_preferences WHERE user_id = $1`, userID).Scan(
 func decorateCheckinPreference(preference CheckinPreference, policy DailyCheckinPolicyV2) *CheckinPreference {
 	preference.CurrentPolicyVersion = policy.ConsentVersion()
 	preference.CurrentFeeBps = policy.AutoFeeBps
+	// Consent records the fee ceiling the user agreed to ("at most N bps"), so a
+	// lower actual fee is still within consent; only a fee above the agreed
+	// ceiling requires re-consent.
 	preference.ConsentValid = preference.AutoEnabled &&
 		policy.AcceptsConsentVersion(preference.ConsentPolicyVersion) &&
-		preference.ConsentFeeBps == policy.AutoFeeBps
+		preference.ConsentFeeBps >= policy.AutoFeeBps
 	return &preference
 }
 
@@ -230,9 +233,12 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 	if err != nil {
 		return nil, err
 	}
+	// Fee ceiling semantics: a lower actual fee stays within the user's consent
+	// (see decorateCheckinPreference); only a fee above the agreed ceiling forces
+	// re-consent.
 	consentValid := preference.AutoEnabled &&
 		extended.AcceptsConsentVersion(preference.ConsentPolicyVersion) &&
-		preference.ConsentFeeBps == extended.AutoFeeBps
+		preference.ConsentFeeBps >= extended.AutoFeeBps
 	if mode == CheckinModeDirectAuto && (!preference.AutoEnabled || !consentValid) {
 		return nil, ErrCheckinConsentRequired
 	}

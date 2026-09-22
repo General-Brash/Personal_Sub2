@@ -20,7 +20,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
-          <tr v-for="event in events" :key="event.id">
+          <tr v-for="event in pagedEvents" :key="event.id">
             <td class="whitespace-nowrap px-5 py-3 text-xs text-gray-600 dark:text-gray-400">{{ formatDate(event.created_at) }}</td>
             <td class="px-5 py-3 font-mono text-xs text-gray-800 dark:text-gray-200">{{ event.action }}</td>
             <td class="px-5 py-3"><span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="event.result === 'success' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'">{{ event.result === 'success' ? t('admin.oidcProvider.audit.success') : t('admin.oidcProvider.audit.failure') }}</span></td>
@@ -30,22 +30,45 @@
           </tr>
         </tbody>
       </table>
+      <Pagination
+        :total="events.length"
+        :page="page"
+        :page-size="pageSize"
+        :show-page-size-selector="false"
+        @update:page="page = $event"
+      />
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import type { OidcAuditEvent } from '@/api/admin'
 
-defineProps<{
+const props = defineProps<{
   events: OidcAuditEvent[]
   loading: boolean
   canRead: boolean
 }>()
 
 const { t } = useI18n()
+
+const page = ref(1)
+const pageSize = 10
+
+const pagedEvents = computed(() =>
+  props.events.slice((page.value - 1) * pageSize, page.value * pageSize)
+)
+
+watch(
+  () => props.events,
+  () => {
+    page.value = 1
+  }
+)
 
 function formatDate(value: string): string {
   const date = new Date(value)

@@ -42,6 +42,7 @@ function mountSection() {
       adminBankTransactionsEnabled: false,
       adminAuditLogsEnabled: true,
       adminOpsEnabled: false,
+      pluginManagementEnabled: false,
     },
     global: {
       stubs: {
@@ -52,12 +53,12 @@ function mountSection() {
 }
 
 describe('PageVisibilitySettingsSection', () => {
-  it('renders two un-nested page groups with ten toggles', () => {
+  it('renders two un-nested page groups with eleven toggles', () => {
     const wrapper = mountSection()
 
     expect(wrapper.findAll('.card')).toHaveLength(1)
     expect(wrapper.find('.card .card').exists()).toBe(false)
-    expect(wrapper.findAll('[role="switch"]')).toHaveLength(10)
+    expect(wrapper.findAll('[role="switch"]')).toHaveLength(11)
     expect(wrapper.text()).toContain('admin.settings.features.pageVisibility.userPages')
     expect(wrapper.text()).toContain('admin.settings.features.pageVisibility.adminPages')
   })
@@ -91,5 +92,6 @@ describe('PageVisibilitySettingsSection', () => {
     expect(wrapper.emitted('update:adminBankTransactionsEnabled')).toEqual([[true]])
     expect(wrapper.emitted('update:adminAuditLogsEnabled')).toEqual([[false]])
     expect(wrapper.emitted('update:adminOpsEnabled')).toEqual([[true]])
+    expect(wrapper.emitted('update:pluginManagementEnabled')).toEqual([[true]])
   })
 })

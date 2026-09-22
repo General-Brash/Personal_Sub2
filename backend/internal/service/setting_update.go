@@ -438,6 +438,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAdminBankTransactionsEnabled] = strconv.FormatBool(settings.AdminBankTransactionsEnabled)
 	updates[SettingKeyAdminAuditLogsEnabled] = strconv.FormatBool(settings.AdminAuditLogsEnabled)
 	updates[SettingKeyAdminOpsEnabled] = strconv.FormatBool(settings.AdminOpsEnabled)
+	updates[SettingKeyPluginManagementEnabled] = strconv.FormatBool(settings.PluginManagementEnabled)
 
 	// Model plaza feature switches + description
 	updates[SettingKeyModelPlazaEnabled] = strconv.FormatBool(settings.ModelPlazaEnabled)

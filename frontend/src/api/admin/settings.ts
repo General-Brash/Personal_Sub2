@@ -734,6 +734,7 @@ export interface SystemSettings {
   admin_bank_transactions_enabled: boolean;
   admin_audit_logs_enabled: boolean;
   admin_ops_enabled: boolean;
+  plugin_management_enabled: boolean;
   // Model Plaza feature switches + description
   model_plaza_enabled: boolean;
   model_plaza_require_auth: boolean;
@@ -1044,6 +1045,7 @@ export interface UpdateSettingsRequest {
   admin_bank_transactions_enabled?: boolean;
   admin_audit_logs_enabled?: boolean;
   admin_ops_enabled?: boolean;
+  plugin_management_enabled?: boolean;
   // Model Plaza feature switches + description
   model_plaza_enabled?: boolean;
   model_plaza_require_auth?: boolean;

@@ -7001,6 +7001,7 @@
           v-model:admin-bank-transactions-enabled="form.admin_bank_transactions_enabled"
           v-model:admin-audit-logs-enabled="form.admin_audit_logs_enabled"
           v-model:admin-ops-enabled="form.admin_ops_enabled"
+          v-model:plugin-management-enabled="form.plugin_management_enabled"
         />
 
         <div class="card">
@@ -9779,6 +9780,7 @@ const form = reactive<SettingsForm>({
   admin_bank_transactions_enabled: true,
   admin_audit_logs_enabled: true,
   admin_ops_enabled: true,
+  plugin_management_enabled: true,
   // Model Plaza feature switches + description
   model_plaza_enabled: false,
   model_plaza_require_auth: false,
@@ -11446,6 +11448,7 @@ async function saveSettings() {
       admin_bank_transactions_enabled: form.admin_bank_transactions_enabled,
       admin_audit_logs_enabled: form.admin_audit_logs_enabled,
       admin_ops_enabled: form.admin_ops_enabled,
+      plugin_management_enabled: form.plugin_management_enabled,
       // Model Plaza feature switches + description
       model_plaza_enabled: form.model_plaza_enabled,
       model_plaza_require_auth: form.model_plaza_require_auth,

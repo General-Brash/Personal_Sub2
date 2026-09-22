@@ -326,6 +326,7 @@ type SystemSettings struct {
 	AdminBankTransactionsEnabled  bool `json:"admin_bank_transactions_enabled"`
 	AdminAuditLogsEnabled         bool `json:"admin_audit_logs_enabled"`
 	AdminOpsEnabled               bool `json:"admin_ops_enabled"`
+	PluginManagementEnabled       bool `json:"plugin_management_enabled"`
 
 	// Model Plaza feature (public group/model pricing showcase)
 	ModelPlazaEnabled     bool   `json:"model_plaza_enabled"`
@@ -441,6 +442,7 @@ type PublicSettings struct {
 	AdminBankTransactionsEnabled  bool `json:"admin_bank_transactions_enabled"`
 	AdminAuditLogsEnabled         bool `json:"admin_audit_logs_enabled"`
 	AdminOpsEnabled               bool `json:"admin_ops_enabled"`
+	PluginManagementEnabled       bool `json:"plugin_management_enabled"`
 
 	ModelPlazaEnabled     bool `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth bool `json:"model_plaza_require_auth"`

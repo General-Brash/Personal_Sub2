@@ -390,6 +390,39 @@ func addCheckinConsentCompatibility(values []checkinConsentCompatibility, consen
 	return normalizeCheckinConsentCompatibility(values)
 }
 
+// carryCheckinConsentCompatibility re-points every consent version the old
+// policy version accepted onto the new policy version, preserving existing
+// consents across a fee reduction (see UpdateDailyCheckinPolicyV2).
+func carryCheckinConsentCompatibility(previous []checkinConsentCompatibility, oldVersion, newVersion string) []checkinConsentCompatibility {
+	carried := addCheckinConsentCompatibility(nil, oldVersion, newVersion)
+	for _, entry := range previous {
+		if strings.TrimSpace(entry.PolicyVersion) == strings.TrimSpace(oldVersion) {
+			carried = addCheckinConsentCompatibility(carried, entry.ConsentVersion, newVersion)
+		}
+	}
+	return carried
+}
+
+// checkinPolicyVersionIgnoringFee computes the effective policy version with the
+// auto-checkin fee normalized out, so two policies that differ only by fee hash
+// to the same value.
+func checkinPolicyVersionIgnoringFee(base *DailyCheckinPolicy, extended DailyCheckinPolicyV2) string {
+	extended.AutoFeeBps = 0
+	return EffectiveCheckinPolicyVersion(base, extended)
+}
+
+// checkinPolicyChangeIsFeeReduction reports whether the only effective change
+// between the current and updated policy is a reduction of the auto-checkin fee.
+// A fee reduction stays within the customer's existing consent ("at most N bps")
+// and therefore must not invalidate it.
+func checkinPolicyChangeIsFeeReduction(currentBase *DailyCheckinPolicy, current DailyCheckinPolicyV2, nextBase *DailyCheckinPolicy, next DailyCheckinPolicyV2, now time.Time) bool {
+	active := current.EffectiveAt(now)
+	if next.AutoFeeBps >= active.AutoFeeBps {
+		return false
+	}
+	return checkinPolicyVersionIgnoringFee(nextBase, next) == checkinPolicyVersionIgnoringFee(currentBase, active)
+}
+
 func canonicalCheckinTime(value time.Time) string {
 	if value.IsZero() {
 		return ""
@@ -548,9 +581,17 @@ func (s *SettingService) UpdateDailyCheckinPolicyV2(ctx context.Context, policy 
 	}
 
 	nextVersion := EffectiveCheckinPolicyVersion(policy, *extended)
-	if nextVersion == activeCheckinPolicyVersion(currentBase, current, now) {
+	oldVersion := activeCheckinPolicyVersion(currentBase, current, now)
+	switch {
+	case nextVersion == oldVersion:
 		extended.ConsentCompatibility = current.ConsentCompatibility
-	} else {
+	case checkinPolicyChangeIsFeeReduction(currentBase, current, policy, *extended, now):
+		// A fee reduction never widens what the user agreed to (they consented to
+		// "at most" the prior fee), so prior consents must stay valid instead of
+		// forcing a silent re-consent that would break auto check-in streaks.
+		// Re-point every consent version the old policy accepted onto the new one.
+		extended.ConsentCompatibility = carryCheckinConsentCompatibility(current.ConsentCompatibility, oldVersion, nextVersion)
+	default:
 		extended.ConsentCompatibility = nil
 	}
 	extended.Version = nextVersion
