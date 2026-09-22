@@ -46,6 +46,9 @@ var (
 	ErrOIDCReplayDetected           = errors.New("oidc refresh replay detected")
 	ErrOIDCUserInactive             = errors.New("oidc user inactive")
 	ErrOIDCCSRFFailed               = errors.New("oidc csrf validation failed")
+	// ErrOIDCProviderMisconfigured 表示授权登录入口已收敛到主面板 SSO，但
+	// server.frontend_url 未配置，无法引导登录（不再降级到密码登录）。
+	ErrOIDCProviderMisconfigured = errors.New("oidc provider misconfigured")
 )
 
 type OIDCClientRecord struct {

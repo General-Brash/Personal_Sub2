@@ -14,17 +14,6 @@ var oidcTemplateFS embed.FS
 
 var oidcTemplates = template.Must(template.ParseFS(oidcTemplateFS, "oidc_templates/*.html"))
 
-// oidcLoginView 驱动两步式登录页：Step 为 "email" 时只收邮箱，
-// 为 "credentials" 时收密码，并按 ShowTOTP 决定是否显示两步验证码框。
-type oidcLoginView struct {
-	Tx       string
-	CSRF     string
-	Step     string
-	Email    string
-	ShowTOTP bool
-	HasError bool
-}
-
 type oidcScopeItem struct {
 	Key   string
 	Label string

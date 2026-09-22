@@ -78,86 +78,18 @@ func (h *OIDCProviderHandler) Authorize(c *gin.Context) {
 	h.redirectSuccess(c, result)
 }
 
-func (h *OIDCProviderHandler) LoginPage(c *gin.Context) {
-	if !h.providerReady(c) {
-		return
-	}
-	tx := c.Query("tx")
-	if tx == "" {
-		tx = h.readCookie(c, h.cfg.OIDCProvider.Cookie.TransactionName)
-	}
-	if tx == "" {
-		h.localError(c, service.ErrOIDCInvalidRequest)
-		return
-	}
-	h.renderLogin(c, tx)
-}
-
-func (h *OIDCProviderHandler) LoginSubmit(c *gin.Context) {
-	if !h.providerReady(c) {
-		return
-	}
-	if !h.checkCSRF(c, c.PostForm("tx"), "login") {
-		h.localError(c, service.ErrOIDCCSRFFailed)
-		return
-	}
-	tx := strings.TrimSpace(c.PostForm("tx"))
-	email := strings.TrimSpace(c.PostForm("email"))
-	attemptKey := servermiddleware.SecurityClientIP(c) + "|" + strings.ToLower(email)
-	currentSession := h.readCookie(c, h.cfg.OIDCProvider.Cookie.SessionName)
-	session, err := h.service.AuthenticateTransactionWithSession(c.Request.Context(), tx, email, c.PostForm("password"), c.PostForm("totp_code"), currentSession, attemptKey)
-	if err != nil {
-		// 认证失败：重渲染第二步（密码/TOTP），保留邮箱并按需显示 TOTP 框。
-		showTOTP := h.service.LoginPrecheck(c.Request.Context(), email, attemptKey)
-		h.renderLoginCredentials(c, tx, email, showTOTP, true, tokenErrorCode(err))
-		return
-	}
-	h.setCookie(c, h.cfg.OIDCProvider.Cookie.SessionName, session, true, h.cfg.OIDCProvider.BrowserSessionAbsoluteTTLSeconds)
-	result, err := h.service.ContinueAuthorization(c.Request.Context(), tx, session)
-	if err != nil {
-		h.localError(c, err)
-		return
-	}
-	if result.ErrorCode != "" {
-		h.redirectError(c, result)
-		return
-	}
-	if result.NeedsConsent {
-		h.renderConsent(c, tx)
-		return
-	}
-	h.redirectSuccess(c, result)
-}
-
-// LoginPrecheck 两步式登录第一步提交：校验邮箱后渲染第二步。
-// 仅当用户存在、激活且启用了 2FA 时第二步才显示 TOTP 框；对不存在/未启用
-// 2FA 的用户一律返回不含 TOTP 的密码页，避免暴露账号是否存在。
-func (h *OIDCProviderHandler) LoginPrecheck(c *gin.Context) {
-	if !h.providerReady(c) {
-		return
-	}
-	tx := strings.TrimSpace(c.PostForm("tx"))
-	if !h.checkCSRF(c, tx, "login") {
-		h.localError(c, service.ErrOIDCCSRFFailed)
-		return
-	}
-	email := strings.TrimSpace(c.PostForm("email"))
-	attemptKey := servermiddleware.SecurityClientIP(c) + "|" + strings.ToLower(email)
-	showTOTP := h.service.LoginPrecheck(c.Request.Context(), email, attemptKey)
-	h.renderLoginCredentials(c, tx, email, showTOTP, false, "")
-}
-
-// beginLogin 决定登录入口：配置了主面板 frontend_url 时跳转到主面板 SSO 引导页
-// （尝试复用主站登录态，实现免密授权），否则降级到 auth 子域自身的两步式登录页。
+// beginLogin 把授权登录入口恒收敛到主面板 SSO：跳转到主面板 SSO 引导页，
+// 复用主站登录态实现免密授权。auth 子域不再有密码登录入口；未配置
+// server.frontend_url 时无法引导登录，明确报错，不再降级到密码登录。
 func (h *OIDCProviderHandler) beginLogin(c *gin.Context, tx string) {
 	base := strings.TrimSpace(h.cfg.Server.FrontendURL)
-	if base != "" {
-		h.noStore(c)
-		target := strings.TrimRight(base, "/") + "/oauth/sso-bridge?tx=" + url.QueryEscape(tx)
-		c.Redirect(http.StatusFound, target)
+	if base == "" {
+		h.localError(c, service.ErrOIDCProviderMisconfigured)
 		return
 	}
-	h.renderLogin(c, tx)
+	h.noStore(c)
+	target := strings.TrimRight(base, "/") + "/oauth/sso-bridge?tx=" + url.QueryEscape(tx)
+	c.Redirect(http.StatusFound, target)
 }
 
 // SSOAuthorize 运行在主面板 host（JWT 鉴权）：为已登录用户签发一次性 SSO code，
@@ -220,6 +152,13 @@ func (h *OIDCProviderHandler) SSOCallback(c *gin.Context) {
 	}
 	if result.ErrorCode != "" {
 		h.redirectError(c, result)
+		return
+	}
+	// 循环保护：SSO 回跳并建会话后正常已满足 max_age，不应再需要登录。
+	// 极端情况下（如 max_age=0 / 时钟漂移）若仍 NeedsLogin，明确报错终止，
+	// 绝不二次跳转 sso-bridge，避免 sso-bridge↔callback 死循环。
+	if result.NeedsLogin {
+		h.localError(c, service.ErrOIDCTemporarilyUnavailable)
 		return
 	}
 	if result.NeedsConsent {
@@ -444,25 +383,6 @@ func (h *OIDCProviderHandler) checkCSRF(c *gin.Context, tx, action string) bool 
 	cookie := h.readCookie(c, "__Host-sub2_oidc_csrf")
 	return h.service.ValidCSRF(tx, action, supplied, cookie)
 }
-// renderLogin 渲染两步式登录页第一步（只收邮箱）。
-func (h *OIDCProviderHandler) renderLogin(c *gin.Context, tx string) {
-	token := h.service.CSRFToken(tx, "login")
-	h.setCookie(c, "__Host-sub2_oidc_csrf", token, false, 300)
-	h.noStore(c)
-	h.renderTemplate(c, "oidc_login", oidcLoginView{Tx: tx, CSRF: token, Step: "email"})
-}
-
-// renderLoginCredentials 渲染登录第二步（密码，必要时含 TOTP）。
-func (h *OIDCProviderHandler) renderLoginCredentials(c *gin.Context, tx, email string, showTOTP, hasError bool, errCode string) {
-	token := h.service.CSRFToken(tx, "login")
-	h.setCookie(c, "__Host-sub2_oidc_csrf", token, false, 300)
-	if errCode != "" {
-		c.Header("X-OIDC-Login-Error", errCode)
-	}
-	h.noStore(c)
-	h.renderTemplate(c, "oidc_login", oidcLoginView{Tx: tx, CSRF: token, Step: "credentials", Email: email, ShowTOTP: showTOTP, HasError: hasError})
-}
-
 func (h *OIDCProviderHandler) renderConsent(c *gin.Context, tx string) {
 	token := h.service.CSRFToken(tx, "consent")
 	h.setCookie(c, "__Host-sub2_oidc_csrf", token, false, 300)
@@ -595,7 +515,7 @@ func statusForLocalError(err error) int {
 	switch {
 	case errors.Is(err, service.ErrOIDCProviderDisabled):
 		return http.StatusNotFound
-	case errors.Is(err, service.ErrOIDCKeyUnavailable), errors.Is(err, service.ErrOIDCTemporarilyUnavailable):
+	case errors.Is(err, service.ErrOIDCKeyUnavailable), errors.Is(err, service.ErrOIDCTemporarilyUnavailable), errors.Is(err, service.ErrOIDCProviderMisconfigured):
 		return http.StatusServiceUnavailable
 	case errors.Is(err, service.ErrOIDCServerError):
 		return http.StatusInternalServerError
@@ -632,7 +552,7 @@ func tokenErrorCode(err error) string {
 		return "login_required"
 	case errors.Is(err, service.ErrOIDCConsentRequired):
 		return "consent_required"
-	case errors.Is(err, service.ErrOIDCProviderDisabled), errors.Is(err, service.ErrOIDCKeyUnavailable):
+	case errors.Is(err, service.ErrOIDCProviderDisabled), errors.Is(err, service.ErrOIDCKeyUnavailable), errors.Is(err, service.ErrOIDCProviderMisconfigured):
 		return "temporarily_unavailable"
 	default:
 		return "server_error"
