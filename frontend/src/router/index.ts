@@ -82,6 +82,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    // 跨域 SSO 引导页：OIDC 授权页在需要登录时会 302 到这里，尝试用主面板登录态免密授权。
+    // requiresAuth:false —— 由页面自行判断登录态并处理未登录回跳，避免守卫提前拦截丢失 tx。
+    path: '/oauth/sso-bridge',
+    name: 'OidcSsoBridge',
+    component: () => import('@/views/auth/SsoBridgeView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Authorizing'
+    }
+  },
+  {
     path: '/auth/linuxdo/callback',
     name: 'LinuxDoOAuthCallback',
     component: () => import('@/views/auth/LinuxDoCallbackView.vue'),

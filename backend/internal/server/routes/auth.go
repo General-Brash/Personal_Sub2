@@ -258,5 +258,11 @@ func RegisterAuthRoutes(
 		// 撤销所有会话（需要认证）
 		authenticated.POST("/auth/revoke-all-sessions", h.Auth.RevokeAllSessions)
 		authenticated.POST("/auth/oauth/bind-token", h.Auth.PrepareOAuthBindAccessTokenCookie)
+		// 跨域 SSO：主面板已登录用户为 OIDC 授权事务签发一次性 SSO code（免密授权）。
+		if h.OIDCProvider != nil {
+			authenticated.POST("/auth/oidc-sso/authorize", rateLimiter.LimitWithOptions("oidc-sso-authorize", 20, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.OIDCProvider.SSOAuthorize)
+		}
 	}
 }

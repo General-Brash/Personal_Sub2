@@ -356,6 +356,13 @@ export default {
       completing: '正在完成注册...',
       completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
     },
+    ssoBridge: {
+      title: '正在跳转授权',
+      processing: '正在为你完成单点登录授权，请稍候...',
+      invalidRequest: '无效的授权请求，缺少必要参数。',
+      failed: '授权失败，请返回登录后重试。',
+      backToLogin: '返回登录'
+    },
     oauthFlow: {
       profileDetailsTitle: '使用 {providerName} 资料',
       profileDetailsDescription: '选择是否将 {providerName} 的昵称或头像应用到当前账户。',

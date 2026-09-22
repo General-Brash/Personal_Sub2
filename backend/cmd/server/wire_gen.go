@@ -299,7 +299,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	auditLogHandler := admin.NewAuditLogHandler(auditLogService, totpService)
 	oidcProviderRepository := repository.NewOIDCProviderRepository(db)
 	oidcSigningService := service.NewOIDCSigningService(oidcProviderRepository, configConfig)
-	oidcProviderService := service.NewOIDCProviderService(oidcProviderRepository, userRepository, totpService, oidcSigningService, configConfig)
+	oidcProviderService := service.NewOIDCProviderService(oidcProviderRepository, userRepository, totpService, oidcSigningService, configConfig, redisClient)
 	oidcProviderHandler := admin.NewOIDCProviderHandler(oidcProviderService, configConfig)
 	upstreamBillingProbeService := service.ProvideUpstreamBillingProbeService(accountRepository, accountTestService, settingService, leaderLockCache, db)
 	ollamaCloudUsageService := service.ProvideOllamaCloudUsageService(accountRepository, httpUpstream, settingService, secretEncryptor, configConfig, leaderLockCache, db)

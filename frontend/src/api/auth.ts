@@ -678,6 +678,23 @@ export async function exchangePendingOAuthCompletion(
   return completePendingOAuthBindLogin(decision)
 }
 
+/**
+ * OIDC 跨域 SSO 免密授权响应
+ */
+export interface OidcSsoAuthorizeResponse {
+  redirect_url: string
+}
+
+/**
+ * 使用主面板已登录态签发一次性 SSO code，换取回跳 auth 子域的绝对 URL。
+ * @param tx - OIDC Provider 传来的授权事务 handle
+ * @returns 包含跨域绝对跳转地址的响应
+ */
+export async function oidcSsoAuthorize(tx: string): Promise<OidcSsoAuthorizeResponse> {
+  const { data } = await apiClient.post<OidcSsoAuthorizeResponse>('/auth/oidc-sso/authorize', { tx })
+  return data
+}
+
 export const authAPI = {
   login,
   login2FA,
@@ -713,7 +730,8 @@ export const authAPI = {
   completeLinuxDoOAuthRegistration,
   completeOIDCOAuthRegistration,
   completeWeChatOAuthRegistration,
-  createPendingDingTalkOAuthAccount
+  createPendingDingTalkOAuthAccount,
+  oidcSsoAuthorize
 }
 
 export default authAPI

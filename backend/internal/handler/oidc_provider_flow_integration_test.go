@@ -46,7 +46,7 @@ func TestOIDCProviderPositiveFlowPostgres(t *testing.T) {
 	oidcRepo := repositorypkg.NewOIDCProviderRepository(db)
 	userRepo := repositorypkg.NewUserRepository(entClient, db)
 	signing := service.NewOIDCSigningService(oidcRepo, cfg)
-	oidcService := service.NewOIDCProviderService(oidcRepo, userRepo, nil, signing, cfg)
+	oidcService := service.NewOIDCProviderService(oidcRepo, userRepo, nil, signing, cfg, nil)
 	oidcHandler := NewOIDCProviderHandler(oidcService, cfg)
 
 	userEmail := "oidc-flow-" + time.Now().UTC().Format("20060102150405.000000000") + "@example.com"

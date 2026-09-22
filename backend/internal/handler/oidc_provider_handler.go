@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"html"
 	"mime"
 	"net/http"
 	"net/url"
@@ -69,7 +68,7 @@ func (h *OIDCProviderHandler) Authorize(c *gin.Context) {
 	}
 	h.setCookie(c, h.cfg.OIDCProvider.Cookie.TransactionName, result.TransactionHandle, true, 300)
 	if result.NeedsLogin {
-		h.renderLogin(c, result.TransactionHandle)
+		h.beginLogin(c, result.TransactionHandle)
 		return
 	}
 	if result.NeedsConsent {
@@ -108,7 +107,109 @@ func (h *OIDCProviderHandler) LoginSubmit(c *gin.Context) {
 	currentSession := h.readCookie(c, h.cfg.OIDCProvider.Cookie.SessionName)
 	session, err := h.service.AuthenticateTransactionWithSession(c.Request.Context(), tx, email, c.PostForm("password"), c.PostForm("totp_code"), currentSession, attemptKey)
 	if err != nil {
-		h.renderLoginError(c, tx, err)
+		// 认证失败：重渲染第二步（密码/TOTP），保留邮箱并按需显示 TOTP 框。
+		showTOTP := h.service.LoginPrecheck(c.Request.Context(), email, attemptKey)
+		h.renderLoginCredentials(c, tx, email, showTOTP, true, tokenErrorCode(err))
+		return
+	}
+	h.setCookie(c, h.cfg.OIDCProvider.Cookie.SessionName, session, true, h.cfg.OIDCProvider.BrowserSessionAbsoluteTTLSeconds)
+	result, err := h.service.ContinueAuthorization(c.Request.Context(), tx, session)
+	if err != nil {
+		h.localError(c, err)
+		return
+	}
+	if result.ErrorCode != "" {
+		h.redirectError(c, result)
+		return
+	}
+	if result.NeedsConsent {
+		h.renderConsent(c, tx)
+		return
+	}
+	h.redirectSuccess(c, result)
+}
+
+// LoginPrecheck 两步式登录第一步提交：校验邮箱后渲染第二步。
+// 仅当用户存在、激活且启用了 2FA 时第二步才显示 TOTP 框；对不存在/未启用
+// 2FA 的用户一律返回不含 TOTP 的密码页，避免暴露账号是否存在。
+func (h *OIDCProviderHandler) LoginPrecheck(c *gin.Context) {
+	if !h.providerReady(c) {
+		return
+	}
+	tx := strings.TrimSpace(c.PostForm("tx"))
+	if !h.checkCSRF(c, tx, "login") {
+		h.localError(c, service.ErrOIDCCSRFFailed)
+		return
+	}
+	email := strings.TrimSpace(c.PostForm("email"))
+	attemptKey := servermiddleware.SecurityClientIP(c) + "|" + strings.ToLower(email)
+	showTOTP := h.service.LoginPrecheck(c.Request.Context(), email, attemptKey)
+	h.renderLoginCredentials(c, tx, email, showTOTP, false, "")
+}
+
+// beginLogin 决定登录入口：配置了主面板 frontend_url 时跳转到主面板 SSO 引导页
+// （尝试复用主站登录态，实现免密授权），否则降级到 auth 子域自身的两步式登录页。
+func (h *OIDCProviderHandler) beginLogin(c *gin.Context, tx string) {
+	base := strings.TrimSpace(h.cfg.Server.FrontendURL)
+	if base != "" {
+		h.noStore(c)
+		target := strings.TrimRight(base, "/") + "/oauth/sso-bridge?tx=" + url.QueryEscape(tx)
+		c.Redirect(http.StatusFound, target)
+		return
+	}
+	h.renderLogin(c, tx)
+}
+
+// SSOAuthorize 运行在主面板 host（JWT 鉴权）：为已登录用户签发一次性 SSO code，
+// 并返回固定指向 auth 子域 sso-callback 的回跳 URL（回跳目标服务端固定，杜绝开放重定向）。
+func (h *OIDCProviderHandler) SSOAuthorize(c *gin.Context) {
+	if !h.providerReady(c) {
+		return
+	}
+	subject, ok := servermiddleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		h.localError(c, service.ErrOIDCLoginRequired)
+		return
+	}
+	var body struct {
+		Tx string `json:"tx"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		h.localError(c, service.ErrOIDCInvalidRequest)
+		return
+	}
+	tx := strings.TrimSpace(body.Tx)
+	code, err := h.service.IssueSSOCode(c.Request.Context(), subject.UserID, tx)
+	if err != nil {
+		h.localError(c, err)
+		return
+	}
+	h.noStore(c)
+	redirectURL := service.OIDCProviderIssuer + "/oauth/sso-callback?code=" + url.QueryEscape(code) + "&tx=" + url.QueryEscape(tx)
+	c.JSON(http.StatusOK, gin.H{"redirect_url": redirectURL})
+}
+
+// SSOCallback 运行在 auth 子域：校验并消费主面板签发的 SSO code，为对应用户建立浏览器会话，
+// 随后继续授权流程（进入 consent 或直接回跳）。
+func (h *OIDCProviderHandler) SSOCallback(c *gin.Context) {
+	if !h.providerReady(c) {
+		return
+	}
+	tx := strings.TrimSpace(c.Query("tx"))
+	code := strings.TrimSpace(c.Query("code"))
+	if tx == "" || code == "" {
+		h.localError(c, service.ErrOIDCInvalidRequest)
+		return
+	}
+	userID, err := h.service.RedeemSSOCode(c.Request.Context(), code, tx)
+	if err != nil {
+		h.localError(c, err)
+		return
+	}
+	currentSession := h.readCookie(c, h.cfg.OIDCProvider.Cookie.SessionName)
+	session, err := h.service.EstablishBrowserSessionForUser(c.Request.Context(), tx, userID, currentSession)
+	if err != nil {
+		h.localError(c, err)
 		return
 	}
 	h.setCookie(c, h.cfg.OIDCProvider.Cookie.SessionName, session, true, h.cfg.OIDCProvider.BrowserSessionAbsoluteTTLSeconds)
@@ -343,21 +444,43 @@ func (h *OIDCProviderHandler) checkCSRF(c *gin.Context, tx, action string) bool 
 	cookie := h.readCookie(c, "__Host-sub2_oidc_csrf")
 	return h.service.ValidCSRF(tx, action, supplied, cookie)
 }
+// renderLogin 渲染两步式登录页第一步（只收邮箱）。
 func (h *OIDCProviderHandler) renderLogin(c *gin.Context, tx string) {
 	token := h.service.CSRFToken(tx, "login")
 	h.setCookie(c, "__Host-sub2_oidc_csrf", token, false, 300)
 	h.noStore(c)
-	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(fmt.Sprintf(`<html><body><h1>Sign in</h1><form method="post" action="/oauth/login"><input type="hidden" name="tx" value="%s"><input type="hidden" name="csrf" value="%s"><label>Email <input name="email" type="email" autocomplete="username"></label><label>Password <input name="password" type="password" autocomplete="current-password"></label><label>TOTP <input name="totp_code" inputmode="numeric" autocomplete="one-time-code"></label><button type="submit">Continue</button></form></body></html>`, html.EscapeString(tx), html.EscapeString(token))))
+	h.renderTemplate(c, "oidc_login", oidcLoginView{Tx: tx, CSRF: token, Step: "email"})
 }
-func (h *OIDCProviderHandler) renderLoginError(c *gin.Context, tx string, err error) {
-	c.Header("X-OIDC-Login-Error", tokenErrorCode(err))
-	h.renderLogin(c, tx)
+
+// renderLoginCredentials 渲染登录第二步（密码，必要时含 TOTP）。
+func (h *OIDCProviderHandler) renderLoginCredentials(c *gin.Context, tx, email string, showTOTP, hasError bool, errCode string) {
+	token := h.service.CSRFToken(tx, "login")
+	h.setCookie(c, "__Host-sub2_oidc_csrf", token, false, 300)
+	if errCode != "" {
+		c.Header("X-OIDC-Login-Error", errCode)
+	}
+	h.noStore(c)
+	h.renderTemplate(c, "oidc_login", oidcLoginView{Tx: tx, CSRF: token, Step: "credentials", Email: email, ShowTOTP: showTOTP, HasError: hasError})
 }
+
 func (h *OIDCProviderHandler) renderConsent(c *gin.Context, tx string) {
 	token := h.service.CSRFToken(tx, "consent")
 	h.setCookie(c, "__Host-sub2_oidc_csrf", token, false, 300)
 	h.noStore(c)
-	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(fmt.Sprintf(`<html><body><h1>Authorize</h1><p>Approve the requested first-party scopes?</p><form method="post" action="/oauth/consent"><input type="hidden" name="tx" value="%s"><input type="hidden" name="csrf" value="%s"><button name="decision" value="approve">Approve</button><button name="decision" value="deny">Deny</button></form></body></html>`, html.EscapeString(tx), html.EscapeString(token))))
+	view, err := h.service.LoadConsentView(c.Request.Context(), tx, h.readCookie(c, h.cfg.OIDCProvider.Cookie.SessionName))
+	if err != nil {
+		h.localError(c, err)
+		return
+	}
+	h.renderTemplate(c, "oidc_consent", oidcConsentViewData{
+		Tx:          tx,
+		CSRF:        token,
+		ClientName:  view.ClientName,
+		ClientOwner: view.ClientOwner,
+		Scopes:      oidcScopeItems(view.Scopes),
+		UserEmail:   view.UserEmail,
+		UserName:    view.UserName,
+	})
 }
 func (h *OIDCProviderHandler) redirectSuccess(c *gin.Context, result *service.OIDCAuthorizeResult) {
 	h.noStore(c)

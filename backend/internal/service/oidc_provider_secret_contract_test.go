@@ -53,7 +53,7 @@ func TestOIDCClientSecretDigestMatchesAdminCreationAndAuthentication(t *testing.
 		ClientSecretMaxOverlapSeconds: 3600,
 	}}
 	repo := &oidcSecretContractRepository{}
-	svc := NewOIDCProviderService(repo, &oidcSecretContractUserRepository{}, nil, nil, cfg)
+	svc := NewOIDCProviderService(repo, &oidcSecretContractUserRepository{}, nil, nil, cfg, nil)
 
 	client, secret, err := svc.AdminCreateClient(context.Background(), OIDCClientCreateInput{
 		Name:          "contract client",
