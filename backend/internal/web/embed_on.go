@@ -354,6 +354,12 @@ func tryServeOverrideFile(c *gin.Context, overrideDir, cleanPath string) bool {
 
 func shouldBypassEmbeddedFrontend(path string) bool {
 	trimmed := strings.TrimSpace(path)
+	// /oauth/sso-bridge 是主面板前端 SPA 路由（跨域 SSO 引导页），必须交给前端兜底渲染
+	// index.html 再由 Vue Router 接管，不能并入下面 /oauth/ 的 OIDC 服务端端点放行，
+	// 否则会命中后端路由（面板 host 上无此路由）返回 404。
+	if trimmed == "/oauth/sso-bridge" {
+		return false
+	}
 	return strings.HasPrefix(trimmed, "/api/") ||
 		strings.HasPrefix(trimmed, "/v1/") ||
 		strings.HasPrefix(trimmed, "/v1beta/") ||

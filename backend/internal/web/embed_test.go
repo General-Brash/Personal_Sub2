@@ -706,10 +706,12 @@ func TestEmbeddedFrontendBypassesOIDCRoutes(t *testing.T) {
 	}
 
 	// 反例：非 OIDC 的相似路径应交给前端处理，不被误放行。
+	// /oauth/sso-bridge 是主面板前端 SPA 路由（跨域 SSO 引导页），必须由前端兜底，不放行。
 	for _, path := range []string{
 		"/oauth-callback",
 		"/.well-known/security.txt",
 		"/oauth",
+		"/oauth/sso-bridge",
 	} {
 		require.False(t, shouldBypassEmbeddedFrontend(path), "expected no bypass for path=%s", path)
 	}

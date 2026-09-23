@@ -49,6 +49,22 @@
         </div>
       </div>
 
+      <div
+        v-if="status?.auto_enabled && status?.consent_valid === false"
+        data-test="checkin-consent-stale-banner"
+        class="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <span>手续费已调整，自动签到已暂停，请确认新的手续费后继续自动签到。</span>
+        <button
+          type="button"
+          data-test="checkin-consent-reconfirm"
+          class="inline-flex min-h-9 items-center justify-center gap-2 self-start rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700 sm:self-auto"
+          @click="showConsentDialog = true"
+        >
+          重新确认
+        </button>
+      </div>
+
       <CheckinConsentDialog
         :show="showConsentDialog"
         :fee-bps="status?.auto_fee_bps ?? 500"
@@ -379,7 +395,6 @@ const checkInButtonLabel = computed(() => {
   if (submitting.value) return t('checkin.checkingIn')
   if (!status.value?.enabled) return t('checkin.disabled')
   if (status.value.today_checked_in) return t('checkin.checkedIn')
-  if (status.value.auto_enabled) return '自动签到已开启'
   return t('checkin.checkIn')
 })
 const temporaryCreditText = computed(() => status.value ? formatCredit(status.value.temporary_credit_available) : '')
@@ -466,10 +481,6 @@ function handleDocumentPointerDown(event: PointerEvent) {
 
 async function handleCheckIn() {
   if (!canCheckIn.value) return
-  if (status.value?.auto_enabled) {
-    appStore.showError('自动签到已开启，请先关闭自动签到后再手动签到')
-    return
-  }
   submitting.value = true
   try {
     const result = await checkIn(getOrCreateIdempotencyKey())
@@ -514,6 +525,9 @@ async function confirmAutoPreference() {
       : status.value
     showConsentDialog.value = false
     appStore.showSuccess('自动签到已开启')
+    // 开启/重新确认后立即触发一次自动签到，无需手动刷新页面；实际领取由
+    // CheckinEntryTrigger 完成，其完成事件 personal-checkin-completed 会回刷本页。
+    window.dispatchEvent(new CustomEvent('personal-checkin-recheck'))
   } catch (error) {
     console.error('Failed to enable automatic check-in:', error)
     appStore.showError('开启自动签到失败')

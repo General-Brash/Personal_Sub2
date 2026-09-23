@@ -4,10 +4,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { CheckinResult, CheckinStatus } from '@/api/checkin'
 import CheckInView from '../CheckInView.vue'
 
-const { authState, checkIn, getCheckinStatus, refreshUser, showError, showSuccess } = vi.hoisted(() => ({
+const { authState, checkIn, getCheckinStatus, updateCheckinPreference, refreshUser, showError, showSuccess } = vi.hoisted(() => ({
   authState: { isAdmin: false },
   checkIn: vi.fn(),
   getCheckinStatus: vi.fn(),
+  updateCheckinPreference: vi.fn(),
   refreshUser: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
@@ -16,6 +17,7 @@ const { authState, checkIn, getCheckinStatus, refreshUser, showError, showSucces
 vi.mock('@/api/checkin', () => ({
   checkIn,
   getCheckinStatus,
+  updateCheckinPreference,
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -92,6 +94,11 @@ const mountView = async () => {
           template: '<section v-if="show" data-test="settings-dialog"><slot /><button data-test="settings-dialog-close" @click="$emit(\'close\')" /></section>',
         },
         CheckinSettingsCard: { template: '<div data-test="checkin-settings-card-stub" />' },
+        CheckinConsentDialog: {
+          props: ['show', 'feeBps'],
+          emits: ['confirm', 'close'],
+          template: '<div v-if="show" data-test="consent-dialog"><button data-test="consent-confirm" @click="$emit(\'confirm\')" /></div>',
+        },
         Icon: { template: '<i />' },
       },
     },
@@ -115,6 +122,7 @@ describe('CheckInView', () => {
     localStorage.clear()
     checkIn.mockReset()
     getCheckinStatus.mockReset()
+    updateCheckinPreference.mockReset()
     refreshUser.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
@@ -438,5 +446,55 @@ describe('CheckInView', () => {
     expect(wrapper.get('[data-test="checkin-result-permanent"]').text()).toContain('$0.25')
     expect(showSuccess).toHaveBeenCalled()
     expect(showError).not.toHaveBeenCalled()
+  })
+
+  it('allows manual check-in even while automatic check-in is enabled', async () => {
+    getCheckinStatus.mockResolvedValueOnce(baseStatus({ auto_enabled: true, consent_valid: true }))
+    checkIn.mockResolvedValue(checkinResult)
+    const wrapper = await mountView()
+
+    const button = wrapper.get('[data-test="check-in-button"]')
+    expect(button.attributes('disabled')).toBeUndefined()
+    await button.trigger('click')
+    await flushPromises()
+
+    expect(checkIn).toHaveBeenCalledTimes(1)
+    expect(showError).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-test="checkin-result-temporary"]').text()).toContain('$2.50')
+  })
+
+  it('shows a re-consent banner and reopens the consent dialog when the fee changed', async () => {
+    getCheckinStatus.mockResolvedValue(baseStatus({ auto_enabled: true, consent_valid: false }))
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="checkin-consent-stale-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="consent-dialog"]').exists()).toBe(false)
+
+    await wrapper.get('[data-test="checkin-consent-reconfirm"]').trigger('click')
+    expect(wrapper.find('[data-test="consent-dialog"]').exists()).toBe(true)
+  })
+
+  it('signs in immediately after enabling automatic check-in by dispatching a recheck event', async () => {
+    getCheckinStatus.mockResolvedValue(baseStatus({ auto_enabled: false, auto_fee_bps: 500, policy_version: 'v1' }))
+    updateCheckinPreference.mockResolvedValue({
+      auto_enabled: true,
+      consent_valid: true,
+      consent_fee_bps: 500,
+      current_policy_version: 'v1',
+      current_fee_bps: 500,
+    })
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+    const wrapper = await mountView()
+
+    await wrapper.get('[data-test="checkin-auto-toggle"]').trigger('click')
+    await wrapper.get('[data-test="consent-confirm"]').trigger('click')
+    await flushPromises()
+
+    expect(updateCheckinPreference).toHaveBeenCalledWith(true, true, 'v1', 500)
+    const recheckDispatched = dispatchSpy.mock.calls.some(
+      ([event]) => event instanceof Event && event.type === 'personal-checkin-recheck',
+    )
+    expect(recheckDispatched).toBe(true)
+    dispatchSpy.mockRestore()
   })
 })

@@ -317,6 +317,12 @@ func (h *ModelPlazaHandler) GetV2(c *gin.Context) {
 		}
 		userRates = rates
 	}
+	plazaSettings := service.ModelPlazaAdminSettings{Overrides: map[string]service.ModelPlazaModelOverride{}}
+	if h.settingService != nil {
+		if loaded, sErr := h.settingService.GetModelPlazaAdminSettings(c.Request.Context()); sErr == nil {
+			plazaSettings = loaded
+		}
+	}
 	out := make([]modelPlazaV2Model, 0, len(items))
 	for i := range items {
 		item := items[i]
@@ -334,6 +340,10 @@ func (h *ModelPlazaHandler) GetV2(c *gin.Context) {
 					continue
 				}
 			} else if !modelPlazaV2RouteAllowed(route, access) {
+				continue
+			}
+			if plazaSettings.HideNoAccount && route.AvailabilityReason == modelPlazaReasonNoAccount {
+				// 收敛：无任何账号支持的幽灵路由不进广场（保留限流/过载等临时态）。
 				continue
 			}
 			choice := modelPlazaV2GroupChoice{
@@ -416,9 +426,177 @@ func (h *ModelPlazaHandler) GetV2(c *gin.Context) {
 			model.QuoteVersion = choices[0].QuoteVersion
 			model.PricedAt = choices[0].PricedAt
 		}
+		if ov, ok := plazaSettings.Overrides[service.ModelPlazaOverrideKey(model.Platform, model.ModelID)]; ok && ov.Hidden {
+			continue
+		}
 		out = append(out, model)
 	}
+	sortModelPlazaV2ByOverride(out, plazaSettings.Overrides)
 	response.Success(c, modelPlazaV2Response{Models: out, GeneratedAt: time.Now().UTC(), Description: description})
+}
+
+// modelPlazaReasonNoAccount 与 service 目录层 runtimeCatalogRoute 的 "no_account"
+// 原因码一致：该路由下无任何 active+可调度且支持该模型的账号（幽灵播种）。
+const modelPlazaReasonNoAccount = "no_account"
+
+// sortModelPlazaV2ByOverride 按管理员覆盖排序：置顶优先，其次 sort_order 升序。
+// 无覆盖时保持目录原序（稳定排序 + 默认零值）。
+func sortModelPlazaV2ByOverride(models []modelPlazaV2Model, overrides map[string]service.ModelPlazaModelOverride) {
+	if len(overrides) == 0 {
+		return
+	}
+	sort.SliceStable(models, func(i, j int) bool {
+		oi := overrides[service.ModelPlazaOverrideKey(models[i].Platform, models[i].ModelID)]
+		oj := overrides[service.ModelPlazaOverrideKey(models[j].Platform, models[j].ModelID)]
+		if oi.Pinned != oj.Pinned {
+			return oi.Pinned
+		}
+		return oi.SortOrder < oj.SortOrder
+	})
+}
+
+type modelPlazaAdminModel struct {
+	Key               string `json:"key"`
+	ModelID           string `json:"model_id"`
+	DisplayName       string `json:"display_name"`
+	Platform          string `json:"platform"`
+	AvailabilityState string `json:"availability_state"`
+	Hidden            bool   `json:"hidden"`
+	Pinned            bool   `json:"pinned"`
+	SortOrder         int    `json:"sort_order"`
+}
+
+type modelPlazaAdminSettingsDTO struct {
+	Models        []modelPlazaAdminModel `json:"models"`
+	HideNoAccount bool                   `json:"hide_no_account"`
+	Version       string                 `json:"version"`
+}
+
+type modelPlazaAdminOverrideDTO struct {
+	Hidden    bool `json:"hidden"`
+	Pinned    bool `json:"pinned"`
+	SortOrder int  `json:"sort_order"`
+}
+
+type modelPlazaAdminUpdateDTO struct {
+	Overrides     map[string]modelPlazaAdminOverrideDTO `json:"overrides"`
+	HideNoAccount bool                                  `json:"hide_no_account"`
+	Version       string                                `json:"version"`
+}
+
+// modelPlazaAdminAvailabilityState 给管理员一个粗粒度的可用状态汇总：任一 route
+// 可调度 → eligible；否则仍有 route（含限流/过载/no_account 幽灵）→ temporarily_unavailable；
+// 完全无 route → catalog_only。仅用于管理列表展示，不参与调度/计费判定。
+func modelPlazaAdminAvailabilityState(item service.ModelCatalogItem) string {
+	hasRoute := false
+	for i := range item.Routes {
+		hasRoute = true
+		if item.Routes[i].Schedulable {
+			return service.ModelCatalogStateEligible
+		}
+	}
+	if hasRoute {
+		return service.ModelCatalogStateTemporarilyUnavailable
+	}
+	return service.ModelCatalogStateCatalogOnly
+}
+
+// sortModelPlazaAdminModels 管理列表排序：置顶优先，其次 sort_order 升序，其余保持目录原序。
+func sortModelPlazaAdminModels(models []modelPlazaAdminModel) {
+	sort.SliceStable(models, func(i, j int) bool {
+		if models[i].Pinned != models[j].Pinned {
+			return models[i].Pinned
+		}
+		return models[i].SortOrder < models[j].SortOrder
+	})
+}
+
+// buildModelPlazaAdminDTO 组装管理面板视图：全部目录模型（含已隐藏项，便于管理员查看
+// 自己隐藏了什么）+ 当前覆盖 + 收敛开关 + 版本。modelCatalog 未注入时只返回设置本身。
+func (h *ModelPlazaHandler) buildModelPlazaAdminDTO(c *gin.Context, settings service.ModelPlazaAdminSettings) (modelPlazaAdminSettingsDTO, error) {
+	models := make([]modelPlazaAdminModel, 0)
+	if h.modelCatalog != nil {
+		items, err := h.modelCatalog.List(c.Request.Context())
+		if err != nil {
+			return modelPlazaAdminSettingsDTO{}, err
+		}
+		models = make([]modelPlazaAdminModel, 0, len(items))
+		for i := range items {
+			item := items[i]
+			key := service.ModelPlazaOverrideKey(item.Platform, item.ModelID)
+			ov := settings.Overrides[key]
+			models = append(models, modelPlazaAdminModel{
+				Key:               key,
+				ModelID:           item.ModelID,
+				DisplayName:       item.DisplayName,
+				Platform:          item.Platform,
+				AvailabilityState: modelPlazaAdminAvailabilityState(item),
+				Hidden:            ov.Hidden,
+				Pinned:            ov.Pinned,
+				SortOrder:         ov.SortOrder,
+			})
+		}
+		sortModelPlazaAdminModels(models)
+	}
+	return modelPlazaAdminSettingsDTO{Models: models, HideNoAccount: settings.HideNoAccount, Version: settings.Version}, nil
+}
+
+// GetModelPlazaAdmin 返回广场展示管理设置（全部目录模型含已隐藏项 + 覆盖 + 收敛开关 + 版本）。
+// GET /api/v1/admin/model-plaza （鉴权 models.catalog.read）
+func (h *ModelPlazaHandler) GetModelPlazaAdmin(c *gin.Context) {
+	if h == nil || h.settingService == nil {
+		response.NotFound(c, "Model plaza is not enabled")
+		return
+	}
+	settings, err := h.settingService.GetModelPlazaAdminSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	dto, err := h.buildModelPlazaAdminDTO(c, settings)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto)
+}
+
+// UpdateModelPlazaAdmin 以版本乐观锁写入广场展示管理设置。
+// PUT /api/v1/admin/model-plaza （鉴权 models.catalog.write）
+func (h *ModelPlazaHandler) UpdateModelPlazaAdmin(c *gin.Context) {
+	if h == nil || h.settingService == nil {
+		response.NotFound(c, "Model plaza is not enabled")
+		return
+	}
+	var body modelPlazaAdminUpdateDTO
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.BadRequest(c, "Invalid model plaza settings")
+		return
+	}
+	next := service.ModelPlazaAdminSettings{
+		Overrides:     make(map[string]service.ModelPlazaModelOverride, len(body.Overrides)),
+		HideNoAccount: body.HideNoAccount,
+		Version:       body.Version,
+	}
+	for key, ov := range body.Overrides {
+		platform, modelID, _ := strings.Cut(key, ":")
+		next.Overrides[service.ModelPlazaOverrideKey(platform, modelID)] = service.ModelPlazaModelOverride{
+			Hidden:    ov.Hidden,
+			Pinned:    ov.Pinned,
+			SortOrder: ov.SortOrder,
+		}
+	}
+	saved, err := h.settingService.UpdateModelPlazaAdminSettings(c.Request.Context(), next)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	dto, err := h.buildModelPlazaAdminDTO(c, saved)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto)
 }
 
 func (h *ModelPlazaHandler) resolveV2Access(c *gin.Context, subject middleware.AuthSubject, authed bool) (service.ModelAccessInput, error) {
