@@ -272,6 +272,33 @@ describe('OIDCProviderView', () => {
     wrapper.unmount()
   })
 
+  it('labels the old secret in a rotation overlap without prompting another rotation', async () => {
+    const now = Date.now()
+    getClient.mockResolvedValue({ ...client, secrets: [
+      { id: 'new', fingerprint: 'new-fp', status: 'active', not_before: new Date(now - 1000).toISOString(), expires_at: new Date(now + 90 * 86400000).toISOString() },
+      { id: 'old', fingerprint: 'old-fp', status: 'retiring', not_before: new Date(now - 86400000).toISOString(), expires_at: new Date(now + 3600000).toISOString() },
+    ] })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('active · Usable')
+    expect(wrapper.text()).toContain('retiring · Rotation overlap — usable until it expires automatically')
+    expect(wrapper.text()).not.toContain('plan rotation')
+    expect(wrapper.text()).not.toContain('No currently usable secret')
+    wrapper.unmount()
+  })
+
+  it('still prompts rotation when a retiring secret is the only usable one', async () => {
+    const now = Date.now()
+    getClient.mockResolvedValue({ ...client, secrets: [
+      { id: 'old', fingerprint: 'old-fp', status: 'retiring', not_before: new Date(now - 86400000).toISOString(), expires_at: new Date(now + 3600000).toISOString() },
+    ] })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('retiring · Expires within 7 days — plan rotation')
+    expect(wrapper.text()).not.toContain('No currently usable secret')
+    wrapper.unmount()
+  })
+
   it('does not write secret or token material to browser storage in the view source', async () => {
     const wrapper = mountView()
     await flushPromises()

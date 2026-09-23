@@ -123,7 +123,7 @@
             </button>
           </div>
 
-          <p v-if="client.enabled && !client.secrets?.some(secret => ['usable', 'expiring'].includes(secretAvailability(secret)))"
+          <p v-if="client.enabled && !client.secrets?.some(secret => ['usable', 'expiring', 'overlap'].includes(secretAvailability(secret)))"
              class="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200" role="alert">
             {{ expiryLabel('none') }}
           </p>
@@ -378,7 +378,7 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
-type SecretAvailability = 'usable' | 'expiring' | 'expired' | 'notYet' | 'inactive' | 'unknown'
+type SecretAvailability = 'usable' | 'expiring' | 'overlap' | 'expired' | 'notYet' | 'inactive' | 'unknown'
 
 function secretAvailability(secret: OidcClientSecretSummary): SecretAvailability {
   if (secret.status !== 'active' && secret.status !== 'retiring') return 'inactive'
@@ -388,14 +388,17 @@ function secretAvailability(secret: OidcClientSecretSummary): SecretAvailability
   const now = currentTime.value
   if (end <= now) return 'expired'
   if (start > now) return 'notYet'
+  // The old secret in a rotation overlap expires on its own while a replacement is usable;
+  // prompting another rotation here would hit the two-usable-secret cap.
+  if (secret.status === 'retiring' && props.client?.secrets?.some(other => other.status === 'active' && ['usable', 'expiring'].includes(secretAvailability(other)))) return 'overlap'
   return end - now <= 7 * 86400 * 1000 ? 'expiring' : 'usable'
 }
 
 function expiryLabel(state: SecretAvailability | 'none'): string {
   const zh = locale.value.startsWith('zh')
   const labels = zh
-    ? { usable: '有效', expiring: '7 天内到期，请准备轮换', expired: '已过期，不可用', notYet: '尚未生效', inactive: '不可用', unknown: '有效期未知，不可判定可用', none: '此客户端没有当前可用的密钥，请安全轮换并更新依赖端' }
-    : { usable: 'Usable', expiring: 'Expires within 7 days — plan rotation', expired: 'Expired — unusable', notYet: 'Not yet valid', inactive: 'Unavailable', unknown: 'Validity unknown — not verified usable', none: 'No currently usable secret. Rotate securely and update the relying party.' }
+    ? { usable: '有效', expiring: '7 天内到期，请准备轮换', overlap: '轮换重叠期内仍可用，到期后自动失效', expired: '已过期，不可用', notYet: '尚未生效', inactive: '不可用', unknown: '有效期未知，不可判定可用', none: '此客户端没有当前可用的密钥，请安全轮换并更新依赖端' }
+    : { usable: 'Usable', expiring: 'Expires within 7 days — plan rotation', overlap: 'Rotation overlap — usable until it expires automatically', expired: 'Expired — unusable', notYet: 'Not yet valid', inactive: 'Unavailable', unknown: 'Validity unknown — not verified usable', none: 'No currently usable secret. Rotate securely and update the relying party.' }
   return labels[state]
 }
 
