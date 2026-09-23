@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 
 const {
   getProviderStatus,
@@ -71,7 +72,7 @@ vi.mock('@/composables/useStepUp', () => ({
 
 vi.mock('vue-i18n', async () => ({
   ...(await vi.importActual<typeof import('vue-i18n')>('vue-i18n')),
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({ t: (key: string) => key, locale: ref('en') }),
 }))
 
 import OIDCProviderView from '../OIDCProviderView.vue'
@@ -151,6 +152,7 @@ describe('OIDCProviderView', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -214,6 +216,86 @@ describe('OIDCProviderView', () => {
     expect(listKeys).toHaveBeenCalledTimes(2)
     expect(getProviderStatus).toHaveBeenCalledTimes(2)
     expect(confirm).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
+  it('distinguishes expired and near-expiry active secrets from usable ones', async () => {
+    const now = Date.now()
+    getClient.mockResolvedValue({ ...client, secrets: [
+      { id: 'expired', fingerprint: 'expired-fp', status: 'active', not_before: new Date(now - 10 * 86400000).toISOString(), expires_at: new Date(now - 1000).toISOString() },
+      { id: 'soon', fingerprint: 'soon-fp', status: 'active', not_before: new Date(now - 86400000).toISOString(), expires_at: new Date(now + 86400000).toISOString() },
+    ] })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Expired — unusable')
+    expect(wrapper.text()).toContain('Expires within 7 days — plan rotation')
+    expect(wrapper.text()).not.toContain('No currently usable secret')
+    wrapper.unmount()
+  })
+
+  it('updates availability and the no-usable-secret alert as time crosses expiry without refetching', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-23T12:00:00Z'))
+    getClient.mockResolvedValue({ ...client, secrets: [
+      { id: 'boundary', fingerprint: 'boundary-fp', status: 'active', not_before: '2026-09-22T12:00:00Z', expires_at: '2026-09-23T12:00:02Z' },
+    ] })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Expires within 7 days — plan rotation')
+    expect(wrapper.text()).not.toContain('No currently usable secret')
+
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(wrapper.text()).toContain('Expired — unusable')
+    expect(wrapper.find('[role="alert"]').text()).toContain('No currently usable secret')
+    expect(getClient).toHaveBeenCalledOnce()
+    wrapper.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('warns when an enabled client has no secrets', async () => {
+    getClient.mockResolvedValue({ ...client, secrets: [] })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').text()).toContain('No currently usable secret')
+    expect(wrapper.text()).toContain('admin.oidcProvider.clients.noSecrets')
+    wrapper.unmount()
+  })
+
+  it('warns when every client secret is expired despite an active status', async () => {
+    getClient.mockResolvedValue({ ...client, secrets: [
+      { id: 'expired', fingerprint: 'expired-fp', status: 'active', not_before: '2026-01-01T00:00:00Z', expires_at: '2026-01-02T00:00:00Z' },
+    ] })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').text()).toContain('No currently usable secret')
+    expect(wrapper.text()).toContain('Expired — unusable')
+    wrapper.unmount()
+  })
+
+  it('labels the old secret in a rotation overlap without prompting another rotation', async () => {
+    const now = Date.now()
+    getClient.mockResolvedValue({ ...client, secrets: [
+      { id: 'new', fingerprint: 'new-fp', status: 'active', not_before: new Date(now - 1000).toISOString(), expires_at: new Date(now + 90 * 86400000).toISOString() },
+      { id: 'old', fingerprint: 'old-fp', status: 'retiring', not_before: new Date(now - 86400000).toISOString(), expires_at: new Date(now + 3600000).toISOString() },
+    ] })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('active · Usable')
+    expect(wrapper.text()).toContain('retiring · Rotation overlap — usable until it expires automatically')
+    expect(wrapper.text()).not.toContain('plan rotation')
+    expect(wrapper.text()).not.toContain('No currently usable secret')
+    wrapper.unmount()
+  })
+
+  it('still prompts rotation when a retiring secret is the only usable one', async () => {
+    const now = Date.now()
+    getClient.mockResolvedValue({ ...client, secrets: [
+      { id: 'old', fingerprint: 'old-fp', status: 'retiring', not_before: new Date(now - 86400000).toISOString(), expires_at: new Date(now + 3600000).toISOString() },
+    ] })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('retiring · Expires within 7 days — plan rotation')
+    expect(wrapper.text()).not.toContain('No currently usable secret')
     wrapper.unmount()
   })
 

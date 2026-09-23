@@ -669,7 +669,7 @@ func (s *OIDCProviderService) AdminCreateClient(ctx context.Context, input OIDCC
 	input.SecretFingerprint = oidcFingerprint(secret)
 	input.AllowedScopes = allowed
 	input.SecretNotBefore = now
-	input.SecretExpiresAt = now.Add(time.Duration(s.cfg.OIDCProvider.ClientSecretMaxOverlapSeconds) * time.Second)
+	input.SecretExpiresAt = now.Add(time.Duration(s.cfg.OIDCProvider.ClientSecretTTLSeconds) * time.Second)
 	input.Now = now
 	client, err := s.repo.CreateClient(ctx, input)
 	if err != nil {
@@ -723,7 +723,15 @@ func (s *OIDCProviderService) AdminRotateSecret(ctx context.Context, clientPK, a
 		return nil, "", err
 	}
 	now := time.Now().UTC()
-	record, err := s.repo.CreateClientSecret(ctx, clientPK, actorID, oidcSecretDigest(s.cfg.OIDCProvider.SecretPepper, secret), oidcFingerprint(secret), now, now.Add(time.Duration(s.cfg.OIDCProvider.ClientSecretMaxOverlapSeconds)*time.Second), reason)
+	// The legacy repository method has no overlap deadline. Require the explicit
+	// rotation capability rather than silently granting a longer window.
+	rotator, ok := s.repo.(interface {
+		CreateClientSecretWithOverlap(context.Context, int64, int64, string, string, time.Time, time.Time, time.Time, string) (*OIDCClientSecretRecord, error)
+	})
+	if !ok {
+		return nil, "", ErrOIDCServerError
+	}
+	record, err := rotator.CreateClientSecretWithOverlap(ctx, clientPK, actorID, oidcSecretDigest(s.cfg.OIDCProvider.SecretPepper, secret), oidcFingerprint(secret), now, now.Add(time.Duration(s.cfg.OIDCProvider.ClientSecretTTLSeconds)*time.Second), now.Add(time.Duration(s.cfg.OIDCProvider.ClientSecretMaxOverlapSeconds)*time.Second), reason)
 	if err != nil {
 		return nil, "", err
 	}

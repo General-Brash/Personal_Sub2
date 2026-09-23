@@ -49,6 +49,9 @@ func validateOIDCProviderConfig(p OIDCProviderConfig) error {
 			return fmt.Errorf("oidc_provider.%s must be between %d and %d seconds", item.name, item.min, item.max)
 		}
 	}
+	if p.ClientSecretTTLSeconds < 1 || p.ClientSecretTTLSeconds > 86400*365 {
+		return fmt.Errorf("oidc_provider.client_secret_ttl_seconds must be between 1 and 31536000 seconds")
+	}
 	if p.ClockSkewSeconds < 0 || p.ClockSkewSeconds > 300 || p.JWKSCacheMaxAgeSeconds <= 0 || p.JWKSCacheMaxAgeSeconds > 3600 || p.ClientSecretMaxOverlapSeconds <= 0 || p.ClientSecretMaxOverlapSeconds > 86400 {
 		return fmt.Errorf("oidc_provider clock skew, JWKS cache age, or secret overlap is outside the safe range")
 	}

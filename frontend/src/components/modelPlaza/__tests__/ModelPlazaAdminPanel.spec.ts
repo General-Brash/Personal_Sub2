@@ -46,6 +46,29 @@ describe('ModelPlazaAdminPanel', () => {
     expect(wrapper.text()).toContain('GPT-4o')
   })
 
+  it('lays out compact cards and preserves hidden, pinned, sort and version in one save', async () => {
+    const wrapper = render()
+    await wrapper.get('[data-testid="plaza-admin-toggle"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="plaza-admin-grid"]').classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'md:grid-cols-2', 'xl:grid-cols-3']))
+    const cards = wrapper.get('[data-testid="plaza-admin-grid"]').findAll(':scope > div')
+    expect(cards).toHaveLength(2)
+    await cards[0].find('input[type="checkbox"]').setValue(true)
+    await cards[0].findAll('input[type="checkbox"]')[1].setValue(true)
+    await cards[0].find('input[type="number"]').setValue('7')
+    await cards[1].find('input[type="number"]').setValue('3')
+    await wrapper.get('[data-testid="plaza-admin-save"]').trigger('click')
+    await flushPromises()
+    expect(client.put).toHaveBeenCalledWith('/admin/model-plaza', {
+      overrides: {
+        'anthropic:claude-sonnet': { hidden: true, pinned: true, sort_order: 7 },
+        'openai:gpt-4o': { hidden: false, pinned: false, sort_order: 3 },
+      },
+      hide_no_account: true,
+      version: 'v1',
+    })
+  })
+
   it('saves only changed overrides with the optimistic-lock version', async () => {
     const wrapper = render()
     await wrapper.get('[data-testid="plaza-admin-toggle"]').trigger('click')

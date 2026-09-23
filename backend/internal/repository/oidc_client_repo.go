@@ -257,7 +257,16 @@ func (r *oidcRepository) UpdateClient(ctx context.Context, input service.OIDCCli
 	return r.GetClientByID(ctx, input.ClientPK)
 }
 
+// CreateClientSecret preserves the legacy interface's conservative 24-hour bound.
+// Provider rotation uses CreateClientSecretWithOverlap to honor its configured bound.
 func (r *oidcRepository) CreateClientSecret(ctx context.Context, clientPK, actorID int64, digest, fingerprint string, notBefore, expiresAt time.Time, reason string) (*service.OIDCClientSecretRecord, error) {
+	return r.CreateClientSecretWithOverlap(ctx, clientPK, actorID, digest, fingerprint, notBefore, expiresAt, notBefore.Add(24*time.Hour), reason)
+}
+
+func (r *oidcRepository) CreateClientSecretWithOverlap(ctx context.Context, clientPK, actorID int64, digest, fingerprint string, notBefore, expiresAt, overlapUntil time.Time, reason string) (*service.OIDCClientSecretRecord, error) {
+	if notBefore.IsZero() || !expiresAt.After(notBefore) || !overlapUntil.After(notBefore) || overlapUntil.After(notBefore.Add(24*time.Hour)) {
+		return nil, fmt.Errorf("invalid oidc secret rotation window")
+	}
 	if err := r.ensureDB(); err != nil {
 		return nil, err
 	}
@@ -277,7 +286,7 @@ func (r *oidcRepository) CreateClientSecret(ctx context.Context, clientPK, actor
 	if _, err := tx.ExecContext(ctx, `UPDATE oidc_client_secrets SET status='expired' WHERE client_pk=$1 AND status IN ('active','retiring') AND expires_at <= $2`, clientPK, now); err != nil {
 		return nil, err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE oidc_client_secrets SET status='retiring' WHERE client_pk=$1 AND status='active' AND expires_at > $2`, clientPK, now); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE oidc_client_secrets SET status='retiring', expires_at=LEAST(expires_at,$3) WHERE client_pk=$1 AND status='active' AND expires_at > $2`, clientPK, now, overlapUntil); err != nil {
 		return nil, err
 	}
 	var count int

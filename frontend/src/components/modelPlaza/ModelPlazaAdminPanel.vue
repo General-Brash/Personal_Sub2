@@ -24,19 +24,20 @@
       <div v-if="loading" class="py-4 text-center text-sm text-gray-500">{{ locale === 'zh' ? '加载中…' : 'Loading…' }}</div>
       <div v-else-if="error" class="py-4 text-center text-sm text-red-600">{{ locale === 'zh' ? '加载失败' : 'Failed to load' }}</div>
       <template v-else>
-        <div class="max-h-96 space-y-2 overflow-y-auto pr-1">
+        <div class="grid max-h-96 grid-cols-1 items-start gap-2 overflow-y-auto pr-1 md:grid-cols-2 xl:grid-cols-3" data-testid="plaza-admin-grid">
           <div
             v-for="m in draftModels"
             :key="m.key"
-            class="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 p-2.5 text-sm dark:border-dark-700"
+            class="min-w-0 rounded-lg border border-gray-200 p-2.5 text-sm dark:border-dark-700"
           >
-            <div class="min-w-0 flex-1">
-              <p class="truncate font-medium text-gray-900 dark:text-white">{{ m.display_name || m.model_id }}</p>
-              <p class="truncate font-mono text-xs text-gray-500 dark:text-gray-400">{{ m.model_id }} · {{ m.platform }}</p>
+            <div class="flex min-w-0 flex-wrap items-start justify-between gap-1">
+              <div class="min-w-0">
+                <p class="break-words font-medium text-gray-900 dark:text-white" :title="m.display_name || m.model_id">{{ m.display_name || m.model_id }}</p>
+                <p class="break-all font-mono text-xs text-gray-500 dark:text-gray-400" :title="m.model_id">{{ m.model_id }} · {{ m.platform }}</p>
+              </div>
+              <span :class="stateClass(m.availability_state)" class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium">{{ stateLabel(m.availability_state) }}</span>
             </div>
-            <span :class="stateClass(m.availability_state)" class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium">
-              {{ stateLabel(m.availability_state) }}
-            </span>
+            <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
             <label class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
               <input v-model="m.hidden" :data-testid="`plaza-admin-hidden-${m.model_id}`" type="checkbox" /> {{ locale === 'zh' ? '隐藏' : 'Hide' }}
             </label>
@@ -52,6 +53,7 @@
             <router-link to="/admin/groups" class="shrink-0 text-xs font-medium text-primary-600 hover:underline dark:text-primary-400">
               {{ locale === 'zh' ? '去配置定价' : 'Configure pricing' }}
             </router-link>
+            </div>
           </div>
         </div>
 
