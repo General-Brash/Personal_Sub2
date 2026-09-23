@@ -6,6 +6,7 @@
       class="plaza-description rounded-2xl border border-gray-100 bg-white px-5 py-4 text-sm shadow-card dark:border-dark-700/50 dark:bg-dark-800/50"
       v-html="descriptionHtml"
     ></div>
+    <ModelPlazaAdminPanel v-if="authStore.isAdmin" />
     <div v-if="loading" class="card p-6 text-center text-sm text-gray-500 dark:text-gray-400">
       {{ locale === 'zh' ? '正在加载模型目录…' : 'Loading model catalog…' }}
     </div>
@@ -137,7 +138,11 @@ import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import PlazaFilterBar from './PlazaFilterBar.vue'
+import ModelPlazaAdminPanel from './ModelPlazaAdminPanel.vue'
+import { useAuthStore } from '@/stores/auth'
 import type { ModelPlazaAvailabilityState, ModelPlazaV2GroupChoice, ModelPlazaV2Model, ModelPlazaV2PriceCondition, ModelPlazaV2Response } from '@/api/modelPlaza'
+
+const authStore = useAuthStore()
 
 const props = defineProps<{
   response: ModelPlazaV2Response | null

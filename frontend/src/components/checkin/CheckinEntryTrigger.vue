@@ -119,6 +119,12 @@ function completedInAnotherView() {
   clearPrompt()
 }
 
+function recheckOnPreferenceChange() {
+  // Fired by CheckInView after auto check-in is enabled / re-confirmed so the
+  // claim happens immediately instead of waiting for the next page load.
+  void attemptAutomaticCheckin()
+}
+
 async function attemptAutomaticCheckin(): Promise<void> {
   if (!active || runInFlight) return
   runInFlight = true
@@ -177,10 +183,12 @@ onBeforeUnmount(() => {
   active = false
   channel?.close()
   window.removeEventListener('personal-checkin-completed', completedInAnotherView)
+  window.removeEventListener('personal-checkin-recheck', recheckOnPreferenceChange)
 })
 
 onMounted(() => {
   window.addEventListener('personal-checkin-completed', completedInAnotherView)
+  window.addEventListener('personal-checkin-recheck', recheckOnPreferenceChange)
   if (typeof BroadcastChannel !== 'undefined') {
     channel = new BroadcastChannel(`personal-checkin:${props.userId}`)
     channel.onmessage = () => clearPrompt()

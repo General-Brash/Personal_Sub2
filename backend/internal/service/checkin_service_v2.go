@@ -242,9 +242,11 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 	if mode == CheckinModeDirectAuto && (!preference.AutoEnabled || !consentValid) {
 		return nil, ErrCheckinConsentRequired
 	}
-	if mode == CheckinModeDirect && preference.AutoEnabled {
-		return nil, ErrCheckinAutoModeConflict
-	}
+	// Manual (direct) check-in stays available even when automatic check-in is
+	// enabled: it carries no fee and the per-period uniqueness guard above
+	// (loadCheckinByPeriodOrDate + the insert-race reload) prevents any double
+	// claim, so whichever mode records the period first wins and the other is
+	// reported as already completed.
 
 	providedVersion := ""
 	if len(expectedPolicy) > 0 {

@@ -98,6 +98,13 @@ func RegisterAdminRoutes(
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
+		// 模型广场展示管理（隐藏/排序/置顶 + 收敛开关）
+		modelPlazaAdmin := admin.Group("/model-plaza")
+		{
+			modelPlazaAdmin.GET("", h.ModelPlaza.GetModelPlazaAdmin)
+			modelPlazaAdmin.PUT("", h.ModelPlaza.UpdateModelPlazaAdmin)
+		}
+
 		// 数据管理
 		registerDataManagementRoutes(admin, h, stepUpAuth)
 

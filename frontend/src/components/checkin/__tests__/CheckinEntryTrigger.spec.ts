@@ -131,4 +131,16 @@ describe('CheckinEntryTrigger', () => {
     await flushPromises()
     expect(autoCheckIn).not.toHaveBeenCalled()
   })
+
+  it('re-attempts an automatic claim when a preference-change recheck event fires', async () => {
+    const wrapper = mount(CheckinEntryTrigger, { props: { userId: 11 } })
+    await flushPromises()
+    expect(autoCheckIn).toHaveBeenCalledTimes(1)
+
+    window.dispatchEvent(new CustomEvent('personal-checkin-recheck'))
+    await flushPromises()
+
+    expect(autoCheckIn).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
 })

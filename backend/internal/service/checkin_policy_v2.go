@@ -26,7 +26,6 @@ var (
 	ErrCheckinPreferenceInvalid  = infraerrors.BadRequest("INVALID_CHECKIN_PREFERENCE", "checkin preference is invalid")
 	ErrCheckinConsentRequired    = infraerrors.Conflict("CHECKIN_CONSENT_REQUIRED", "current automatic-checkin consent is required")
 	ErrCheckinModeRemoved        = infraerrors.Conflict("CHECKIN_MODE_REMOVED", "check-in game modes have been retired; use direct check-in")
-	ErrCheckinAutoModeConflict   = infraerrors.Conflict("CHECKIN_AUTO_MODE_CONFLICT", "automatic check-in is enabled; manual direct check-in is unavailable")
 	ErrCheckinModeDisabled       = infraerrors.Conflict("CHECKIN_MODE_DISABLED", "check-in mode is disabled")
 	ErrCheckinAlreadyCompleted   = infraerrors.Conflict("CHECKIN_ALREADY_COMPLETED", "check-in already completed for this period")
 	ErrCheckinRewardZero         = infraerrors.Conflict("CHECKIN_REWARD_ZERO", "check-in reward is zero")

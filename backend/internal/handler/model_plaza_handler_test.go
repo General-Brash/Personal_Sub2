@@ -138,3 +138,47 @@ func TestModelPlazaHandler_V2DisabledByDefault(t *testing.T) {
 
 	require.Equal(t, http.StatusNotFound, w.Code)
 }
+
+func TestModelPlazaAdminAvailabilityState(t *testing.T) {
+	// 任一 route 可调度 → eligible（即便同时存在幽灵 no_account route）
+	eligible := service.ModelCatalogItem{Routes: []service.ModelCatalogRoute{
+		{Schedulable: false, AvailabilityReason: "no_account"},
+		{Schedulable: true},
+	}}
+	require.Equal(t, service.ModelCatalogStateEligible, modelPlazaAdminAvailabilityState(eligible))
+
+	// 有 route 但都不可调度 → temporarily_unavailable
+	tempUnavail := service.ModelCatalogItem{Routes: []service.ModelCatalogRoute{
+		{Schedulable: false, AvailabilityReason: "no_account"},
+	}}
+	require.Equal(t, service.ModelCatalogStateTemporarilyUnavailable, modelPlazaAdminAvailabilityState(tempUnavail))
+
+	// 无 route → catalog_only
+	require.Equal(t, service.ModelCatalogStateCatalogOnly, modelPlazaAdminAvailabilityState(service.ModelCatalogItem{}))
+}
+
+func TestSortModelPlazaAdminModels_PinnedThenSortOrder(t *testing.T) {
+	models := []modelPlazaAdminModel{
+		{ModelID: "a", SortOrder: 2},
+		{ModelID: "b", Pinned: true, SortOrder: 5},
+		{ModelID: "c", SortOrder: 1},
+		{ModelID: "d", Pinned: true, SortOrder: 1},
+	}
+	sortModelPlazaAdminModels(models)
+	order := []string{models[0].ModelID, models[1].ModelID, models[2].ModelID, models[3].ModelID}
+	require.Equal(t, []string{"d", "b", "c", "a"}, order)
+}
+
+func TestSortModelPlazaV2ByOverride_PinnedAndOrder(t *testing.T) {
+	models := []modelPlazaV2Model{
+		{ModelID: "a", Platform: "p"},
+		{ModelID: "b", Platform: "p"},
+		{ModelID: "c", Platform: "p"},
+	}
+	overrides := map[string]service.ModelPlazaModelOverride{
+		service.ModelPlazaOverrideKey("p", "b"): {Pinned: true},
+		service.ModelPlazaOverrideKey("p", "c"): {SortOrder: -1},
+	}
+	sortModelPlazaV2ByOverride(models, overrides)
+	require.Equal(t, []string{"b", "c", "a"}, []string{models[0].ModelID, models[1].ModelID, models[2].ModelID})
+}
