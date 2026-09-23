@@ -21,7 +21,7 @@
       <div class="space-y-2 text-sm" data-testid="plaza-v2-filters">
         <div class="flex flex-wrap items-center gap-2">
           <span class="w-10 shrink-0 text-xs text-gray-500">{{ locale === 'zh' ? '平台' : 'Platform' }}</span>
-          <button v-for="platform in ['all', ...platforms]" :key="platform" type="button" class="rounded-lg px-2 py-1 ring-1 ring-gray-200 dark:ring-dark-600" :class="selectedPlatform === platform ? 'bg-primary-600 text-white' : 'dark:text-gray-200'" :disabled="platform !== 'all' && !hasChoice(platform, selectedGroupId, selectedRate)" @click="selectedPlatform = platform">{{ platform === 'all' ? (locale === 'zh' ? '全部' : 'All') : platform }}</button>
+          <button v-for="platform in ['all', ...platforms]" :key="platform" type="button" class="rounded-lg px-2 py-1 ring-1 ring-gray-200 disabled:opacity-40 dark:ring-dark-600" :class="selectedPlatform === platform ? 'bg-primary-600 text-white' : 'dark:text-gray-200'" :disabled="platform !== 'all' && !hasChoice(platform, selectedGroupId, selectedRate)" @click="selectedPlatform = platform">{{ platform === 'all' ? (locale === 'zh' ? '全部' : 'All') : platform }}</button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <span class="w-10 shrink-0 text-xs text-gray-500">{{ locale === 'zh' ? '分组' : 'Group' }}</span>
