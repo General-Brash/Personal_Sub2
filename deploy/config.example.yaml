@@ -1126,6 +1126,9 @@ oidc_provider:
   refresh_token_absolute_ttl_seconds: 2592000
   clock_skew_seconds: 60
   jwks_cache_max_age_seconds: 300
+  # New client secrets live independently of the old-secret overlap (default 90 days; max 365 days).
+  client_secret_ttl_seconds: 7776000
+  # Old active secret remains usable for at most this many seconds after rotation (max 24 hours).
   client_secret_max_overlap_seconds: 86400
   require_pkce_s256: true
   authorization_response_iss: true

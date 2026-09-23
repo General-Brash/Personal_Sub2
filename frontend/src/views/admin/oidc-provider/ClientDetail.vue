@@ -123,6 +123,10 @@
             </button>
           </div>
 
+          <p v-if="client.enabled && !client.secrets?.some(secret => ['usable', 'expiring'].includes(secretAvailability(secret)))"
+             class="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200" role="alert">
+            {{ expiryLabel('none') }}
+          </p>
           <div v-if="client.secrets?.length" class="mt-3 overflow-x-auto">
             <table class="min-w-full text-left text-sm">
               <thead class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -138,7 +142,7 @@
                 <tr v-for="secret in client.secrets" :key="secret.id">
                   <td class="px-2 py-2 font-mono text-xs text-gray-700 dark:text-gray-300">{{ secret.fingerprint }}</td>
                   <td class="px-2 py-2">
-                    <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="secretStatusClass(secret.status)">{{ secret.status }}</span>
+                    <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="secretStatusClass(secretAvailability(secret))">{{ secret.status }} · {{ expiryLabel(secretAvailability(secret)) }}</span>
                   </td>
                   <td class="px-2 py-2 text-xs text-gray-600 dark:text-gray-400">{{ formatDate(secret.not_before) }}</td>
                   <td class="px-2 py-2 text-xs text-gray-600 dark:text-gray-400">{{ formatDate(secret.expires_at) }}</td>
@@ -199,9 +203,9 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { OidcClientDetail, OidcClientDraft, OidcClientSecretIssueResponse, OidcResourceId } from '@/api/admin'
+import type { OidcClientDetail, OidcClientDraft, OidcClientSecretSummary, OidcClientSecretIssueResponse, OidcResourceId } from '@/api/admin'
 
 const props = defineProps<{
   client: OidcClientDetail | null
@@ -223,10 +227,53 @@ const emit = defineEmits<{
   'clear-issued-secret': []
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const supportedScopes = ['openid', 'profile', 'email', 'roles', 'offline_access']
 const copied = ref(false)
 const formError = ref('')
+const currentTime = ref(Date.now())
+let clockTimer: ReturnType<typeof setTimeout> | undefined
+
+function scheduleClock(): void {
+  clearTimeout(clockTimer)
+  clockTimer = undefined
+  if (document.hidden || props.isCreating || !props.client?.secrets?.length) return
+  const now = Date.now()
+  const boundaries = props.client.secrets
+    .filter(secret => secret.status === 'active' || secret.status === 'retiring')
+    .flatMap(secret => {
+      const start = Date.parse(secret.not_before)
+      const end = Date.parse(secret.expires_at)
+      return [start, end - 7 * 86400 * 1000, end]
+    })
+    .filter(boundary => Number.isFinite(boundary) && boundary > now)
+  const next = Math.min(60_000, ...boundaries.map(boundary => boundary - now))
+  clockTimer = setTimeout(refreshClock, Math.max(1, next))
+}
+
+function refreshClock(): void {
+  currentTime.value = Date.now()
+  scheduleClock()
+}
+
+function onVisibilityChange(): void {
+  if (document.hidden) {
+    clearTimeout(clockTimer)
+    clockTimer = undefined
+  } else {
+    refreshClock()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  refreshClock()
+})
+onUnmounted(() => {
+  clearTimeout(clockTimer)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
+watch(() => [props.client, props.isCreating], refreshClock)
 
 const draft = reactive<OidcClientDraft>({
   name: '',
@@ -331,9 +378,30 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
-function secretStatusClass(status: string): string {
-  if (status === 'active') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-  if (status === 'revoked' || status === 'expired') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-  return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+type SecretAvailability = 'usable' | 'expiring' | 'expired' | 'notYet' | 'inactive' | 'unknown'
+
+function secretAvailability(secret: OidcClientSecretSummary): SecretAvailability {
+  if (secret.status !== 'active' && secret.status !== 'retiring') return 'inactive'
+  const start = Date.parse(secret.not_before)
+  const end = Date.parse(secret.expires_at)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 'unknown'
+  const now = currentTime.value
+  if (end <= now) return 'expired'
+  if (start > now) return 'notYet'
+  return end - now <= 7 * 86400 * 1000 ? 'expiring' : 'usable'
+}
+
+function expiryLabel(state: SecretAvailability | 'none'): string {
+  const zh = locale.value.startsWith('zh')
+  const labels = zh
+    ? { usable: '有效', expiring: '7 天内到期，请准备轮换', expired: '已过期，不可用', notYet: '尚未生效', inactive: '不可用', unknown: '有效期未知，不可判定可用', none: '此客户端没有当前可用的密钥，请安全轮换并更新依赖端' }
+    : { usable: 'Usable', expiring: 'Expires within 7 days — plan rotation', expired: 'Expired — unusable', notYet: 'Not yet valid', inactive: 'Unavailable', unknown: 'Validity unknown — not verified usable', none: 'No currently usable secret. Rotate securely and update the relying party.' }
+  return labels[state]
+}
+
+function secretStatusClass(state: SecretAvailability): string {
+  if (state === 'usable') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+  if (state === 'expired' || state === 'inactive') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+  return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200'
 }
 </script>

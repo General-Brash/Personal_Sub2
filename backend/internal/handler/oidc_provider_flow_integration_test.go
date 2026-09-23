@@ -67,6 +67,7 @@ func TestOIDCProviderPositiveFlowPostgres(t *testing.T) {
 	require.Equal(t, service.OIDCSigningRS256, key.Alg)
 
 	redirectURI := "https://client.example.test/callback"
+	beforeCreate := time.Now().UTC()
 	client, clientSecret, err := oidcService.AdminCreateClient(ctx, service.OIDCClientCreateInput{
 		Name:               "OIDC integration positive flow",
 		Owner:              "integration-test",
@@ -77,12 +78,17 @@ func TestOIDCProviderPositiveFlowPostgres(t *testing.T) {
 		Reason:             "integration-positive-flow",
 	})
 	require.NoError(t, err)
+	afterCreate := time.Now().UTC()
 	require.NotEmpty(t, client.ClientID)
 	require.True(t, strings.HasPrefix(client.ClientID, "sub2-"))
 	require.NotEmpty(t, clientSecret, "the application must return the one-time generated secret")
 	storedClient, err := oidcRepo.GetClientByID(ctx, client.ID)
 	require.NoError(t, err)
 	require.Len(t, storedClient.Secrets, 1)
+	secretRecord := storedClient.Secrets[0]
+	require.WithinDuration(t, secretRecord.NotBefore.Add(time.Duration(cfg.OIDCProvider.ClientSecretTTLSeconds)*time.Second), secretRecord.ExpiresAt, time.Second)
+	require.False(t, secretRecord.ExpiresAt.Before(beforeCreate.Add(90*24*time.Hour)))
+	require.False(t, secretRecord.ExpiresAt.After(afterCreate.Add(90*24*time.Hour)))
 	require.NotEqual(t, clientSecret, storedClient.Secrets[0].Fingerprint)
 	require.Equal(t, sha256Hex(clientSecret), storedClient.Secrets[0].Fingerprint)
 
@@ -221,6 +227,7 @@ func oidcProviderIntegrationConfig() *config.Config {
 		SigningKeySource:                 "database_encrypted",
 		EncryptionKey:                    "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
 		SecretPepper:                     "integration-secret-pepper-0123456789abcdef",
+		ClientSecretTTLSeconds:           90 * 86400,
 		TransactionTTLSeconds:            300,
 		BrowserSessionIdleTTLSeconds:     1800,
 		BrowserSessionAbsoluteTTLSeconds: 3600,

@@ -381,6 +381,7 @@ type OIDCProviderConfig struct {
 	ClockSkewSeconds                 int                      `mapstructure:"clock_skew_seconds"`
 	JWKSCacheMaxAgeSeconds           int                      `mapstructure:"jwks_cache_max_age_seconds"`
 	ClientSecretMaxOverlapSeconds    int                      `mapstructure:"client_secret_max_overlap_seconds"`
+	ClientSecretTTLSeconds           int                      `mapstructure:"client_secret_ttl_seconds"`
 	RequirePKCES256                  bool                     `mapstructure:"require_pkce_s256"`
 	AuthorizationResponseIssuer      bool                     `mapstructure:"authorization_response_iss"`
 	AllowedScopes                    []string                 `mapstructure:"allowed_scopes"`
@@ -2187,6 +2188,7 @@ func setDefaults() {
 	viper.SetDefault("oidc_provider.clock_skew_seconds", 60)
 	viper.SetDefault("oidc_provider.jwks_cache_max_age_seconds", 300)
 	viper.SetDefault("oidc_provider.client_secret_max_overlap_seconds", 86400)
+	viper.SetDefault("oidc_provider.client_secret_ttl_seconds", 86400*90)
 	viper.SetDefault("oidc_provider.require_pkce_s256", true)
 	viper.SetDefault("oidc_provider.authorization_response_iss", true)
 	viper.SetDefault("oidc_provider.allowed_scopes", []string{"openid", "profile", "email", "roles", "offline_access"})
