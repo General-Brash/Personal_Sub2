@@ -204,6 +204,20 @@ export interface CustomEndpoint {
   description: string
 }
 
+/**
+ * 顶部快捷跳转条目。
+ * 与 CustomMenuItem 的区别：只在新标签页打开绝对 http(s) 外链，
+ * 不走 /custom/:id 内嵌页。
+ */
+export interface QuickJumpItem {
+  id: string
+  label: string
+  icon_svg: string
+  url: string
+  visibility: 'user' | 'admin'
+  sort_order: number
+}
+
 export interface LoginAgreementDocument {
   id: string
   title: string
@@ -249,6 +263,8 @@ export interface PublicSettings {
   table_page_size_options: number[]
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
+  quick_jump_enabled: boolean
+  quick_jump_items: QuickJumpItem[]
   linuxdo_oauth_enabled: boolean
   dingtalk_oauth_enabled?: boolean
   wechat_oauth_enabled: boolean

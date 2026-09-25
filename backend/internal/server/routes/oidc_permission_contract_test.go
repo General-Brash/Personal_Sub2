@@ -16,16 +16,9 @@ func TestOIDCAdminPermissionContractIsComplete(t *testing.T) {
 		"oidc.consents.revoke", "oidc.keys.read", "oidc.keys.rotate",
 		"oidc.keys.revoke", "oidc.audit.read",
 	}
-	catalog := make(map[string]bool)
-	for _, item := range middleware.AdminPermissionCatalog() {
-		catalog[item.Permission] = true
-	}
 	for _, permission := range permissions {
 		if !service.IsKnownAdminPermission(permission) {
 			t.Errorf("permission %q missing from knownAdminPermissions", permission)
-		}
-		if !catalog[permission] {
-			t.Errorf("permission %q missing from AdminPermissionCatalog", permission)
 		}
 	}
 	paths := map[string]string{

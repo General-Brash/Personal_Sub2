@@ -73,7 +73,7 @@ func newSSOTestService(t *testing.T, cache OIDCSSOCodeCache) *OIDCProviderServic
 		EncryptionKey: ssoTestEncryptionKey,
 		SecretPepper:  "runtime-secret-pepper-abcdefghijklmnopqrstuvwxyz",
 	}}
-	svc := NewOIDCProviderService(nil, nil, nil, nil, cfg, cache)
+	svc := NewOIDCProviderService(nil, nil, nil, nil, cfg, cache, nil)
 	if svc.protector == nil {
 		t.Fatal("protector must be initialised for SSO tests")
 	}

@@ -25,6 +25,15 @@ var permissionSourceFiles = token.NewFileSet()
 var permissionSourceFound = map[string]permissionSourceRoute{}
 var permissionSourceSeen = map[string]bool{}
 
+// nonAdminPageRoutes are the only routes under /api/v1/pages (registered by
+// handler.RegisterPageRoutes) that are not administrative: page content is
+// JWT-only and page images are public. Every other /api/v1/pages route must be
+// mapped, so a new admin route there fails this gate.
+var nonAdminPageRoutes = map[string]bool{
+	"GET /api/v1/pages/:slug":                  true,
+	"GET /api/v1/pages/:slug/images/*filename": true,
+}
+
 func permissionSourceLiteral(e ast.Expr) string {
 	if b, ok := e.(*ast.BasicLit); ok && b.Kind == token.STRING {
 		s, _ := strconv.Unquote(b.Value)
@@ -146,9 +155,20 @@ func TestAdminPermissionInventoryCoversAllRegisteredRoutes(t *testing.T) {
 	}
 	walkPermissionSource("RegisterAdminRoutes", []string{"/api/v1"})
 	walkPermissionSource("RegisterPaymentRoutes", []string{"/api/v1"})
+	walkPermissionSource("RegisterPageRoutes", []string{"/api/v1"})
+	if _, ok := permissionSourceFound["GET /api/v1/pages"]; !ok {
+		t.Fatal("RegisterPageRoutes traversal did not find GET /api/v1/pages")
+	}
+	for route := range nonAdminPageRoutes {
+		if _, ok := permissionSourceFound[route]; !ok {
+			t.Errorf("whitelisted non-admin page route %s is no longer registered", route)
+		}
+	}
 	count := 0
-	for _, entry := range permissionSourceFound {
-		if !strings.HasPrefix(entry.Path, "/api/v1/admin") {
+	for route, entry := range permissionSourceFound {
+		adminRoute := strings.HasPrefix(entry.Path, "/api/v1/admin")
+		pageRoute := strings.HasPrefix(entry.Path, "/api/v1/pages") && !nonAdminPageRoutes[route]
+		if !adminRoute && !pageRoute {
 			continue
 		}
 		count++
@@ -168,4 +188,19 @@ func TestAdminPermissionInventoryCoversAllRegisteredRoutes(t *testing.T) {
 		t.Fatal("unknown routes must remain denied")
 	}
 	t.Logf("mapped %d administrative route patterns", count)
+}
+
+// Write routes must not be satisfiable with read/export permissions (F-8).
+func TestAdminWriteRoutesMapToWritePermissions(t *testing.T) {
+	want := map[string]string{
+		"PUT /api/v1/admin/api-keys/:id":      "users.credentials.write",
+		"POST /api/v1/admin/audit-logs/clear": "audit.manage",
+	}
+	for route, permission := range want {
+		method, path := splitRoute(route)
+		got, ok := middleware.LookupAdminRoutePermission(method, path)
+		if !ok || got != permission {
+			t.Errorf("route %s = %q/%v, want %q", route, got, ok, permission)
+		}
+	}
 }

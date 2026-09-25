@@ -153,43 +153,6 @@ func LookupAdminRoutePermission(method, fullPath string) (string, bool) {
 	return "", false
 }
 
-func AdminPermissionCatalog() []service.AdminPermissionDefinition {
-	return []service.AdminPermissionDefinition{
-		{Permission: "users.read", Resource: "users", Action: "read", Description: "Read users"},
-		{Permission: "users.update", Resource: "users", Action: "update", Description: "Edit non-sensitive user fields"},
-		{Permission: "users.status", Resource: "users", Action: "status", Sensitive: true, Description: "Enable or disable users"},
-		{Permission: "users.delete", Resource: "users", Action: "delete", Sensitive: true, Description: "Delete users"},
-		{Permission: "users.balance.adjust", Resource: "users", Action: "balance.adjust", Sensitive: true, Description: "Adjust user balance"},
-		{Permission: "users.role.assign", Resource: "users", Action: "role.assign", Sensitive: true, Description: "Assign ordinary admin role"},
-		{Permission: "users.entitlement.manage", Resource: "users", Action: "entitlement.manage", Sensitive: true, Description: "Manage user entitlement"},
-		{Permission: "security.permissions.grant", Resource: "security", Action: "permissions.grant", Sensitive: true, Description: "Grant or revoke permissions"},
-		{Permission: "security.superadmin.assign", Resource: "security", Action: "superadmin.assign", Sensitive: true, Description: "Assign or remove super administrators"},
-		{Permission: "audit.read", Resource: "audit", Action: "read", Sensitive: true, Description: "Read audit data"},
-		{Permission: "audit.export", Resource: "audit", Action: "export", Sensitive: true, Description: "Export audit data"},
-		{Permission: "oidc.provider.read", Resource: "oidc", Action: "provider.read", Description: "Read OIDC Provider status"},
-		{Permission: "oidc.clients.read", Resource: "oidc", Action: "clients.read", Description: "Read OIDC Provider clients"},
-		{Permission: "oidc.clients.write", Resource: "oidc", Action: "clients.write", Sensitive: true, Description: "Manage OIDC Provider clients"},
-		{Permission: "oidc.clients.secret.rotate", Resource: "oidc", Action: "clients.secret.rotate", Sensitive: true, Description: "Rotate OIDC Provider secrets"},
-		{Permission: "oidc.clients.disable", Resource: "oidc", Action: "clients.disable", Sensitive: true, Description: "Enable or disable OIDC clients"},
-		{Permission: "oidc.consents.read", Resource: "oidc", Action: "consents.read", Sensitive: true, Description: "Read OIDC consents"},
-		{Permission: "oidc.consents.revoke", Resource: "oidc", Action: "consents.revoke", Sensitive: true, Description: "Revoke OIDC consents"},
-		{Permission: "oidc.keys.read", Resource: "oidc", Action: "keys.read", Sensitive: true, Description: "Read OIDC signing key metadata"},
-		{Permission: "oidc.keys.rotate", Resource: "oidc", Action: "keys.rotate", Sensitive: true, Description: "Rotate OIDC signing keys"},
-		{Permission: "oidc.keys.revoke", Resource: "oidc", Action: "keys.revoke", Sensitive: true, Description: "Retire or revoke OIDC signing keys"},
-		{Permission: "oidc.audit.read", Resource: "oidc", Action: "audit.read", Sensitive: true, Description: "Read OIDC audit events"},
-	}
-}
-
-func IsSensitiveAdminPermission(permission string) bool {
-	for _, item := range AdminPermissionCatalog() {
-		if item.Permission == permission {
-			return item.Sensitive
-		}
-	}
-	// Unknown permissions are treated as sensitive and fail closed.
-	return true
-}
-
 func adminPermissionMode(c *gin.Context, permissionService *service.AdminPermissionService) string {
 	if permissionService != nil {
 		return permissionService.Mode()

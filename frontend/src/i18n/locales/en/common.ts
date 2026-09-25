@@ -157,6 +157,11 @@ export default {
   },
 
   // Navigation
+  quickJump: {
+    title: 'Quick Jump',
+    empty: 'No jump links have been configured yet',
+    manage: 'Settings',
+  },
   nav: {
     checkIn: 'Daily Check-in',
     dashboard: 'Dashboard',

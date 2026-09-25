@@ -36,10 +36,7 @@ func RegisterAdminRoutes(
 			features := h.FeatureManagement
 			admin.GET("/settings/personal-features", features.GetFeatureSettings)
 			admin.PUT("/settings/personal-features", features.UpdateFeatureSettings)
-			admin.GET("/permissions", features.ListPermissions)
-			admin.GET("/users/:id/permissions", features.GetUserPermissions)
-			admin.PUT("/users/:id/permissions/:permission", features.GrantUserPermission)
-			admin.DELETE("/users/:id/permissions/:permission", features.RevokeUserPermission)
+			registerAdminPermissionRoutes(admin, features, stepUpAuth)
 			admin.GET("/users/:id/entitlement", features.GetUserEntitlement)
 			admin.PUT("/users/:id/entitlement", features.UpdateUserEntitlement)
 			admin.GET("/entitlements/catalog", features.GetEntitlementCatalog)
@@ -194,6 +191,16 @@ func registerAdminComplianceRoutes(admin *gin.RouterGroup, h *handler.Handlers) 
 		compliance.GET("", h.Admin.Compliance.GetStatus)
 		compliance.POST("/accept", h.Admin.Compliance.Accept)
 	}
+}
+
+// registerAdminPermissionRoutes 注册管理员细粒度权限的查询与授予/撤销路由。
+// 授予/撤销属于发证操作：无条件要求 step-up，不受全局 step_up_enabled 开关影响。
+func registerAdminPermissionRoutes(admin *gin.RouterGroup, features *handler.FeatureManagementHandler, stepUpAuth middleware.StepUpAuthMiddleware) {
+	alwaysStepUp := gin.HandlerFunc(middleware.RequireStepUpAlways(stepUpAuth))
+	admin.GET("/permissions", features.ListPermissions)
+	admin.GET("/users/:id/permissions", features.GetUserPermissions)
+	admin.PUT("/users/:id/permissions/:permission", alwaysStepUp, features.GrantUserPermission)
+	admin.DELETE("/users/:id/permissions/:permission", alwaysStepUp, features.RevokeUserPermission)
 }
 
 func registerContentModerationRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
