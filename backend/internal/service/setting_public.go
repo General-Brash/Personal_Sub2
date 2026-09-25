@@ -195,6 +195,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyTablePageSizeOptions,
 		SettingKeyCustomMenuItems,
 		SettingKeyCustomEndpoints,
+		SettingKeyQuickJumpEnabled,
+		SettingKeyQuickJumpItems,
 		SettingKeyLinuxDoConnectEnabled,
 		SettingKeyDingTalkConnectEnabled,
 		SettingKeyWeChatConnectEnabled,
@@ -347,6 +349,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		TablePageSizeOptions:                tablePageSizeOptions,
 		CustomMenuItems:                     settings[SettingKeyCustomMenuItems],
 		CustomEndpoints:                     settings[SettingKeyCustomEndpoints],
+		QuickJumpEnabled:                    settings[SettingKeyQuickJumpEnabled] == "true",
+		QuickJumpItems:                      settings[SettingKeyQuickJumpItems],
 		LinuxDoOAuthEnabled:                 linuxDoEnabled,
 		DingTalkOAuthEnabled:                dingTalkEnabled,
 		WeChatOAuthEnabled:                  weChatEnabled,
@@ -610,6 +614,8 @@ type PublicSettingsInjectionPayload struct {
 	TablePageSizeOptions                []int                    `json:"table_page_size_options"`
 	CustomMenuItems                     json.RawMessage          `json:"custom_menu_items"`
 	CustomEndpoints                     json.RawMessage          `json:"custom_endpoints"`
+	QuickJumpEnabled                    bool                     `json:"quick_jump_enabled"`
+	QuickJumpItems                      json.RawMessage          `json:"quick_jump_items"`
 	LinuxDoOAuthEnabled                 bool                     `json:"linuxdo_oauth_enabled"`
 	DingTalkOAuthEnabled                bool                     `json:"dingtalk_oauth_enabled"`
 	WeChatOAuthEnabled                  bool                     `json:"wechat_oauth_enabled"`
@@ -710,26 +716,30 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		TablePageSizeOptions:                settings.TablePageSizeOptions,
 		CustomMenuItems:                     filterUserVisibleMenuItems(settings.CustomMenuItems),
 		CustomEndpoints:                     safeRawJSONArray(settings.CustomEndpoints),
-		LinuxDoOAuthEnabled:                 settings.LinuxDoOAuthEnabled,
-		DingTalkOAuthEnabled:                settings.DingTalkOAuthEnabled,
-		WeChatOAuthEnabled:                  settings.WeChatOAuthEnabled,
-		WeChatOAuthOpenEnabled:              settings.WeChatOAuthOpenEnabled,
-		WeChatOAuthMPEnabled:                settings.WeChatOAuthMPEnabled,
-		WeChatOAuthMobileEnabled:            settings.WeChatOAuthMobileEnabled,
-		OIDCOAuthEnabled:                    settings.OIDCOAuthEnabled,
-		OIDCOAuthProviderName:               settings.OIDCOAuthProviderName,
-		GitHubOAuthEnabled:                  settings.GitHubOAuthEnabled,
-		GoogleOAuthEnabled:                  settings.GoogleOAuthEnabled,
-		BackendModeEnabled:                  settings.BackendModeEnabled,
-		MallEnabled:                         settings.MallEnabled,
-		PaymentEnabled:                      settings.PaymentEnabled,
-		Version:                             s.version,
-		ServerTimezone:                      timezone.Name(),
-		ServerUTCOffset:                     timezone.UTCOffset(),
-		BalanceLowNotifyEnabled:             settings.BalanceLowNotifyEnabled,
-		AccountQuotaNotifyEnabled:           settings.AccountQuotaNotifyEnabled,
-		BalanceLowNotifyThreshold:           settings.BalanceLowNotifyThreshold,
-		BalanceLowNotifyRechargeURL:         settings.BalanceLowNotifyRechargeURL,
+		QuickJumpEnabled:                    settings.QuickJumpEnabled,
+		// Quick Jump is external navigation, not iframe content. Only explicitly user-visible items
+		// are included in the anonymous public/SSR payload; admin and unknown visibility fail closed.
+		QuickJumpItems:              filterUserVisibleQuickJumpItems(settings.QuickJumpItems),
+		LinuxDoOAuthEnabled:         settings.LinuxDoOAuthEnabled,
+		DingTalkOAuthEnabled:        settings.DingTalkOAuthEnabled,
+		WeChatOAuthEnabled:          settings.WeChatOAuthEnabled,
+		WeChatOAuthOpenEnabled:      settings.WeChatOAuthOpenEnabled,
+		WeChatOAuthMPEnabled:        settings.WeChatOAuthMPEnabled,
+		WeChatOAuthMobileEnabled:    settings.WeChatOAuthMobileEnabled,
+		OIDCOAuthEnabled:            settings.OIDCOAuthEnabled,
+		OIDCOAuthProviderName:       settings.OIDCOAuthProviderName,
+		GitHubOAuthEnabled:          settings.GitHubOAuthEnabled,
+		GoogleOAuthEnabled:          settings.GoogleOAuthEnabled,
+		BackendModeEnabled:          settings.BackendModeEnabled,
+		MallEnabled:                 settings.MallEnabled,
+		PaymentEnabled:              settings.PaymentEnabled,
+		Version:                     s.version,
+		ServerTimezone:              timezone.Name(),
+		ServerUTCOffset:             timezone.UTCOffset(),
+		BalanceLowNotifyEnabled:     settings.BalanceLowNotifyEnabled,
+		AccountQuotaNotifyEnabled:   settings.AccountQuotaNotifyEnabled,
+		BalanceLowNotifyThreshold:   settings.BalanceLowNotifyThreshold,
+		BalanceLowNotifyRechargeURL: settings.BalanceLowNotifyRechargeURL,
 
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
 		ChannelMonitorMode:                   settings.ChannelMonitorMode,
@@ -802,6 +812,41 @@ func safeRawJSONArray(raw string) json.RawMessage {
 		return json.RawMessage(raw)
 	}
 	return json.RawMessage("[]")
+}
+
+// filterUserVisibleQuickJumpItems is deliberately stricter than the custom-menu
+// filter: only visibility="user" is public. Admin and unknown values fail closed.
+func filterUserVisibleQuickJumpItems(raw string) json.RawMessage {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" {
+		return json.RawMessage("[]")
+	}
+
+	var visibility []struct {
+		Visibility string `json:"visibility"`
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &visibility); err != nil {
+		return json.RawMessage("[]")
+	}
+	if err := json.Unmarshal([]byte(raw), &items); err != nil || len(items) != len(visibility) {
+		return json.RawMessage("[]")
+	}
+
+	filtered := make([]json.RawMessage, 0, len(items))
+	for i, item := range visibility {
+		if item.Visibility == "user" {
+			filtered = append(filtered, items[i])
+		}
+	}
+	if len(filtered) == 0 {
+		return json.RawMessage("[]")
+	}
+	result, err := json.Marshal(filtered)
+	if err != nil {
+		return json.RawMessage("[]")
+	}
+	return result
 }
 
 // GetFrameSrcOrigins returns deduplicated http(s) origins from home_content URL,

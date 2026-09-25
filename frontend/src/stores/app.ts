@@ -354,6 +354,8 @@ export const useAppStore = defineStore('app', () => {
         table_page_size_options: [10, 20, 50, 100],
         custom_menu_items: [],
         custom_endpoints: [],
+        quick_jump_enabled: false,
+        quick_jump_items: [],
         linuxdo_oauth_enabled: false,
         wechat_oauth_enabled: false,
         wechat_oauth_open_enabled: false,

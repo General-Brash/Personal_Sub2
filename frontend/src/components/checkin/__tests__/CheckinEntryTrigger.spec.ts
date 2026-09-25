@@ -60,6 +60,20 @@ describe('CheckinEntryTrigger', () => {
     wrapper.unmount()
   })
 
+  it('claims without consent when the site forces automatic check-in for all users', async () => {
+    vi.mocked(getCheckinPreference).mockResolvedValue({
+      auto_enabled: false, consent_valid: false, consent_fee_bps: 0,
+      current_policy_version: 'policy-v1', current_fee_bps: 0,
+      auto_forced_by_admin: true,
+    })
+    const wrapper = mount(CheckinEntryTrigger, { props: { userId: 11 } })
+    await flushPromises()
+    expect(autoCheckIn).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('completed')).toHaveLength(1)
+    expect(wrapper.find('[data-test="checkin-entry-trigger"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('reuses a retry identity for the same user and period, without sharing it across users', async () => {
     const first = mount(CheckinEntryTrigger, { props: { userId: 11 } })
     await flushPromises()

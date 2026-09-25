@@ -127,9 +127,9 @@ export const useAuthStore = defineStore('auth', () => {
     const rules: Array<[string, string[]]> = [
       ['/admin/dashboard', ['ops.read']], ['/admin/users', ['users.read']],
       ['/admin/groups', ['groups.read']], ['/admin/accounts', ['accounts.catalog.read']],
-      ['/admin/channels', ['channels.catalog.read', 'models.pricing.manage']],
+      ['/admin/channels', ['channels.catalog.read']],
       ['/admin/subscriptions', ['users.read', 'mall.orders.read']],
-      ['/admin/affiliates', ['affiliates.read', 'invites.read']],
+      ['/admin/affiliates', ['affiliates.read']],
       ['/admin/bank', ['bank.ledger.read']], ['/admin/orders/shelves', ['mall.products.read']],
       ['/admin/orders/plans', ['mall.products.read']], ['/admin/orders', ['mall.orders.read']],
       ['/admin/finance', ['mall.orders.read', 'audit.read']], ['/admin/usage', ['ops.read']],

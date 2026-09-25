@@ -140,7 +140,10 @@ async function attemptAutomaticCheckin(): Promise<void> {
     promptKey = `checkin-prompt:${props.userId}:${status.business_period_id}`
     const preference = await getCheckinPreference()
     if (!active) return
-    if (!preference.auto_enabled || !preference.consent_valid) {
+    // 站点强制全员自动签到时，用户既不需要自行开启也不需要同意手续费（此时恒为 0），
+    // 因此跳过同意拦截，直接发起本周期的自动领取。
+    const forcedByAdmin = preference.auto_forced_by_admin === true
+    if (!forcedByAdmin && (!preference.auto_enabled || !preference.consent_valid)) {
       autoFailure.value = ''
       needsConsent.value = preference.auto_enabled === true
       showPrompt.value = !isPromptDismissed(promptKey) && window.location.pathname !== '/check-in'

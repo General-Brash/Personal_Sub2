@@ -25,8 +25,15 @@
             <Icon name="cog" size="sm" />
             {{ t('checkin.admin.settingsTitle') }}
           </button>
+          <span
+            v-if="status?.enabled && autoForcedByAdmin"
+            data-test="checkin-auto-forced-note"
+            class="text-sm text-gray-500 dark:text-gray-400"
+          >
+            {{ t('checkin.forcedAuto.notice') }}
+          </span>
           <button
-            v-if="status?.enabled"
+            v-if="status?.enabled && !autoForcedByAdmin"
             data-test="checkin-auto-toggle"
             type="button"
             class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-700"
@@ -50,7 +57,7 @@
       </div>
 
       <div
-        v-if="status?.auto_enabled && status?.consent_valid === false"
+        v-if="!autoForcedByAdmin && status?.auto_enabled && status?.consent_valid === false"
         data-test="checkin-consent-stale-banner"
         class="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between"
       >
@@ -66,7 +73,7 @@
       </div>
 
       <CheckinConsentDialog
-        :show="showConsentDialog"
+        :show="showConsentDialog && !autoForcedByAdmin"
         :fee-bps="status?.auto_fee_bps ?? 500"
         @confirm="confirmAutoPreference"
         @close="showConsentDialog = false"
@@ -391,6 +398,8 @@ const rewardGuidePinned = ref(false)
 let latestStatusRequest = 0
 
 const canCheckIn = computed(() => Boolean(status.value?.enabled && !status.value.today_checked_in && !submitting.value))
+// 站点强制全员自动签到：隐藏用户侧开关与重新确认流程，改为一行说明文案。
+const autoForcedByAdmin = computed(() => status.value?.auto_forced_by_admin === true)
 const checkInButtonLabel = computed(() => {
   if (submitting.value) return t('checkin.checkingIn')
   if (!status.value?.enabled) return t('checkin.disabled')
@@ -498,6 +507,11 @@ async function handleCheckIn() {
 
 async function handleToggleAuto() {
   if (!status.value?.enabled || preferenceSaving.value) return
+  if (autoForcedByAdmin.value) {
+    // 状态可能已过期（后端也会明确拒绝），直接提示而不走同意弹窗。
+    appStore.showError(t('checkin.forcedAuto.updateRejected'))
+    return
+  }
   if (status.value.auto_enabled) {
     preferenceSaving.value = true
     try {
@@ -516,7 +530,7 @@ async function handleToggleAuto() {
 }
 
 async function confirmAutoPreference() {
-  if (preferenceSaving.value) return
+  if (preferenceSaving.value || autoForcedByAdmin.value) return
   preferenceSaving.value = true
   try {
     const preference = await updateCheckinPreference(true, true, status.value?.policy_version, status.value?.auto_fee_bps)

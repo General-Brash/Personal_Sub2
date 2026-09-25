@@ -497,4 +497,33 @@ describe('CheckInView', () => {
     expect(recheckDispatched).toBe(true)
     dispatchSpy.mockRestore()
   })
+
+  it('replaces the automatic toggle with a notice when the site forces automatic check-in', async () => {
+    getCheckinStatus.mockResolvedValue(baseStatus({
+      auto_enabled: true,
+      consent_valid: true,
+      auto_fee_bps: 0,
+      auto_forced_by_admin: true,
+    }))
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="checkin-auto-toggle"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="checkin-auto-forced-note"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="consent-dialog"]').exists()).toBe(false)
+    expect(updateCheckinPreference).not.toHaveBeenCalled()
+    // 手动领取在强制期仍然可用。
+    expect(wrapper.get('[data-test="check-in-button"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('hides the re-consent banner while automatic check-in is forced', async () => {
+    getCheckinStatus.mockResolvedValue(baseStatus({
+      auto_enabled: true,
+      consent_valid: false,
+      auto_forced_by_admin: true,
+    }))
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="checkin-consent-stale-banner"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="checkin-auto-toggle"]').exists()).toBe(false)
+  })
 })

@@ -79,6 +79,7 @@ export default {
       removeRedirect: '移除 redirect URI',
       scopeHint: '后端必须将这些值与 Provider allowlist 求交集。协议要求 openid。',
       trustedHint: '此开关不能绕过认证、redirect、scope、PKCE、nonce 或审计检查。offline_access 仍需服务端预授权。',
+      trustedSitePolicyNote: '当「系统设置 → 安全 → OIDC 授权页策略」为「每次都要用户确认」时，此开关不生效。',
       reason: '原因',
       reasonPlaceholder: '说明此次操作，写入审计记录',
       reasonRequired: '敏感变更必须填写原因。',

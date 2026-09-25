@@ -79,6 +79,7 @@ export default {
       removeRedirect: 'Remove redirect URI',
       scopeHint: 'The backend must intersect these values with the Provider allowlist. openid is required by the protocol.',
       trustedHint: 'This flag never bypasses authentication, redirect, scope, PKCE, nonce, or audit checks. offline_access still requires server-side pre-authorization.',
+      trustedSitePolicyNote: 'This flag has no effect while Settings → Security → OIDC Consent Page Policy is set to "Ask every time".',
       reason: 'Reason',
       reasonPlaceholder: 'Explain the operational change for the audit trail',
       reasonRequired: 'A reason is required for this sensitive change.',
