@@ -300,7 +300,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	oidcProviderRepository := repository.NewOIDCProviderRepository(db)
 	oidcSigningService := service.NewOIDCSigningService(oidcProviderRepository, configConfig)
 	oidcSSOCodeCache := repository.NewOIDCSSOCodeCache(redisClient)
-	oidcProviderService := service.NewOIDCProviderService(oidcProviderRepository, userRepository, totpService, oidcSigningService, configConfig, oidcSSOCodeCache)
+	oidcProviderService := service.NewOIDCProviderService(oidcProviderRepository, userRepository, totpService, oidcSigningService, configConfig, oidcSSOCodeCache, settingRepository)
 	oidcProviderHandler := admin.NewOIDCProviderHandler(oidcProviderService, configConfig)
 	upstreamBillingProbeService := service.ProvideUpstreamBillingProbeService(accountRepository, accountTestService, settingService, leaderLockCache, db)
 	ollamaCloudUsageService := service.ProvideOllamaCloudUsageService(accountRepository, httpUpstream, settingService, secretEncryptor, configConfig, leaderLockCache, db)

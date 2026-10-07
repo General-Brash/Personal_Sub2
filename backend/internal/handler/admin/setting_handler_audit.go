@@ -449,6 +449,15 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.CustomEndpoints != after.CustomEndpoints {
 		changed = append(changed, "custom_endpoints")
 	}
+	if before.OIDCConsentPromptMode != after.OIDCConsentPromptMode {
+		changed = append(changed, "oidc_consent_prompt_mode")
+	}
+	if before.QuickJumpEnabled != after.QuickJumpEnabled {
+		changed = append(changed, "quick_jump_enabled")
+	}
+	if before.QuickJumpItems != after.QuickJumpItems {
+		changed = append(changed, "quick_jump_items")
+	}
 	if before.EnableFingerprintUnification != after.EnableFingerprintUnification {
 		changed = append(changed, "enable_fingerprint_unification")
 	}

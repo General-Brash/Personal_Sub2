@@ -302,9 +302,9 @@ func (h *UserHandler) Create(c *gin.Context) {
 
 	ctx := adminMutationRequestContext(c)
 
-	// 创建管理员账号属权限敏感操作：需最近完成 step-up 2FA 验证。
+	// 创建管理员账号属提权操作：无条件要求最近完成 step-up 2FA 验证，不受 step_up_enabled 开关影响。
 	if req.Role == service.RoleAdmin || req.Role == service.RoleSuperAdmin {
-		if !middleware.EnforceStepUp(c, h.totpService, h.userService, h.settingService) {
+		if !middleware.EnforceStepUpAlways(c, h.totpService, h.userService) {
 			return
 		}
 	}
@@ -353,7 +353,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		return
 	}
 
-	// 把普通用户提升为管理员属权限敏感操作：需最近完成 step-up 2FA 验证。
+	// 把普通用户提升为管理员属提权操作：无条件要求最近完成 step-up 2FA 验证，不受 step_up_enabled 开关影响。
 	// 目标已是管理员时（前端编辑表单总是携带 role）不触发，避免日常编辑被打断。
 	if req.Role == service.RoleAdmin || req.Role == service.RoleSuperAdmin {
 		target, err := h.adminService.GetUser(ctx, userID)
@@ -362,7 +362,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 			return
 		}
 		if !target.IsAdmin() {
-			if !middleware.EnforceStepUp(c, h.totpService, h.userService, h.settingService) {
+			if !middleware.EnforceStepUpAlways(c, h.totpService, h.userService) {
 				return
 			}
 		}

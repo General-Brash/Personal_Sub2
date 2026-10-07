@@ -20,6 +20,16 @@ import (
 // oidcSSOCodeTTL 是跨域 SSO 一次性凭证的有效期（含一次性消费标记的过期）。
 const oidcSSOCodeTTL = 60 * time.Second
 
+// 授权页（consent）站点级策略取值。
+//
+// always：每次授权都必须由用户在授权页上点"允许"，不复用历史同意，也不接受
+// 客户端的 trusted_skip_consent 预授权。
+// remember：首次确认后记住，后续同 scope 同策略版本的授权静默放行（历史行为）。
+const (
+	OIDCConsentPromptModeAlways   = "always"
+	OIDCConsentPromptModeRemember = "remember"
+)
+
 type OIDCProviderService struct {
 	repo         OIDCProviderRepository
 	users        UserRepository
@@ -29,14 +39,15 @@ type OIDCProviderService struct {
 	signing      *OIDCSigningService
 	loginGuard   *oidcLoginAttemptGuard
 	ssoCodeCache OIDCSSOCodeCache
+	settings     SettingRepository
 }
 
-func NewOIDCProviderService(repo OIDCProviderRepository, users UserRepository, totp *TotpService, signing *OIDCSigningService, cfg *config.Config, ssoCodeCache OIDCSSOCodeCache) *OIDCProviderService {
+func NewOIDCProviderService(repo OIDCProviderRepository, users UserRepository, totp *TotpService, signing *OIDCSigningService, cfg *config.Config, ssoCodeCache OIDCSSOCodeCache, settings SettingRepository) *OIDCProviderService {
 	var protector *oidcProtector
 	if cfg != nil && cfg.OIDCProvider.EncryptionKey != "" {
 		protector, _ = newOIDCProtector(cfg)
 	}
-	return &OIDCProviderService{repo: repo, users: users, totp: totp, signing: signing, cfg: cfg, protector: protector, loginGuard: newOIDCLoginAttemptGuard(), ssoCodeCache: ssoCodeCache}
+	return &OIDCProviderService{repo: repo, users: users, totp: totp, signing: signing, cfg: cfg, protector: protector, loginGuard: newOIDCLoginAttemptGuard(), ssoCodeCache: ssoCodeCache, settings: settings}
 }
 
 func (s *OIDCProviderService) enabled() error {
@@ -249,13 +260,23 @@ func (s *OIDCProviderService) finishAuthorization(ctx context.Context, handle st
 	if consentErr != nil && !errors.Is(consentErr, sql.ErrNoRows) {
 		return nil, consentErr
 	}
-	if !contains(strings.Fields(prompt), "consent") && consentErr == nil && consent.Status == "active" {
+	promptFields := strings.Fields(prompt)
+	silent := contains(promptFields, "none")
+	mode := s.consentPromptMode(ctx)
+	// always 模式下，除 prompt=none 的静默检查外一律要求用户在授权页上交互确认。
+	// prompt=none 是 RP 显式要求"绝不展示任何界面"，对它强制交互会直接打断依赖
+	// 静默会话检查/续期的接入方，因此这里保留复用历史同意的能力。
+	forceInteractive := contains(promptFields, "consent") ||
+		(mode == OIDCConsentPromptModeAlways && !silent)
+	if !forceInteractive && consentErr == nil && consent.Status == "active" {
 		if err := s.repo.SetTransactionConsent(ctx, transaction.ID, consent.ID); err != nil {
 			return nil, err
 		}
 		return s.issueAuthorizationCode(ctx, handle, client, user)
 	}
-	if trustedOIDCConsentSkipAllowed(prompt, client.TrustedSkipConsent) {
+	// trusted_skip_consent 是管理员预授权而不是用户同意，与 always 策略直接冲突，
+	// 因此在 always 模式下无条件失效（含 prompt=none）。
+	if mode != OIDCConsentPromptModeAlways && trustedOIDCConsentSkipAllowed(prompt, client.TrustedSkipConsent) {
 		consentID, err := s.repo.CreateConsent(ctx, OIDCConsentCreateInput{UserID: user.ID, ClientPK: client.ID, ScopeSnapshot: transaction.ScopeSnapshot, ScopeSetHash: scopeHash, PolicyVersion: client.PolicyVersion, Source: "admin_pre_authorized"})
 		if err != nil {
 			return nil, err
@@ -265,7 +286,7 @@ func (s *OIDCProviderService) finishAuthorization(ctx context.Context, handle st
 		}
 		return s.issueAuthorizationCode(ctx, handle, client, user)
 	}
-	if contains(strings.Fields(prompt), "none") {
+	if silent {
 		result.ErrorCode = "consent_required"
 		result.ErrorDescription = "consent is required"
 		state, stateErr := s.transactionState(transaction, client, handle)
@@ -926,6 +947,32 @@ func normalizeOIDCPrompt(raw string) (string, error) {
 	sort.Strings(items)
 	return strings.Join(items, " "), nil
 }
+
+// consentPromptMode 读取站点级授权页策略。
+//
+// 读取失败或取值非法时 fail closed 到 always：授权页是安全面，读不到配置时应当
+// 更严格，不能退回静默授权。
+func (s *OIDCProviderService) consentPromptMode(ctx context.Context) string {
+	if s == nil || s.settings == nil {
+		return OIDCConsentPromptModeAlways
+	}
+	raw, err := s.settings.GetValue(ctx, SettingKeyOIDCConsentPromptMode)
+	if err != nil {
+		return OIDCConsentPromptModeAlways
+	}
+	return normalizeOIDCConsentPromptMode(raw)
+}
+
+// normalizeOIDCConsentPromptMode 把任意输入收敛到合法取值，非法值一律按 always 处理。
+func normalizeOIDCConsentPromptMode(raw string) string {
+	if strings.ToLower(strings.TrimSpace(raw)) == OIDCConsentPromptModeRemember {
+		return OIDCConsentPromptModeRemember
+	}
+	return OIDCConsentPromptModeAlways
+}
+
+// trustedOIDCConsentSkipAllowed 只判断客户端自身的预授权开关，不检查站点级策略；
+// 站点策略由调用方在 finishAuthorization 中前置判断。
 func trustedOIDCConsentSkipAllowed(prompt string, trusted bool) bool {
 	return trusted && !contains(strings.Fields(prompt), "consent")
 }

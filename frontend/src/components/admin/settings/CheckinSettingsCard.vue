@@ -54,8 +54,46 @@
         </div>
         <div>
           <label for="daily-checkin-auto-fee" class="input-label">自动签到手续费（%）</label>
-          <input id="daily-checkin-auto-fee" v-model="autoFeePercent" data-testid="checkin-auto-fee-percent" type="number" min="0" max="100" step="0.01" required class="input" />
+          <input
+            id="daily-checkin-auto-fee"
+            v-model="autoFeePercent"
+            data-testid="checkin-auto-fee-percent"
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            required
+            class="input"
+            :disabled="form.auto_force_all"
+          />
+          <p
+            v-if="form.auto_force_all"
+            data-testid="checkin-auto-force-all-fee-hint"
+            class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+          >
+            {{ t('checkin.admin.autoForceAllFeeMustBeZero') }}
+          </p>
         </div>
+      </div>
+
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
+          <label
+            for="daily-checkin-auto-force-all"
+            class="text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            {{ t('checkin.admin.autoForceAll') }}
+          </label>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('checkin.admin.autoForceAllHint') }}
+          </p>
+        </div>
+        <Toggle
+          id="daily-checkin-auto-force-all"
+          v-model="form.auto_force_all"
+          data-testid="checkin-auto-force-all"
+          :aria-label="t('checkin.admin.autoForceAll')"
+        />
       </div>
 
       <p data-testid="checkin-policy-effective-preview" class="rounded-lg bg-gray-50 p-3 text-sm text-gray-600 dark:bg-dark-800 dark:text-gray-300">
@@ -184,6 +222,7 @@ const form = reactive<CheckinSettingsForm>({
   version: '',
   refresh_time: '00:00',
   auto_fee_bps: 500,
+  auto_force_all: false,
   pending_refresh: null,
   next_reset_at: null,
 })
@@ -204,6 +243,16 @@ function bpsEditor(read: () => number, write: (bps: number) => void, scale: numb
   })
 }
 const autoFeePercent = bpsEditor(() => form.auto_fee_bps, value => { form.auto_fee_bps = value }, 100)
+
+// 全员强制自动签到必须零手续费：用户没有机会单独同意费率，所以开启开关时
+// 直接把费率归零并禁用输入框，后端同样会拒绝非 0 费率的保存。
+watch(
+  () => form.auto_force_all,
+  (forced) => {
+    if (forced) form.auto_fee_bps = 0
+  },
+  { flush: 'sync' },
+)
 
 const effectivePreview = computed(() => {
   if (form.pending_refresh) {
@@ -249,6 +298,7 @@ function applySettings(settings: CheckinAdminSettings) {
   form.version = settings.version
   form.refresh_time = settings.refresh_time || '00:00'
   form.auto_fee_bps = settings.auto_fee_bps ?? 0
+  form.auto_force_all = settings.auto_force_all ?? false
   form.pending_refresh = settings.pending_refresh ?? null
   form.next_reset_at = settings.next_reset_at ?? null
 }
@@ -313,6 +363,10 @@ async function saveSettings() {
     appStore.showError(t('checkin.admin.invalidRewardAmount'))
     return
   }
+  if (form.auto_force_all && form.auto_fee_bps !== 0) {
+    appStore.showError(t('checkin.admin.autoForceAllFeeMustBeZero'))
+    return
+  }
   const rewardTiers = form.reward_tiers.slice(0, form.max_reward_day)
   if (
     rewardTiers.length !== form.max_reward_day ||
@@ -341,6 +395,7 @@ async function saveSettings() {
       expected_version: form.version,
       refresh_time: form.refresh_time,
       auto_fee_bps: form.auto_fee_bps,
+      auto_force_all: form.auto_force_all,
     })
     applySettings(saved)
     appStore.showSuccess(t('checkin.admin.settingsSaved'))

@@ -809,6 +809,7 @@ func TestAPIContracts(t *testing.T) {
 						"oidc_connect_userinfo_email_path": "",
 						"oidc_connect_userinfo_id_path": "",
 						"oidc_connect_userinfo_username_path": "",
+						"oidc_consent_prompt_mode": "always",
 						"github_oauth_enabled": false,
 						"github_oauth_client_id": "",
 						"github_oauth_client_secret_configured": false,
@@ -961,6 +962,8 @@ func TestAPIContracts(t *testing.T) {
 					"openai_fast_policy_settings": {
 						"rules": []
 					},
+					"quick_jump_enabled": false,
+					"quick_jump_items": [],
 					"custom_menu_items": [],
 					"custom_endpoints": [],
 					"mall_enabled":    false,
@@ -1168,6 +1171,7 @@ func TestAPIContracts(t *testing.T) {
 					"oidc_connect_userinfo_email_path": "",
 					"oidc_connect_userinfo_id_path": "",
 					"oidc_connect_userinfo_username_path": "",
+					"oidc_consent_prompt_mode": "always",
 					"github_oauth_enabled": false,
 					"github_oauth_client_id": "",
 					"github_oauth_client_secret_configured": false,
@@ -1285,6 +1289,8 @@ func TestAPIContracts(t *testing.T) {
 					"openai_fast_policy_settings": {
 						"rules": []
 					},
+					"quick_jump_enabled": false,
+					"quick_jump_items": [],
 					"mall_enabled":    false,
 					"payment_enabled": false,
 					"payment_min_amount": 0,

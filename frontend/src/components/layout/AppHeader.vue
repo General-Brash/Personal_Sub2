@@ -38,6 +38,9 @@
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
         </a>
 
+        <!-- Quick Jump Entry -->
+        <QuickJumpEntry v-if="user" />
+
         <!-- Model Plaza Entry -->
         <router-link
           v-if="user && modelPlazaEnabled"
@@ -268,6 +271,7 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
+import QuickJumpEntry from '@/components/common/QuickJumpEntry.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 

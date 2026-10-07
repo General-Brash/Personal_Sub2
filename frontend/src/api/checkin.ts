@@ -38,6 +38,8 @@ export interface CheckinStatus {
   auto_fee_bps?: number
   auto_enabled?: boolean
   consent_valid?: boolean
+  /** 站点为所有用户强制开启自动签到（手续费恒为 0），用户无需自行开启或同意。 */
+  auto_forced_by_admin?: boolean
   policy_version?: string
 }
 
@@ -70,6 +72,8 @@ export interface CheckinPreference {
   consent_valid?: boolean
   current_policy_version: string
   current_fee_bps: number
+  /** 站点强制开启时为 true，前端据此区分「站点强制」与「用户自选」。 */
+  auto_forced_by_admin?: boolean
 }
 
 export interface CheckinAdminRandomPolicy {
@@ -94,6 +98,8 @@ export interface CheckinAdminSettings {
   version: string
   refresh_time: string
   auto_fee_bps: number
+  /** 为所有用户强制开启自动签到；开启时手续费必须为 0。 */
+  auto_force_all: boolean
   // Deprecated read-only compatibility fields. They are not accepted on writes.
   reviewed?: boolean
   normal?: CheckinAdminRandomPolicy
@@ -109,6 +115,7 @@ export interface CheckinAdminSettingsUpdate {
   version: string
   refresh_time: string
   auto_fee_bps: number
+  auto_force_all: boolean
   expected_version?: string
 }
 

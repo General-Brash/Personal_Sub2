@@ -39,6 +39,9 @@ type AdminMutationAuthorizationOptions struct {
 	RequireHumanSuperAdmin         bool
 	RequireHumanSuperAdminForAdmin bool
 	DisallowSelfTarget             bool
+	// AllowHumanSuperAdminSelfTarget relaxes DisallowSelfTarget only when the
+	// locked actor is a human JWT super administrator.
+	AllowHumanSuperAdminSelfTarget bool
 }
 
 // AdminMutationAuthorization is the state read and locked by
@@ -314,7 +317,8 @@ func AuthorizeAdminMutationTx(
 			(opts.ExpectedTargetStatus != "" && target.Status != opts.ExpectedTargetStatus) {
 			return nil, service.ErrAdminMutationConflict
 		}
-		if opts.DisallowSelfTarget && opts.TargetUserID == actorUserID {
+		selfTargetAllowed := opts.AllowHumanSuperAdminSelfTarget && isHumanSuperAdmin
+		if opts.DisallowSelfTarget && opts.TargetUserID == actorUserID && !selfTargetAllowed {
 			return nil, service.ErrAdminPermissionSelfGrant
 		}
 		if opts.TargetMustBeAdmin && target.Role != service.RoleAdmin && target.Role != service.RoleSuperAdmin {

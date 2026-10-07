@@ -55,6 +55,7 @@ type CheckinStatus struct {
 	AutoFeeBps                       int                            `json:"auto_fee_bps"`
 	AutoEnabled                      bool                           `json:"auto_enabled"`
 	ConsentValid                     bool                           `json:"consent_valid"`
+	AutoForcedByAdmin                bool                           `json:"auto_forced_by_admin"`
 	PolicyVersion                    string                         `json:"policy_version,omitempty"`
 	NormalEnabled                    bool                           `json:"normal_enabled"`
 	NormalMinBps                     int                            `json:"normal_min_bps"`

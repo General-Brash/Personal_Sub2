@@ -2,11 +2,13 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +19,11 @@ import (
 // 测试环境不注入认证上下文，因此门控一旦触发会以 401 中止；
 // 借此区分「触发了 step-up 校验」与「直接放行到业务层（200）」。
 func setupRoleStepUpRouter(t *testing.T) (*gin.Engine, *stubAdminService) {
+	t.Helper()
+	return setupRoleStepUpRouterWithSettings(t, nil)
+}
+
+func setupRoleStepUpRouterWithSettings(t *testing.T, settingService *service.SettingService) (*gin.Engine, *stubAdminService) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -29,7 +36,7 @@ func setupRoleStepUpRouter(t *testing.T) (*gin.Engine, *stubAdminService) {
 		Status: service.StatusActive,
 	})
 
-	h := NewUserHandler(adminSvc, nil, nil, nil, nil, nil, nil)
+	h := NewUserHandler(adminSvc, nil, nil, nil, nil, nil, settingService)
 	router.POST("/api/v1/admin/users", h.Create)
 	router.PUT("/api/v1/admin/users/:id", h.Update)
 	return router, adminSvc
@@ -82,5 +89,38 @@ func TestCreateRegularUserSkipsStepUp(t *testing.T) {
 	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/users", map[string]any{
 		"email": "new-user@example.com", "password": "pass123", "role": "user",
 	})
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+// 提权类门控不读取 step_up_enabled：开关关闭时仍必须触发 step-up 校验（此处以 401 中止）。
+func setupRoleStepUpRouterWithSwitchDisabled(t *testing.T) *gin.Engine {
+	t.Helper()
+	repo := &settingHandlerRepoStub{values: map[string]string{service.SettingKeyStepUpEnabled: "false"}}
+	settingService := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	require.False(t, settingService.IsStepUpEnabled(context.Background()))
+	router, _ := setupRoleStepUpRouterWithSettings(t, settingService)
+	return router
+}
+
+func TestUpdateUserPromoteToAdminRequiresStepUpWhenSwitchDisabled(t *testing.T) {
+	router := setupRoleStepUpRouterWithSwitchDisabled(t)
+
+	rec := doJSON(t, router, http.MethodPut, "/api/v1/admin/users/1", map[string]any{"role": "admin"})
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestCreateAdminUserRequiresStepUpWhenSwitchDisabled(t *testing.T) {
+	router := setupRoleStepUpRouterWithSwitchDisabled(t)
+
+	rec := doJSON(t, router, http.MethodPost, "/api/v1/admin/users", map[string]any{
+		"email": "new-admin@example.com", "password": "pass123", "role": "admin",
+	})
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestUpdateUserKeepAdminRoleSkipsStepUpWhenSwitchDisabled(t *testing.T) {
+	router := setupRoleStepUpRouterWithSwitchDisabled(t)
+
+	rec := doJSON(t, router, http.MethodPut, "/api/v1/admin/users/2", map[string]any{"role": "admin"})
 	require.Equal(t, http.StatusOK, rec.Code)
 }

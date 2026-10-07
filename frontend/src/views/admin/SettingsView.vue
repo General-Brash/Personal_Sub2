@@ -1751,6 +1751,33 @@
                   class="input w-28 text-right"
                 />
               </div>
+
+              <!-- OIDC 授权页策略 -->
+              <div
+                class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
+              >
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t("admin.settings.security.oidcConsentPromptMode")
+                  }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.security.oidcConsentPromptModeHint") }}
+                  </p>
+                </div>
+                <select
+                  v-model="form.oidc_consent_prompt_mode"
+                  class="input w-56"
+                >
+                  <option value="always">
+                    {{ t("admin.settings.security.oidcConsentPromptModeAlways") }}
+                  </option>
+                  <option value="remember">
+                    {{
+                      t("admin.settings.security.oidcConsentPromptModeRemember")
+                    }}
+                  </option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -6782,6 +6809,201 @@
               </button>
             </div>
           </div>
+
+          <!-- Quick Jump Items -->
+          <div ref="quickJumpCardRef" class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.quickJump.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.quickJump.description") }}
+              </p>
+            </div>
+            <div class="space-y-4 p-6">
+              <!-- 顶部入口总开关 -->
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t("admin.settings.quickJump.enabled")
+                  }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.quickJump.enabledHint") }}
+                  </p>
+                </div>
+                <Toggle v-model="form.quick_jump_enabled" />
+              </div>
+
+              <!-- 已配置的跳转条目 -->
+              <div
+                v-for="(item, index) in form.quick_jump_items"
+                :key="item.id || index"
+                class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+              >
+                <div class="mb-3 flex items-center justify-between">
+                  <span
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{
+                      t("admin.settings.quickJump.itemLabel", { n: index + 1 })
+                    }}
+                  </span>
+                  <div class="flex items-center gap-2">
+                    <button
+                      v-if="index > 0"
+                      type="button"
+                      class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+                      :title="t('admin.settings.quickJump.moveUp')"
+                      @click="moveQuickJumpItem(index, -1)"
+                    >
+                      <svg
+                        class="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M5 15l7-7 7 7"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      v-if="index < form.quick_jump_items.length - 1"
+                      type="button"
+                      class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+                      :title="t('admin.settings.quickJump.moveDown')"
+                      @click="moveQuickJumpItem(index, 1)"
+                    >
+                      <svg
+                        class="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                      :title="t('admin.settings.quickJump.remove')"
+                      @click="removeQuickJumpItem(index)"
+                    >
+                      <svg
+                        class="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.quickJump.name") }}
+                    </label>
+                    <input
+                      v-model="item.label"
+                      type="text"
+                      class="input text-sm"
+                      :placeholder="
+                        t('admin.settings.quickJump.namePlaceholder')
+                      "
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.quickJump.visibility") }}
+                    </label>
+                    <select v-model="item.visibility" class="input text-sm">
+                      <option value="user">
+                        {{ t("admin.settings.quickJump.visibilityUser") }}
+                      </option>
+                      <option value="admin">
+                        {{ t("admin.settings.quickJump.visibilityAdmin") }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <div class="sm:col-span-2">
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.quickJump.url") }}
+                    </label>
+                    <input
+                      v-model="item.url"
+                      type="url"
+                      class="input font-mono text-sm"
+                      :placeholder="t('admin.settings.quickJump.urlPlaceholder')"
+                    />
+                  </div>
+
+                  <div class="sm:col-span-2">
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.quickJump.iconSvg") }}
+                    </label>
+                    <ImageUpload
+                      :model-value="item.icon_svg"
+                      mode="svg"
+                      size="sm"
+                      :upload-label="t('admin.settings.quickJump.uploadSvg')"
+                      :remove-label="t('admin.settings.quickJump.removeSvg')"
+                      :max-size="10 * 1024"
+                      @update:model-value="(v: string) => (item.icon_svg = v)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 dark:border-dark-600 dark:text-gray-400 dark:hover:border-primary-500 dark:hover:text-primary-400"
+                @click="addQuickJumpItem"
+              >
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+                {{ t("admin.settings.quickJump.add") }}
+              </button>
+            </div>
+          </div>
 	        </div>
 	        <!-- /Tab: General -->
 
@@ -8733,7 +8955,8 @@
 import PersonalFeatureSettingsCard from '@/components/admin/settings/PersonalFeatureSettingsCard.vue'
 import EntitlementPolicyCard from '@/components/admin/settings/EntitlementPolicyCard.vue'
 import InvitationAdministrationCard from '@/components/admin/settings/InvitationAdministrationCard.vue'
-import { ref, reactive, computed, onMounted, watch } from "vue";
+import { ref, reactive, computed, onMounted, watch, nextTick } from "vue";
+import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api";
 import {
@@ -8811,6 +9034,7 @@ import {
 } from "./codexFingerprintSignals";
 
 const { t, locale } = useI18n();
+const route = useRoute();
 const appStore = useAppStore();
 // 关闭 step-up 开关是敏感操作：后端返回 STEP_UP_REQUIRED 时弹 TOTP 码重试
 const settingsStepUp = useStepUp();
@@ -8869,6 +9093,27 @@ function selectSettingsTab(tab: SettingsTab): void {
   activeTab.value = tab;
 }
 
+// 快捷跳转弹窗里的齿轮会带 ?tab=general&focus=quick-jump 跳到这里，
+// 需要切到对应 Tab 并把卡片滚到视野中央，否则管理员落在页面顶部找不到入口。
+const quickJumpCardRef = ref<HTMLElement | null>(null);
+
+function applyDeepLinkFromQuery(): void {
+  const query = route?.query;
+  const requestedTab = query?.tab;
+  if (typeof requestedTab === "string") {
+    const match = settingsTabs.find((tab) => tab.key === requestedTab);
+    if (match) selectSettingsTab(match.key);
+  }
+  if (query?.focus === "quick-jump" && !loading.value) {
+    void nextTick(() => {
+      quickJumpCardRef.value?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }
+}
+
 function focusSettingsTab(tab: SettingsTab): void {
   window.requestAnimationFrame(() => {
     document.getElementById(`settings-tab-${tab}`)?.focus();
@@ -8910,6 +9155,10 @@ const { copyToClipboard } = useClipboard();
 
 const loading = ref(true);
 const loadFailed = ref(false);
+watch(
+  () => [route?.query?.tab, route?.query?.focus, loading.value],
+  applyDeepLinkFromQuery,
+);
 const saving = ref(false);
 const testingSmtp = ref(false);
 const sendingTestEmail = ref(false);
@@ -9512,6 +9761,7 @@ const form = reactive<SettingsForm>({
   passkey_rp_origins: [],
   session_binding_enabled: false,
   step_up_enabled: false,
+  oidc_consent_prompt_mode: "always",
   audit_log_retention_days: 180,
   login_agreement_enabled: false,
   login_agreement_mode: "modal",
@@ -9568,6 +9818,15 @@ const form = reactive<SettingsForm>({
   table_default_page_size: tablePageSizeDefault,
   table_page_size_options: [10, 20, 50, 100],
   custom_menu_items: [] as Array<{
+    id: string;
+    label: string;
+    icon_svg: string;
+    url: string;
+    visibility: "user" | "admin";
+    sort_order: number;
+  }>,
+  quick_jump_enabled: false,
+  quick_jump_items: [] as Array<{
     id: string;
     label: string;
     icon_svg: string;
@@ -10580,6 +10839,37 @@ function moveMenuItem(index: number, direction: -1 | 1) {
   });
 }
 
+// 顶部快捷跳转条目管理（与自定义菜单项同构，但只接受绝对 http(s) 外链）
+function addQuickJumpItem() {
+  form.quick_jump_items.push({
+    id: "",
+    label: "",
+    icon_svg: "",
+    url: "",
+    visibility: "user",
+    sort_order: form.quick_jump_items.length,
+  });
+}
+
+function removeQuickJumpItem(index: number) {
+  form.quick_jump_items.splice(index, 1);
+  form.quick_jump_items.forEach((item, i) => {
+    item.sort_order = i;
+  });
+}
+
+function moveQuickJumpItem(index: number, direction: -1 | 1) {
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= form.quick_jump_items.length) return;
+  const items = form.quick_jump_items;
+  const temp = items[index];
+  items[index] = items[targetIndex];
+  items[targetIndex] = temp;
+  items.forEach((item, i) => {
+    item.sort_order = i;
+  });
+}
+
 // Custom endpoint management
 function addEndpoint() {
   form.custom_endpoints.push({ name: "", endpoint: "", description: "" });
@@ -10777,6 +11067,9 @@ async function loadSettings() {
       settings.login_agreement_mode === "checkbox" ? "checkbox" : "modal";
     form.channel_monitor_mode =
       settings.channel_monitor_mode === "v2" ? "v2" : "v1";
+    // 后端只接受 always / remember，非法值一律按 always 展示，避免下拉出现空选项
+    form.oidc_consent_prompt_mode =
+      settings.oidc_consent_prompt_mode === "remember" ? "remember" : "always";
     form.channel_monitor_hide_throughput = Boolean(
       settings.channel_monitor_hide_throughput
     );
@@ -11148,6 +11441,7 @@ async function saveSettings() {
       passkey_enabled: form.passkey_enabled,
       session_binding_enabled: form.session_binding_enabled,
       step_up_enabled: form.step_up_enabled,
+      oidc_consent_prompt_mode: form.oidc_consent_prompt_mode,
       // 清空数字框时 v-model.number 会得到空串，后端 int 字段解析空串会 400 拒绝整次保存；
       // 空/非法值回退默认 180（与后端 parseAuditLogRetentionDays("") 语义一致，0 仍表示永久保留）。
       audit_log_retention_days: Number.isFinite(form.audit_log_retention_days)
@@ -11183,6 +11477,8 @@ async function saveSettings() {
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
       custom_menu_items: form.custom_menu_items,
+      quick_jump_enabled: form.quick_jump_enabled,
+      quick_jump_items: form.quick_jump_items,
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,
       smtp_host: form.smtp_host,
@@ -12548,6 +12844,7 @@ onMounted(() => {
   loadRectifierSettings();
   loadBetaPolicySettings();
   loadProviders();
+  applyDeepLinkFromQuery();
 });
 
 // =========================

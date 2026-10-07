@@ -36,9 +36,16 @@ export default {
       retrying: 'Retrying automatic check-in…',
       dismiss: 'Later'
     },
+    forcedAuto: {
+      notice: 'Automatic check-in is enabled for all users on this site (0% fee)',
+      updateRejected: 'Automatic check-in is enforced for all users on this site, so personal settings cannot be changed.',
+    },
     admin: {
       settingsTitle: 'Daily Check-in Settings',
       enabled: 'Enable daily check-in',
+      autoForceAll: 'Force automatic check-in for all users',
+      autoForceAllHint: 'When enabled, the fee is forced to 0% and every user checks in automatically on arrival, without opting in or accepting a fee. Turning it off restores each user\'s own setting.',
+      autoForceAllFeeMustBeZero: 'The fee must be 0% while automatic check-in is forced for all users.',
       maxRewardDay: 'Maximum reward day',
       rewardTiers: 'Reward tiers',
       rewardDayColumn: 'Check-in day',

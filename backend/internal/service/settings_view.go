@@ -164,6 +164,9 @@ type SystemSettings struct {
 	TablePageSizeOptions        []int
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
+	QuickJumpEnabled            bool   // 是否展示顶部快捷跳转入口
+	QuickJumpItems              string // JSON array of quick jump items
+	OIDCConsentPromptMode       string // OIDC 授权页策略：always=每次确认，remember=首次确认后记住
 
 	DefaultConcurrency           int
 	DefaultBalance               float64
@@ -367,6 +370,8 @@ type PublicSettings struct {
 	TablePageSizeOptions        []int
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
+	QuickJumpEnabled            bool   // 是否展示顶部快捷跳转入口
+	QuickJumpItems              string // JSON array of quick jump items
 
 	LinuxDoOAuthEnabled      bool
 	DingTalkOAuthEnabled     bool

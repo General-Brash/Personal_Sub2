@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -202,6 +203,9 @@ func (r *adminPermissionRepository) ApplyAdminPermissionChange(ctx context.Conte
 		TargetMustBeAdmin:  true,
 		TargetNotFound:     service.ErrAdminPrincipalNotFound,
 		DisallowSelfTarget: true,
+		// oidc.* has no super-admin shortcut; a human super administrator may
+		// self-grant it so single-super-admin deployments are not deadlocked.
+		AllowHumanSuperAdminSelfTarget: strings.HasPrefix(change.Permission, "oidc."),
 		Permissions: []AdminMutationPermission{{
 			Permission: "security.permissions.grant",
 			Scope:      userMutationScope(change.TargetUserID),

@@ -313,4 +313,43 @@ describe('CheckinSettingsCard', () => {
     expect(updateCheckinSettings).not.toHaveBeenCalled()
   })
 
+  it('zeroes and locks the fee when forcing automatic check-in for all users', async () => {
+    const wrapper = mount(CheckinSettingsCard)
+    await flushPromises()
+
+    const feeInput = wrapper.get('[data-testid="checkin-auto-fee-percent"]')
+    expect((feeInput.element as HTMLInputElement).value).toBe('5.00')
+    expect(feeInput.attributes('disabled')).toBeUndefined()
+
+    await wrapper.get('[data-testid="checkin-auto-force-all"]').trigger('click')
+
+    expect((feeInput.element as HTMLInputElement).value).toBe('0.00')
+    expect(feeInput.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="checkin-auto-force-all-fee-hint"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
+    await flushPromises()
+
+    const payload = updateCheckinSettings.mock.calls[0]?.[0]
+    expect(payload.auto_force_all).toBe(true)
+    expect(payload.auto_fee_bps).toBe(0)
+  })
+
+  it('restores the saved force switch and keeps the fee editable when it is off', async () => {
+    getCheckinSettings.mockResolvedValueOnce({ ...settings, auto_force_all: true, auto_fee_bps: 0 })
+    const forced = mount(CheckinSettingsCard)
+    await flushPromises()
+    expect(forced.get('[data-testid="checkin-auto-fee-percent"]').attributes('disabled')).toBeDefined()
+
+    const wrapper = mount(CheckinSettingsCard)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="checkin-auto-force-all-fee-hint"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="save-checkin-settings"]').trigger('click')
+    await flushPromises()
+
+    const payload = updateCheckinSettings.mock.calls[0]?.[0]
+    expect(payload.auto_force_all).toBe(false)
+    expect(payload.auto_fee_bps).toBe(500)
+  })
+
 })

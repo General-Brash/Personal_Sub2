@@ -57,6 +57,7 @@ type checkinAdminPolicyV2DTO struct {
 	Version         string                         `json:"version"`
 	RefreshTime     string                         `json:"refresh_time"`
 	AutoFeeBps      int                            `json:"auto_fee_bps"`
+	AutoForceAll    bool                           `json:"auto_force_all"`
 	Reviewed        bool                           `json:"reviewed"`
 	Normal          checkinAdminRandomDTO          `json:"normal"`
 	Super           checkinAdminSuperDTO           `json:"super"`
@@ -72,6 +73,7 @@ type checkinAdminPolicyV2UpdateDTO struct {
 	Version         string                 `json:"version"`
 	RefreshTime     string                 `json:"refresh_time"`
 	AutoFeeBps      int                    `json:"auto_fee_bps"`
+	AutoForceAll    bool                   `json:"auto_force_all"`
 	ExpectedVersion string                 `json:"expected_version,omitempty"`
 }
 
@@ -91,6 +93,7 @@ func (dto checkinAdminPolicyV2UpdateDTO) toPolicy() (*service.DailyCheckinPolicy
 	return &service.DailyCheckinPolicy{Enabled: dto.Enabled, MaxRewardDay: dto.MaxRewardDay, RewardTiers: tiers},
 		&service.DailyCheckinPolicyV2{
 			Version: dto.Version, RefreshTime: dto.RefreshTime, AutoFeeBps: dto.AutoFeeBps,
+			AutoForceAll: dto.AutoForceAll,
 		}, nil
 }
 
@@ -106,7 +109,7 @@ func newCheckinAdminPolicyV2DTO(base *service.DailyCheckinPolicy, extended servi
 	}
 	return checkinAdminPolicyV2DTO{
 		Enabled: base.Enabled, MaxRewardDay: base.MaxRewardDay, RewardTiers: tiers,
-		Version: extended.Version, RefreshTime: extended.RefreshTime, AutoFeeBps: extended.AutoFeeBps, Reviewed: extended.ReviewApproved,
+		Version: extended.Version, RefreshTime: extended.RefreshTime, AutoFeeBps: extended.AutoFeeBps, AutoForceAll: extended.AutoForceAll, Reviewed: extended.ReviewApproved,
 		Normal:         checkinAdminRandomDTO{Enabled: extended.Normal.Enabled, MinBps: extended.Normal.MinBps, MaxBps: extended.Normal.MaxBps},
 		Super:          checkinAdminSuperDTO{Enabled: extended.Super.Enabled, MinBps: extended.Super.MinBps, MaxBps: extended.Super.MaxBps, Cost: strconv.FormatFloat(extended.Super.Cost, 'f', 8, 64)},
 		PendingRefresh: extended.PendingRefresh, NextResetAt: nextResetAt,

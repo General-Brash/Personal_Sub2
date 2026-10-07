@@ -160,3 +160,8 @@ mutating provider state.
   permission enforcement is disabled or shadow-only. CSRF tokens are stateless HMACs bound to
   `user_id | JWT session id | token version | purpose`; they are never stored or logged.
 
+## 9. Site-level consent prompt mode
+
+- `oidc_consent_prompt_mode` is a site-level setting accepting `always` or `remember`; its default is `always`. A setting read failure or invalid value fails closed to `always`.
+- In `always`, every interactive authorization displays the consent page, even when an active consent exists; `trusted_skip_consent` never bypasses consent. `prompt=none` may still reuse an existing active consent; without one it returns `consent_required`. In `remember`, an active consent for the same scope and client policy version may be reused; otherwise authorization requires interaction unless `trusted_skip_consent` preauthorization applies (not with `prompt=consent`).
+- This setting is managed through the generic `/admin/settings` entry with `system.settings.manage`. This is an explicitly user-selected exception; do not characterize it as using OIDC-specific `oidc.*` permissions or OIDC-specific CSRF/step-up controls.

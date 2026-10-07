@@ -362,6 +362,11 @@ const (
 	SettingKeyTablePageSizeOptions        = "table_page_size_options"       // 表格可选每页条数（JSON 数组）
 	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
 	SettingKeyCustomEndpoints             = "custom_endpoints"              // 自定义端点列表（JSON 数组）
+	SettingKeyQuickJumpEnabled            = "quick_jump_enabled"            // 是否展示顶部快捷跳转入口
+	SettingKeyQuickJumpItems              = "quick_jump_items"              // 顶部快捷跳转条目（JSON 数组）
+
+	// OIDC Provider（本站作为授权服务端）站点级策略
+	SettingKeyOIDCConsentPromptMode = "oidc_consent_prompt_mode" // 授权页策略：always=每次都要用户确认，remember=首次确认后记住
 
 	// 页面可见性设置（仅控制前端入口和页面访问，不改变对应业务能力）
 	SettingKeyUserChannelStatusEnabled      = "user_channel_status_enabled"

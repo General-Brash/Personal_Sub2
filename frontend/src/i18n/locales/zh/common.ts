@@ -157,6 +157,11 @@ export default {
   },
 
   // Navigation
+  quickJump: {
+    title: '快捷跳转',
+    empty: '管理员还没有配置跳转链接',
+    manage: '设置',
+  },
   nav: {
     checkIn: '每日签到',
     dashboard: '仪表盘',

@@ -36,9 +36,16 @@ export default {
       retrying: '正在重试自动签到…',
       dismiss: '稍后'
     },
+    forcedAuto: {
+      notice: '站点已为所有用户开启自动签到（手续费 0%）',
+      updateRejected: '站点已为所有用户强制开启自动签到，无法修改个人设置。',
+    },
     admin: {
       settingsTitle: '每日签到设置',
       enabled: '启用每日签到',
+      autoForceAll: '为所有用户强制开启自动签到',
+      autoForceAllHint: '开启后手续费强制为 0%，所有用户访问站点即自动签到，无需自行开启或同意手续费。关闭后恢复为用户各自的设置。',
+      autoForceAllFeeMustBeZero: '强制全员自动签到时，手续费必须为 0%。',
       maxRewardDay: '最大奖励天数',
       rewardTiers: '奖励阶梯',
       rewardDayColumn: '签到天数',

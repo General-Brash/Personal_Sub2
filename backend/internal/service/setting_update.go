@@ -358,6 +358,9 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyTablePageSizeOptions] = string(tablePageSizeOptionsJSON)
 	updates[SettingKeyCustomMenuItems] = settings.CustomMenuItems
 	updates[SettingKeyCustomEndpoints] = settings.CustomEndpoints
+	updates[SettingKeyQuickJumpEnabled] = strconv.FormatBool(settings.QuickJumpEnabled)
+	updates[SettingKeyQuickJumpItems] = settings.QuickJumpItems
+	updates[SettingKeyOIDCConsentPromptMode] = normalizeOIDCConsentPromptMode(settings.OIDCConsentPromptMode)
 
 	// 默认配置
 	updates[SettingKeyDefaultConcurrency] = strconv.Itoa(settings.DefaultConcurrency)

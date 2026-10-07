@@ -20,6 +20,8 @@ type CheckinPreference struct {
 	ConsentValid         bool       `json:"consent_valid"`
 	CurrentPolicyVersion string     `json:"current_policy_version"`
 	CurrentFeeBps        int        `json:"current_fee_bps"`
+	// AutoForcedByAdmin 让前端区分「站点强制」与「用户自选」，不必靠 AutoEnabled 猜。
+	AutoForcedByAdmin bool `json:"auto_forced_by_admin"`
 }
 
 func NewCheckinServiceV2(db *sql.DB, policyProvider DailyCheckinPolicyProvider, temporaryCreditService *TemporaryCreditService) *CheckinService {
@@ -98,6 +100,11 @@ func (s *CheckinService) UpdatePreference(ctx context.Context, userID int64, aut
 	if err != nil {
 		return nil, err
 	}
+	// 全员强制期间明确拒绝用户的开/关请求，且不写库：只有这样关闭强制开关后
+	// 才能回到用户自己的 auto_enabled 原值。
+	if extended.forcedAutoCheckin() {
+		return nil, ErrCheckinAutoForcedByAdmin
+	}
 	if autoEnabled && !accepted {
 		return nil, ErrCheckinConsentRequired
 	}
@@ -165,6 +172,12 @@ func decorateCheckinPreference(preference CheckinPreference, policy DailyCheckin
 	preference.ConsentValid = preference.AutoEnabled &&
 		policy.AcceptsConsentVersion(preference.ConsentPolicyVersion) &&
 		preference.ConsentFeeBps >= policy.AutoFeeBps
+	// 全员强制期间只覆盖展示值，绝不回写用户偏好：关闭开关后必须能回到用户原值。
+	if policy.forcedAutoCheckin() {
+		preference.AutoForcedByAdmin = true
+		preference.AutoEnabled = true
+		preference.ConsentValid = true
+	}
 	return &preference
 }
 
@@ -236,10 +249,13 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 	// Fee ceiling semantics: a lower actual fee stays within the user's consent
 	// (see decorateCheckinPreference); only a fee above the agreed ceiling forces
 	// re-consent.
-	consentValid := preference.AutoEnabled &&
+	// forceAll：站点全员强制自动签到时无需用户自行开启，也无需同意手续费
+	// （forcedAutoCheckin 已保证此时费率为 0）。
+	forceAll := extended.forcedAutoCheckin()
+	consentValid := forceAll || (preference.AutoEnabled &&
 		extended.AcceptsConsentVersion(preference.ConsentPolicyVersion) &&
-		preference.ConsentFeeBps >= extended.AutoFeeBps
-	if mode == CheckinModeDirectAuto && (!preference.AutoEnabled || !consentValid) {
+		preference.ConsentFeeBps >= extended.AutoFeeBps)
+	if mode == CheckinModeDirectAuto && !forceAll && (!preference.AutoEnabled || !consentValid) {
 		return nil, ErrCheckinConsentRequired
 	}
 	// Manual (direct) check-in stays available even when automatic check-in is
@@ -503,6 +519,7 @@ func (s *CheckinService) getStatusV2(ctx context.Context, userID int64, requeste
 		AutoFeeBps:                       extended.AutoFeeBps,
 		AutoEnabled:                      decoratedPreference.AutoEnabled,
 		ConsentValid:                     decoratedPreference.ConsentValid,
+		AutoForcedByAdmin:                decoratedPreference.AutoForcedByAdmin,
 		PolicyVersion:                    extended.ConsentVersion(),
 	}
 	if existing != nil {

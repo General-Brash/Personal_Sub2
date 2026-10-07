@@ -127,3 +127,47 @@ func TestAdminCannotMutateSuperAdminThroughBalanceOrEntitlementEndpoints(t *test
 		t.Fatal(err)
 	}
 }
+
+// D-1: oidc.* has no super-admin shortcut, so a human JWT super administrator
+// may grant/revoke oidc.* on itself. Every other self mutation stays denied.
+func TestSuperAdminMaySelfGrantOnlyOIDCPermissions(t *testing.T) {
+	repo := &adminPermissionRepoStub{record: &AdminPrincipalRecord{UserID: 1, Role: RoleSuperAdmin, Status: StatusActive}}
+	svc := NewAdminPermissionService(repo, AdminPermissionModeEnforce)
+	superAdmin := &AdminPrincipal{UserID: 1, Role: RoleSuperAdmin, Kind: AdminPrincipalKindJWT}
+	global := map[string]any{"*": "*"}
+
+	if err := svc.GrantPermission(context.Background(), superAdmin, 1, "oidc.keys.rotate", AdminGrantAllow, global, "bootstrap"); err != nil {
+		t.Fatalf("super admin oidc self grant: %v", err)
+	}
+	if err := svc.RevokePermission(context.Background(), superAdmin, 1, "oidc.keys.rotate", "cleanup"); err != nil {
+		t.Fatalf("super admin oidc self revoke: %v", err)
+	}
+	if err := svc.GrantPermission(context.Background(), superAdmin, 1, "security.permissions.grant", AdminGrantAllow, global, "self"); !errors.Is(err, ErrAdminPermissionSelfGrant) {
+		t.Fatalf("non-oidc self grant error = %v", err)
+	}
+	if err := svc.RevokePermission(context.Background(), superAdmin, 1, "users.read", "self"); !errors.Is(err, ErrAdminPermissionSelfGrant) {
+		t.Fatalf("non-oidc self revoke error = %v", err)
+	}
+
+	repo.record = &AdminPrincipalRecord{UserID: 2, Role: RoleAdmin, Status: StatusActive}
+	admin := &AdminPrincipal{UserID: 2, Role: RoleAdmin, Kind: AdminPrincipalKindJWT}
+	if err := svc.GrantPermission(context.Background(), admin, 2, "oidc.keys.rotate", AdminGrantAllow, global, "self"); !errors.Is(err, ErrAdminPermissionSelfGrant) {
+		t.Fatalf("ordinary admin oidc self grant error = %v", err)
+	}
+	apiKey := &AdminPrincipal{UserID: 2, Role: RoleAdmin, Kind: AdminPrincipalKindAPIKey}
+	if err := svc.GrantPermission(context.Background(), apiKey, 2, "oidc.keys.rotate", AdminGrantAllow, global, "self"); !errors.Is(err, ErrAdminPermissionSelfGrant) {
+		t.Fatalf("api-key oidc self grant error = %v", err)
+	}
+}
+
+// D-4: permissions without any enforcement point were retired from the catalog.
+func TestRetiredAdminPermissionsAreUnknown(t *testing.T) {
+	for _, permission := range []string{"affiliates.quota.adjust", "affiliates.rebate.replay", "bank.settlement.retry", "invites.read", "models.pricing.manage"} {
+		if IsKnownAdminPermission(permission) {
+			t.Errorf("retired permission %q is still known", permission)
+		}
+	}
+	if !IsKnownAdminPermission("affiliates.read") || !IsKnownAdminPermission("invites.quota.adjust") {
+		t.Fatal("live permissions must remain known")
+	}
+}

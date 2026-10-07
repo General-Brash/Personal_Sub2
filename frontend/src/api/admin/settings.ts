@@ -9,6 +9,7 @@ import type {
   CustomMenuItem,
   LoginAgreementDocument,
   NotifyEmailEntry,
+  QuickJumpItem,
 } from "@/types";
 
 export interface DefaultSubscriptionSetting {
@@ -486,6 +487,9 @@ export interface SystemSettings {
   backend_mode_enabled: boolean;
   custom_menu_items: CustomMenuItem[];
   custom_endpoints: CustomEndpoint[];
+  quick_jump_enabled: boolean;
+  quick_jump_items: QuickJumpItem[];
+  oidc_consent_prompt_mode: string;
   // SMTP settings
   smtp_host: string;
   smtp_port: number;
@@ -836,6 +840,9 @@ export interface UpdateSettingsRequest {
   backend_mode_enabled?: boolean;
   custom_menu_items?: CustomMenuItem[];
   custom_endpoints?: CustomEndpoint[];
+  quick_jump_enabled?: boolean;
+  quick_jump_items?: QuickJumpItem[];
+  oidc_consent_prompt_mode?: string;
   smtp_host?: string;
   smtp_port?: number;
   smtp_username?: string;

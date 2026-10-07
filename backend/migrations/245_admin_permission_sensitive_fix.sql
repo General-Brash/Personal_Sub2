@@ -1,0 +1,12 @@
+-- F-13: make the sensitive flag of the administrator permission catalog explicit.
+-- Migration 238 seeds admin_permissions with ON CONFLICT DO UPDATE, while 240
+-- re-seeds the catalog with ON CONFLICT DO NOTHING and the opposite sensitive
+-- value for users.update, audit.read, bank.ledger.read, mall.orders.read,
+-- channels.credentials.read and accounts.credentials.read. 238 runs first and
+-- 240 never overwrites, so 238's values are effective only because of ordering.
+-- This migration writes the explicit final value: those six permissions are
+-- sensitive, and so are payment.credentials.read and users.credentials.read,
+-- which only 240 seeded (as non-sensitive). Only the sensitive column of these
+-- eight rows changes; the flag is informational and does not alter
+-- authorization. The statement is idempotent.
+UPDATE admin_permissions SET sensitive = TRUE WHERE permission IN ('users.update','audit.read','bank.ledger.read','mall.orders.read','channels.credentials.read','accounts.credentials.read','payment.credentials.read','users.credentials.read');

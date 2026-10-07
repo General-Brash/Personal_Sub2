@@ -430,7 +430,7 @@ func (s *AdminPermissionService) GrantPermission(ctx context.Context, actor *Adm
 	if actor.Kind == AdminPrincipalKindAPIKey && actor.Role == RoleSuperAdmin {
 		return ErrAdminPermissionDenied
 	}
-	if actor.UserID == targetUserID {
+	if actor.UserID == targetUserID && !allowsSuperAdminOIDCSelfGrant(actor, permission) {
 		return ErrAdminPermissionSelfGrant
 	}
 	if reason == "" {
@@ -479,7 +479,7 @@ func (s *AdminPermissionService) RevokePermission(ctx context.Context, actor *Ad
 	if actor.Kind == AdminPrincipalKindAPIKey && actor.Role == RoleSuperAdmin {
 		return ErrAdminPermissionDenied
 	}
-	if actor.UserID == targetUserID {
+	if actor.UserID == targetUserID && !allowsSuperAdminOIDCSelfGrant(actor, permission) {
 		return ErrAdminPermissionSelfGrant
 	}
 	if reason == "" {
@@ -506,6 +506,15 @@ func (s *AdminPermissionService) RevokePermission(ctx context.Context, actor *Ad
 		OldValue: map[string]any{"reason": reason},
 	})
 	return err
+}
+
+// allowsSuperAdminOIDCSelfGrant is the only exception to the self-grant ban.
+// oidc.* never inherits the super-admin shortcut (authorizeExplicitGrant), so a
+// single-super-admin deployment could otherwise never obtain it. Only a human
+// JWT super administrator may grant or revoke oidc.* on itself; the routes
+// always require step-up and the repository rechecks the locked actor row.
+func allowsSuperAdminOIDCSelfGrant(actor *AdminPrincipal, permission string) bool {
+	return actor != nil && actor.Kind == AdminPrincipalKindJWT && actor.IsSuperAdmin() && strings.HasPrefix(permission, "oidc.")
 }
 
 func cloneAdminGrants(in []AdminGrant) []AdminGrant {
@@ -637,9 +646,7 @@ var knownAdminPermissions = map[string]struct{}{
 	"accounts.catalog.write":         {},
 	"accounts.credentials.read":      {},
 	"accounts.credentials.write":     {},
-	"affiliates.quota.adjust":        {},
 	"affiliates.read":                {},
-	"affiliates.rebate.replay":       {},
 	"affiliates.relationship.create": {},
 	"audit.export":                   {},
 	"audit.read":                     {},
@@ -657,7 +664,6 @@ var knownAdminPermissions = map[string]struct{}{
 	"bank.ledger.read":               {},
 	"bank.settings.read":             {},
 	"bank.settings.update":           {},
-	"bank.settlement.retry":          {},
 	"channels.catalog.read":          {},
 	"channels.catalog.write":         {},
 	"channels.credentials.read":      {},
@@ -669,7 +675,6 @@ var knownAdminPermissions = map[string]struct{}{
 	"groups.read":                    {},
 	"groups.update":                  {},
 	"invites.quota.adjust":           {},
-	"invites.read":                   {},
 	"mall.fulfill":                   {},
 	"mall.orders.read":               {},
 	"mall.products.read":             {},
@@ -677,7 +682,6 @@ var knownAdminPermissions = map[string]struct{}{
 	"mall.refund":                    {},
 	"models.catalog.read":            {},
 	"models.catalog.write":           {},
-	"models.pricing.manage":          {},
 	"ops.manage":                     {},
 	"ops.read":                       {},
 	"plugins.execute":                {},

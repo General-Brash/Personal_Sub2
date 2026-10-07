@@ -168,6 +168,9 @@ type UpdateSettingsRequest struct {
 	TablePageSizeOptions        []int                 `json:"table_page_size_options"`
 	CustomMenuItems             *[]dto.CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
+	QuickJumpEnabled            *bool                 `json:"quick_jump_enabled"`
+	QuickJumpItems              *[]dto.QuickJumpItem  `json:"quick_jump_items"`
+	OIDCConsentPromptMode       *string               `json:"oidc_consent_prompt_mode"`
 
 	// 默认配置
 	DefaultConcurrency                        int                               `json:"default_concurrency"`
@@ -1263,6 +1266,17 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		}
 	}
 
+	// OIDC 授权页策略验证（仅 always / remember；未提交则保留原值）
+	oidcConsentPromptMode := previousSettings.OIDCConsentPromptMode
+	if req.OIDCConsentPromptMode != nil {
+		mode := strings.ToLower(strings.TrimSpace(*req.OIDCConsentPromptMode))
+		if mode != service.OIDCConsentPromptModeAlways && mode != service.OIDCConsentPromptModeRemember {
+			response.BadRequest(c, "OIDC consent prompt mode must be always or remember")
+			return
+		}
+		oidcConsentPromptMode = mode
+	}
+
 	// 自定义菜单项验证
 	const (
 		maxCustomMenuItems    = 20
@@ -1349,6 +1363,80 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			return
 		}
 		customMenuJSON = string(menuBytes)
+	}
+
+	// 顶部快捷跳转验证：只允许绝对 http(s) 外链，不支持 md:<slug> 内嵌页，
+	// 长度/条数上限与自定义菜单项保持一致。
+	quickJumpEnabled := previousSettings.QuickJumpEnabled
+	if req.QuickJumpEnabled != nil {
+		quickJumpEnabled = *req.QuickJumpEnabled
+	}
+	quickJumpJSON := previousSettings.QuickJumpItems
+	if req.QuickJumpItems != nil {
+		items := *req.QuickJumpItems
+		if len(items) > maxCustomMenuItems {
+			response.BadRequest(c, "Too many quick jump items (max 20)")
+			return
+		}
+		for i, item := range items {
+			if strings.TrimSpace(item.Label) == "" {
+				response.BadRequest(c, "Quick jump item label is required")
+				return
+			}
+			if len(item.Label) > maxMenuItemLabelLen {
+				response.BadRequest(c, "Quick jump item label is too long (max 50 characters)")
+				return
+			}
+			urlTrimmed := strings.TrimSpace(item.URL)
+			if urlTrimmed == "" {
+				response.BadRequest(c, "Quick jump item URL is required")
+				return
+			}
+			if len(item.URL) > maxMenuItemURLLen {
+				response.BadRequest(c, "Quick jump item URL is too long (max 2048 characters)")
+				return
+			}
+			if err := config.ValidateAbsoluteHTTPURL(urlTrimmed); err != nil {
+				response.BadRequest(c, "Quick jump item URL must be an absolute http(s) URL")
+				return
+			}
+			if item.Visibility != "user" && item.Visibility != "admin" {
+				response.BadRequest(c, "Quick jump item visibility must be 'user' or 'admin'")
+				return
+			}
+			if len(item.IconSVG) > maxMenuItemIconSVGLen {
+				response.BadRequest(c, "Quick jump item icon SVG is too large (max 10KB)")
+				return
+			}
+			if strings.TrimSpace(item.ID) == "" {
+				id, err := generateMenuItemID()
+				if err != nil {
+					response.Error(c, http.StatusInternalServerError, "Failed to generate quick jump item ID")
+					return
+				}
+				items[i].ID = id
+			} else if len(item.ID) > maxMenuItemIDLen {
+				response.BadRequest(c, "Quick jump item ID is too long (max 32 characters)")
+				return
+			} else if !menuItemIDPattern.MatchString(item.ID) {
+				response.BadRequest(c, "Quick jump item ID contains invalid characters (only a-z, A-Z, 0-9, - and _ are allowed)")
+				return
+			}
+		}
+		seenQuickJump := make(map[string]struct{}, len(items))
+		for _, item := range items {
+			if _, exists := seenQuickJump[item.ID]; exists {
+				response.BadRequest(c, "Duplicate quick jump item ID: "+item.ID)
+				return
+			}
+			seenQuickJump[item.ID] = struct{}{}
+		}
+		quickJumpBytes, err := json.Marshal(items)
+		if err != nil {
+			response.BadRequest(c, "Failed to serialize quick jump items")
+			return
+		}
+		quickJumpJSON = string(quickJumpBytes)
 	}
 
 	// 自定义端点验证
@@ -1637,6 +1725,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		TablePageSizeOptions:                   req.TablePageSizeOptions,
 		CustomMenuItems:                        customMenuJSON,
 		CustomEndpoints:                        customEndpointsJSON,
+		QuickJumpEnabled:                       quickJumpEnabled,
+		QuickJumpItems:                         quickJumpJSON,
+		OIDCConsentPromptMode:                  oidcConsentPromptMode,
 		DefaultConcurrency:                     req.DefaultConcurrency,
 		DefaultBalance:                         req.DefaultBalance,
 		AffiliateRebateRate:                    affiliateRebateRate,
@@ -2318,6 +2409,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		TableDefaultPageSize:                                   updatedSettings.TableDefaultPageSize,
 		TablePageSizeOptions:                                   updatedSettings.TablePageSizeOptions,
 		CustomMenuItems:                                        dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
+		QuickJumpEnabled:                                       updatedSettings.QuickJumpEnabled,
+		QuickJumpItems:                                         dto.ParseQuickJumpItems(updatedSettings.QuickJumpItems),
+		OIDCConsentPromptMode:                                  updatedSettings.OIDCConsentPromptMode,
 		CustomEndpoints:                                        dto.ParseCustomEndpoints(updatedSettings.CustomEndpoints),
 		DefaultConcurrency:                                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                                         updatedSettings.DefaultBalance,

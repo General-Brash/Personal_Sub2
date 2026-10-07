@@ -25,6 +25,19 @@ type CustomEndpoint struct {
 	Description string `json:"description"`
 }
 
+// QuickJumpItem 是顶部快捷跳转弹窗里的一个外链条目。
+//
+// 与 CustomMenuItem 的区别：快捷跳转只在新标签页打开绝对 http(s) 外链，不参与
+// /custom/:id 内嵌页渲染，也不进入 CSP frame-src 收集。
+type QuickJumpItem struct {
+	ID         string `json:"id"`
+	Label      string `json:"label"`
+	IconSVG    string `json:"icon_svg"`
+	URL        string `json:"url"`
+	Visibility string `json:"visibility"` // "user" or "admin"
+	SortOrder  int    `json:"sort_order"`
+}
+
 // SystemSettings represents the admin settings API response payload.
 type SystemSettings struct {
 	RegistrationEnabled                 bool                     `json:"registration_enabled"`
@@ -163,6 +176,9 @@ type SystemSettings struct {
 	TablePageSizeOptions        []int            `json:"table_page_size_options"`
 	CustomMenuItems             []CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints             []CustomEndpoint `json:"custom_endpoints"`
+	QuickJumpEnabled            bool             `json:"quick_jump_enabled"`
+	QuickJumpItems              []QuickJumpItem  `json:"quick_jump_items"`
+	OIDCConsentPromptMode       string           `json:"oidc_consent_prompt_mode"`
 
 	DefaultConcurrency           int                          `json:"default_concurrency"`
 	DefaultBalance               float64                      `json:"default_balance"`
@@ -401,6 +417,8 @@ type PublicSettings struct {
 	TablePageSizeOptions                []int                    `json:"table_page_size_options"`
 	CustomMenuItems                     []CustomMenuItem         `json:"custom_menu_items"`
 	CustomEndpoints                     []CustomEndpoint         `json:"custom_endpoints"`
+	QuickJumpEnabled                    bool                     `json:"quick_jump_enabled"`
+	QuickJumpItems                      []QuickJumpItem          `json:"quick_jump_items"`
 	DingTalkOAuthEnabled                bool                     `json:"dingtalk_oauth_enabled"`
 	LinuxDoOAuthEnabled                 bool                     `json:"linuxdo_oauth_enabled"`
 	WeChatOAuthEnabled                  bool                     `json:"wechat_oauth_enabled"`
@@ -611,6 +629,31 @@ func ParseUserVisibleMenuItems(raw string) []CustomMenuItem {
 	filtered := make([]CustomMenuItem, 0, len(items))
 	for _, item := range items {
 		if item.Visibility != "admin" {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+// ParseQuickJumpItems 把 JSON 字符串解析为快捷跳转条目；空值或非法输入返回空切片。
+func ParseQuickJumpItems(raw string) []QuickJumpItem {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" {
+		return []QuickJumpItem{}
+	}
+	var items []QuickJumpItem
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return []QuickJumpItem{}
+	}
+	return items
+}
+
+// ParseUserVisibleQuickJumpItems 只保留 visibility 明确为 user 的快捷跳转条目。
+func ParseUserVisibleQuickJumpItems(raw string) []QuickJumpItem {
+	items := ParseQuickJumpItems(raw)
+	filtered := make([]QuickJumpItem, 0, len(items))
+	for _, item := range items {
+		if item.Visibility == "user" {
 			filtered = append(filtered, item)
 		}
 	}

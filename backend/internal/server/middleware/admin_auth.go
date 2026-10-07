@@ -165,7 +165,11 @@ func validateAdminAPIKey(
 		return false
 	}
 
-	// Legacy global key must resolve to an explicit principal + scopes in enforce mode.
+	// In every permission mode (not only enforce), the legacy global key must
+	// resolve to an enabled explicit binding row in admin_api_key_bindings
+	// (binding_key 'legacy_admin_api_key', principal + known, non-wildcard
+	// scopes). No code path writes that table, so the key is rejected with
+	// ADMIN_KEY_PRINCIPAL_REQUIRED until an operator inserts the binding manually.
 	principal, principalOK := attachLegacyAdminAPIKeyPrincipal(c, permissionService)
 	if !principalOK {
 		return false

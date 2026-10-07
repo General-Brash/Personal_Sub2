@@ -1,0 +1,11 @@
+-- D-4 (F-14): retire five administrator permissions that can be granted but
+-- have no enforcement point anywhere (no route mapping, handler or service check
+-- uses them): affiliates.quota.adjust, affiliates.rebate.replay,
+-- bank.settlement.retry, invites.read and models.pricing.manage. Grants of them
+-- never took effect.
+-- Existing admin_principal_grants rows for these permissions are removed by the
+-- foreign key declared in 238
+-- (permission REFERENCES admin_permissions(permission) ON DELETE CASCADE); no
+-- other table references admin_permissions. admin_permission_audit_logs keeps
+-- its historical rows (plain text, no foreign key). The statement is idempotent.
+DELETE FROM admin_permissions WHERE permission IN ('affiliates.quota.adjust','affiliates.rebate.replay','bank.settlement.retry','invites.read','models.pricing.manage');

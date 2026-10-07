@@ -238,3 +238,63 @@ func TestAuthorizeAdminMutationTxMarkedMissingActorCannotBypassLegacyGate(t *tes
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+// D-1 under enforce: the self-target exception depends on the locked actor role,
+// and holding the oidc grant itself never lets an ordinary admin self-target.
+func TestAuthorizeAdminMutationTxSuperAdminSelfTargetRequiresLockedHumanSuperAdmin(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		lockedRole string
+		wantErr    error
+	}{
+		{name: "human super admin", lockedRole: service.RoleSuperAdmin},
+		{name: "ordinary admin holding oidc grants", lockedRole: service.RoleAdmin, wantErr: service.ErrAdminPermissionSelfGrant},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = db.Close() })
+
+			principal := &service.AdminPrincipal{
+				ID: "user:1", Kind: service.AdminPrincipalKindJWT, UserID: 1,
+				Role: tc.lockedRole, Version: 7, Explicit: true,
+			}
+			ctx := enforcedAdminMutationContext(principal)
+			grantRows := sqlmock.NewRows([]string{"permission", "effect", "scope"})
+			if tc.lockedRole == service.RoleAdmin {
+				grantRows.AddRow("security.permissions.grant", service.AdminGrantAllow, []byte(`{"*":"*"}`)).
+					AddRow("oidc.keys.rotate", service.AdminGrantAllow, []byte(`{"*":"*"}`))
+			}
+
+			mock.ExpectBegin()
+			expectAdminMutationLockUsers(mock,
+				sqlmock.NewRows([]string{"id", "role", "status", "version"}).
+					AddRow(int64(1), tc.lockedRole, service.StatusActive, int64(7)),
+				int64(1))
+			mock.ExpectQuery(regexp.QuoteMeta("SELECT permission, effect, scope")).WithArgs(int64(1)).
+				WillReturnRows(grantRows)
+			mock.ExpectRollback()
+
+			tx, err := db.BeginTx(ctx, nil)
+			require.NoError(t, err)
+			_, err = AuthorizeAdminMutationTx(ctx, tx, 1, AdminMutationAuthorizationOptions{
+				TargetUserID:                   1,
+				TargetMustBeAdmin:              true,
+				DisallowSelfTarget:             true,
+				AllowHumanSuperAdminSelfTarget: true,
+				Permissions: []AdminMutationPermission{{
+					Permission: "security.permissions.grant",
+					Scope:      userMutationScope(1),
+				}},
+				Privilege: &AdminMutationPermission{Permission: "oidc.keys.rotate", Scope: map[string]any{"*": "*"}},
+			})
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.wantErr)
+			}
+			require.NoError(t, tx.Rollback())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}

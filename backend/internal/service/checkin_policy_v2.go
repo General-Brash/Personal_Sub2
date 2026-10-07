@@ -23,15 +23,17 @@ const (
 )
 
 var (
-	ErrCheckinPreferenceInvalid  = infraerrors.BadRequest("INVALID_CHECKIN_PREFERENCE", "checkin preference is invalid")
-	ErrCheckinConsentRequired    = infraerrors.Conflict("CHECKIN_CONSENT_REQUIRED", "current automatic-checkin consent is required")
-	ErrCheckinModeRemoved        = infraerrors.Conflict("CHECKIN_MODE_REMOVED", "check-in game modes have been retired; use direct check-in")
-	ErrCheckinModeDisabled       = infraerrors.Conflict("CHECKIN_MODE_DISABLED", "check-in mode is disabled")
-	ErrCheckinAlreadyCompleted   = infraerrors.Conflict("CHECKIN_ALREADY_COMPLETED", "check-in already completed for this period")
-	ErrCheckinRewardZero         = infraerrors.Conflict("CHECKIN_REWARD_ZERO", "check-in reward is zero")
-	ErrCheckinPermanentFunds     = infraerrors.Conflict("CHECKIN_SUPER_BALANCE_INSUFFICIENT", "spendable permanent balance is insufficient")
-	ErrCheckinRandomUnavailable  = infraerrors.ServiceUnavailable("CHECKIN_RANDOM_UNAVAILABLE", "secure random source is unavailable")
-	ErrCheckinPolicyVersionStale = infraerrors.Conflict("CHECKIN_POLICY_VERSION_STALE", "check-in policy version changed")
+	ErrCheckinPreferenceInvalid    = infraerrors.BadRequest("INVALID_CHECKIN_PREFERENCE", "checkin preference is invalid")
+	ErrCheckinConsentRequired      = infraerrors.Conflict("CHECKIN_CONSENT_REQUIRED", "current automatic-checkin consent is required")
+	ErrCheckinForcedAutoFeeNotZero = infraerrors.BadRequest("CHECKIN_FORCED_AUTO_FEE_NOT_ZERO", "auto-checkin fee must be 0 when automatic check-in is forced for all users")
+	ErrCheckinAutoForcedByAdmin    = infraerrors.Conflict("CHECKIN_AUTO_FORCED_BY_ADMIN", "automatic check-in is enforced for all users by the administrator")
+	ErrCheckinModeRemoved          = infraerrors.Conflict("CHECKIN_MODE_REMOVED", "check-in game modes have been retired; use direct check-in")
+	ErrCheckinModeDisabled         = infraerrors.Conflict("CHECKIN_MODE_DISABLED", "check-in mode is disabled")
+	ErrCheckinAlreadyCompleted     = infraerrors.Conflict("CHECKIN_ALREADY_COMPLETED", "check-in already completed for this period")
+	ErrCheckinRewardZero           = infraerrors.Conflict("CHECKIN_REWARD_ZERO", "check-in reward is zero")
+	ErrCheckinPermanentFunds       = infraerrors.Conflict("CHECKIN_SUPER_BALANCE_INSUFFICIENT", "spendable permanent balance is insufficient")
+	ErrCheckinRandomUnavailable    = infraerrors.ServiceUnavailable("CHECKIN_RANDOM_UNAVAILABLE", "secure random source is unavailable")
+	ErrCheckinPolicyVersionStale   = infraerrors.Conflict("CHECKIN_POLICY_VERSION_STALE", "check-in policy version changed")
 )
 
 type CheckinMode string
@@ -59,9 +61,12 @@ func normalizeCheckinMode(mode CheckinMode) (CheckinMode, error) {
 // DailyCheckinPolicyV2 keeps the legacy normal/super/reviewed fields readable
 // for old settings and history, but those fields are no longer active policy.
 type DailyCheckinPolicyV2 struct {
-	Version              string                        `json:"version"`
-	RefreshTime          string                        `json:"refresh_time"`
-	AutoFeeBps           int                           `json:"auto_fee_bps"`
+	Version     string `json:"version"`
+	RefreshTime string `json:"refresh_time"`
+	AutoFeeBps  int    `json:"auto_fee_bps"`
+	// AutoForceAll 表示站点为所有用户强制开启自动签到（手续费必须为 0）。
+	// 它只影响运行时闸门与展示，绝不参与 EffectiveCheckinPolicyVersion 的哈希。
+	AutoForceAll         bool                          `json:"auto_force_all"`
 	Normal               DailyCheckinRandomV2          `json:"normal"`
 	Super                DailyCheckinSuperV2           `json:"super"`
 	PendingRefresh       *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
@@ -70,6 +75,13 @@ type DailyCheckinPolicyV2 struct {
 	Configured           bool                          `json:"-"`
 	ConsentCompatibility []checkinConsentCompatibility `json:"-"`
 	legacyGameFields     bool                          `json:"-"`
+}
+
+// forcedAutoCheckin 报告站点是否真正处于「全员强制自动签到」状态。
+// 手续费非 0 时强制开关一律不生效：这是运行时的双重保险，避免历史脏数据
+// 在用户从未同意的情况下产生手续费扣减。
+func (p DailyCheckinPolicyV2) forcedAutoCheckin() bool {
+	return p.AutoForceAll && p.AutoFeeBps == 0
 }
 
 type DailyCheckinRandomV2 struct {
@@ -94,6 +106,7 @@ type checkinPolicyV2Wire struct {
 	Version              string                        `json:"version"`
 	RefreshTime          string                        `json:"refresh_time"`
 	AutoFeeBps           *int                          `json:"auto_fee_bps"`
+	AutoForceAll         bool                          `json:"auto_force_all"`
 	Normal               json.RawMessage               `json:"normal"`
 	Super                json.RawMessage               `json:"super"`
 	PendingRefresh       *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
@@ -106,6 +119,7 @@ type checkinPolicyV2StoredWire struct {
 	Version              string                        `json:"version"`
 	RefreshTime          string                        `json:"refresh_time"`
 	AutoFeeBps           int                           `json:"auto_fee_bps"`
+	AutoForceAll         bool                          `json:"auto_force_all"`
 	PendingRefresh       *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
 	RefreshEffectiveAt   *time.Time                    `json:"refresh_effective_at,omitempty"`
 	ConsentCompatibility []checkinConsentCompatibility `json:"consent_compatibility,omitempty"`
@@ -144,6 +158,11 @@ func (p DailyCheckinPolicyV2) Validate() error {
 	}
 	if p.AutoFeeBps < 0 || p.AutoFeeBps > 10000 {
 		return ErrDailyCheckinPolicyInvalid
+	}
+	// 全员强制自动签到必须零手续费：用户没有机会单独同意费率，任何非 0 费率
+	// 都会变成未经同意的扣减，所以这里直接拒绝保存。
+	if p.AutoForceAll && p.AutoFeeBps != 0 {
+		return ErrCheckinForcedAutoFeeNotZero
 	}
 	if p.PendingRefresh != nil {
 		if _, err := parseCheckinRefreshTime(p.PendingRefresh.RefreshTime); err != nil {
@@ -209,6 +228,7 @@ func parseDailyCheckinPolicyV2(raw string) (DailyCheckinPolicyV2, error) {
 		Version:              strings.TrimSpace(wire.Version),
 		RefreshTime:          strings.TrimSpace(wire.RefreshTime),
 		AutoFeeBps:           *wire.AutoFeeBps,
+		AutoForceAll:         wire.AutoForceAll,
 		Normal:               normal,
 		Super:                DailyCheckinSuperV2{Enabled: superWire.Enabled, MinBps: superWire.MinBps, MaxBps: superWire.MaxBps, Cost: cost},
 		PendingRefresh:       wire.PendingRefresh,
@@ -235,6 +255,7 @@ func (p DailyCheckinPolicyV2) settingValue() (string, error) {
 		Version:              p.Version,
 		RefreshTime:          p.RefreshTime,
 		AutoFeeBps:           p.AutoFeeBps,
+		AutoForceAll:         p.AutoForceAll,
 		PendingRefresh:       p.PendingRefresh,
 		RefreshEffectiveAt:   p.RefreshEffectiveAt,
 		ConsentCompatibility: normalizeCheckinConsentCompatibility(p.ConsentCompatibility),
@@ -289,6 +310,11 @@ type checkinPendingRefreshVersion struct {
 // EffectiveCheckinPolicyVersion is a deterministic fingerprint of the active
 // direct/direct-auto policy only. Deprecated normal/super/reviewed settings are
 // intentionally excluded so they cannot silently invalidate automatic consent.
+//
+// auto_force_all（全员强制自动签到）同样被刻意排除在指纹之外。用户的自动签到
+// 同意绑定在 policy_version 上，一旦该开关进入哈希，管理员每次切换开关都会
+// 静默作废全站所有用户的同意，导致大批用户断签。该开关只影响运行时闸门，
+// 不改变用户同意的内容（强制期费率恒为 0，不会扣得更多）。
 func EffectiveCheckinPolicyVersion(base *DailyCheckinPolicy, extended DailyCheckinPolicyV2) string {
 	tiers := make([]dailyCheckinRewardTierValue, 0)
 	if base != nil {

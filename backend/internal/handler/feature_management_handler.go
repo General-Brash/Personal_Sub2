@@ -58,7 +58,7 @@ func featureTargetID(c *gin.Context) (int64, bool) {
 }
 
 func (h *FeatureManagementHandler) ListPermissions(c *gin.Context) {
-	if _, ok := h.authorize(c, "users.read", false); !ok {
+	if _, ok := h.authorize(c, "security.permissions.grant", false); !ok {
 		return
 	}
 	items, err := h.permissions.ListPermissionCatalog(c.Request.Context())
@@ -70,7 +70,7 @@ func (h *FeatureManagementHandler) ListPermissions(c *gin.Context) {
 }
 
 func (h *FeatureManagementHandler) GetUserPermissions(c *gin.Context) {
-	if _, ok := h.authorize(c, "users.read", false); !ok {
+	if _, ok := h.authorize(c, "security.permissions.grant", false); !ok {
 		return
 	}
 	id, ok := featureTargetID(c)
