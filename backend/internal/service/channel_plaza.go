@@ -240,13 +240,14 @@ func (s *ChannelService) lookupOfficialPricing(ctx context.Context, modelName st
 	if cached, ok := memo[modelName]; ok {
 		return cached
 	}
-	if s.plazaBillingService != nil && s.plazaBillingService.HasIdentifiedTokenPricing(modelName) {
-		if mp, err := s.plazaBillingService.GetModelPricing(modelName); err == nil && mp != nil {
+	if s.plazaBillingService != nil && s.plazaBillingService.hasIdentifiedSystemTokenPricing(modelName) {
+		if mp, err := s.plazaBillingService.getSystemModelPricing(modelName); err == nil && mp != nil {
 			result := &PlazaOfficialPricing{InputPrice: nonZeroPtr(mp.InputPricePerToken), OutputPrice: nonZeroPtr(mp.OutputPricePerToken), CacheWritePrice: nonZeroPtr(mp.CacheCreationPricePerToken), CacheReadPrice: nonZeroPtr(mp.CacheReadPricePerToken)}
 			if mp.SupportsCacheBreakdown {
 				result.CacheWrite1hPrice = nonZeroPtr(mp.CacheCreation1hPrice)
 			}
-			if sched, err := s.plazaBillingService.ResolveContextPricingSchedule(ctx, s.plazaResolver, ContextPricingScheduleInput{Model: modelName}); err == nil && sched != nil && len(sched.Tiers) > 1 {
+			systemBilling := &BillingService{cfg: s.plazaBillingService.cfg, pricingService: s.pricingService, fallbackPrices: s.plazaBillingService.fallbackPrices}
+			if sched, err := systemBilling.ResolveContextPricingSchedule(ctx, NewModelPricingResolver(nil, systemBilling), ContextPricingScheduleInput{Model: modelName}); err == nil && sched != nil && len(sched.Tiers) > 1 {
 				result.Intervals = plazaIntervalsFromTiers(sched.Tiers)
 			}
 			memo[modelName] = result
@@ -276,6 +277,16 @@ func (s *ChannelService) lookupOfficialPricing(ctx context.Context, modelName st
 
 func (s *ChannelService) fillPlazaDisplayPricing(ctx context.Context, m *PlazaModel, g *Group) {
 	if s.plazaBillingService != nil && s.plazaResolver != nil {
+		var groupID *int64
+		if g != nil {
+			groupID = &g.ID
+		}
+		resolved := s.plazaResolver.Resolve(ctx, PricingInput{Model: m.Name, GroupID: groupID, Group: g})
+		if resolved.Mode != BillingModeToken && resolved.Mode != "" {
+			resolved = applyDedicatedMediaQuotePrices(m.Name, g, resolved)
+			m.Pricing = defaultResolvedDisplayPricing(resolved, m.Pricing)
+			return
+		}
 		sched, err := s.plazaBillingService.ResolveContextPricingSchedule(ctx, s.plazaResolver, ContextPricingScheduleInput{
 			Model:    m.Name,
 			Group:    g,

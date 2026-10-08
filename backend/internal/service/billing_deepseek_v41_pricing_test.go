@@ -29,7 +29,16 @@ const deepSeekV41FlashJSON = `{
 
 func assertDeepSeekV41SameAsFlash(t *testing.T, got *ModelPricing, flash *ModelPricing) {
 	t.Helper()
-	require.Equal(t, flash, got, "V4.1 Flash must reuse the full V4 Flash pricing card")
+	require.NotNil(t, flash)
+	require.NotNil(t, got)
+	require.Equal(t, "exact", flash.PricingMatchType)
+	require.Equal(t, "alias", got.PricingMatchType)
+
+	// The alias reuses every price and policy field, but its provenance must
+	// still describe the requested V4.1 ID rather than claim an exact match.
+	want := *flash
+	want.PricingMatchType = "alias"
+	require.Equal(t, &want, got, "V4.1 Flash must reuse the full V4 Flash pricing card")
 }
 
 func TestDeepSeekV41_NoDynamicServiceUsesFlashFallbackCard(t *testing.T) {

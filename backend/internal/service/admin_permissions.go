@@ -680,6 +680,8 @@ var knownAdminPermissions = map[string]struct{}{
 	"mall.products.read":             {},
 	"mall.products.write":            {},
 	"mall.refund":                    {},
+	"models.pricing.read":            {},
+	"models.pricing.write":           {},
 	"models.catalog.read":            {},
 	"models.catalog.write":           {},
 	"ops.manage":                     {},

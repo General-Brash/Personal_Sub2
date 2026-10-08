@@ -64,6 +64,7 @@ func (s *OpenAIGatewayService) forwardResponsesViaRawChatCompletions(
 	// 国产模型默认 effort 补充：需要 mappedModel 判定，推迟到 billingModel 算出之后。
 	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, billingModel)
 	chatReq.Model = upstreamModel
+	normalizeAgentsA1SystemMessages(chatReq)
 	if clientStream {
 		chatReq.StreamOptions = &apicompat.ChatStreamOptions{IncludeUsage: true}
 	}
@@ -115,6 +116,65 @@ func (s *OpenAIGatewayService) forwardResponsesViaRawChatCompletions(
 		return s.streamChatCompletionsAsResponses(c, resp, originalModel, customTools, toolSearch, namespaceTools, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
 	}
 	return s.bufferChatCompletionsAsResponses(c, resp, originalModel, customTools, toolSearch, namespaceTools, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
+}
+
+// normalizeAgentsA1SystemMessages adapts Agents-A1's single leading system
+// message requirement. Preserve instruction order and all non-system messages;
+// later Codex developer instructions otherwise fail on subsequent tool rounds.
+func normalizeAgentsA1SystemMessages(req *apicompat.ChatCompletionsRequest) {
+	if req.Model != "Agents-A1" {
+		return
+	}
+	count, first := 0, -1
+	for i, message := range req.Messages {
+		if message.Role == "system" {
+			count++
+			if first < 0 {
+				first = i
+			}
+		}
+	}
+	if count == 0 || (count == 1 && first == 0) {
+		return
+	}
+
+	var texts []string
+	for _, message := range req.Messages {
+		if message.Role != "system" {
+			continue
+		}
+		// Do not discard metadata or unexpected content while merging instructions.
+		if message.Name != "" || message.ToolCallID != "" || len(message.ToolCalls) > 0 ||
+			message.FunctionCall != nil || message.ReasoningContent != "" || message.Reasoning != "" {
+			return
+		}
+		var text string
+		if err := json.Unmarshal(message.Content, &text); err == nil {
+			texts = append(texts, text)
+			continue
+		}
+		var parts []apicompat.ChatContentPart
+		if err := json.Unmarshal(message.Content, &parts); err != nil {
+			return
+		}
+		for _, part := range parts {
+			if part.Type != "text" {
+				return
+			}
+			texts = append(texts, part.Text)
+		}
+	}
+
+	merged := req.Messages[first]
+	merged.Content, _ = json.Marshal(strings.Join(texts, "\n\n"))
+	messages := make([]apicompat.ChatMessage, 1, len(req.Messages)-count+1)
+	messages[0] = merged
+	for _, message := range req.Messages {
+		if message.Role != "system" {
+			messages = append(messages, message)
+		}
+	}
+	req.Messages = messages
 }
 
 func (s *OpenAIGatewayService) bufferChatCompletionsAsResponses(

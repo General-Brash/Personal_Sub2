@@ -119,7 +119,16 @@ func (s *ChannelService) ListAvailable(ctx context.Context) ([]AvailableChannel,
 //
 // 当 s.pricingService 为 nil（测试场景），跳过回落。
 func (s *ChannelService) fillGlobalPricingFallback(models []SupportedModel) {
-	fillGlobalPricingFallback(s.pricingService, models)
+	if s.plazaBillingService == nil {
+		fillGlobalPricingFallback(s.pricingService, models)
+		return
+	}
+	for i := range models {
+		if pricingNeedsFallback(models[i].Pricing) {
+			models[i].Pricing = defaultResolvedDisplayPricing(s.plazaBillingService.resolveDefaultPricing(models[i].Name), models[i].Pricing)
+		}
+		models[i].Pricing = withDefaultMaxReasoningEffortMultiplier(models[i].Pricing, models[i].Name)
+	}
 }
 
 func fillGlobalPricingFallback(pricingService *PricingService, models []SupportedModel) {

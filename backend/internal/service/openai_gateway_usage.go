@@ -591,7 +591,11 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		return s.billingService.CalculateWebSearchCost(result.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), webSearchMultiplier), nil
 	}
 	if isGrokVideoUsageResult(result, billingModels) {
-		if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved == nil || resolved.Mode != BillingModeToken {
+		resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey)
+		if resolved == nil && !apiKeyHasConfiguredVideoPrice(apiKey, billingModel, NormalizeVideoBillingResolutionOrDefault(result.VideoResolution)) {
+			resolved = s.billingService.resolveAdminDefaultMediaPricing(billingModel)
+		}
+		if resolved == nil || resolved.Mode != BillingModeToken {
 			return s.calculateOpenAIVideoCost(ctx, billingModel, apiKey, result, videoMultiplier), nil
 		}
 	}
@@ -610,8 +614,11 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	}
 
 	if result != nil && result.ImageCount > 0 {
-		// 渠道定价为 token 计费时走 token 路径，否则走图片计费
-		if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved == nil || resolved.Mode != BillingModeToken {
+		resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey)
+		if resolved == nil && !apiKeyHasConfiguredImagePrice(apiKey, NormalizeImageBillingTierOrDefault(result.ImageSize)) {
+			resolved = s.billingService.resolveAdminDefaultMediaPricing(billingModel)
+		}
+		if resolved == nil || resolved.Mode != BillingModeToken {
 			return s.calculateOpenAIImageCost(ctx, billingModel, apiKey, result, imageMultiplier), nil
 		}
 	}
@@ -801,6 +808,13 @@ func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 		logger.LegacyPrintf("service.openai_gateway", "Calculate image channel cost failed: %v", err)
 	}
 
+	if defaults := s.billingService.resolveAdminDefaultMediaPricing(billingModel); defaults != nil && defaults.Mode == BillingModePerRequest {
+		cost, err := s.billingService.calculateDefaultMediaRequestCost(ctx, billingModel, s.resolver, multiplier, defaults)
+		if err == nil {
+			return cost
+		}
+		return nil
+	}
 	return s.billingService.CalculateImageCost(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
 }
 
@@ -867,6 +881,13 @@ func (s *OpenAIGatewayService) calculateOpenAIVideoCost(
 		logger.LegacyPrintf("service.openai_gateway", "Calculate video channel cost failed: %v", err)
 	}
 
+	if defaults := s.billingService.resolveAdminDefaultMediaPricing(billingModel); defaults != nil && defaults.Mode == BillingModePerRequest {
+		cost, err := s.billingService.calculateDefaultMediaRequestCost(ctx, billingModel, s.resolver, multiplier, defaults)
+		if err == nil {
+			return cost
+		}
+		return nil
+	}
 	return s.billingService.CalculateVideoCost(billingModel, resolution, videoCount, durationSeconds, groupConfig, multiplier)
 }
 

@@ -11,8 +11,9 @@
     </button>
 
     <div v-if="expanded" class="space-y-4 border-t border-gray-100 px-5 py-4 dark:border-dark-700/50">
+      <template v-if="canReadDisplay">
       <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
-        <input v-model="draftHideNoAccount" data-testid="plaza-admin-hide-no-account" type="checkbox" class="mt-0.5" />
+        <input v-model="draftHideNoAccount" data-testid="plaza-admin-hide-no-account" :disabled="!canWriteDisplay || saving" type="checkbox" class="mt-0.5" />
         <span>
           {{ locale === 'zh' ? '隐藏“无任何账号支持”的模型（收敛幽灵模型）' : 'Hide models with no supporting account' }}
           <span class="block text-xs text-gray-500 dark:text-gray-400">
@@ -39,19 +40,21 @@
             </div>
             <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
             <label class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
-              <input v-model="m.hidden" :data-testid="`plaza-admin-hidden-${m.model_id}`" type="checkbox" /> {{ locale === 'zh' ? '隐藏' : 'Hide' }}
+              <input v-model="m.hidden" :data-testid="`plaza-admin-hidden-${m.model_id}`" :disabled="!canWriteDisplay || saving" type="checkbox" /> {{ locale === 'zh' ? '隐藏' : 'Hide' }}
             </label>
             <label class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
-              <input v-model="m.pinned" type="checkbox" /> {{ locale === 'zh' ? '置顶' : 'Pin' }}
+              <input v-model="m.pinned" :disabled="!canWriteDisplay || saving" type="checkbox" /> {{ locale === 'zh' ? '置顶' : 'Pin' }}
             </label>
             <input
               v-model.number="m.sort_order"
+              :disabled="!canWriteDisplay || saving"
               type="number"
               class="w-16 rounded border border-gray-300 px-2 py-1 text-xs dark:border-dark-600 dark:bg-dark-800"
               :aria-label="locale === 'zh' ? '排序' : 'Sort order'"
             />
+            <button v-if="canReadPricing" type="button" class="text-xs font-medium text-primary-600 hover:underline dark:text-primary-400" :data-testid="`plaza-pricing-edit-${m.model_id}`" @click="openPricing(m.model_id)">{{ t(m.has_exact_pricing_standard ? 'modelPlaza.defaultPricing.edit' : 'modelPlaza.defaultPricing.add') }}</button>
             <router-link to="/admin/groups" class="shrink-0 text-xs font-medium text-primary-600 hover:underline dark:text-primary-400">
-              {{ locale === 'zh' ? '去配置定价' : 'Configure pricing' }}
+              {{ locale === 'zh' ? '配置分组覆盖价' : 'Configure group override' }}
             </router-link>
             </div>
           </div>
@@ -60,6 +63,7 @@
         <div class="flex flex-wrap items-center gap-3">
           <button
             type="button"
+            v-if="canWriteDisplay"
             data-testid="plaza-admin-save"
             class="btn-primary px-4 py-1.5 text-sm"
             :disabled="saving"
@@ -73,22 +77,89 @@
           <span v-if="saveError" class="text-xs text-red-600 dark:text-red-400">{{ saveError }}</span>
         </div>
       </template>
+      </template>
+      <section v-if="canReadPricing" class="space-y-3 border-t border-gray-100 pt-4 dark:border-dark-700" data-testid="plaza-pricing-section">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-sm font-semibold">{{ t('modelPlaza.defaultPricing.listTitle') }}</h3>
+          <button v-if="canWritePricing" type="button" class="btn-primary text-sm" data-testid="plaza-pricing-add" @click="openPricing()">{{ t('modelPlaza.defaultPricing.add') }}</button>
+        </div>
+        <p class="text-xs text-gray-500">{{ t('modelPlaza.defaultPricing.capabilityNotice') }}</p>
+        <form class="flex gap-2" @submit.prevent="pricingPage = 1; loadPricingList()">
+          <input v-model="pricingSearch" type="search" class="input min-w-0 flex-1" maxlength="256" :placeholder="t('modelPlaza.defaultPricing.search')" />
+          <button type="submit" class="btn-secondary" :disabled="pricingLoading">{{ t('modelPlaza.defaultPricing.searchButton') }}</button>
+        </form>
+        <p v-if="pricingListError" role="alert" class="text-sm text-red-600">{{ pricingListError }}</p>
+        <p v-if="pricingLoading" class="text-sm text-gray-500">{{ t('modelPlaza.defaultPricing.loading') }}</p>
+        <ul v-else class="space-y-2">
+          <li v-for="item in pricingItems" :key="item.model_id" class="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 p-2 text-sm dark:border-dark-700">
+            <div class="min-w-0"><code class="break-all">{{ item.model_id }}</code><span class="ml-2 text-xs text-gray-500">{{ item.override.billing_mode || t('modelPlaza.defaultPricing.inherit') }}</span>
+              <p v-if="canReadDisplay && !loading && !error && !draftModels.some(m => m.model_id.toLowerCase() === item.model_id)" class="text-xs text-amber-700 dark:text-amber-300">{{ t('modelPlaza.defaultPricing.unconnected') }}</p>
+            </div>
+            <button type="button" class="text-xs text-primary-600 hover:underline" @click="openPricing(item.model_id)">{{ t('modelPlaza.defaultPricing.edit') }}</button>
+          </li>
+        </ul>
+        <p v-if="!pricingLoading && !pricingItems.length && !pricingListError" class="text-sm text-gray-500">{{ t('modelPlaza.defaultPricing.empty') }}</p>
+        <div class="flex items-center justify-end gap-2 text-xs">
+          <button type="button" class="btn-secondary" :disabled="pricingPage <= 1 || pricingLoading" @click="pricingPage--; loadPricingList()">{{ t('modelPlaza.defaultPricing.previous') }}</button>
+          <span>{{ pricingPage }} · {{ pricingTotal }}</span>
+          <button type="button" class="btn-secondary" :disabled="pricingPage * 20 >= pricingTotal || pricingLoading" @click="pricingPage++; loadPricingList()">{{ t('modelPlaza.defaultPricing.next') }}</button>
+        </div>
+      </section>
     </div>
+    <ModelDefaultPricingDialog :show="pricingDialogOpen" :model-id="editingModel" @close="pricingDialogOpen = false" @saved="onPricingSaved" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import ModelDefaultPricingDialog from './ModelDefaultPricingDialog.vue'
 import { useI18n } from 'vue-i18n'
 import {
   getModelPlazaAdmin,
   updateModelPlazaAdmin,
+  listModelDefaultPricing,
+  type DefaultPricingOverrideList,
+  type ModelDefaultPricingDetail,
   type ModelPlazaAdminModel,
   type ModelPlazaAdminSettings,
 } from '@/api/admin/modelPlaza'
 import type { ModelPlazaAvailabilityState } from '@/api/modelPlaza'
 
-const { locale } = useI18n()
+const { locale, t } = useI18n()
+const emit = defineEmits<{ 'pricing-saved': [] }>()
+const auth = useAuthStore()
+const canReadDisplay = computed(() => auth.canAdmin('models.catalog.read'))
+const canWriteDisplay = computed(() => auth.canAdmin('models.catalog.write'))
+const canReadPricing = computed(() => auth.canAdmin('models.pricing.read'))
+const canWritePricing = computed(() => auth.canAdmin('models.pricing.write'))
+const pricingDialogOpen = ref(false)
+const editingModel = ref<string>()
+const pricingItems = ref<DefaultPricingOverrideList['items']>([])
+const pricingSearch = ref('')
+const pricingPage = ref(1)
+const pricingTotal = ref(0)
+const pricingLoading = ref(false)
+const pricingListError = ref('')
+const pricingLoaded = ref(false)
+function openPricing(model?: string) { editingModel.value = model; pricingDialogOpen.value = true }
+async function loadPricingList(afterSave = false) {
+  pricingLoading.value = true; pricingListError.value = ''
+  try {
+    const result = await listModelDefaultPricing(pricingSearch.value, pricingPage.value)
+    pricingItems.value = result.items ?? []; pricingTotal.value = result.total; pricingLoaded.value = true
+  } catch {
+    pricingListError.value = t(afterSave ? 'modelPlaza.defaultPricing.savedRefreshFailed' : 'modelPlaza.defaultPricing.listFailed')
+  } finally { pricingLoading.value = false }
+}
+async function onPricingSaved(detail: ModelDefaultPricingDetail) {
+  // Update only pricing metadata; display draft fields and display version remain untouched.
+  for (const model of draftModels.value) {
+    if (model.model_id.toLowerCase() === detail.requested_model_id.trim().toLowerCase()) model.has_exact_pricing_standard = detail.has_admin_override || detail.has_exact_system_standard
+  }
+  emit('pricing-saved')
+  await loadPricingList(true)
+}
 
 const expanded = ref(false)
 const loading = ref(false)
@@ -122,10 +193,12 @@ async function load() {
 
 function toggle() {
   expanded.value = !expanded.value
-  if (expanded.value && !draftModels.value.length && !loading.value) void load()
+  if (expanded.value && canReadDisplay.value && !draftModels.value.length && !loading.value) void load()
+  if (expanded.value && canReadPricing.value && !pricingLoaded.value && !pricingLoading.value) void loadPricingList()
 }
 
 async function save() {
+  if (!canWriteDisplay.value) return
   saving.value = true
   saveOk.value = false
   saveError.value = ''

@@ -65,7 +65,7 @@ func (s *GatewayService) PreflightTokenRequestPricing(ctx context.Context, apiKe
 	if s == nil || s.billingService == nil {
 		return billingPricingUnavailable(model, "token")
 	}
-	return s.billingService.PreflightTokenPricing(ctx, model, groupID, s.resolver)
+	return s.billingService.PreflightTokenPricing(ctx, model, groupID, s.resolver, pricingGroupFromAPIKey(apiKey))
 }
 
 func (s *GatewayService) PreflightImageRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult, sizeTier string) error {
@@ -77,7 +77,7 @@ func (s *GatewayService) PreflightImageRequestPricing(ctx context.Context, apiKe
 	if s == nil || s.billingService == nil {
 		return billingPricingUnavailable(model, "image")
 	}
-	return s.billingService.PreflightImagePricing(ctx, model, sizeTier, groupID, groupConfig, s.resolver)
+	return s.billingService.PreflightImagePricing(ctx, model, sizeTier, groupID, groupConfig, s.resolver, pricingGroupFromAPIKey(apiKey))
 }
 
 func (s *OpenAIGatewayService) PreflightTokenRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult) error {
@@ -92,7 +92,7 @@ func (s *OpenAIGatewayService) PreflightTokenRequestPricing(ctx context.Context,
 	if s == nil || s.billingService == nil {
 		return billingPricingUnavailable(model, "token")
 	}
-	return s.billingService.PreflightTokenPricing(ctx, model, groupID, s.resolver)
+	return s.billingService.PreflightTokenPricing(ctx, model, groupID, s.resolver, pricingGroupFromAPIKey(apiKey))
 }
 
 func (s *OpenAIGatewayService) PreflightImageRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult, sizeTier string) error {
@@ -107,7 +107,7 @@ func (s *OpenAIGatewayService) PreflightImageRequestPricing(ctx context.Context,
 	if s == nil || s.billingService == nil {
 		return billingPricingUnavailable(model, "image")
 	}
-	return s.billingService.PreflightImagePricing(ctx, model, sizeTier, groupID, groupConfig, s.resolver)
+	return s.billingService.PreflightImagePricing(ctx, model, sizeTier, groupID, groupConfig, s.resolver, pricingGroupFromAPIKey(apiKey))
 }
 
 func (s *OpenAIGatewayService) PreflightVideoRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult, resolution string) error {
@@ -122,7 +122,7 @@ func (s *OpenAIGatewayService) PreflightVideoRequestPricing(ctx context.Context,
 	if s == nil || s.billingService == nil {
 		return billingPricingUnavailable(model, "video")
 	}
-	return s.billingService.PreflightVideoPricing(ctx, model, resolution, groupID, groupConfig, s.resolver)
+	return s.billingService.PreflightVideoPricing(ctx, model, resolution, groupID, groupConfig, s.resolver, pricingGroupFromAPIKey(apiKey))
 }
 
 func (s *OpenAIGatewayService) PreflightResponsesRequestPricing(ctx context.Context, apiKey *APIKey, account *Account, requestedModel string, mapping ChannelMappingResult, body []byte) error {
@@ -154,7 +154,7 @@ func (s *OpenAIGatewayService) PreflightResponsesRequestPricing(ctx context.Cont
 	if s == nil || s.billingService == nil {
 		return billingPricingUnavailable(model, "image")
 	}
-	return s.billingService.PreflightImagePricing(ctx, model, imageConfig.SizeTier, groupID, groupConfig, s.resolver)
+	return s.billingService.PreflightImagePricing(ctx, model, imageConfig.SizeTier, groupID, groupConfig, s.resolver, pricingGroupFromAPIKey(apiKey))
 }
 
 // PreflightMessagesRequestPricing validates the effective model used by the
@@ -174,7 +174,7 @@ func (s *OpenAIGatewayService) PreflightMessagesRequestPricing(ctx context.Conte
 	if s == nil || s.billingService == nil {
 		return billingPricingUnavailable(model, "token")
 	}
-	return s.billingService.PreflightTokenPricing(ctx, model, groupID, s.resolver)
+	return s.billingService.PreflightTokenPricing(ctx, model, groupID, s.resolver, pricingGroupFromAPIKey(apiKey))
 }
 
 func openAIMessagesBillingModelForPreflight(account *Account, mapping ChannelMappingResult, requestedModel, defaultMappedModel string) string {
@@ -192,4 +192,11 @@ func openAIMessagesBillingModelForPreflight(account *Account, mapping ChannelMap
 		return normalizeOpenAIModelForUpstream(account, effective)
 	}
 	return effective
+}
+
+func pricingGroupFromAPIKey(key *APIKey) *Group {
+	if key == nil {
+		return nil
+	}
+	return key.Group
 }

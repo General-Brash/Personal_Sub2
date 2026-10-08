@@ -187,3 +187,10 @@ describe('ModelPlazaV2Content', () => {
     expect(wrapper.get('[role="status"]').text()).toContain('重新选择')
   })
 })
+
+it('shows dedicated image-token rates including zero without treating a text-only sample as the lowest price', () => {
+  const wrapper = render([model('image-token', [choice(1, 'Images', quote(2, 8, { image_input_per_million: 0, image_output_per_million: 10 }))])])
+  expect(wrapper.get('[data-testid="plaza-image-input-price"]').text()).toContain('$0')
+  expect(wrapper.get('[data-testid="plaza-image-output-price"]').text()).toContain('$10')
+  expect(wrapper.text()).not.toContain('样例估算最低')
+})

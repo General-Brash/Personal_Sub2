@@ -22,15 +22,16 @@ import (
 //   - 匿名：仅非专属分组（订阅型照常展示）；
 //   - 登录：非专属分组 + user_allowed_groups 授权的专属分组（不检查订阅有效性）。
 type ModelPlazaHandler struct {
-	entitlements        *service.EntitlementService
-	channelService      *service.ChannelService
-	apiKeyService       *service.APIKeyService
-	settingService      *service.SettingService
-	modelCatalog        *service.ModelCatalogService
-	modelAvailability   *service.ModelAvailabilityResolver
-	priceQuote          *service.PriceQuoteService
-	modelAccessProvider service.ModelAccessProvider
-	modelPlazaV2Enabled bool
+	entitlements          *service.EntitlementService
+	channelService        *service.ChannelService
+	apiKeyService         *service.APIKeyService
+	settingService        *service.SettingService
+	modelCatalog          *service.ModelCatalogService
+	modelAvailability     *service.ModelAvailabilityResolver
+	priceQuote            *service.PriceQuoteService
+	modelAccessProvider   service.ModelAccessProvider
+	modelPlazaV2Enabled   bool
+	defaultPricingBilling *service.BillingService
 }
 
 // NewModelPlazaHandler 创建模型广场 handler。
@@ -396,7 +397,9 @@ func (h *ModelPlazaHandler) GetV2(c *gin.Context) {
 					}
 					quoteDTO := modelPlazaV2PriceQuote{
 						QuoteVersion: q.QuoteVersion, PricedAt: q.PricedAt.UTC(), Unit: q.Unit, Currency: q.Currency,
+						SourceVersions:  publicModelPlazaSourceVersions(q.SourceVersions),
 						InputPerMillion: q.InputPerMillion, OutputPerMillion: q.OutputPerMillion,
+						ImageInputPerMillion: q.ImageInputPerMillion, ImageOutputPerMillion: q.ImageOutputPerMillion,
 						CacheWritePerMillion: q.CacheWritePerMillion, CacheWrite1hPerMillion: q.CacheWrite1hPerMillion,
 						CacheReadPerMillion: q.CacheReadPerMillion, PerRequestPrice: q.PerRequestPrice,
 						Intervals: modelPlazaV2QuoteIntervals(q.Intervals), DynamicFactorStatus: q.DynamicFactorStatus,
@@ -456,14 +459,15 @@ func sortModelPlazaV2ByOverride(models []modelPlazaV2Model, overrides map[string
 }
 
 type modelPlazaAdminModel struct {
-	Key               string `json:"key"`
-	ModelID           string `json:"model_id"`
-	DisplayName       string `json:"display_name"`
-	Platform          string `json:"platform"`
-	AvailabilityState string `json:"availability_state"`
-	Hidden            bool   `json:"hidden"`
-	Pinned            bool   `json:"pinned"`
-	SortOrder         int    `json:"sort_order"`
+	HasExactPricingStandard bool   `json:"has_exact_pricing_standard"`
+	Key                     string `json:"key"`
+	ModelID                 string `json:"model_id"`
+	DisplayName             string `json:"display_name"`
+	Platform                string `json:"platform"`
+	AvailabilityState       string `json:"availability_state"`
+	Hidden                  bool   `json:"hidden"`
+	Pinned                  bool   `json:"pinned"`
+	SortOrder               int    `json:"sort_order"`
 }
 
 type modelPlazaAdminSettingsDTO struct {
@@ -526,14 +530,15 @@ func (h *ModelPlazaHandler) buildModelPlazaAdminDTO(c *gin.Context, settings ser
 			key := service.ModelPlazaOverrideKey(item.Platform, item.ModelID)
 			ov := settings.Overrides[key]
 			models = append(models, modelPlazaAdminModel{
-				Key:               key,
-				ModelID:           item.ModelID,
-				DisplayName:       item.DisplayName,
-				Platform:          item.Platform,
-				AvailabilityState: modelPlazaAdminAvailabilityState(item),
-				Hidden:            ov.Hidden,
-				Pinned:            ov.Pinned,
-				SortOrder:         ov.SortOrder,
+				Key:                     key,
+				ModelID:                 item.ModelID,
+				DisplayName:             item.DisplayName,
+				Platform:                item.Platform,
+				AvailabilityState:       modelPlazaAdminAvailabilityState(item),
+				Hidden:                  ov.Hidden,
+				Pinned:                  ov.Pinned,
+				SortOrder:               ov.SortOrder,
+				HasExactPricingStandard: h.defaultPricingBilling != nil && h.defaultPricingBilling.HasExactDefaultPricing(item.ModelID),
 			})
 		}
 		sortModelPlazaAdminModels(models)
@@ -649,6 +654,7 @@ func modelPlazaV2PriceConditions(values []service.PriceQuoteCondition) []modelPl
 		out = append(out, modelPlazaV2PriceCondition{
 			Pattern: value.Pattern, Unit: value.Unit, BillingMode: value.BillingMode,
 			InputPerMillion: value.InputPerMillion, OutputPerMillion: value.OutputPerMillion,
+			ImageInputPerMillion: value.ImageInputPerMillion, ImageOutputPerMillion: value.ImageOutputPerMillion,
 			CacheWritePerMillion: value.CacheWritePerMillion, CacheWrite1hPerMillion: value.CacheWrite1hPerMillion,
 			CacheReadPerMillion: value.CacheReadPerMillion, PerRequestPrice: value.PerRequestPrice,
 			Intervals: modelPlazaV2QuoteIntervals(value.Intervals),
@@ -753,6 +759,9 @@ type modelPlazaV2GroupChoice struct {
 }
 
 type modelPlazaV2PriceQuote struct {
+	ImageInputPerMillion    *float64                     `json:"image_input_per_million,omitempty"`
+	ImageOutputPerMillion   *float64                     `json:"image_output_per_million,omitempty"`
+	SourceVersions          map[string]string            `json:"source_versions,omitempty"`
 	PeakRateMultiplier      *float64                     `json:"peak_rate_multiplier,omitempty"`
 	QuoteVersion            string                       `json:"quote_version"`
 	PricedAt                time.Time                    `json:"priced_at"`
@@ -778,6 +787,8 @@ type modelPlazaV2PriceQuote struct {
 }
 
 type modelPlazaV2PriceCondition struct {
+	ImageInputPerMillion   *float64                    `json:"image_input_per_million,omitempty"`
+	ImageOutputPerMillion  *float64                    `json:"image_output_per_million,omitempty"`
 	Pattern                string                      `json:"pattern"`
 	Unit                   string                      `json:"pricing_unit"`
 	BillingMode            string                      `json:"billing_mode,omitempty"`

@@ -100,6 +100,10 @@ func RegisterAdminRoutes(
 		{
 			modelPlazaAdmin.GET("", h.ModelPlaza.GetModelPlazaAdmin)
 			modelPlazaAdmin.PUT("", h.ModelPlaza.UpdateModelPlazaAdmin)
+			modelPlazaAdmin.GET("/pricing", h.ModelPlazaPricing.Get)
+			modelPlazaAdmin.GET("/pricing/overrides", h.ModelPlazaPricing.List)
+			modelPlazaAdmin.PUT("/pricing", h.ModelPlazaPricing.Put)
+			modelPlazaAdmin.POST("/pricing/reset", h.ModelPlazaPricing.Reset)
 		}
 
 		// 数据管理

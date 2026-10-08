@@ -1,7 +1,7 @@
 <template>
   <!-- 后台内嵌形态:?embedded=1 且已登录,套完整后台布局 -->
   <AppLayout v-if="isEmbedded">
-    <ModelPlazaV2Content v-if="useV2" :response="v2Data" :loading="loading" :error="loadFailed" />
+    <ModelPlazaV2Content v-if="useV2" :response="v2Data" :loading="loading" :error="loadFailed" :pricing-refresh-failed="pricingRefreshFailed" @pricing-saved="refreshPricing" />
     <ModelPlazaContent v-else :response="data" :loading="loading" :error="loadFailed" embedded />
   </AppLayout>
 
@@ -9,7 +9,7 @@
   <div v-else class="min-h-screen bg-gray-50 dark:bg-dark-950">
     <PlazaNavBar />
     <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <ModelPlazaV2Content v-if="useV2" :response="v2Data" :loading="loading" :error="loadFailed" />
+      <ModelPlazaV2Content v-if="useV2" :response="v2Data" :loading="loading" :error="loadFailed" :pricing-refresh-failed="pricingRefreshFailed" @pricing-saved="refreshPricing" />
       <ModelPlazaContent v-else :response="data" :loading="loading" :error="loadFailed" />
     </main>
   </div>
@@ -40,6 +40,12 @@ const data = ref<ModelPlazaResponse | null>(null)
 const v2Data = ref<ModelPlazaV2Response | null>(null)
 const loading = ref(true)
 const loadFailed = ref(false)
+const pricingRefreshFailed = ref(false)
+async function refreshPricing() {
+  pricingRefreshFailed.value = false
+  try { v2Data.value = await getModelPlazaV2() }
+  catch { pricingRefreshFailed.value = true }
+}
 
 onMounted(async () => {
   // 独立形态导航条需要站点名/Logo;有 __APP_CONFIG__ 注入时同步命中缓存。

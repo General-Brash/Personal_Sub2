@@ -117,6 +117,8 @@ export interface ModelPlazaV2QuoteInterval {
 }
 
 export interface ModelPlazaV2PriceCondition {
+  image_input_per_million?: number | null
+  image_output_per_million?: number | null
   pattern: string
   pricing_unit: string
   billing_mode?: string
@@ -130,6 +132,8 @@ export interface ModelPlazaV2PriceCondition {
 }
 
 export interface ModelPlazaV2PriceQuote {
+  image_input_per_million?: number | null
+  image_output_per_million?: number | null
   peak_rate_multiplier?: number | null
   quote_version: string
   priced_at: string

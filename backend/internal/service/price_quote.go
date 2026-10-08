@@ -58,6 +58,8 @@ type PriceQuoteInterval struct {
 }
 
 type PriceQuoteCondition struct {
+	ImageInputPerMillion   *float64             `json:"image_input_per_million,omitempty"`
+	ImageOutputPerMillion  *float64             `json:"image_output_per_million,omitempty"`
 	Pattern                string               `json:"pattern"`
 	Unit                   string               `json:"pricing_unit"`
 	BillingMode            string               `json:"billing_mode,omitempty"`
@@ -71,6 +73,8 @@ type PriceQuoteCondition struct {
 }
 
 type ModelPriceQuote struct {
+	ImageInputPerMillion    *float64              `json:"image_input_per_million,omitempty"`
+	ImageOutputPerMillion   *float64              `json:"image_output_per_million,omitempty"`
 	Currency                string                `json:"currency"`
 	Unit                    string                `json:"pricing_unit"`
 	InputPerMillion         *float64              `json:"input_per_million,omitempty"`
@@ -140,25 +144,38 @@ func (s *PriceQuoteService) Quote(ctx context.Context, input PriceQuoteInput) *M
 		quote.QuoteVersion = priceQuoteVersion(quote, nil, input, nil)
 		return quote
 	}
+	resolved = applyDedicatedMediaQuotePrices(input.Model, input.Group, resolved)
 	quote.Source = resolved.Source
-	quote.Unit = string(resolved.Mode)
+	revision := resolved.DefaultPricingRevision
+	if revision == "" && resolved.BasePricing != nil {
+		revision = resolved.BasePricing.DefaultPricingRevision
+	}
+	if revision != "" {
+		if quote.SourceVersions == nil {
+			quote.SourceVersions = map[string]string{}
+		}
+		quote.SourceVersions["admin_default_pricing"] = revision
+	}
+	quote.Unit = resolvedPricingQuoteUnit(resolved)
 	if quote.Unit == "" {
 		quote.Unit = "per_1m_tokens"
 	}
 	quote.InputPerMillion = perMillionPrice(baseInputPrice(resolved))
 	quote.OutputPerMillion = perMillionPrice(baseOutputPrice(resolved))
+	quote.ImageInputPerMillion = perMillionPrice(baseImageInputPrice(resolved))
+	quote.ImageOutputPerMillion = perMillionPrice(baseImageOutputPrice(resolved))
 	quote.CacheWritePerMillion = perMillionPrice(baseCacheWritePrice(resolved))
 	quote.CacheWrite1hPerMillion = perMillionPrice(baseCacheWrite1hPrice(resolved))
 	quote.CacheReadPerMillion = perMillionPrice(baseCacheReadPrice(resolved))
 	if resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage || resolved.Mode == BillingModeVideo {
-		quote.Unit = "per_request"
-		if resolved.DefaultPerRequestPricePresent && validPositivePrice(resolved.DefaultPerRequestPrice) {
+		quote.Unit = resolvedPricingQuoteUnit(resolved)
+		if resolved.DefaultPerRequestPricePresent && validUnitPrice(resolved.DefaultPerRequestPrice) {
 			value := resolved.DefaultPerRequestPrice
 			quote.PerRequestPrice = &value
 		}
 		for _, tier := range resolved.RequestTiers {
 			item := PriceQuoteInterval{TierLabel: tier.TierLabel, MinTokens: tier.MinTokens, MaxTokens: cloneCatalogInt(tier.MaxTokens)}
-			if tier.PerRequestPrice != nil && validPositivePrice(*tier.PerRequestPrice) {
+			if tier.PerRequestPrice != nil && validUnitPrice(*tier.PerRequestPrice) {
 				value := *tier.PerRequestPrice
 				item.PerRequestPrice = &value
 			}
@@ -203,6 +220,7 @@ func (s *PriceQuoteService) Quote(ctx context.Context, input PriceQuoteInput) *M
 		}
 	}
 	quote.PriceConditions = s.collectGroupPriceConditions(ctx, input)
+	quote.PriceConditions = append(quote.PriceConditions, defaultMediaGroupPriceConditions(input.Model, input.Group, resolved)...)
 	if s.dynamic != nil {
 		factor, err := s.dynamic.ResolveDynamicPriceFactor(ctx, DynamicPriceFactorInput{
 			Mode: priceQuoteDynamicMode(resolved), Model: input.Model, GroupID: input.GroupID, UserID: input.UserID, At: at, SourceVersions: cloneCatalogStringMap(input.SourceVersions),
@@ -283,24 +301,26 @@ func (s *PriceQuoteService) collectGroupPriceConditions(ctx context.Context, inp
 }
 
 func priceQuoteConditionFromResolved(pattern string, resolved *ResolvedPricing) PriceQuoteCondition {
-	condition := PriceQuoteCondition{Pattern: strings.TrimSpace(pattern), Unit: string(resolved.Mode), BillingMode: string(resolved.Mode)}
+	condition := PriceQuoteCondition{Pattern: strings.TrimSpace(pattern), Unit: resolvedPricingQuoteUnit(resolved), BillingMode: string(resolved.Mode)}
 	if condition.Unit == "" {
 		condition.Unit = "per_1m_tokens"
 	}
 	condition.InputPerMillion = perMillionPrice(baseInputPrice(resolved))
 	condition.OutputPerMillion = perMillionPrice(baseOutputPrice(resolved))
+	condition.ImageInputPerMillion = perMillionPrice(baseImageInputPrice(resolved))
+	condition.ImageOutputPerMillion = perMillionPrice(baseImageOutputPrice(resolved))
 	condition.CacheWritePerMillion = perMillionPrice(baseCacheWritePrice(resolved))
 	condition.CacheWrite1hPerMillion = perMillionPrice(baseCacheWrite1hPrice(resolved))
 	condition.CacheReadPerMillion = perMillionPrice(baseCacheReadPrice(resolved))
 	if resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage || resolved.Mode == BillingModeVideo {
-		condition.Unit = "per_request"
-		if resolved.DefaultPerRequestPricePresent && validPositivePrice(resolved.DefaultPerRequestPrice) {
+		condition.Unit = resolvedPricingQuoteUnit(resolved)
+		if resolved.DefaultPerRequestPricePresent && validUnitPrice(resolved.DefaultPerRequestPrice) {
 			value := resolved.DefaultPerRequestPrice
 			condition.PerRequestPrice = &value
 		}
 		for _, tier := range resolved.RequestTiers {
 			item := PriceQuoteInterval{TierLabel: tier.TierLabel, MinTokens: tier.MinTokens, MaxTokens: cloneCatalogInt(tier.MaxTokens)}
-			if tier.PerRequestPrice != nil && validPositivePrice(*tier.PerRequestPrice) {
+			if tier.PerRequestPrice != nil && validUnitPrice(*tier.PerRequestPrice) {
 				value := *tier.PerRequestPrice
 				item.PerRequestPrice = &value
 			}
@@ -355,10 +375,10 @@ func baseCacheWritePrice(resolved *ResolvedPricing) *float64 {
 		return nil
 	}
 	value := resolved.BasePricing.CacheCreationPricePerToken
-	if value <= 0 {
+	if value <= 0 && !resolved.BasePricing.CacheCreationPriceExplicit {
 		value = resolved.BasePricing.CacheCreation5mPrice
 	}
-	if value <= 0 {
+	if value <= 0 && !resolved.BasePricing.CacheCreationPriceExplicit {
 		return nil
 	}
 	return &value
@@ -369,14 +389,14 @@ func baseCacheWrite1hPrice(resolved *ResolvedPricing) *float64 {
 		return nil
 	}
 	value := resolved.BasePricing.CacheCreation1hPrice
-	if value <= 0 {
+	if value <= 0 && !resolved.BasePricing.CacheCreation1hPriceExplicit {
 		return nil
 	}
 	return &value
 }
 
 func baseCacheReadPrice(resolved *ResolvedPricing) *float64 {
-	if resolved == nil || resolved.BasePricing == nil || resolved.BasePricing.CacheReadPricePerToken <= 0 {
+	if resolved == nil || resolved.BasePricing == nil || (resolved.BasePricing.CacheReadPricePerToken <= 0 && !resolved.BasePricing.CacheReadPriceExplicit) {
 		return nil
 	}
 	value := resolved.BasePricing.CacheReadPricePerToken
@@ -384,11 +404,11 @@ func baseCacheReadPrice(resolved *ResolvedPricing) *float64 {
 }
 
 func perMillionPrice(value *float64) *float64 {
-	if value == nil || !validPositivePrice(*value) {
+	if value == nil || !validUnitPrice(*value) {
 		return nil
 	}
 	out := *value * 1_000_000
-	if !validPositivePrice(out) {
+	if !validUnitPrice(out) {
 		return nil
 	}
 	return &out
@@ -411,6 +431,12 @@ func priceQuoteUnknownFields(quote *ModelPriceQuote) []string {
 		return []string{"pricing"}
 	}
 	fields := []string{}
+	if quote.Unit != "per_1m_tokens" {
+		if quote.PerRequestPrice == nil && len(quote.Intervals) == 0 {
+			fields = append(fields, "per_request_price")
+		}
+		return fields
+	}
 	if quote.InputPerMillion == nil {
 		fields = append(fields, "input_per_million")
 	}
@@ -431,6 +457,8 @@ func priceQuoteUnknownFields(quote *ModelPriceQuote) []string {
 
 func priceQuoteVersion(quote *ModelPriceQuote, resolved *ResolvedPricing, input PriceQuoteInput, factor *DynamicPriceFactor) string {
 	payload := struct {
+		ImageInput       *float64              `json:"image_input,omitempty"`
+		ImageOutput      *float64              `json:"image_output,omitempty"`
 		Model            string                `json:"model"`
 		GroupID          int64                 `json:"group_id"`
 		Source           string                `json:"source"`
@@ -458,12 +486,13 @@ func priceQuoteVersion(quote *ModelPriceQuote, resolved *ResolvedPricing, input 
 		PricingUpdatedAt string                `json:"pricing_updated_at,omitempty"`
 	}{
 		Model: strings.ToLower(strings.TrimSpace(input.Model)), GroupID: input.GroupID, Source: quote.Source, Unit: quote.Unit,
+		ImageInput: quote.ImageInputPerMillion, ImageOutput: quote.ImageOutputPerMillion,
 		Input: quote.InputPerMillion, Output: quote.OutputPerMillion, CacheWrite: quote.CacheWritePerMillion,
 		CacheWrite1h: quote.CacheWrite1hPerMillion, CacheRead: quote.CacheReadPerMillion, PerRequest: quote.PerRequestPrice,
 		Intervals: quote.Intervals, Static: quote.StaticRateMultiplier, User: quote.UserRateMultiplier, Peak: quote.PeakRateMultiplier,
 		Effective: quote.EffectiveRateMultiplier, RateSource: quote.RateSource, ImageIndependent: quote.ImageRateIndependent,
 		ImageRate: quote.ImageRateMultiplier, ChannelTime: quote.ChannelTimeMultiplier, Conditions: quote.PriceConditions,
-		SourceVersions: cloneCatalogStringMap(input.SourceVersions),
+		SourceVersions: cloneCatalogStringMap(quote.SourceVersions),
 	}
 	if factor != nil {
 		factorValue := factor.Factor
@@ -494,4 +523,115 @@ func priceQuoteDynamicMode(resolved *ResolvedPricing) string {
 		}
 	}
 	return DynamicRateModeText
+}
+
+func validUnitPrice(value float64) bool {
+	return value >= 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func resolvedPricingQuoteUnit(resolved *ResolvedPricing) string {
+	if resolved.Unit != "" {
+		return resolved.Unit
+	}
+	if resolved.Mode == BillingModeImage {
+		return "per_image"
+	}
+	if resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeVideo {
+		return "per_request"
+	}
+	return "per_1m_tokens"
+}
+
+// The existing dedicated media group prices precede channel/default prices.
+// Overlay only configured tiers; missing tiers keep the resolved default unit.
+func applyDedicatedMediaQuotePrices(model string, group *Group, resolved *ResolvedPricing) *ResolvedPricing {
+	if group == nil || resolved == nil || resolved.Source == PricingSourceGroup {
+		return resolved
+	}
+	var labels []string
+	var prices []*float64
+	switch resolved.Mode {
+	case BillingModeImage:
+		labels = []string{ImageBillingSize1K, ImageBillingSize2K, ImageBillingSize4K}
+		prices = []*float64{group.ImagePrice1K, group.ImagePrice2K, group.ImagePrice4K}
+	case BillingModeVideo:
+		labels = []string{VideoBillingResolution480P, VideoBillingResolution720P, VideoBillingResolution1080P}
+		for _, label := range labels {
+			prices = append(prices, group.GetVideoPriceForModel(model, label))
+		}
+	default:
+		return resolved
+	}
+	present := false
+	for _, price := range prices {
+		present = present || price != nil
+	}
+	if !present {
+		return resolved
+	}
+	clone := *resolved
+	clone.Source = PricingSourceGroup
+	clone.Unit = defaultPricingUnit(resolved.Mode)
+	clone.RequestTiers = nil
+	for i, label := range labels {
+		price := prices[i]
+		if price == nil {
+			for _, tier := range resolved.RequestTiers {
+				if strings.EqualFold(tier.TierLabel, label) {
+					price = tier.PerRequestPrice
+					break
+				}
+			}
+			if price == nil && resolved.DefaultPerRequestPricePresent {
+				p := resolved.DefaultPerRequestPrice
+				price = &p
+			}
+		}
+		if price != nil {
+			clone.RequestTiers = append(clone.RequestTiers, PricingInterval{TierLabel: label, PerRequestPrice: price})
+		}
+		if i == 0 {
+			clone.DefaultPerRequestPricePresent = price != nil
+			if price != nil {
+				clone.DefaultPerRequestPrice = *price
+			}
+		}
+	}
+	return &clone
+}
+
+// A token/request default may also be invoked through a media endpoint. Dedicated
+// group media prices then use a different unit, so show conditional base prices
+// instead of folding USD/image or USD/second into the token/request quote.
+func defaultMediaGroupPriceConditions(model string, group *Group, resolved *ResolvedPricing) []PriceQuoteCondition {
+	if group == nil || resolved == nil || resolved.Source != PricingSourceAdmin || (resolved.Mode != BillingModeToken && resolved.Mode != BillingModePerRequest) {
+		return nil
+	}
+	conditions := []PriceQuoteCondition{}
+	for _, tier := range []string{ImageBillingSize1K, ImageBillingSize2K, ImageBillingSize4K} {
+		if price := group.GetImagePrice(tier); price != nil && validUnitPrice(*price) {
+			conditions = append(conditions, PriceQuoteCondition{Pattern: "image_generation:" + tier, Unit: "per_image", BillingMode: string(BillingModeImage), PerRequestPrice: price})
+		}
+	}
+	for _, tier := range []string{VideoBillingResolution480P, VideoBillingResolution720P, VideoBillingResolution1080P} {
+		if price := group.GetVideoPriceForModel(model, tier); price != nil && validUnitPrice(*price) {
+			conditions = append(conditions, PriceQuoteCondition{Pattern: "video_generation:" + tier, Unit: "per_second", BillingMode: string(BillingModeVideo), PerRequestPrice: price})
+		}
+	}
+	return conditions
+}
+
+func baseImageInputPrice(resolved *ResolvedPricing) *float64 {
+	if resolved == nil || resolved.BasePricing == nil {
+		return nil
+	}
+	p := resolved.BasePricing
+	return presentDefaultPrice(p.ImageInputPricePerToken, p.ImageInputPriceExplicit)
+}
+func baseImageOutputPrice(resolved *ResolvedPricing) *float64 {
+	if resolved == nil || resolved.BasePricing == nil {
+		return nil
+	}
+	p := resolved.BasePricing
+	return presentDefaultPrice(p.ImageOutputPricePerToken, p.ImageOutputPriceExplicit)
 }

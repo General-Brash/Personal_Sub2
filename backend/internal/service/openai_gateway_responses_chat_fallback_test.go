@@ -227,3 +227,27 @@ func forceChatResponsesFallbackAccount() *Account {
 	}
 	return account
 }
+
+func TestForwardResponses_ChatCompletionsPreservesNamespaceIdentity(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.4","stream":false,"tools":[{"type":"namespace","name":"mcp__ableton","tools":[{"type":"function","name":"get_track_info","parameters":{"type":"object"}}]}],"input":[{"type":"function_call","name":"get_track_info","namespace":"mcp__ableton","call_id":"call_first","arguments":"{}"},{"type":"function_call_output","call_id":"call_first","output":"ok"}]}`)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	upstream := &httpUpstreamRecorder{resp: newOpenAIRejectedFieldTestResponse(http.StatusOK,
+		`{"id":"chatcmpl_ns","model":"gpt-5.4","choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"call_next","type":"function","function":{"name":"mcp__ableton__get_track_info","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`,
+	)}
+	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
+
+	_, err := svc.Forward(context.Background(), c, forceChatResponsesFallbackAccount(), body)
+	require.NoError(t, err)
+	require.Equal(t, "http://upstream.example/v1/chat/completions", upstream.lastReq.URL.String())
+	// Declaration and history must resolve to the same flattened tool. Removing
+	// namespace at the gateway entrance leaves a bare, unmatched history name.
+	require.Equal(t, "mcp__ableton__get_track_info", gjson.GetBytes(upstream.lastBody, "tools.0.function.name").String())
+	require.Equal(t, "mcp__ableton__get_track_info", gjson.GetBytes(upstream.lastBody, `messages.#(role=="assistant").tool_calls.0.function.name`).String())
+	require.Equal(t, "call_first", gjson.GetBytes(upstream.lastBody, `messages.#(role=="assistant").tool_calls.0.id`).String())
+	require.Equal(t, "mcp__ableton", gjson.Get(rec.Body.String(), "output.0.namespace").String())
+	require.Equal(t, "get_track_info", gjson.Get(rec.Body.String(), "output.0.name").String())
+	require.Equal(t, "call_next", gjson.Get(rec.Body.String(), "output.0.call_id").String())
+}
