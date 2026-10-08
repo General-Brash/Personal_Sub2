@@ -604,15 +604,10 @@ func (s *PricingService) downloadPricingData() error {
 	return nil
 }
 
-// applyPricingOverrides 把 override 文件的条目逐字段修补进原始目录数据。目录与回退
+// applyPricingOverridesWithSources 把 override 文件的条目逐字段修补进原始目录数据并记录来源。目录与回退
 // 文件的解析都经过 parsePricingData，因此 override 是系统文件层最高优先级；管理员层由 BillingService 另行叠加。这里只修补
 // 已存在的条目：目录/回退里都没有的模型由 mergeOverrideOnlyModels 在两层数据合并后
 // 统一并入——若在此处抢先建条目，纯 override 条目会挡住回退文件中同名完整条目的合并。
-func (s *PricingService) applyPricingOverrides(rawData map[string]json.RawMessage) map[string]json.RawMessage {
-	merged, _ := s.applyPricingOverridesWithSources(rawData)
-	return merged
-}
-
 func (s *PricingService) applyPricingOverridesWithSources(rawData map[string]json.RawMessage) (map[string]json.RawMessage, map[string]bool) {
 	patched := map[string]bool{}
 	overrides := s.loadPricingOverrideEntries()
@@ -708,7 +703,7 @@ func (s *PricingService) mergeOverrideOnlyModels(data map[string]*LiteLLMModelPr
 	if len(leftover) == 0 {
 		return data
 	}
-	// 复用主解析路径（含 above_XXXk 折算与有效性过滤）；applyPricingOverrides
+	// 复用主解析路径（含 above_XXXk 折算与有效性过滤）；applyPricingOverridesWithSources
 	// 对已存在条目做的自我修补是幂等的，不会二次改值。
 	if body, err := json.Marshal(leftover); err == nil {
 		if parsed, err := s.parsePricingData(body); err == nil {
