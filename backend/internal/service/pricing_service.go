@@ -159,6 +159,10 @@ var (
 // LiteLLMModelPricing LiteLLM价格数据结构
 // 只保留我们需要的字段，使用指针来处理可能缺失的值
 type LiteLLMModelPricing struct {
+	catalogSource                       string
+	catalogModelID                      string
+	CacheReadPricePresent               bool    `json:"-"`
+	CacheCreation1hPricePresent         bool    `json:"-"`
 	InputCostPerToken                   float64 `json:"input_cost_per_token"`
 	InputCostPerTokenPriority           float64 `json:"input_cost_per_token_priority"`
 	OutputCostPerToken                  float64 `json:"output_cost_per_token"`
@@ -601,13 +605,19 @@ func (s *PricingService) downloadPricingData() error {
 }
 
 // applyPricingOverrides 把 override 文件的条目逐字段修补进原始目录数据。目录与回退
-// 文件的解析都经过 parsePricingData，因此 override 是最高优先级的数据源。这里只修补
+// 文件的解析都经过 parsePricingData，因此 override 是系统文件层最高优先级；管理员层由 BillingService 另行叠加。这里只修补
 // 已存在的条目：目录/回退里都没有的模型由 mergeOverrideOnlyModels 在两层数据合并后
 // 统一并入——若在此处抢先建条目，纯 override 条目会挡住回退文件中同名完整条目的合并。
 func (s *PricingService) applyPricingOverrides(rawData map[string]json.RawMessage) map[string]json.RawMessage {
+	merged, _ := s.applyPricingOverridesWithSources(rawData)
+	return merged
+}
+
+func (s *PricingService) applyPricingOverridesWithSources(rawData map[string]json.RawMessage) (map[string]json.RawMessage, map[string]bool) {
+	patched := map[string]bool{}
 	overrides := s.loadPricingOverrideEntries()
 	if len(overrides) == 0 {
-		return rawData
+		return rawData, patched
 	}
 	for name, patch := range overrides {
 		base, ok := rawData[name]
@@ -620,8 +630,9 @@ func (s *PricingService) applyPricingOverrides(rawData map[string]json.RawMessag
 			continue
 		}
 		rawData[name] = merged
+		patched[name] = true
 	}
-	return rawData
+	return rawData, patched
 }
 
 // loadPricingOverrideEntries 读取 override 文件的原始条目。未配置返回 nil；
@@ -739,7 +750,7 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 	if err := json.Unmarshal(body, &rawData); err != nil {
 		return nil, fmt.Errorf("parse raw JSON: %w", err)
 	}
-	rawData = s.applyPricingOverrides(rawData)
+	rawData, patched := s.applyPricingOverridesWithSources(rawData)
 
 	result := make(map[string]*LiteLLMModelPricing)
 	skipped := 0
@@ -772,6 +783,9 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		}
 
 		pricing := &LiteLLMModelPricing{
+			catalogSource: PricingSourceLiteLLM, catalogModelID: modelName,
+			CacheReadPricePresent:                 entry.CacheReadInputTokenCost != nil,
+			CacheCreation1hPricePresent:           entry.CacheCreationInputTokenCostAbove1hr != nil,
 			LiteLLMProvider:                       entry.LiteLLMProvider,
 			Mode:                                  entry.Mode,
 			SupportsPromptCaching:                 entry.SupportsPromptCaching,
@@ -845,6 +859,9 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 			orphanCacheTiers = append(orphanCacheTiers, modelName+"("+strings.Join(orphans, ",")+")")
 		}
 
+		if patched[modelName] {
+			pricing.catalogSource = "override_file"
+		}
 		result[modelName] = pricing
 	}
 
@@ -1020,6 +1037,13 @@ func (s *PricingService) loadPricingData(filePath string) error {
 		return fmt.Errorf("parse pricing data: %w", err)
 	}
 
+	if s.cfg != nil && filePath == s.cfg.Pricing.FallbackFile {
+		for _, pricing := range pricingData {
+			if pricing.catalogSource == PricingSourceLiteLLM {
+				pricing.catalogSource = "fallback_file"
+			}
+		}
+	}
 	// 计算哈希
 	hash := sha256.Sum256(data)
 	hashStr := hex.EncodeToString(hash[:])
@@ -1063,6 +1087,9 @@ func (s *PricingService) mergeFallbackPricingData(data map[string]*LiteLLMModelP
 	for modelName, pricing := range fallbackData {
 		if _, ok := data[modelName]; ok {
 			continue
+		}
+		if pricing.catalogSource != "override_file" {
+			pricing.catalogSource = "fallback_file"
 		}
 		data[modelName] = pricing
 		merged++
@@ -1163,8 +1190,11 @@ func (s *PricingService) validatePricingURL(raw string) (string, error) {
 
 // GetModelPricing 获取模型价格（带模糊匹配）
 func (s *PricingService) GetModelPricing(modelName string) *LiteLLMModelPricing {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	pricing, _ := s.GetModelPricingWithMatch(modelName)
+	return pricing
+}
+
+func (s *PricingService) getModelPricingLocked(modelName string) *LiteLLMModelPricing {
 
 	if modelName == "" {
 		return nil

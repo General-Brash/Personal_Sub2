@@ -226,6 +226,7 @@ func ProvideHandlers(
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
 	modelPlazaHandler *ModelPlazaHandler,
+	modelPlazaPricingHandler *ModelPlazaPricingHandler,
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
 	checkinHandler *CheckinHandler,
@@ -263,6 +264,7 @@ func ProvideHandlers(
 		PaymentWebhook:    paymentWebhookHandler,
 		AvailableChannel:  availableChannelHandler,
 		ModelPlaza:        modelPlazaHandler,
+		ModelPlazaPricing: modelPlazaPricingHandler,
 		AsyncImage:        asyncImageHandler,
 		BatchImage:        batchImageHandler,
 		Checkin:           checkinHandler,
@@ -296,6 +298,7 @@ var ProviderSet = wire.NewSet(
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
 	ProvideModelPlazaHandler,
+	NewModelPlazaPricingHandler,
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
 	ProvideCheckinHandler,
@@ -358,10 +361,11 @@ func ProvideDynamicRateHandler(gateway *service.GatewayService, keys *service.AP
 	return h
 }
 
-func ProvideModelPlazaHandler(channels *service.ChannelService, keys *service.APIKeyService, settings *service.SettingService, groups *service.GroupService, accounts *service.AccountService, routes service.CompositeModelRouteRepository, pricing *service.ModelPricingResolver, users *service.UserService, entitlements *service.EntitlementService, gateway *service.GatewayService) *ModelPlazaHandler {
+func ProvideModelPlazaHandler(channels *service.ChannelService, keys *service.APIKeyService, settings *service.SettingService, groups *service.GroupService, accounts *service.AccountService, routes service.CompositeModelRouteRepository, pricing *service.ModelPricingResolver, billing *service.BillingService, users *service.UserService, entitlements *service.EntitlementService, gateway *service.GatewayService) *ModelPlazaHandler {
 	source := service.NewRuntimeModelCatalogSource(groups, accounts)
 	source.SetCompositeRouteSource(routes)
 	h := NewModelPlazaHandler(channels, keys, settings)
+	h.defaultPricingBilling = billing
 	h.SetModelPlazaV2(true, service.NewModelCatalogService(source), service.NewModelAvailabilityResolver(), service.NewPriceQuoteService(pricing, gateway), &service.ModelFeatureAccess{Users: users, Groups: groups, Entitlements: entitlements})
 	h.entitlements = entitlements
 	return h

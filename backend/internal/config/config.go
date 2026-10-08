@@ -736,7 +736,7 @@ type PricingConfig struct {
 	DataDir string `mapstructure:"data_dir"`
 	// 回退文件路径
 	FallbackFile string `mapstructure:"fallback_file"`
-	// 可选最高优先级的字段级定价覆盖补丁。
+	// 可选系统文件层最高优先级的字段级定价补丁；管理员数据库默认价在计费入口继续叠加。
 	OverrideFile string `mapstructure:"override_file"`
 	// 更新间隔（小时）
 	UpdateIntervalHours int `mapstructure:"update_interval_hours"`

@@ -998,7 +998,11 @@ func (s *GatewayService) calculateRecordUsageCost(
 ) (*CostBreakdown, error) {
 	// 图片生成：渠道定价为 token 计费时走 token 路径，否则走图片计费
 	if result.ImageCount > 0 {
-		if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil && resolved.Mode == BillingModeToken {
+		resolved := s.resolveChannelPricing(ctx, billingModel, apiKey)
+		if resolved == nil && !apiKeyHasConfiguredImagePrice(apiKey, NormalizeImageBillingTierOrDefault(result.ImageSize)) {
+			resolved = s.billingService.resolveAdminDefaultMediaPricing(billingModel)
+		}
+		if resolved != nil && resolved.Mode == BillingModeToken {
 			return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt, opts)
 		}
 		return s.calculateImageCost(ctx, result, apiKey, billingModel, imageMultiplier)
@@ -1174,6 +1178,9 @@ func (s *GatewayService) calculateImageCost(
 		return cost, nil
 	}
 
+	if defaults := s.billingService.resolveAdminDefaultMediaPricing(billingModel); defaults != nil && defaults.Mode == BillingModePerRequest {
+		return s.billingService.calculateDefaultMediaRequestCost(ctx, billingModel, s.resolver, multiplier, defaults)
+	}
 	return s.billingService.CalculateImageCostChecked(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
 }
 

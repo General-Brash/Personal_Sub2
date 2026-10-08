@@ -114,8 +114,8 @@ func TestNormalizeOpenAIResponsesRejectedFieldRetryBodyBindsMaxOutputTokensToRej
 	require.False(t, gjson.GetBytes(retryBody, "max_output_tokens").Exists())
 }
 
-func TestOpenAIGatewayService_APIKeyStripsAllIndexedNamespacesBeforeFirstForward(t *testing.T) {
-	body := []byte(`{"model":"gpt-5.5","stream":false,"input":[{"type":"function_call","name":"first","namespace":"remove-first","arguments":"{}"},{"type":"custom_tool_call","name":"second","namespace":"remove-second","input":"{}"}]}`)
+func TestOpenAIGatewayService_APIKeyPreservesToolCallNamespacesBeforeFirstForward(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.5","stream":false,"input":[{"type":"function_call","name":"first","namespace":"mcp__ableton","arguments":"{}"},{"type":"custom_tool_call","name":"second","namespace":"mcp__other","input":"{}"}]}`)
 	upstream := &httpUpstreamRecorder{responses: []*http.Response{
 		newOpenAIRejectedFieldTestResponse(http.StatusOK, `{"output":[],"usage":{"input_tokens":1,"output_tokens":1,"input_tokens_details":{"cached_tokens":0}}}`),
 	}}
@@ -130,8 +130,8 @@ func TestOpenAIGatewayService_APIKeyStripsAllIndexedNamespacesBeforeFirstForward
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Len(t, upstream.bodies, 1)
-	require.False(t, gjson.GetBytes(upstream.bodies[0], "input.0.namespace").Exists())
-	require.False(t, gjson.GetBytes(upstream.bodies[0], "input.1.namespace").Exists())
+	require.Equal(t, "mcp__ableton", gjson.GetBytes(upstream.bodies[0], "input.0.namespace").String())
+	require.Equal(t, "mcp__other", gjson.GetBytes(upstream.bodies[0], "input.1.namespace").String())
 }
 
 func TestOpenAIGatewayService_OpenAIHTTPStripsInputNamespacesBeforeFirstForward(t *testing.T) {
@@ -191,8 +191,8 @@ func TestOpenAIGatewayService_RetriesExplicitMaxOutputTokensRejection(t *testing
 	require.Equal(t, "keep", gjson.GetBytes(upstream.bodies[1], "input.0.content.max_output_tokens").String())
 }
 
-func TestOpenAIGatewayService_ComposesProactiveNamespaceStripWithRejectedFieldRetry(t *testing.T) {
-	body := []byte(`{"model":"gpt-5.5","stream":false,"max_output_tokens":2048,"input":[{"type":"function_call","name":"first","namespace":"remove-first","arguments":"{}"},{"type":"custom_tool_call","name":"second","namespace":"remove-second","input":"{}"}]}`)
+func TestOpenAIGatewayService_RejectedFieldRetryPreservesToolCallNamespaces(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.5","stream":false,"max_output_tokens":2048,"input":[{"type":"function_call","name":"first","namespace":"mcp__ableton","arguments":"{}"},{"type":"custom_tool_call","name":"second","namespace":"mcp__other","input":"{}"}]}`)
 	upstream := &httpUpstreamRecorder{responses: []*http.Response{
 		newOpenAIRejectedFieldTestResponse(http.StatusBadRequest, `{"error":{"code":"unsupported_parameter","message":"Unsupported parameter: max_output_tokens","param":"max_output_tokens"}}`),
 		newOpenAIRejectedFieldTestResponse(http.StatusOK, `{"output":[],"usage":{"input_tokens":1,"output_tokens":1,"input_tokens_details":{"cached_tokens":0}}}`),
@@ -209,8 +209,8 @@ func TestOpenAIGatewayService_ComposesProactiveNamespaceStripWithRejectedFieldRe
 	require.NotNil(t, result)
 	require.Len(t, upstream.bodies, 2)
 	for _, forwardedBody := range upstream.bodies {
-		require.False(t, gjson.GetBytes(forwardedBody, "input.0.namespace").Exists())
-		require.False(t, gjson.GetBytes(forwardedBody, "input.1.namespace").Exists())
+		require.Equal(t, "mcp__ableton", gjson.GetBytes(forwardedBody, "input.0.namespace").String())
+		require.Equal(t, "mcp__other", gjson.GetBytes(forwardedBody, "input.1.namespace").String())
 	}
 	require.Equal(t, int64(2048), gjson.GetBytes(upstream.bodies[0], "max_output_tokens").Int())
 	require.False(t, gjson.GetBytes(upstream.bodies[1], "max_output_tokens").Exists())
@@ -277,4 +277,23 @@ func newOpenAIRejectedFieldTestResponse(status int, body string) *http.Response 
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
 		Body:       io.NopCloser(strings.NewReader(body)),
 	}
+}
+
+func TestOpenAIGatewayService_APIKeyRetriesOnlyExplicitlyRejectedNamespace(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.5","stream":false,"input":[{"type":"function_call","name":"first","namespace":"mcp__ableton","call_id":"call_1","arguments":"{}"},{"type":"function_call","name":"second","namespace":"mcp__other","call_id":"call_2","arguments":"{}"}]}`)
+	upstream := &httpUpstreamRecorder{responses: []*http.Response{
+		newOpenAIRejectedFieldTestResponse(http.StatusBadRequest, `{"error":{"code":"unsupported_parameter","message":"Unsupported parameter: input[1].namespace","param":"input[1].namespace"}}`),
+		newOpenAIRejectedFieldTestResponse(http.StatusOK, namespaceForwardOKResponse),
+	}}
+	_, err := newOpenAIRejectedFieldTestService(upstream).Forward(
+		context.Background(), newOpenAIRejectedFieldTestContext(body), newOpenAIRejectedFieldTestAccount(), body,
+	)
+	require.NoError(t, err)
+	require.Len(t, upstream.bodies, 2)
+	require.Equal(t, "mcp__ableton", gjson.GetBytes(upstream.bodies[0], "input.0.namespace").String())
+	require.Equal(t, "mcp__other", gjson.GetBytes(upstream.bodies[0], "input.1.namespace").String())
+	require.JSONEq(t, gjson.GetBytes(upstream.bodies[0], "input.0").Raw, gjson.GetBytes(upstream.bodies[1], "input.0").Raw)
+	require.False(t, gjson.GetBytes(upstream.bodies[1], "input.1.namespace").Exists())
+	require.Equal(t, "second", gjson.GetBytes(upstream.bodies[1], "input.1.name").String())
+	require.Equal(t, "call_2", gjson.GetBytes(upstream.bodies[1], "input.1.call_id").String())
 }

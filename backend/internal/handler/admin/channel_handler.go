@@ -611,14 +611,21 @@ func (h *ChannelHandler) GetModelDefaultPricing(c *gin.Context) {
 		return
 	}
 
+	imageInput, imageOutput := pricing.ImageInputPricePerToken, pricing.ImageOutputPricePerToken
+	if imageInput == 0 && !pricing.ImageInputPriceExplicit {
+		imageInput = pricing.InputPricePerToken
+	}
+	if imageOutput == 0 && !pricing.ImageOutputPriceExplicit {
+		imageOutput = pricing.OutputPricePerToken
+	}
 	response.Success(c, gin.H{
 		"found":              true,
 		"input_price":        pricing.InputPricePerToken,
 		"output_price":       pricing.OutputPricePerToken,
 		"cache_write_price":  pricing.CacheCreationPricePerToken,
 		"cache_read_price":   pricing.CacheReadPricePerToken,
-		"image_input_price":  pricing.ImageInputPricePerToken,
-		"image_output_price": pricing.ImageOutputPricePerToken,
+		"image_input_price":  imageInput,
+		"image_output_price": imageOutput,
 	})
 }
 

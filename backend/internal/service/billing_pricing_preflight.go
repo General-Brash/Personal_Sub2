@@ -149,12 +149,15 @@ func validateTokenModelPricing(model string, pricing *ModelPricing) error {
 
 // PreflightTokenPricing proves that every pricing branch reachable by token
 // billing has explicit, finite input and output prices before upstream I/O.
-func (s *BillingService) PreflightTokenPricing(ctx context.Context, model string, groupID *int64, resolver *ModelPricingResolver) error {
+func (s *BillingService) PreflightTokenPricing(ctx context.Context, model string, groupID *int64, resolver *ModelPricingResolver, groups ...*Group) error {
 	model = strings.TrimSpace(model)
 	if model == "" || s == nil {
 		return billingPricingUnavailable(model, "token")
 	}
 	if resolver == nil {
+		if fields, _, _, exists := s.defaultPricing.Lookup(model); exists && fields.BillingMode == BillingModePerRequest {
+			return validateResolvedPerRequestPricing(model, s.resolveDefaultPricing(model))
+		}
 		pricing, err := s.GetModelPricing(model)
 		if err != nil {
 			return billingPricingUnavailable(model, "token")
@@ -162,7 +165,15 @@ func (s *BillingService) PreflightTokenPricing(ctx context.Context, model string
 		return validateTokenModelPricing(model, pricing)
 	}
 
-	resolved := resolver.Resolve(ctx, PricingInput{Model: model, GroupID: groupID})
+	var group *Group
+	if len(groups) > 0 {
+		group = groups[0]
+	}
+	resolved := resolver.Resolve(ctx, PricingInput{Model: model, GroupID: groupID, Group: group})
+	return validateResolvedTokenPricing(model, resolved)
+}
+
+func validateResolvedTokenPricing(model string, resolved *ResolvedPricing) error {
 	if resolved == nil {
 		return billingPricingUnavailable(model, "token")
 	}
@@ -293,51 +304,83 @@ func resolvedTierPrice(resolver *ModelPricingResolver, resolved *ResolvedPricing
 	return 0, false
 }
 
-func (s *BillingService) PreflightImagePricing(ctx context.Context, model, sizeTier string, groupID *int64, groupConfig *ImagePriceConfig, resolver *ModelPricingResolver) error {
+func (s *BillingService) PreflightImagePricing(ctx context.Context, model, sizeTier string, groupID *int64, groupConfig *ImagePriceConfig, resolver *ModelPricingResolver, groups ...*Group) error {
 	model = strings.TrimSpace(model)
 	sizeTier = NormalizeImageBillingTierOrDefault(sizeTier)
+	var group *Group
+	if len(groups) > 0 {
+		group = groups[0]
+	}
+	var resolved *ResolvedPricing
+	if resolver != nil {
+		resolved = resolver.Resolve(ctx, PricingInput{Model: model, GroupID: groupID, Group: group})
+	}
+	if resolved != nil && (resolved.Source == PricingSourceGroup || (resolved.Source == PricingSourceChannel && resolved.Mode == BillingModeToken)) {
+		return validateResolvedMediaPricing(model, "image", sizeTier, resolver, resolved)
+	}
 	if configured := selectedImageGroupPrice(groupConfig, sizeTier); configured != nil {
 		return validateBillingPriceFor(model, "image", "group_image_price", *configured)
 	}
-	if resolver != nil {
-		resolved := resolver.Resolve(ctx, PricingInput{Model: model, GroupID: groupID})
-		if resolved != nil && resolved.Source == PricingSourceChannel {
-			if resolved.Mode == BillingModeToken || resolved.Mode == "" {
-				return s.PreflightTokenPricing(ctx, model, groupID, resolver)
-			}
-			if price, ok := resolvedTierPrice(resolver, resolved, sizeTier); ok {
-				return validateBillingPriceFor(model, "image", "channel_image_price", price)
-			}
-			return billingPricingUnavailable(model, "image")
-		}
+	if resolved == nil {
+		resolved = s.resolveAdminDefaultMediaPricing(model)
+	}
+	if resolved != nil && (resolved.Source == PricingSourceChannel || resolved.Source == PricingSourceAdmin) {
+		return validateResolvedMediaPricing(model, "image", sizeTier, resolver, resolved)
 	}
 	_, err := s.getDefaultImagePriceChecked(model, sizeTier)
 	return err
 }
 
-func (s *BillingService) PreflightVideoPricing(ctx context.Context, model, resolution string, groupID *int64, groupConfig *VideoPriceConfig, resolver *ModelPricingResolver) error {
+func (s *BillingService) PreflightVideoPricing(ctx context.Context, model, resolution string, groupID *int64, groupConfig *VideoPriceConfig, resolver *ModelPricingResolver, groups ...*Group) error {
 	model = strings.TrimSpace(model)
 	resolution = NormalizeVideoBillingResolutionOrDefault(resolution)
+	var group *Group
+	if len(groups) > 0 {
+		group = groups[0]
+	}
+	var resolved *ResolvedPricing
+	if resolver != nil {
+		resolved = resolver.Resolve(ctx, PricingInput{Model: model, GroupID: groupID, Group: group})
+	}
+	if resolved != nil && (resolved.Source == PricingSourceGroup || (resolved.Source == PricingSourceChannel && resolved.Mode == BillingModeToken)) {
+		return validateResolvedMediaPricing(model, "video", resolution, resolver, resolved)
+	}
+	if groupConfig != nil {
+		if price := LookupVideoModelPrice(groupConfig.ModelPrices, model, resolution); price != nil {
+			return validateBillingPriceFor(model, "video", "group_video_model_price", *price)
+		}
+	}
 	if configured := selectedVideoGroupPrice(groupConfig, resolution); configured != nil {
 		return validateBillingPriceFor(model, "video", "group_video_price", *configured)
 	}
-	if resolver != nil {
-		resolved := resolver.Resolve(ctx, PricingInput{Model: model, GroupID: groupID})
-		if resolved != nil && resolved.Source == PricingSourceChannel {
-			if resolved.Mode == BillingModeToken || resolved.Mode == "" {
-				return s.PreflightTokenPricing(ctx, model, groupID, resolver)
-			}
-			if price, ok := resolvedTierPrice(resolver, resolved, resolution); ok {
-				return validateBillingPriceFor(model, "video", "channel_video_price", price)
-			}
-			return billingPricingUnavailable(model, "video")
-		}
+	if resolved == nil {
+		resolved = s.resolveAdminDefaultMediaPricing(model)
+	}
+	if resolved != nil && (resolved.Source == PricingSourceChannel || resolved.Source == PricingSourceAdmin) {
+		return validateResolvedMediaPricing(model, "video", resolution, resolver, resolved)
 	}
 	_, err := s.getDefaultVideoPriceChecked(model, resolution)
 	return err
 }
 
-func (s *BillingService) getDefaultImagePriceChecked(model, imageSize string) (float64, error) {
+func validateResolvedMediaPricing(model, kind, tier string, resolver *ModelPricingResolver, resolved *ResolvedPricing) error {
+	if resolved.Mode == BillingModeToken || resolved.Mode == "" {
+		return validateResolvedTokenPricing(model, resolved)
+	}
+	if resolved.Source == PricingSourceAdmin && resolved.Mode != BillingModePerRequest && string(resolved.Mode) != kind {
+		return billingPricingUnavailable(model, kind)
+	}
+	// Tier matching only needs the immutable resolved card, not an initialized resolver.
+	if resolver == nil {
+		resolver = &ModelPricingResolver{}
+	}
+	if price, ok := resolvedTierPrice(resolver, resolved, tier); ok {
+		return validateBillingPriceFor(model, kind, "resolved_unit_price", price)
+	}
+	return billingPricingUnavailable(model, kind)
+}
+
+func (s *BillingService) getSystemImagePriceChecked(model, imageSize string) (float64, error) {
 	if price, ok := getDefaultGrokImagineImagePrice(model, imageSize); ok {
 		return price, validateBillingPriceFor(model, "image", "default_image_price", price)
 	}
@@ -364,7 +407,8 @@ func (s *BillingService) getDefaultImagePriceChecked(model, imageSize string) (f
 	return basePrice, nil
 }
 
-func (s *BillingService) getDefaultVideoPriceChecked(model, resolution string) (float64, error) {
+func (s *BillingService) getSystemVideoPriceChecked(model, resolution string) (float64, error) {
+	model = adminDefaultPricingAliasKey(strings.ToLower(strings.TrimSpace(model)))
 	if price, ok := getDefaultGrokImagineVideoPrice(model, resolution); ok {
 		return price, validateBillingPriceFor(model, "video", "default_video_price", price)
 	}

@@ -35,7 +35,13 @@ func (r *settingRepository) CompareAndSetMultiple(ctx context.Context, expected,
 	for _, key := range keys {
 		row, err := tx.Setting.Query().Where(setting.KeyEQ(key)).ForUpdate().Only(ctx)
 		if ent.IsNotFound(err) {
-			row, err = tx.Setting.Create().SetKey(key).SetValue("").SetUpdatedAt(time.Now()).Save(ctx)
+			// PostgreSQL cannot row-lock an absent key. The conflict-safe insert waits
+			// for a concurrent initializer, then SELECT FOR UPDATE compares its value.
+			err = tx.Setting.Create().SetKey(key).SetValue("").SetUpdatedAt(time.Now()).
+				OnConflictColumns(setting.FieldKey).DoNothing().Exec(ctx)
+			if err == nil {
+				row, err = tx.Setting.Query().Where(setting.KeyEQ(key)).ForUpdate().Only(ctx)
+			}
 		}
 		if err != nil {
 			return false, err

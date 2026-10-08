@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"time"
 
@@ -881,7 +882,8 @@ var ProviderSet = wire.NewSet(
 	ProvideUsageService,
 	NewDashboardService,
 	ProvidePricingService,
-	NewBillingService,
+	ProvideDefaultModelPricingService,
+	ProvideBillingService,
 	ProvideBillingCacheService,
 	wire.Bind(new(AvailableCreditInvalidator), new(*BillingCacheService)),
 	NewAnnouncementService,
@@ -1114,4 +1116,25 @@ func ProvideBatchImagePublicService(repo BatchImageRepository, accounts AccountR
 	svc := NewBatchImagePublicService(repo, accounts, groups, rates, queue, pricing, billing, auth, cfg)
 	svc.Entitlements = entitlements
 	return svc
+}
+
+// A persisted manual layer must be loaded successfully before accepting traffic.
+func ProvideDefaultModelPricingService(repo SettingRepository) (*DefaultModelPricingService, error) {
+	svc := NewDefaultModelPricingService(repo)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := svc.Initialize(ctx); err != nil {
+		return nil, err
+	}
+	return svc, nil
+}
+
+func ProvideBillingService(cfg *config.Config, prices *PricingService, defaults *DefaultModelPricingService) (*BillingService, error) {
+	svc := NewBillingService(cfg, prices)
+	svc.defaultPricing = defaults
+	if err := defaults.setBaselineValidator(svc.GetSystemDefaultPricing); err != nil {
+		defaults.Stop()
+		return nil, fmt.Errorf("invalid persisted default pricing: %w", err)
+	}
+	return svc, nil
 }

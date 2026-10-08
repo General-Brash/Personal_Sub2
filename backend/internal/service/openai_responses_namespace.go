@@ -70,16 +70,17 @@ func shouldStripOpenAIResponsesInputNamespaces(account *Account, transport OpenA
 // shouldKeepOpenAIResponsesToolCallNamespaces 判定清理 input 残留 namespace 时是否
 // 保留工具调用项上的 namespace。
 //
-// 上游对这个字段有两套互斥要求，判定按「出口 + 端点」而非工具声明内容：
+// namespace 是历史工具调用身份的一部分，不能仅凭认证类型推断上游是否支持：
 //   - /backend-api/codex/responses 会按 namespace 解析历史调用，缺字段直接 400
 //     `Missing namespace for function_call '...'. Round-trip the model's
 //     function_call item with its namespace field included.`（issue #4761 回帖），
-//     故 OAuth 非 compact 请求必须保留。
+//     故非 compact、非摊平请求必须保留。
 //   - compact 端点的 schema 不含该字段，携带即 400 `Unknown parameter:
 //     input[N].namespace`（issue #4761 正文），故 compact 一律清理。
-//   - API Key 出口是标准 Responses API（api.openai.com 或自定义 base_url），同样
-//     不认识该字段，维持全量清理；否则只能退化成
-//     openai_responses_rejected_field_retry 的逐项删除，6 次上限根本盖不住长历史。
+//   - API Key 也可连接支持 namespace 的上游。首次转发必须保留历史调用身份，
+//     不依赖本轮是否带 tools 声明。普通 HTTP 保留已有的明确拒绝定点重试；
+//     passthrough 不新增降级重试。Chat Completions / client-tools 桥接也需要先
+//     拿到完整身份再做映射。
 //   - 摊平模式下调用项已被改写成平名，残留 namespace 指向的声明已不存在，一律清理。
 func shouldKeepOpenAIResponsesToolCallNamespaces(
 	account *Account,
@@ -87,7 +88,7 @@ func shouldKeepOpenAIResponsesToolCallNamespaces(
 	passthroughEnabled bool,
 	compactPath bool,
 ) bool {
-	if account == nil || !account.IsOpenAIOAuth() {
+	if account == nil || (!account.IsOpenAIOAuth() && !account.IsOpenAIApiKey()) {
 		return false
 	}
 	if compactPath {

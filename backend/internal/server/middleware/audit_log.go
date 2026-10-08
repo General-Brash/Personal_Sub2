@@ -63,6 +63,7 @@ var auditExtraAllowedKeys = map[string]struct{}{
 	"reason": {}, "request_id": {}, "client_id": {}, "secret_id": {},
 	"secret_fingerprint": {}, "kid": {}, "user_id": {}, "family_id": {},
 	"old_status": {}, "new_status": {}, "guard_blocked": {},
+	"pricing_model": {}, "old_pricing_revision": {}, "new_pricing_revision": {},
 }
 
 // SetAuditExtra adds allowlisted, scalar details to the current audit entry.
@@ -372,4 +373,19 @@ func deriveAuditAction(method, fullPath string) string {
 		return verb
 	}
 	return strings.Join(parts, ".") + "." + verb
+}
+
+// SetDefaultPricingAudit records only the fixed public pricing contract. It never
+// accepts an arbitrary request map or the complete settings table.
+func SetDefaultPricingAudit(c *gin.Context, change service.DefaultPricingChange) {
+	SetAuditExtra(c, map[string]any{"result": "saved", "old_pricing_revision": change.OldVersion, "new_pricing_revision": change.NewVersion})
+	value, _ := c.Get(auditCtxKeyExtra)
+	fields, ok := value.(map[string]any)
+	if !ok {
+		fields = map[string]any{}
+	}
+	fields["pricing_model"] = change.ModelID
+	fields["pricing_before"] = change.Before
+	fields["pricing_after"] = change.After
+	c.Set(auditCtxKeyExtra, fields)
 }

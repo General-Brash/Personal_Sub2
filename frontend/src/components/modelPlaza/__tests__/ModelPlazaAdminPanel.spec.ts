@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ModelPlazaAdminPanel from '../ModelPlazaAdminPanel.vue'
+import ModelDefaultPricingDialog from '../ModelDefaultPricingDialog.vue'
 
 const client = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn() }))
 vi.mock('@/api/client', () => ({ apiClient: client }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ canAdmin: () => true }) }))
 vi.mock('vue-i18n', async () => {
   const vue = await vi.importActual<typeof import('vue')>('vue')
   return { useI18n: () => ({ locale: vue.ref('zh'), t: (k: string) => k }) }
@@ -27,7 +29,7 @@ function render() {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  client.get.mockResolvedValue({ data: settings() })
+  client.get.mockImplementation((url: string) => Promise.resolve({ data: url.includes('/pricing/overrides') ? { items: [], total: 0, page: 1, page_size: 20 } : settings() }))
   client.put.mockResolvedValue({ data: { ...settings(), version: 'v2' } })
 })
 afterEach(() => {
@@ -83,4 +85,22 @@ describe('ModelPlazaAdminPanel', () => {
     })
     expect(wrapper.text()).toContain('已保存')
   })
+})
+
+it('preserves display drafts when pricing is saved and the independent list refresh fails', async () => {
+  const wrapper = render()
+  await wrapper.get('[data-testid="plaza-admin-toggle"]').trigger('click'); await flushPromises()
+  await wrapper.get('[data-testid="plaza-admin-hidden-claude-sonnet"]').setValue(true)
+  const cards = wrapper.get('[data-testid="plaza-admin-grid"]').findAll(':scope > div')
+  await cards[0].find('input[type="number"]').setValue('17')
+  client.get.mockRejectedValueOnce(new Error('refresh offline'))
+  wrapper.findComponent(ModelDefaultPricingDialog).vm.$emit('saved', { pricing_key: 'claude-sonnet', requested_model_id: 'claude-sonnet', has_admin_override: true, has_exact_system_standard: true })
+  await flushPromises()
+  expect(wrapper.emitted('pricing-saved')).toHaveLength(1)
+  expect((wrapper.get('[data-testid="plaza-admin-hidden-claude-sonnet"]').element as HTMLInputElement).checked).toBe(true)
+  expect((cards[0].find('input[type="number"]').element as HTMLInputElement).value).toBe('17')
+  expect(wrapper.text()).toContain('modelPlaza.defaultPricing.savedRefreshFailed')
+  await wrapper.get('[data-testid="plaza-admin-save"]').trigger('click'); await flushPromises()
+  expect(client.put.mock.calls[0][1].version).toBe('v1')
+  expect(client.put.mock.calls[0][1].overrides['anthropic:claude-sonnet']).toEqual({ hidden: true, pinned: false, sort_order: 17 })
 })

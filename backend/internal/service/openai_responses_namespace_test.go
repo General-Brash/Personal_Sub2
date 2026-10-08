@@ -92,8 +92,14 @@ func TestShouldKeepOpenAIResponsesToolCallNamespaces(t *testing.T) {
 		// WSv2 + compact 是唯一「不摊平但仍必须清理」的组合，钉住 compact 判定本身，
 		// 使其不会被误当成可由 shouldFlatten 推导出的冗余分支。
 		{name: "oauth_compact_wsv2_strips", account: oauth, transport: OpenAIUpstreamTransportResponsesWebsocketV2, compactPath: true, want: false},
-		// API Key 出口是标准 Responses API，不认识该字段。
-		{name: "apikey_strips", account: apiKey, transport: OpenAIUpstreamTransportHTTPSSE, want: false},
+		// API Key 也可连接支持 namespace 的上游，认证类型不能决定工具身份是否保留。
+		{name: "apikey_http_keeps", account: apiKey, transport: OpenAIUpstreamTransportHTTPSSE, want: true},
+		{name: "apikey_http_passthrough_keeps", account: apiKey, transport: OpenAIUpstreamTransportHTTPSSE, passthroughEnabled: true, want: true},
+		{name: "apikey_wsv2_keeps", account: apiKey, transport: OpenAIUpstreamTransportResponsesWebsocketV2, want: true},
+		{name: "apikey_wsv2_passthrough_keeps", account: apiKey, transport: OpenAIUpstreamTransportResponsesWebsocketV2, passthroughEnabled: true, want: true},
+		{name: "apikey_compact_strips", account: apiKey, transport: OpenAIUpstreamTransportHTTPSSE, compactPath: true, want: false},
+		{name: "apikey_compact_passthrough_strips", account: apiKey, transport: OpenAIUpstreamTransportHTTPSSE, passthroughEnabled: true, compactPath: true, want: false},
+		{name: "grok_apikey_strips", account: &Account{Platform: PlatformGrok, Type: AccountTypeAPIKey}, transport: OpenAIUpstreamTransportHTTPSSE, want: false},
 		{name: "setup_token_strips", account: setupToken, transport: OpenAIUpstreamTransportHTTPSSE, want: false},
 		{name: "nil_account", account: nil, transport: OpenAIUpstreamTransportHTTPSSE, want: false},
 	}

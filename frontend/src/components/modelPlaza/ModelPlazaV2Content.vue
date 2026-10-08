@@ -6,7 +6,8 @@
       class="plaza-description rounded-2xl border border-gray-100 bg-white px-5 py-4 text-sm shadow-card dark:border-dark-700/50 dark:bg-dark-800/50"
       v-html="descriptionHtml"
     ></div>
-    <ModelPlazaAdminPanel v-if="authStore.isAdmin" />
+    <ModelPlazaAdminPanel v-if="authStore.isAdmin && (authStore.canAdmin('models.catalog.read') || authStore.canAdmin('models.pricing.read'))" @pricing-saved="emit('pricing-saved')" />
+    <p v-if="pricingRefreshFailed" role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">{{ t('modelPlaza.defaultPricing.quoteRefreshFailed') }}</p>
     <div v-if="loading" class="card p-6 text-center text-sm text-gray-500 dark:text-gray-400">
       {{ locale === 'zh' ? '正在加载模型目录…' : 'Loading model catalog…' }}
     </div>
@@ -73,7 +74,7 @@
               <span :class="stateClass(choice.availability_state)" class="rounded-full px-2 py-0.5 text-[11px] font-medium">{{ stateLabel(choice.availability_state) }}</span>
             </div>
 
-            <p v-if="choice.price_quote" class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">{{ choice.price_quote.currency }} · {{ choice.price_quote.pricing_unit }}</p>
+            <p v-if="choice.price_quote" class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">{{ choice.price_quote.currency }} · {{ pricingUnitLabel(choice.price_quote.pricing_unit) }}</p>
             <p v-if="choice.price_quote" class="mt-2 text-xs text-gray-500">{{ locale === 'zh' ? '基准单价，需叠加下方倍率；最终账单以请求快照为准。' : 'Base unit prices; factors below apply. The request snapshot determines billing.' }}</p>
             <dl v-if="choice.price_quote" class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
               <div v-if="choice.price_quote.input_per_million != null">
@@ -84,6 +85,14 @@
                 <dt class="text-gray-500 dark:text-gray-400">{{ locale === 'zh' ? '输出 / 1M' : 'Output / 1M' }}</dt>
                 <dd class="font-mono font-medium text-gray-900 dark:text-white">${{ formatPrice(choice.price_quote.output_per_million) }}</dd>
               </div>
+              <div v-if="choice.price_quote.image_input_per_million != null">
+                <dt class="text-gray-500 dark:text-gray-400">{{ locale === 'zh' ? '图片输入 / 1M' : 'Image input / 1M' }}</dt>
+                <dd class="font-mono font-medium" data-testid="plaza-image-input-price">${{ formatPrice(choice.price_quote.image_input_per_million) }}</dd>
+              </div>
+              <div v-if="choice.price_quote.image_output_per_million != null">
+                <dt class="text-gray-500 dark:text-gray-400">{{ locale === 'zh' ? '图片输出 / 1M' : 'Image output / 1M' }}</dt>
+                <dd class="font-mono font-medium" data-testid="plaza-image-output-price">${{ formatPrice(choice.price_quote.image_output_per_million) }}</dd>
+              </div>
               <div v-if="choice.price_quote.cache_read_per_million != null">
                 <dt class="text-gray-500 dark:text-gray-400">{{ locale === 'zh' ? '缓存读取 / 1M' : 'Cache read / 1M' }}</dt>
                 <dd class="font-mono font-medium text-gray-900 dark:text-white">${{ formatPrice(choice.price_quote.cache_read_per_million) }}</dd>
@@ -91,7 +100,7 @@
               <div v-if="choice.price_quote.cache_write_per_million != null"><dt class="text-gray-500">{{locale === 'zh' ? '缓存写入 / 1M' : 'Cache write / 1M'}}</dt><dd class="font-mono">${{formatPrice(choice.price_quote.cache_write_per_million)}}</dd></div>
               <div v-if="choice.price_quote.cache_write_1h_per_million != null"><dt class="text-gray-500">{{locale === 'zh' ? '缓存写入 1h / 1M' : '1h cache write / 1M'}}</dt><dd class="font-mono">${{formatPrice(choice.price_quote.cache_write_1h_per_million)}}</dd></div>
               <div v-if="choice.price_quote.per_request_price != null">
-                <dt class="text-gray-500 dark:text-gray-400">{{ locale === 'zh' ? '按次价格' : 'Per request' }}</dt>
+                <dt class="text-gray-500 dark:text-gray-400">{{ pricingUnitLabel(choice.price_quote.pricing_unit) }}</dt>
                 <dd class="font-mono font-medium text-gray-900 dark:text-white">${{ formatPrice(choice.price_quote.per_request_price) }}</dd>
               </div>
             </dl>
@@ -101,7 +110,7 @@
                 <span>{{interval.tier_label || `${interval.min_tokens ?? 0}–${interval.max_tokens ?? '∞'} tokens`}}</span>
                 <span v-if="interval.input_per_million != null">{{locale==='zh'?'输入':'Input'}} ${{formatPrice(interval.input_per_million)}} / 1M</span>
                 <span v-if="interval.output_per_million != null">{{locale==='zh'?'输出':'Output'}} ${{formatPrice(interval.output_per_million)}} / 1M</span>
-                <span v-if="interval.per_request_price != null">${{formatPrice(interval.per_request_price)}} / request</span>
+                <span v-if="interval.per_request_price != null">${{formatPrice(interval.per_request_price)}} / {{ pricingUnitLabel(choice.price_quote.pricing_unit) }}</span>
               </div>
             </div>
             <p v-if="choice.price_quote?.unknown_fields?.length" class="mt-2 text-xs text-amber-700">{{locale==='zh'?'未确定字段：':'Unknown fields: '}}{{choice.price_quote.unknown_fields.join(', ')}}</p>
@@ -167,9 +176,11 @@ const props = defineProps<{
   response: ModelPlazaV2Response | null
   loading: boolean
   error: boolean
+  pricingRefreshFailed?: boolean
 }>()
 
-const { locale } = useI18n()
+const { locale, t } = useI18n()
+const emit = defineEmits<{ 'pricing-saved': [] }>()
 const models = computed(() => props.response?.models ?? [])
 
 const selectedPlatform = ref<string>('all')
@@ -254,9 +265,10 @@ function knownQuote(choice: ModelPlazaV2GroupChoice): boolean {
 function samplePrice(choice: ModelPlazaV2GroupChoice): { currency: string; unit: string; amount: number } | null {
   const q = choice.price_quote
   if (!q || !q.currency || q.intervals?.length || q.price_conditions?.length) return null
+  if (q.image_input_per_million != null || q.image_output_per_million != null) return null
   // The backend lists unknown cache prices even for a no-cache sample. Reject every
   // other unknown field unless it belongs only to the other billing unit.
-  const irrelevantFields = q.pricing_unit === 'per_request'
+  const irrelevantFields = ['per_request', 'per_image', 'per_second'].includes(q.pricing_unit)
     ? ['input_per_million', 'output_per_million', 'cache_read_per_million', 'cache_write_per_million', 'cache_write_1h_per_million']
     : q.pricing_unit === 'per_1m_tokens'
       ? ['per_request_price', 'cache_read_per_million', 'cache_write_per_million', 'cache_write_1h_per_million']
@@ -270,7 +282,7 @@ function samplePrice(choice: ModelPlazaV2GroupChoice): { currency: string; unit:
     (q.channel_time_multiplier != null && !validAmount(q.channel_time_multiplier))) return null
   const base = q.pricing_unit === 'per_1m_tokens' && validAmount(q.input_per_million) && validAmount(q.output_per_million)
     ? q.input_per_million + q.output_per_million
-    : q.pricing_unit === 'per_request' && validAmount(q.per_request_price) ? q.per_request_price : null
+    : ['per_request', 'per_image', 'per_second'].includes(q.pricing_unit) && validAmount(q.per_request_price) ? q.per_request_price : null
   if (base === null) return null
   const amount = base * rate * (q.peak_rate_multiplier ?? 1) * (q.channel_time_multiplier ?? 1) * dynamic
   return Number.isFinite(amount) ? { currency: q.currency, unit: q.pricing_unit, amount } : null
@@ -391,11 +403,18 @@ function rateSourceLabel(source: string | undefined): string {
   return (locale.value === 'zh' ? zh : en)[source] ?? source
 }
 
+function pricingUnitLabel(unit: string): string {
+  const zh = locale.value === 'zh'
+  return ({ per_1m_tokens: zh ? '百万 Token' : 'million tokens', per_token: zh ? 'Token' : 'token', per_request: zh ? '次' : 'request', per_image: zh ? '张' : 'image', per_second: zh ? '秒' : 'second' } as Record<string, string>)[unit] ?? unit
+}
+
 function conditionSummary(condition: ModelPlazaV2PriceCondition): string {
   const parts: string[] = []
   if (condition.input_per_million != null) parts.push(`in $${formatPrice(condition.input_per_million)}`)
+  if (condition.image_input_per_million != null) parts.push(`image in $${formatPrice(condition.image_input_per_million)} / 1M`)
+  if (condition.image_output_per_million != null) parts.push(`image out $${formatPrice(condition.image_output_per_million)} / 1M`)
   if (condition.output_per_million != null) parts.push(`out $${formatPrice(condition.output_per_million)}`)
-  if (condition.per_request_price != null) parts.push(`req $${formatPrice(condition.per_request_price)}`)
+  if (condition.per_request_price != null) parts.push(`${pricingUnitLabel(condition.pricing_unit)} $${formatPrice(condition.per_request_price)}`)
   return parts.join(' · ') || (locale.value === 'zh' ? '条件价' : 'Conditional price')
 }
 </script>

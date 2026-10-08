@@ -1195,7 +1195,7 @@ pricing:
   # detected by content hash at the next hash check and reloaded without restart.
   # 备用定价文件：只补目录缺失的模型。修改后在下一次哈希检查时按内容哈希自动重载，无需重启。
   fallback_file: "./resources/model-pricing/model_prices_and_context_window.json"
-  # Override patch file (optional, highest priority): entries are shallow-merged
+  # Override patch file (optional, highest priority within system/file defaults): entries are shallow-merged
   # field-by-field over catalog/fallback data; a null field value removes that field.
   # Model names must match catalog keys exactly. Edits are detected by content hash
   # at the next hash check and reloaded without restart.
@@ -1203,6 +1203,9 @@ pricing:
   # 字段值为 null 表示删除该字段。模型名须与目录键完全一致。
   # 修改后在下一次哈希检查时按内容哈希自动重载，无需重启。
   # override_file: "./data/model_pricing_overrides.json"
+  # Admin model-plaza default prices are stored separately in settings under
+  # model_default_pricing_overrides and override these system defaults.
+  # Existing group/channel cards still take precedence. See model-default-pricing.md.
   # Update interval in hours
   # 更新间隔（小时）
   update_interval_hours: 24

@@ -107,6 +107,7 @@ func provideCleanup(
 	batchImageWorker *service.BatchImageWorkerRuntime,
 	affiliateRebateWorker *service.AffiliateRebateWorker,
 	pricing *service.PricingService,
+	defaultPricing *service.DefaultModelPricingService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
 	bank *service.BankService,
@@ -294,6 +295,7 @@ func provideCleanup(
 				}
 				return nil
 			}},
+			{"DefaultModelPricingService", func() error { defaultPricing.Stop(); return nil }},
 			{"PricingService", func() error {
 				pricing.Stop()
 				return nil

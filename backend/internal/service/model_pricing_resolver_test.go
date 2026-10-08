@@ -37,9 +37,8 @@ func TestResolve_NoGroupID(t *testing.T) {
 	require.Equal(t, BillingModeToken, resolved.Mode)
 	require.NotNil(t, resolved.BasePricing)
 	require.InDelta(t, 3e-6, resolved.BasePricing.InputPricePerToken, 1e-12)
-	// BillingService.GetModelPricing uses fallback internally, but resolveBasePricing
-	// reports "litellm" when GetModelPricing succeeds (regardless of internal source)
-	require.Equal(t, "litellm", resolved.Source)
+	// The source is the actual code fallback, not a successful-LiteLLM placeholder.
+	require.Equal(t, PricingSourceFallback, resolved.Source)
 }
 
 func TestResolve_UnknownModel(t *testing.T) {
@@ -53,8 +52,8 @@ func TestResolve_UnknownModel(t *testing.T) {
 
 	require.NotNil(t, resolved)
 	require.Nil(t, resolved.BasePricing)
-	// Unknown model: GetModelPricing returns error, source is "fallback"
-	require.Equal(t, "fallback", resolved.Source)
+	// Unknown is distinct from a usable fallback standard.
+	require.Equal(t, "unavailable", resolved.Source)
 }
 
 func TestGetIntervalPricing_NoIntervals(t *testing.T) {
