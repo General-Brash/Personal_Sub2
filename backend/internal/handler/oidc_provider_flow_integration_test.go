@@ -108,6 +108,7 @@ func TestOIDCProviderPositiveFlowPostgres(t *testing.T) {
 
 	router := gin.New()
 	router.GET("/oauth/authorize", oidcHandler.Authorize)
+	router.POST("/oauth/consent", oidcHandler.ConsentSubmit)
 	router.POST("/oauth/token", oidcHandler.Token)
 	router.GET("/oauth/userinfo", oidcHandler.UserInfo)
 	router.POST("/oauth/revoke", oidcHandler.Revoke)
@@ -127,8 +128,34 @@ func TestOIDCProviderPositiveFlowPostgres(t *testing.T) {
 	authorizeReq.AddCookie(&http.Cookie{Name: cfg.OIDCProvider.Cookie.SessionName, Value: sessionHandle})
 	authorizeRR := httptest.NewRecorder()
 	router.ServeHTTP(authorizeRR, authorizeReq)
-	require.Equal(t, http.StatusFound, authorizeRR.Code)
-	authorizeLocation := mustLocation(t, authorizeRR)
+	// The default "always" policy requires explicit consent even for trusted
+	// clients. Complete the browser flow with the transaction and CSRF cookies
+	// issued by the authorization page rather than bypassing this policy.
+	require.Equal(t, http.StatusOK, authorizeRR.Code)
+	require.Contains(t, authorizeRR.Body.String(), `action="/oauth/consent"`)
+	require.Empty(t, authorizeRR.Header().Get("Location"))
+	consentCookies := authorizeRR.Result().Cookies()
+	consentForm := url.Values{"decision": {"approve"}}
+	for _, cookie := range consentCookies {
+		switch cookie.Name {
+		case cfg.OIDCProvider.Cookie.TransactionName:
+			consentForm.Set("tx", cookie.Value)
+		case "__Host-sub2_oidc_csrf":
+			consentForm.Set("csrf", cookie.Value)
+		}
+	}
+	require.NotEmpty(t, consentForm.Get("tx"))
+	require.NotEmpty(t, consentForm.Get("csrf"))
+	consentReq := httptest.NewRequest(http.MethodPost, "/oauth/consent", strings.NewReader(consentForm.Encode()))
+	consentReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	consentReq.AddCookie(&http.Cookie{Name: cfg.OIDCProvider.Cookie.SessionName, Value: sessionHandle})
+	for _, cookie := range consentCookies {
+		consentReq.AddCookie(cookie)
+	}
+	consentRR := httptest.NewRecorder()
+	router.ServeHTTP(consentRR, consentReq)
+	require.Equal(t, http.StatusFound, consentRR.Code)
+	authorizeLocation := mustLocation(t, consentRR)
 	require.Equal(t, redirectURI, authorizeLocation.Scheme+"://"+authorizeLocation.Host+authorizeLocation.Path)
 	require.Equal(t, state, authorizeLocation.Query().Get("state"))
 	require.Equal(t, service.OIDCProviderIssuer, authorizeLocation.Query().Get("iss"))
