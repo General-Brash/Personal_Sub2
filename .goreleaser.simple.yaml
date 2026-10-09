@@ -5,6 +5,7 @@ project_name: sub2api
 
 before:
   hooks:
+    - sh backend/scripts/check-migration-line-endings.sh
     - go mod tidy -C backend
 
 builds:

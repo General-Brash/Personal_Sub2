@@ -14,6 +14,9 @@ RUN go mod download
 # 复制源代码
 COPY . .
 
+# Fail before embedding SQL from a noncanonical checkout.
+RUN sh ./scripts/check-migration-line-endings.sh
+
 # 构建应用
 RUN VERSION_VALUE="$(./scripts/resolve-version.sh)" && \
     VERSION_VALUE="${VERSION_VALUE#v}" && \

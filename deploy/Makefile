@@ -9,11 +9,13 @@ wire:
 	@echo "Wire 代码生成完成"
 
 build:
+	@sh ./scripts/check-migration-line-endings.sh
 	@echo "构建后端（不嵌入前端）..."
 	@go build -ldflags="$(LDFLAGS)" -o bin/server ./cmd/server
 	@echo "构建完成: bin/server"
 
 build-embed:
+	@sh ./scripts/check-migration-line-endings.sh
 	@echo "构建后端（嵌入前端）..."
 	@go build -tags embed -ldflags="$(LDFLAGS)" -o bin/server ./cmd/server
 	@echo "构建完成: bin/server (with embedded frontend)"

@@ -64,6 +64,9 @@ RUN go mod download
 # Copy backend source first
 COPY backend/ ./
 
+# Fail before embedding SQL from a checkout with CRLF/mixed line endings.
+RUN sh ./scripts/check-migration-line-endings.sh
+
 # Copy frontend dist from previous stage (must be after backend copy to avoid being overwritten)
 COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist
 
