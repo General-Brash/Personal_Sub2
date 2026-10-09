@@ -11,6 +11,17 @@ linters:
     - staticcheck
     - unused
 
+  exclusions:
+    rules:
+      # x/net v0.60.0 fixes reachable HTTP/2 vulnerabilities but deprecates its
+      # existing HTTP/2 APIs. Keep the tested keepalive, H2C and error handling
+      # unchanged in this security update; migrate to net/http separately.
+      # Only these existing call sites and SA1019 are exempt, not security checks.
+      - path: 'internal[/\\](repository[/\\]http_upstream(_http2_keepalive_test)?|server[/\\]http|service[/\\]openai_codex_models_service(_test)?)\.go$'
+        linters:
+          - staticcheck
+        text: 'SA1019: .*golang\.org/x/net/http2'
+
   settings:
     depguard:
       rules:
