@@ -54,6 +54,8 @@ npm install -g pnpm
 
 - Go 版本必须是 **1.27.2**：三个 workflow 都显式固定 `go-version: '1.27.2'`，随后硬断言 `go version | grep -q 'go1.27.2'`。升级 Go 时要同时改 `backend/go.mod`、`backend-ci.yml`（两处）、`release.yml`、`security-scan.yml` 里的这句断言，**以及三个 Dockerfile 里的 Go 构建镜像**（`Dockerfile` / `deploy/Dockerfile` 的 `ARG GOLANG_IMAGE`、`backend/Dockerfile` 的 `FROM golang:`）。前者漏了 CI 会在版本校验步骤直接失败；**后者漏了 CI 不会报，而是等到有人用这些 Dockerfile 构建时才失败**（`go.mod requires go >= X (running Y; GOTOOLCHAIN=local)`）。
 - 前端使用 `pnpm install --frozen-lockfile`，必须提交 `pnpm-lock.yaml`
+- 迁移 SQL 必须保持 Git 中的 LF 原始字节。`.gitattributes` 不会修复已经存在的 CRLF/混合换行工作区；Docker、Make 和 GoReleaser 编译前会执行 `backend/scripts/check-migration-line-endings.sh` 并拒绝非 LF 输入。
+- 发布构建优先使用固定提交的 `git archive` 干净导出，避免把本地字节差异嵌入应用。禁止修改已执行迁移的数据库 checksum 来绕过保护；候选镜像应先在数据库隔离副本上完成启动验证，再通过独立失败回退脚本切换生产。
 
 ### 本地测试命令
 
