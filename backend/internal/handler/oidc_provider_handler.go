@@ -383,6 +383,17 @@ func (h *OIDCProviderHandler) checkCSRF(c *gin.Context, tx, action string) bool 
 	cookie := h.readCookie(c, "__Host-sub2_oidc_csrf")
 	return h.service.ValidCSRF(tx, action, supplied, cookie)
 }
+
+// allowConsentRedirectFormAction 把本次授权事务已登记回调地址的来源（scheme://host）
+// 加入确认页及确认提交响应的 CSP form-action，避免浏览器按默认 form-action 'self'
+// 拦截表单提交后的跨域 302 回调。redirectURI 已在授权开始时与客户端注册地址精确校验。
+func (h *OIDCProviderHandler) allowConsentRedirectFormAction(c *gin.Context, redirectURI string) {
+	u, err := url.Parse(strings.TrimSpace(redirectURI))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return
+	}
+	servermiddleware.AllowFormActionOrigin(c, u.Scheme+"://"+u.Host)
+}
 func (h *OIDCProviderHandler) renderConsent(c *gin.Context, tx string) {
 	token := h.service.CSRFToken(tx, "consent")
 	h.setCookie(c, "__Host-sub2_oidc_csrf", token, false, 300)
@@ -392,6 +403,7 @@ func (h *OIDCProviderHandler) renderConsent(c *gin.Context, tx string) {
 		h.localError(c, err)
 		return
 	}
+	h.allowConsentRedirectFormAction(c, view.RedirectURI)
 	h.renderTemplate(c, "oidc_consent", oidcConsentViewData{
 		Tx:          tx,
 		CSRF:        token,
@@ -410,6 +422,7 @@ func (h *OIDCProviderHandler) redirectSuccess(c *gin.Context, result *service.OI
 		h.localError(c, err)
 		return
 	}
+	h.allowConsentRedirectFormAction(c, result.RedirectURI)
 	q := u.Query()
 	q.Set("code", result.Code)
 	q.Set("state", result.State)
@@ -425,6 +438,7 @@ func (h *OIDCProviderHandler) redirectError(c *gin.Context, result *service.OIDC
 		h.localError(c, err)
 		return
 	}
+	h.allowConsentRedirectFormAction(c, result.RedirectURI)
 	q := u.Query()
 	q.Set("error", result.ErrorCode)
 	if result.ErrorDescription != "" {
@@ -492,7 +506,7 @@ func statusForTokenError(err error) int {
 	if errors.Is(err, service.ErrOIDCProviderDisabled) || errors.Is(err, service.ErrOIDCKeyUnavailable) || errors.Is(err, service.ErrOIDCTemporarilyUnavailable) {
 		return http.StatusServiceUnavailable
 	}
-	if errors.Is(err, service.ErrOIDCInvalidGrant) || errors.Is(err, service.ErrOIDCInvalidScope) || errors.Is(err, service.ErrOIDCUserInactive) || errors.Is(err, service.ErrOIDCReplayDetected) {
+	if errors.Is(err, service.ErrOIDCInvalidGrant) || errors.Is(err, service.ErrOIDCInvalidScope) || errors.Is(err, service.ErrOIDCUserInactive) || errors.Is(err, service.ErrOIDCReplayDetected) || errors.Is(err, service.ErrOIDCInvalidRequest) {
 		return http.StatusBadRequest
 	}
 	if errors.Is(err, service.ErrOIDCServerError) {
@@ -534,6 +548,10 @@ func tokenErrorCode(err error) string {
 		return "invalid_grant"
 	case errors.Is(err, service.ErrOIDCInvalidScope):
 		return "invalid_scope"
+	case errors.Is(err, service.ErrOIDCInvalidRequest):
+		return "invalid_request"
+	case errors.Is(err, service.ErrOIDCCSRFFailed):
+		return "csrf_failed"
 	case errors.Is(err, service.ErrOIDCUnauthorized):
 		return "unauthorized_client"
 	case errors.Is(err, service.ErrOIDCAccessDenied):

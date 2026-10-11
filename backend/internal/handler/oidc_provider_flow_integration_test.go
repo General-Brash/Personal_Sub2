@@ -25,6 +25,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	repositorypkg "github.com/Wei-Shaw/sub2api/internal/repository"
 	validation "github.com/Wei-Shaw/sub2api/internal/repository/validation"
+	middleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/testutil/integrationenv"
 	"github.com/gin-gonic/gin"
@@ -107,6 +108,7 @@ func TestOIDCProviderPositiveFlowPostgres(t *testing.T) {
 	nonce := "nonce-" + randomOpaque(t, 12)
 
 	router := gin.New()
+	router.Use(middleware.SecurityHeaders(config.CSPConfig{Enabled: true}, nil))
 	router.GET("/oauth/authorize", oidcHandler.Authorize)
 	router.POST("/oauth/consent", oidcHandler.ConsentSubmit)
 	router.POST("/oauth/token", oidcHandler.Token)
@@ -134,6 +136,9 @@ func TestOIDCProviderPositiveFlowPostgres(t *testing.T) {
 	require.Equal(t, http.StatusOK, authorizeRR.Code)
 	require.Contains(t, authorizeRR.Body.String(), `action="/oauth/consent"`)
 	require.Empty(t, authorizeRR.Header().Get("Location"))
+	authorizeCSP := authorizeRR.Header().Get("Content-Security-Policy")
+	require.Contains(t, authorizeCSP, "form-action")
+	require.True(t, oidcCSPFormActionAllows(authorizeCSP, "https://client.example.test"), "consent page CSP must allow the registered redirect origin: %s", authorizeCSP)
 	consentCookies := authorizeRR.Result().Cookies()
 	consentForm := url.Values{"decision": {"approve"}}
 	for _, cookie := range consentCookies {
@@ -161,6 +166,60 @@ func TestOIDCProviderPositiveFlowPostgres(t *testing.T) {
 	require.Equal(t, service.OIDCProviderIssuer, authorizeLocation.Query().Get("iss"))
 	code := authorizeLocation.Query().Get("code")
 	require.NotEmpty(t, code)
+
+	consentCSP := consentRR.Header().Get("Content-Security-Policy")
+	require.True(t, oidcCSPFormActionAllows(consentCSP, "https://client.example.test"), "consent redirect CSP must allow the registered redirect origin: %s", consentCSP)
+
+	// Denying consent must return to the registered redirect URI with
+	// error=access_denied and still carry a form-action CSP that allows the
+	// cross-origin redirect, mirroring the approve path above.
+	denyVerifier := randomOpaque(t, 32)
+	denyChallenge := pkceS256(denyVerifier)
+	denyState := "state-" + randomOpaque(t, 12)
+	denyNonce := "nonce-" + randomOpaque(t, 12)
+	denyAuthorizeQuery := url.Values{
+		"client_id":             {client.ClientID},
+		"redirect_uri":          {redirectURI},
+		"response_type":         {"code"},
+		"scope":                 {"openid profile email roles offline_access"},
+		"state":                 {denyState},
+		"nonce":                 {denyNonce},
+		"code_challenge":        {denyChallenge},
+		"code_challenge_method": {service.OIDCCodeChallengeS256},
+	}
+	denyAuthorizeReq := httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+denyAuthorizeQuery.Encode(), nil)
+	denyAuthorizeReq.AddCookie(&http.Cookie{Name: cfg.OIDCProvider.Cookie.SessionName, Value: sessionHandle})
+	denyAuthorizeRR := httptest.NewRecorder()
+	router.ServeHTTP(denyAuthorizeRR, denyAuthorizeReq)
+	require.Equal(t, http.StatusOK, denyAuthorizeRR.Code)
+	require.Contains(t, denyAuthorizeRR.Body.String(), `action="/oauth/consent"`)
+	denyCookies := denyAuthorizeRR.Result().Cookies()
+	denyForm := url.Values{"decision": {"deny"}}
+	for _, cookie := range denyCookies {
+		switch cookie.Name {
+		case cfg.OIDCProvider.Cookie.TransactionName:
+			denyForm.Set("tx", cookie.Value)
+		case "__Host-sub2_oidc_csrf":
+			denyForm.Set("csrf", cookie.Value)
+		}
+	}
+	require.NotEmpty(t, denyForm.Get("tx"))
+	require.NotEmpty(t, denyForm.Get("csrf"))
+	denyReq := httptest.NewRequest(http.MethodPost, "/oauth/consent", strings.NewReader(denyForm.Encode()))
+	denyReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	denyReq.AddCookie(&http.Cookie{Name: cfg.OIDCProvider.Cookie.SessionName, Value: sessionHandle})
+	for _, cookie := range denyCookies {
+		denyReq.AddCookie(cookie)
+	}
+	denyRR := httptest.NewRecorder()
+	router.ServeHTTP(denyRR, denyReq)
+	require.Equal(t, http.StatusFound, denyRR.Code)
+	denyLocation := mustLocation(t, denyRR)
+	require.Equal(t, redirectURI, denyLocation.Scheme+"://"+denyLocation.Host+denyLocation.Path)
+	require.Equal(t, "access_denied", denyLocation.Query().Get("error"))
+	require.Equal(t, denyState, denyLocation.Query().Get("state"))
+	denyCSP := denyRR.Header().Get("Content-Security-Policy")
+	require.True(t, oidcCSPFormActionAllows(denyCSP, "https://client.example.test"), "deny redirect CSP must allow the registered redirect origin: %s", denyCSP)
 
 	tokenResponse := postOIDCForm(t, router, "/oauth/token", client.ClientID, clientSecret, url.Values{
 		"grant_type":    {service.OIDCGrantAuthorizationCode},
@@ -395,4 +454,19 @@ func openOIDCIntegrationTarget(t *testing.T, ctx context.Context) (*sql.DB, *dbe
 	entClient := dbent.NewClient(dbent.Driver(driver))
 	t.Cleanup(func() { require.NoError(t, entClient.Close()) })
 	return db, entClient
+}
+
+func oidcCSPFormActionAllows(policy, origin string) bool {
+	for _, directive := range strings.Split(policy, ";") {
+		fields := strings.Fields(directive)
+		if len(fields) == 0 || fields[0] != "form-action" {
+			continue
+		}
+		for _, field := range fields[1:] {
+			if field == origin {
+				return true
+			}
+		}
+	}
+	return false
 }

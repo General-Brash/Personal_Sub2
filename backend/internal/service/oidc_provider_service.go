@@ -1027,6 +1027,8 @@ type OIDCConsentView struct {
 	Scopes      []string
 	UserEmail   string
 	UserName    string
+	// RedirectURI 本次授权事务已登记的回调地址，用于确认页 CSP form-action 放行。
+	RedirectURI string
 }
 
 // LoadConsentView 汇总授权确认页展示数据：接入应用名/负责人、请求的 scope 列表、
@@ -1044,6 +1046,7 @@ func (s *OIDCProviderService) LoadConsentView(ctx context.Context, handle, sessi
 		ClientName:  client.Name,
 		ClientOwner: client.Owner,
 		Scopes:      strings.Fields(transaction.ScopeSnapshot),
+		RedirectURI: transaction.RedirectURI,
 	}
 	if transaction.UserID != nil && *transaction.UserID != 0 {
 		if user, uErr := s.repo.GetUser(ctx, *transaction.UserID); uErr == nil && user != nil {

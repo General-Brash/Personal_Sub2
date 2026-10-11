@@ -102,6 +102,27 @@ func GetNonceFromContext(c *gin.Context) string {
 	return ""
 }
 
+// AllowFormActionOrigin 把 origin 追加到当前响应已设置的 CSP form-action 指令。
+// OIDC 确认页表单提交后需要 302 跳到接入应用的跨域回调地址，若不放行该来源，
+// 浏览器会按 form-action 'self' 拦截跳转、页面停留在确认页。
+// CSP 未启用（无响应头）、来源已存在或来源含 CSP 分隔符/通配符时为 no-op；nonce 等其他指令不受影响。
+func AllowFormActionOrigin(c *gin.Context, origin string) {
+	origin = strings.TrimSpace(origin)
+	// 含空白、分号、逗号、引号或通配符的值不可能是合法来源，直接拒绝，避免拼坏或放宽 CSP 指令。
+	if c == nil || origin == "" || strings.ContainsAny(origin, " \t\r\n;,'\"*") {
+		return
+	}
+	header := c.Writer.Header()
+	policy := header.Get("Content-Security-Policy")
+	if policy == "" {
+		return
+	}
+	if directiveHasValue(policy, "form-action", origin) {
+		return
+	}
+	header.Set("Content-Security-Policy", addToDirective(policy, "form-action", origin))
+}
+
 // SecurityHeaders sets baseline security headers for all responses.
 // getFrameSrcOrigins is an optional function that returns extra origins to inject into frame-src;
 // pass nil to disable dynamic frame-src injection.
