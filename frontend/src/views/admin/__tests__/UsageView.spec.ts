@@ -688,10 +688,17 @@ describe('admin UsageView model audit export', () => {
 				upstream_response_model: 'gpt-5.4',
 				upstream_model_mismatch: true,
 				request_type: 'sync',
-				input_tokens: 1,
-				output_tokens: 1,
-				cache_read_tokens: 0,
+				input_tokens: 1171,
+				output_tokens: 186,
+				cache_read_tokens: 176800,
 				cache_creation_tokens: 0,
+				input_cost: 0.002342,
+				output_cost: 0.00186,
+				cache_read_cost: 0.07072,
+				total_cost: 0.074922,
+				actual_cost: 0.0561915,
+				account_stats_cost: 0.021882,
+				account_rate_multiplier: 1,
 				duration_ms: 10,
 			}],
 			total: 1,
@@ -730,6 +737,8 @@ describe('admin UsageView model audit export', () => {
 		])
 		const row = sheetAddAoa.mock.calls[0][1][0]
 		expect(row.slice(4, 8)).toEqual(['gpt-5.6-sol', 'gpt-5.5', 'gpt-5.4', 'Yes'])
+		expect(row.slice(17, 21)).toEqual(['0.0023', '0.0019', '0.0707', '0.0000'])
+		expect(row.slice(23, 26)).toEqual(['0.0749', '0.0562', '0.0219'])
 		expect(saveAs).toHaveBeenCalledTimes(1)
 	})
 })

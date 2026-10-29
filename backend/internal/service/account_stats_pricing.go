@@ -3,7 +3,24 @@ package service
 import (
 	"context"
 	"strings"
+	"time"
 )
+
+// AccountStatsPricingContext carries the request's billing policy snapshot.
+// Costs resolved with this context are before the consumer's account multiplier.
+type AccountStatsPricingContext struct {
+	Group                     *Group
+	RecalculateGroupPricing   bool
+	BillingModel              string
+	PricingAt                 time.Time
+	LongContextBillingEnabled *bool
+	LongContextThreshold      int
+	LongContextMultiplier     float64
+	SearchCount               int
+	WebSearchCalls            int
+	AudioMode                 string
+	AudioUnits                float64
+}
 
 // resolveAccountStatsCost 计算账号统计定价费用。
 // 返回 nil 表示不覆盖，使用默认公式（total_cost × account_rate_multiplier）。
@@ -240,9 +257,7 @@ func calculateTokenStatsCost(pricing *ChannelModelPricing, tokens UsageTokens) *
 	return &cost
 }
 
-// applyAccountStatsCost resolves the account stats cost for a usage log entry.
-// It resolves the upstream model (falling back to the requested model) and calls
-// the 4-level priority chain via resolveAccountStatsCost.
+// applyAccountStatsCost preserves the legacy account stats pricing signature.
 func applyAccountStatsCost(
 	ctx context.Context,
 	usageLog *UsageLog,
@@ -252,6 +267,26 @@ func applyAccountStatsCost(
 	tokens UsageTokens,
 	totalCost float64,
 ) {
+	applyAccountStatsCostWithPricingContext(
+		ctx, usageLog, cs, bs, accountID, groupID, upstreamModel, requestedModel, tokens, totalCost, nil,
+	)
+}
+
+// applyAccountStatsCostWithPricingContext uses group/default pricing for a snapshot.
+// A nil snapshot retains the legacy account stats pricing rules.
+func applyAccountStatsCostWithPricingContext(
+	ctx context.Context,
+	usageLog *UsageLog,
+	cs *ChannelService, bs *BillingService,
+	accountID int64, groupID int64,
+	upstreamModel, requestedModel string,
+	tokens UsageTokens,
+	totalCost float64,
+	pricingContext *AccountStatsPricingContext,
+) {
+	if usageLog == nil {
+		return
+	}
 	model := upstreamModel
 	if model == "" {
 		model = requestedModel
@@ -268,7 +303,180 @@ func applyAccountStatsCost(
 	if usageLog != nil && usageLog.ReasoningEffort != nil {
 		reasoningEffort = *usageLog.ReasoningEffort
 	}
+	if pricingContext != nil {
+		model = strings.TrimSpace(pricingContext.BillingModel)
+		if model == "" {
+			usageLog.AccountStatsCost = &totalCost
+			return
+		}
+		usageLog.AccountStatsCost = resolveAccountStatsCostWithPricingContext(
+			ctx, usageLog, bs, model, tokens, totalCost, serviceTier, reasoningEffort, *pricingContext,
+		)
+		return
+	}
 	usageLog.AccountStatsCost = resolveAccountStatsCostWithEffort(
 		ctx, cs, bs, accountID, groupID, model, tokens, requestCount, totalCost, serviceTier, reasoningEffort,
 	)
+}
+
+func resolveAccountStatsCostWithPricingContext(
+	ctx context.Context, usageLog *UsageLog, bs *BillingService,
+	model string, tokens UsageTokens, totalCost float64, serviceTier, reasoningEffort string,
+	pricingContext AccountStatsPricingContext,
+) *float64 {
+	group := pricingContext.Group
+	hasGroupModelPricing := matchGroupModelPricing(group, model) != nil
+	isMediaUsage := usageLog.ImageCount > 0 || usageLog.VideoCount > 0 ||
+		pricingContext.AudioMode != "" || pricingContext.WebSearchCalls > 0
+	// Media and dedicated tools may bypass group cards in consumer billing.
+	if hasGroupModelPricing && !pricingContext.RecalculateGroupPricing && !isMediaUsage {
+		return &totalCost
+	}
+	imageSize := NormalizeImageBillingTierOrDefault(optionalStringValue(usageLog.ImageSize))
+	videoResolution := NormalizeVideoBillingResolutionOrDefault(optionalStringValue(usageLog.VideoResolution))
+	hasGroupMediaPrice := false
+	if group != nil {
+		if usageLog.VideoCount > 0 {
+			price := group.GetVideoPriceForModel(model, videoResolution)
+			if price != nil && validateBillingPriceFor(model, "video", "group_video_price", *price) == nil {
+				hasGroupMediaPrice = true
+			}
+		} else if usageLog.ImageCount > 0 {
+			price := group.GetImagePrice(imageSize)
+			if price != nil && validateBillingPriceFor(model, "image", "group_image_price", *price) == nil {
+				hasGroupMediaPrice = true
+			}
+		}
+	}
+	if bs == nil {
+		return nil
+	}
+
+	apiKey := &APIKey{Group: group}
+	var cost *CostBreakdown
+	var err error
+	switch {
+	case pricingContext.WebSearchCalls > 0:
+		cost = bs.CalculateWebSearchCost(pricingContext.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), 1)
+	case hasGroupModelPricing:
+		cost, err = calculateAccountStatsDefaultCost(
+			ctx, usageLog, bs, model, tokens, imageSize, videoResolution, serviceTier, reasoningEffort, pricingContext,
+		)
+	case hasGroupMediaPrice && usageLog.VideoCount > 0:
+		duration := 0
+		if usageLog.VideoDurationSeconds != nil {
+			duration = *usageLog.VideoDurationSeconds
+		}
+		cost, err = bs.CalculateVideoCostChecked(model, videoResolution, usageLog.VideoCount, duration, videoPriceConfigFromAPIKey(apiKey), 1)
+	case hasGroupMediaPrice:
+		cost, err = bs.CalculateImageCostChecked(model, imageSize, usageLog.ImageCount, imagePriceConfigFromAPIKey(apiKey), 1)
+	case pricingContext.AudioMode != "":
+		audioConfig := groupAudioPriceConfigFromAPIKey(apiKey)
+		mode := strings.ToLower(pricingContext.AudioMode)
+		hasGroupPrice := audioConfig != nil &&
+			(mode == "realtime" && audioConfig.RealtimePerMin != nil ||
+				mode == "tts" && audioConfig.TTSPerMChars != nil ||
+				mode == "stt" && audioConfig.STTPerHour != nil)
+		if resolved := bs.resolveAdminDefaultMediaPricing(model); !hasGroupPrice && resolved != nil && resolved.Mode == BillingModePerRequest {
+			cost, err = bs.calculateDefaultMediaRequestCost(ctx, model, nil, 1, resolved)
+		} else {
+			cost = bs.CalculateAudioCost(pricingContext.AudioMode, pricingContext.AudioUnits, audioConfig, 1)
+		}
+	case model == "" && pricingContext.SearchCount > 0:
+		cost = &CostBreakdown{}
+	case model == "":
+		return nil
+	default:
+		cost, err = calculateAccountStatsDefaultCost(
+			ctx, usageLog, bs, model, tokens, imageSize, videoResolution, serviceTier, reasoningEffort, pricingContext,
+		)
+	}
+	// Missing base pricing retains the existing totalCost fallback; a surcharge
+	// must not hide that failure. A successfully calculated zero is authoritative.
+	if err != nil || cost == nil {
+		return nil
+	}
+	if pricingContext.SearchCount > 0 {
+		cost.TotalCost += bs.CalculateSearchCost(pricingContext.SearchCount, groupSearchPricePer1kFromAPIKey(apiKey), 1).TotalCost
+	}
+	return &cost.TotalCost
+}
+
+func calculateAccountStatsDefaultCost(
+	ctx context.Context, usageLog *UsageLog, bs *BillingService,
+	model string, tokens UsageTokens, imageSize, videoResolution, serviceTier, reasoningEffort string,
+	pricingContext AccountStatsPricingContext,
+) (*CostBreakdown, error) {
+	// No channel service: channel prices are never the underlying default price.
+	resolver := NewModelPricingResolver(nil, bs)
+	resolved := resolver.Resolve(ctx, PricingInput{Model: model, Group: pricingContext.Group})
+	input := CostInput{
+		Ctx: ctx, Model: model, Group: pricingContext.Group,
+		Tokens: tokens, RequestCount: 1, RateMultiplier: 1, PricingAt: pricingContext.PricingAt,
+		ServiceTier: normalizeBillingServiceTier(serviceTier), ReasoningEffort: reasoningEffort,
+		Resolver: resolver, Resolved: resolved, LongContextBillingEnabled: pricingContext.LongContextBillingEnabled,
+	}
+	if resolved.Source == PricingSourceGroup {
+		// Group cards use media units, not the default HTTP-request or legacy threshold rules.
+		switch {
+		case pricingContext.AudioMode != "":
+			input.UsageUnits = pricingContext.AudioUnits
+			input.SizeTier = pricingContext.AudioMode
+		case resolved.Mode == BillingModeVideo:
+			videoCount := usageLog.VideoCount
+			if videoCount <= 0 {
+				videoCount = 1
+			}
+			duration := 0
+			if usageLog.VideoDurationSeconds != nil {
+				duration = *usageLog.VideoDurationSeconds
+			}
+			input.UsageUnits = float64(videoCount) * float64(NormalizeVideoBillingDurationSecondsOrDefault(duration))
+			input.SizeTier = videoResolution
+		case resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage:
+			switch {
+			case usageLog.VideoCount > 0:
+				input.RequestCount = usageLog.VideoCount
+				input.SizeTier = videoResolution
+			case usageLog.ImageCount > 0:
+				input.RequestCount = usageLog.ImageCount
+				input.SizeTier = imageSize
+			case resolved.Mode == BillingModeImage:
+				input.SizeTier = imageSize
+			}
+		}
+		return bs.CalculateCostUnified(input)
+	}
+	// Administrator token modes and actual token-billed image requests keep the
+	// multimodal token pipeline. Other media requests must not become text usage.
+	useTokenPricing := resolved.Mode == BillingModeToken &&
+		(resolved.Source == PricingSourceAdmin || optionalStringValue(usageLog.BillingMode) == string(BillingModeToken))
+	switch {
+	case resolved.Mode == BillingModePerRequest:
+		// The default per-request unit is one HTTP request, not media count.
+		return bs.CalculateCostUnified(input)
+	case resolved.Mode == BillingModeVideo || (!useTokenPricing && usageLog.VideoCount > 0):
+		duration := 0
+		if usageLog.VideoDurationSeconds != nil {
+			duration = *usageLog.VideoDurationSeconds
+		}
+		return bs.CalculateVideoCostChecked(model, videoResolution, usageLog.VideoCount, duration, nil, 1)
+	case resolved.Mode == BillingModeImage || (!useTokenPricing && usageLog.ImageCount > 0):
+		return bs.CalculateImageCostChecked(model, imageSize, usageLog.ImageCount, nil, 1)
+	}
+	groupAllowsLongContext := pricingContext.Group == nil || pricingContext.Group.LongContextPricingEnabled
+	accountAllowsLongContext := pricingContext.LongContextBillingEnabled == nil || *pricingContext.LongContextBillingEnabled
+	if pricingContext.LongContextThreshold > 0 && pricingContext.LongContextMultiplier > 1 &&
+		groupAllowsLongContext && accountAllowsLongContext && len(resolved.Intervals) == 0 && tokens.ImageInputTokens == 0 {
+		// The legacy partition helper does not carry image input tokens or the
+		// resolved effort card. Keep multimodal usage unified; apply effort once.
+		cost, err := bs.CalculateCostWithLongContextAndBillingPolicy(
+			model, tokens, 1, pricingContext.LongContextThreshold, pricingContext.LongContextMultiplier, input.ServiceTier, "",
+		)
+		if err == nil {
+			applyCostBreakdownMultiplier(cost, maxReasoningEffortBillingMultiplier(model, reasoningEffort, resolved.BasePricing))
+		}
+		return cost, err
+	}
+	return bs.CalculateCostUnified(input)
 }

@@ -75,6 +75,7 @@ type usageLogBestEffortWriter interface {
 // postUsageBillingParams 统一扣费所需的参数
 type postUsageBillingParams struct {
 	Cost                  *CostBreakdown
+	AccountStatsCost      *float64
 	User                  *User
 	APIKey                *APIKey
 	Account               *Account
@@ -127,8 +128,22 @@ func (p *postUsageBillingParams) shouldUpdateRateLimits() bool {
 	return p.Cost.ActualCost > 0 && p.APIKey.HasRateLimits() && p.APIKeyService != nil
 }
 
+func (p *postUsageBillingParams) accountQuotaCost() float64 {
+	if p == nil {
+		return 0
+	}
+	baseCost := 0.0
+	// An explicit zero account price must not fall back to the user price.
+	if p.AccountStatsCost != nil {
+		baseCost = *p.AccountStatsCost
+	} else if p.Cost != nil {
+		baseCost = p.Cost.TotalCost
+	}
+	return baseCost * p.AccountRateMultiplier
+}
+
 func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
-	return p.Cost.TotalCost > 0 && p.Account.IsAPIKeyOrBedrock() && p.Account.HasAnyQuotaLimit()
+	return p.accountQuotaCost() > 0 && p.Account != nil && p.Account.IsAPIKeyOrBedrock() && p.Account.HasAnyQuotaLimit()
 }
 
 // postUsageBilling is the legacy fallback billing path used when the unified
@@ -172,7 +187,7 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 	}
 
 	if p.shouldUpdateAccountQuota() {
-		accountCost := cost.TotalCost * p.AccountRateMultiplier
+		accountCost := p.accountQuotaCost()
 		if err := deps.accountRepo.IncrementQuotaUsed(billingCtx, p.Account.ID, accountCost); err != nil {
 			slog.Error("increment account quota used failed", "account_id", p.Account.ID, "cost", accountCost, "error", err)
 		}
@@ -334,7 +349,7 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.APIKeyRateLimitCost = usageBillingLedgerAmountFromFloat64(p.Cost.ActualCost)
 	}
 	if p.shouldUpdateAccountQuota() {
-		cmd.AccountQuotaCost = usageBillingLedgerAmountFromFloat64(p.Cost.TotalCost * p.AccountRateMultiplier)
+		cmd.AccountQuotaCost = usageBillingLedgerAmountFromFloat64(p.accountQuotaCost())
 	}
 
 	return cmd
@@ -515,16 +530,16 @@ func notifyAccountQuota(p *postUsageBillingParams, deps *billingDeps, result *Us
 			slog.Error("panic in notifyAccountQuota", "recover", r)
 		}
 	}()
-	if p.Cost.TotalCost <= 0 || p.Account == nil || !p.Account.IsAPIKeyOrBedrock() || deps.balanceNotifyService == nil {
+	accountCost := p.accountQuotaCost()
+	if !p.shouldUpdateAccountQuota() || deps == nil || deps.balanceNotifyService == nil {
 		slog.Debug("notifyAccountQuota: skipped",
-			"total_cost", p.Cost.TotalCost,
-			"account_nil", p.Account == nil,
-			"is_apikey_or_bedrock", p.Account != nil && p.Account.IsAPIKeyOrBedrock(),
-			"service_nil", deps.balanceNotifyService == nil,
+			"account_cost", accountCost,
+			"account_nil", p == nil || p.Account == nil,
+			"is_apikey_or_bedrock", p != nil && p.Account != nil && p.Account.IsAPIKeyOrBedrock(),
+			"service_nil", deps == nil || deps.balanceNotifyService == nil,
 		)
 		return
 	}
-	accountCost := p.Cost.TotalCost * p.AccountRateMultiplier
 	var quotaState *AccountQuotaState
 	if result != nil {
 		quotaState = result.QuotaState
@@ -905,9 +920,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 			} else {
 				baselineChannelPriced := s.resolveChannelPricing(ctx, billingModel, apiKey) != nil
 				if responseModelBillingAdoptable(cost, responseCost, baselineChannelPriced, responseChannelPriced) {
-					// billingModel 仅用于定价查表，后续流程只消费 cost。
 					logResponseModelBillingApplied("service.gateway", account, result.RequestID, billingModel, responseModel, cost, responseCost)
 					cost = responseCost
+					billingModel = responseModel
 				}
 			}
 		}
@@ -925,22 +940,42 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
 		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost, opts)
 
-	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
+	// Account pricing uses the same model identity and request snapshot as user billing.
+	groupID := int64(0)
 	if apiKey.GroupID != nil {
-		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
-			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
-			// Anthropic's input_tokens excludes cache_read and cache_creation (billed separately);
-			// OpenAI gateway uses actualInputTokens which also excludes cache_read for the same reason.
-			UsageTokens{
-				InputTokens:         result.Usage.InputTokens,
-				OutputTokens:        result.Usage.OutputTokens,
-				CacheCreationTokens: result.Usage.CacheCreationInputTokens,
-				CacheReadTokens:     result.Usage.CacheReadInputTokens,
-				ImageOutputTokens:   result.Usage.ImageOutputTokens,
-			},
-			cost.TotalCost,
-		)
+		groupID = *apiKey.GroupID
 	}
+	accountPricing := AccountStatsPricingContext{
+		Group:                 apiKey.Group,
+		BillingModel:          billingModel,
+		PricingAt:             pricingAt,
+		LongContextThreshold:  opts.LongContextThreshold,
+		LongContextMultiplier: opts.LongContextMultiplier,
+		SearchCount:           result.SearchCount,
+	}
+	if apiKey.Group != nil {
+		longContextEnabled := apiKey.Group.LongContextPricingEnabled
+		accountPricing.LongContextBillingEnabled = &longContextEnabled
+	}
+	if result.AudioUsage != nil {
+		accountPricing.AudioMode = result.AudioUsage.Mode
+		accountPricing.AudioUnits = result.AudioUsage.DurationOrUnits
+	}
+	applyAccountStatsCostWithPricingContext(ctx, usageLog, s.channelService, s.billingService,
+		account.ID, groupID, result.UpstreamModel, result.Model,
+		// Anthropic input tokens already exclude cache reads and writes.
+		UsageTokens{
+			InputTokens:           result.Usage.InputTokens,
+			OutputTokens:          result.Usage.OutputTokens,
+			CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
+			CacheCreation5mTokens: result.Usage.CacheCreation5mTokens,
+			CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
+			CacheReadTokens:       result.Usage.CacheReadInputTokens,
+			ImageOutputTokens:     result.Usage.ImageOutputTokens,
+		},
+		cost.TotalCost,
+		&accountPricing,
+	)
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
@@ -962,6 +997,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	requestID := usageLog.RequestID
 	usedUnifiedBilling, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
 		Cost:                  cost,
+		AccountStatsCost:      usageLog.AccountStatsCost,
 		User:                  user,
 		APIKey:                apiKey,
 		Account:               account,

@@ -141,7 +141,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import UserBreakdownSubTable from './UserBreakdownSubTable.vue'
 import type { EndpointStat, UserBreakdownItem } from '@/types'
 import { getUserBreakdown } from '@/api/admin/dashboard'
-import { formatMoneyDisplay } from '@/utils/format'
+import { formatUsageCost as formatCost } from '@/utils/usagePricing'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -294,5 +294,4 @@ const formatNumber = (value: number): string => {
   return value.toLocaleString()
 }
 
-const formatCost = formatMoneyDisplay
 </script>

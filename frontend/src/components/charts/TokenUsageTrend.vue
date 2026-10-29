@@ -35,7 +35,7 @@ import {
 import { Line } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import type { TrendDataPoint } from '@/types'
-import { formatMoneyDisplay } from '@/utils/format'
+import { formatUsageCost as formatCost } from '@/utils/usagePricing'
 
 ChartJS.register(
   CategoryScale,
@@ -216,5 +216,4 @@ const formatTokens = (value: number): string => {
   return value.toLocaleString()
 }
 
-const formatCost = formatMoneyDisplay
 </script>

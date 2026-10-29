@@ -131,7 +131,7 @@ describe('ModelDistributionChart', () => {
       raw: 1.4,
       dataset: { data: [1.4, 0.2] },
     })
-    expect(label).toBe('model-b: $1.40 (87.5%)')
+    expect(label).toBe('model-b: $1.4000 (87.5%)')
   })
 
   it('can hide account cost for user usage stats without account_cost', () => {

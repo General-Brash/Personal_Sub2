@@ -1,6 +1,11 @@
 import { formatMoneyDisplay } from '@/utils/format'
 
 export const TOKENS_PER_MILLION = 1_000_000
+export const USAGE_COST_FRACTION_DIGITS = 4
+
+export function formatUsageCost(amount: string | number | null | undefined): string {
+  return formatMoneyDisplay(amount, USAGE_COST_FRACTION_DIGITS)
+}
 
 interface TokenPriceFormatOptions {
   fractionDigits?: number
@@ -16,11 +21,12 @@ export function calculateTokenUnitPrice(
   cost: number | null | undefined,
   tokens: number | null | undefined
 ): number | null {
-  if (!isFiniteNumber(cost) || !isFiniteNumber(tokens) || tokens <= 0) {
+  if (!isFiniteNumber(cost) || cost < 0 || !isFiniteNumber(tokens) || tokens <= 0) {
     return null
   }
 
-  return cost / tokens
+  const price = cost / tokens
+  return Number.isFinite(price) ? price : null
 }
 
 export function calculateTokenPricePerMillion(
@@ -32,7 +38,8 @@ export function calculateTokenPricePerMillion(
     return null
   }
 
-  return unitPrice * TOKENS_PER_MILLION
+  const price = unitPrice * TOKENS_PER_MILLION
+  return Number.isFinite(price) ? price : null
 }
 
 export function formatTokenPricePerMillion(
@@ -45,9 +52,7 @@ export function formatTokenPricePerMillion(
     return options.emptyValue ?? '-'
   }
 
-  const fractionDigits = options.fractionDigits ?? 2
-  const formatted = fractionDigits === 2
-    ? formatMoneyDisplay(pricePerMillion)
-    : pricePerMillion.toFixed(fractionDigits)
+  const fractionDigits = options.fractionDigits ?? USAGE_COST_FRACTION_DIGITS
+  const formatted = formatMoneyDisplay(pricePerMillion, fractionDigits)
   return options.withCurrencySymbol == false ? formatted : `$${formatted}`
 }
