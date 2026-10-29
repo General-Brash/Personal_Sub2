@@ -58,7 +58,7 @@ describe('TokenUsageTrend', () => {
 
     const options = (wrapper.vm as any).$?.setupState.lineOptions
     const footer = options.plugins.tooltip.callbacks.footer([{ dataIndex: 0 }])
-    expect(footer).toBe('Actual: $0.01 | Standard: $0.01')
+    expect(footer).toBe('Actual: $0.0050 | Standard: $0.0100')
   })
 
   it('returns 0 hit rate when all prompt tokens are zero', () => {

@@ -356,6 +356,8 @@ func resolveAccountStatsCostWithPricingContext(
 	var cost *CostBreakdown
 	var err error
 	switch {
+	case pricingContext.WebSearchCalls > 0:
+		cost = bs.CalculateWebSearchCost(pricingContext.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), 1)
 	case hasGroupModelPricing:
 		cost, err = calculateAccountStatsDefaultCost(
 			ctx, usageLog, bs, model, tokens, imageSize, videoResolution, serviceTier, reasoningEffort, pricingContext,
@@ -368,8 +370,6 @@ func resolveAccountStatsCostWithPricingContext(
 		cost, err = bs.CalculateVideoCostChecked(model, videoResolution, usageLog.VideoCount, duration, videoPriceConfigFromAPIKey(apiKey), 1)
 	case hasGroupMediaPrice:
 		cost, err = bs.CalculateImageCostChecked(model, imageSize, usageLog.ImageCount, imagePriceConfigFromAPIKey(apiKey), 1)
-	case pricingContext.WebSearchCalls > 0:
-		cost = bs.CalculateWebSearchCost(pricingContext.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), 1)
 	case pricingContext.AudioMode != "":
 		audioConfig := groupAudioPriceConfigFromAPIKey(apiKey)
 		mode := strings.ToLower(pricingContext.AudioMode)

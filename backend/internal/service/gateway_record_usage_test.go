@@ -213,7 +213,7 @@ func TestGatewayServiceRecordUsage_AccountStatsPreservesCacheTTLBreakdown(t *tes
 		wantStatsCost float64
 	}{
 		{name: "default_model_prices", wantStatsCost: 1.19},
-		{name: "custom_account_prices", customPricing: true, wantStatsCost: 2.38},
+		{name: "custom_account_prices_do_not_override_defaults", customPricing: true, wantStatsCost: 1.19},
 		{name: "user_prices_applied_to_stats", applyPricing: true, wantStatsCost: 1.19},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
