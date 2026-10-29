@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -164,6 +165,11 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 		}
 	} else {
 		if cost.ActualCost > 0 {
+			if dbent.TxFromContext(billingCtx) == nil && deps.billingCacheService != nil {
+				if err := deps.billingCacheService.autoExchangeIfNeeded(billingCtx, p.User.ID); err != nil {
+					slog.Warn("bank auto exchange before legacy deduction failed", "user_id", p.User.ID, "error", err)
+				}
+			}
 			if err := deps.userRepo.DeductBalance(billingCtx, p.User.ID, cost.ActualCost); err != nil {
 				slog.Error("deduct balance failed", "user_id", p.User.ID, "error", err)
 			} else if deps.billingCacheService != nil {
@@ -458,6 +464,12 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 
 func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {
 	if p == nil || p.Cost == nil || p.User == nil || deps == nil || deps.billingCacheService == nil {
+		return
+	}
+	if result != nil && result.AutoExchange != nil {
+		if err := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); err != nil {
+			slog.Warn("invalidate balance cache after auto exchange failed", "user_id", p.User.ID, "error", err)
+		}
 		return
 	}
 	permanentBalanceDeduction, known := permanentBalanceCacheDeduction(result)

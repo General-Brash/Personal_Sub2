@@ -729,6 +729,16 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 		userMap[u.ID] = &outUsers[len(outUsers)-1]
 	}
 
+	if filters.IncludeTemporaryCreditAvailable {
+		availableByUserID, err := r.getTemporaryCreditAvailableByUserIDs(ctx, userIDs)
+		if err != nil {
+			return nil, nil, err
+		}
+		for id, u := range userMap {
+			u.TemporaryCreditAvailable = availableByUserID[id]
+		}
+	}
+
 	shouldLoadSubscriptions := filters.IncludeSubscriptions == nil || *filters.IncludeSubscriptions
 	if shouldLoadSubscriptions {
 		// Batch load active subscriptions with groups to avoid N+1.
@@ -761,6 +771,45 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 	}
 
 	return outUsers, paginationResultFromTotal(int64(total), params), nil
+}
+
+func (r *userRepository) getTemporaryCreditAvailableByUserIDs(ctx context.Context, userIDs []int64) (map[int64]float64, error) {
+	result := make(map[int64]float64, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	if r.sql == nil {
+		return nil, fmt.Errorf("sql executor is not configured")
+	}
+
+	const query = `
+		SELECT user_id, SUM(remaining_amount)
+		FROM temporary_credit_grants
+		WHERE user_id = ANY($1)
+		  AND remaining_amount > 0
+		  AND available_at <= clock_timestamp()
+		  AND expires_at > clock_timestamp()
+		GROUP BY user_id
+	`
+
+	rows, err := r.sql.QueryContext(ctx, query, pq.Array(userIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var userID int64
+		var available float64
+		if err := rows.Scan(&userID, &available); err != nil {
+			return nil, err
+		}
+		result[userID] = available
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func userEffectiveEntitlementTierPredicate(tier string) predicate.User {

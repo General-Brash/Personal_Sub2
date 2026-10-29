@@ -44,6 +44,9 @@ type User struct {
 	// map[groupID]rateMultiplier
 	GroupRates map[int64]float64
 
+	// TemporaryCreditAvailable is a non-persistent snapshot loaded only on request.
+	TemporaryCreditAvailable float64
+
 	// TOTP 双因素认证字段
 	TotpSecretEncrypted *string    // AES-256-GCM 加密的 TOTP 密钥
 	TotpEnabled         bool       // 是否启用 TOTP

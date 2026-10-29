@@ -8,6 +8,15 @@ import type { FinancialAmountUnit, FixedPageResponse, BankTransactionItem } from
  */
 export type BankAmount = string
 
+export interface BankAutoExchangePreference {
+  enabled: boolean
+  threshold: BankAmount
+  exchange_amount: BankAmount
+  frozen_deposit: BankAmount
+}
+
+export type BankAutoExchangeSettings = Pick<BankAutoExchangePreference, 'enabled' | 'threshold' | 'exchange_amount'>
+
 export interface BankExchangeTier {
   up_to: BankAmount | null
   rate: BankAmount
@@ -71,6 +80,7 @@ export interface BankLedgerPage {
 }
 
 export interface BankStatus {
+  /** Spendable permanent credit, excluding the auto-exchange deposit. */
   permanent_balance: BankAmount
   temporary_credit_available: BankAmount
   temporary_credit_earliest_expires_at: string | null
@@ -80,6 +90,7 @@ export interface BankStatus {
   policy: BankPolicy
   ledger: BankLedgerItem[]
   exchange_progress?: BankExchangeProgress | null
+  auto_exchange?: BankAutoExchangePreference
 }
 
 export interface BankAdvanceResult {
@@ -116,6 +127,23 @@ export interface BankRepayResult {
 
 export async function getBankStatus(): Promise<BankStatus> {
   const response = await apiClient.get<BankStatus>('/bank/status')
+  return response.data
+}
+
+export async function getBankAutoExchange(): Promise<BankAutoExchangePreference> {
+  const response = await apiClient.get<BankAutoExchangePreference>('/bank/auto-exchange')
+  return response.data
+}
+
+export async function updateBankAutoExchange(
+  settings: BankAutoExchangeSettings,
+  idempotencyKey: string,
+): Promise<BankAutoExchangePreference> {
+  const response = await apiClient.put<BankAutoExchangePreference>(
+    '/bank/auto-exchange',
+    settings,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  )
   return response.data
 }
 
@@ -192,6 +220,8 @@ export async function getBankTransactions(params?: { page?: number; user_id?: nu
 
 export const bankAPI = {
   getStatus: getBankStatus,
+  getAutoExchange: getBankAutoExchange,
+  updateAutoExchange: updateBankAutoExchange,
   getLedger: getBankLedger,
   advance: requestBankAdvance,
   exchange: exchangePermanentForTemporary,

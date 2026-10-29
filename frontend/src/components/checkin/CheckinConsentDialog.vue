@@ -1,19 +1,21 @@
 <template>
-  <BaseDialog :show="show" title="开启自动签到" width="normal" close-on-click-outside @close="$emit('close')">
+  <BaseDialog :show="show" :title="t('checkin.consent.title')" width="normal" close-on-click-outside @close="$emit('close')">
     <div class="space-y-4">
       <div class="rounded-lg border border-primary-200 bg-primary-50 p-4 text-sm leading-6 text-primary-900 dark:border-primary-900/60 dark:bg-primary-950/30 dark:text-primary-100">
-        <p>开启后，进入站点时自动按<b>直接领取</b>完成本周期签到。</p>
-        <p class="mt-2">自动签到使用直接领取规则；本次临时奖励手续费为 <b>{{ formatBpsAsPercent(feeBps) }}</b>，从临时基础奖内扣除，不额外扣永久余额。永久基础奖不变。</p>
-        <p class="mt-2">可随时关闭。费率或收费对象变化时，本同意失效并要求重新确认。</p>
+        <p>{{ t('checkin.consent.directRule') }}</p>
+        <p v-if="randomEnabled" class="mt-2">{{ t('checkin.consent.randomRule') }}</p>
+        <p v-if="feeBps === 0" class="mt-2">{{ t('checkin.consent.feeFree') }}</p>
+        <p v-else class="mt-2">{{ t('checkin.consent.feeRule', { fee: formatBpsAsPercent(feeBps) }) }}</p>
+        <p class="mt-2">{{ t('checkin.consent.ruleChanges') }}</p>
       </div>
       <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-3 text-sm text-gray-700 dark:border-dark-600 dark:text-gray-200">
         <input v-model="accepted" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600" data-test="checkin-consent-checkbox" />
-        <span>我已阅读并同意以上自动签到与手续费条款。</span>
+        <span>{{ t('checkin.consent.accept') }}</span>
       </label>
       <div class="flex justify-end gap-3">
-        <button type="button" class="btn-secondary" @click="$emit('close')">取消</button>
-        <button type="button" class="btn-primary" :disabled="!accepted" data-test="checkin-consent-confirm" @click="$emit('confirm')">
-          确认开启
+        <button type="button" class="btn-secondary" @click="$emit('close')">{{ t('checkin.consent.cancel') }}</button>
+        <button type="button" class="btn-primary" :disabled="!accepted" data-test="checkin-consent-confirm" @click="handleConfirm">
+          {{ t('checkin.consent.confirm') }}
         </button>
       </div>
     </div>
@@ -22,14 +24,38 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 
-const props = defineProps<{ show: boolean; feeBps: number }>()
-defineEmits<{ (event: 'confirm'): void; (event: 'close'): void }>()
+const props = withDefaults(defineProps<{ show: boolean; feeBps: number; randomEnabled?: boolean; policyVersion?: string }>(), {
+  randomEnabled: false,
+  policyVersion: '',
+})
+const emit = defineEmits<{
+  (event: 'confirm', payload: { policyVersion: string; feeBps: number }): void
+  (event: 'close'): void
+}>()
+const { t } = useI18n()
 const accepted = ref(false)
+const confirmationSnapshot = ref<{ policyVersion: string; feeBps: number } | null>(null)
+
+function handleConfirm() {
+  const snapshot = confirmationSnapshot.value
+  if (!accepted.value || !props.show || !props.policyVersion || !snapshot
+    || snapshot.policyVersion !== props.policyVersion || snapshot.feeBps !== props.feeBps) return
+  emit('confirm', { policyVersion: snapshot.policyVersion, feeBps: snapshot.feeBps })
+}
 
 function formatBpsAsPercent(bps: number): string {
   return `${(bps / 100).toFixed(2)}%`
 }
-watch(() => props.show, (shown) => { if (shown) accepted.value = false })
+watch(accepted, (value) => {
+  confirmationSnapshot.value = value
+    ? { policyVersion: props.policyVersion, feeBps: props.feeBps }
+    : null
+}, { flush: 'sync' })
+watch(() => [props.show, props.feeBps, props.randomEnabled, props.policyVersion], () => {
+  accepted.value = false
+  confirmationSnapshot.value = null
+}, { flush: 'sync' })
 </script>

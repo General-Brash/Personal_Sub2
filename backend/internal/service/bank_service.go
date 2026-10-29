@@ -253,15 +253,16 @@ type BankExchangeProgress struct {
 }
 
 type BankStatus struct {
-	PermanentBalance                 string               `json:"permanent_balance"`
-	TemporaryCreditAvailable         string               `json:"temporary_credit_available"`
-	TemporaryCreditEarliestExpiresAt *time.Time           `json:"temporary_credit_earliest_expires_at"`
-	TemporaryDebt                    string               `json:"temporary_debt"`
-	TemporaryDebtDueAt               *time.Time           `json:"temporary_debt_due_at"`
-	ActiveAdvance                    *BankAdvanceStatus   `json:"active_advance"`
-	Policy                           BankPolicyDTO        `json:"policy"`
-	Ledger                           []BankLedgerItem     `json:"ledger"`
-	ExchangeProgress                 BankExchangeProgress `json:"exchange_progress"`
+	PermanentBalance                 string                     `json:"permanent_balance"`
+	TemporaryCreditAvailable         string                     `json:"temporary_credit_available"`
+	TemporaryCreditEarliestExpiresAt *time.Time                 `json:"temporary_credit_earliest_expires_at"`
+	TemporaryDebt                    string                     `json:"temporary_debt"`
+	TemporaryDebtDueAt               *time.Time                 `json:"temporary_debt_due_at"`
+	ActiveAdvance                    *BankAdvanceStatus         `json:"active_advance"`
+	Policy                           BankPolicyDTO              `json:"policy"`
+	Ledger                           []BankLedgerItem           `json:"ledger"`
+	ExchangeProgress                 BankExchangeProgress       `json:"exchange_progress"`
+	AutoExchange                     BankAutoExchangePreference `json:"auto_exchange"`
 }
 
 type BankAdvanceResult struct {
@@ -383,7 +384,7 @@ var bankPolicyKeys = []string{
 	SettingKeyBankEarlyRepayPermanentRatio,
 }
 
-func loadBankPolicy(ctx context.Context, q bankQueryer) (BankPolicy, error) {
+func loadBankPolicy(ctx context.Context, q TemporaryCreditSQLExecutor) (BankPolicy, error) {
 	policy := DefaultBankPolicy()
 	args := make([]any, 0, len(bankPolicyKeys))
 	placeholders := make([]string, 0, len(bankPolicyKeys))
@@ -616,6 +617,10 @@ WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&balance, &debt, &debtDue); 
 	if err != nil {
 		return nil, err
 	}
+	autoExchange, err := s.GetAutoExchangePreference(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 	if earliestExpiry != nil {
 		utc := earliestExpiry.UTC()
 		earliestExpiry = &utc
@@ -635,6 +640,7 @@ WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&balance, &debt, &debtDue); 
 		Policy:                           policy.DTO(),
 		Ledger:                           ledger,
 		ExchangeProgress:                 bankExchangeProgress(policy.ExchangeTiers, localDate, dailyExchanged),
+		AutoExchange:                     *autoExchange,
 	}, nil
 }
 

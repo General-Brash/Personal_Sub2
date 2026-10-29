@@ -88,6 +88,8 @@ func RegisterUserRoutes(
 		{
 			bank.GET("/status", h.Bank.GetStatus)
 			bank.GET("/ledger", h.Bank.ListLedger)
+			bank.GET("/auto-exchange", h.Bank.GetAutoExchange)
+			bank.PUT("/auto-exchange", h.Bank.UpdateAutoExchange)
 			bank.POST("/advance", h.Bank.Advance)
 			bank.POST("/exchange", h.Bank.Exchange)
 			bank.POST("/repay", h.Bank.Repay)

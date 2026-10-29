@@ -482,23 +482,38 @@
 
           <template #cell-balance="{ value, row }">
             <div class="flex items-center gap-2">
-              <div class="group relative">
-                <button
-                  class="font-medium text-gray-900 underline decoration-dashed decoration-gray-300 underline-offset-4 transition-colors hover:text-primary-600 dark:text-white dark:decoration-dark-500 dark:hover:text-primary-400"
-                  @click="handleBalanceHistory(row)"
-                >
-                  ${{ value.toFixed(2) }}
-                </button>
-                <!-- Instant tooltip -->
-                <div class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity duration-75 group-hover:opacity-100 dark:bg-dark-600">
-                  {{ t('checkin.admin.audit') }}
-                  <div class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-dark-600"></div>
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.admin.permanentCredit') }}</span>
+                  <button
+                    type="button"
+                    :disabled="!canAdjustBalance"
+                    :title="writeActionTitle('users.balance.adjust') || t('checkin.admin.permanentCredit')"
+                    class="font-medium text-gray-900 underline decoration-dashed decoration-gray-300 underline-offset-4 transition-colors hover:text-primary-600 disabled:cursor-not-allowed dark:text-white dark:decoration-dark-500 dark:hover:text-primary-400"
+                    @click.stop="handleDeposit(row, 'permanent')"
+                  >
+                    ${{ value.toFixed(2) }}
+                  </button>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.admin.temporaryCredit') }}</span>
+                  <button
+                    type="button"
+                    :disabled="!canAdjustBalance"
+                    :title="writeActionTitle('users.balance.adjust') || t('checkin.admin.temporaryCredit')"
+                    class="font-medium text-gray-900 underline decoration-dashed decoration-gray-300 underline-offset-4 transition-colors hover:text-primary-600 disabled:cursor-not-allowed dark:text-white dark:decoration-dark-500 dark:hover:text-primary-400"
+                    @click.stop="handleDeposit(row, 'temporary')"
+                  >
+                    ${{ (row.temporary_credit_available ?? 0).toFixed(2) }}
+                  </button>
                 </div>
               </div>
               <button
-                @click.stop="handleDeposit(row)"
+                type="button"
+                :disabled="!canAdjustBalance"
+                @click.stop="handleDeposit(row, 'permanent')"
                 class="rounded px-2 py-0.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
-                :title="t('admin.users.deposit')"
+                :title="writeActionTitle('users.balance.adjust') || t('admin.users.deposit')"
               >
                 {{ t('admin.users.deposit') }}
               </button>
@@ -779,7 +794,7 @@
               <button
                 :disabled="!canAdjustBalance"
                 :title="writeActionTitle('users.balance.adjust')"
-                @click="handleDeposit(user); closeActionMenu()"
+                @click="handleDeposit(user, 'permanent'); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
                 <Icon name="plus" size="sm" class="text-emerald-500" :stroke-width="2" />
@@ -870,7 +885,7 @@
     <UserAllowedGroupsModal :show="showAllowedGroupsModal" :user="allowedGroupsUser" @close="closeAllowedGroupsModal" @success="loadUsers" />
     <AdminPermissionsPanel :show="showAdminPermissionsPanel" :user-id="adminPermissionsUser?.id" @close="closeAdminPermissionsPanel" @changed="loadUsers" />
     <UserEntitlementPanel :show="showUserEntitlementPanel" :user-id="entitlementUser?.id" :user-ids="entitlementTargets" @close="closeUserEntitlementPanel" @changed="loadUsers" />
-    <UserBalanceModal :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" @close="closeBalanceModal" @success="loadUsers" />
+    <UserBalanceModal :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" :initial-credit-type="balanceCreditType" @close="closeBalanceModal" @success="loadUsers" />
     <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
     <GroupReplaceModal :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
     <UserAttributesConfigModal :show="showAttributesModal" @close="handleAttributesModalClose" />
@@ -1732,6 +1747,7 @@ const groupReplaceOldGroup = ref<{ id: number; name: string } | null>(null)
 const showBalanceModal = ref(false)
 const balanceUser = ref<AdminUser | null>(null)
 const balanceOperation = ref<'add' | 'subtract'>('add')
+const balanceCreditType = ref<'permanent' | 'temporary'>('permanent')
 
 // Balance History modal state
 const showBalanceHistoryModal = ref(false)
@@ -2009,21 +2025,26 @@ const confirmDelete = async () => {
   }
 }
 
-const handleDeposit = (user: AdminUser) => {
+const handleDeposit = (user: AdminUser, creditType: 'permanent' | 'temporary' = 'permanent') => {
+  if (!canAdjustBalance.value) return
   balanceUser.value = user
   balanceOperation.value = 'add'
+  balanceCreditType.value = creditType
   showBalanceModal.value = true
 }
 
 const handleWithdraw = (user: AdminUser) => {
+  if (!canAdjustBalance.value) return
   balanceUser.value = user
   balanceOperation.value = 'subtract'
+  balanceCreditType.value = 'permanent'
   showBalanceModal.value = true
 }
 
 const closeBalanceModal = () => {
   showBalanceModal.value = false
   balanceUser.value = null
+  balanceCreditType.value = 'permanent'
 }
 
 const handleBalanceHistory = (user: AdminUser) => {
@@ -2039,7 +2060,7 @@ const closeBalanceHistoryModal = () => {
 // Handle deposit from balance history modal
 const handleDepositFromHistory = () => {
   if (balanceHistoryUser.value) {
-    handleDeposit(balanceHistoryUser.value)
+    handleDeposit(balanceHistoryUser.value, 'permanent')
   }
 }
 

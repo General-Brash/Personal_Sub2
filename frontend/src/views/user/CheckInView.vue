@@ -7,7 +7,7 @@
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('checkin.description') }}</p>
           <p v-if="status" data-test="checkin-period-state" class="mt-1 text-xs text-gray-400 dark:text-gray-500">
             下次刷新：{{ status.next_reset_at ? formatExpiry(status.next_reset_at) : '北京时间 00:00' }}
-            · 自动手续费：{{ formatBpsAsPercent(status.auto_fee_bps ?? 500) }}
+            · 自动手续费：{{ formatBpsAsPercent(effectiveAutoFeeBps) }}
             · 当前模式：{{ status.mode ?? 'direct' }}
           </p>
         </div>
@@ -61,20 +61,22 @@
         data-test="checkin-consent-stale-banner"
         class="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between"
       >
-        <span>手续费已调整，自动签到已暂停，请确认新的手续费后继续自动签到。</span>
+        <span>{{ t('checkin.auto.consentRequired') }}</span>
         <button
           type="button"
           data-test="checkin-consent-reconfirm"
           class="inline-flex min-h-9 items-center justify-center gap-2 self-start rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700 sm:self-auto"
           @click="showConsentDialog = true"
         >
-          重新确认
+          {{ t('checkin.auto.reconfirm') }}
         </button>
       </div>
 
       <CheckinConsentDialog
         :show="showConsentDialog && !autoForcedByAdmin"
-        :fee-bps="status?.auto_fee_bps ?? 500"
+        :fee-bps="effectiveAutoFeeBps"
+        :random-enabled="randomEnabled"
+        :policy-version="status?.policy_version"
         @confirm="confirmAutoPreference"
         @close="showConsentDialog = false"
       />
@@ -123,7 +125,7 @@
                 {{ formatCredit(lastCheckinResult.reward_amount) }}
               </p>
             </div>
-            <div>
+            <div v-if="hasPermanentCheckinReward(lastCheckinResult.permanent_reward_amount)">
               <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
                 {{ t('checkin.permanentReward') }}
               </p>
@@ -160,7 +162,8 @@
                   data-test="reward-guide-button"
                   type="button"
                   class="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 dark:text-gray-500 dark:hover:bg-dark-700 dark:hover:text-primary-400"
-                  :aria-label="t('checkin.admin.rewardTiers')"
+                  :aria-label="rewardGuideTitle"
+                  :title="rewardGuideTitle"
                   aria-controls="checkin-reward-guide"
                   :aria-expanded="rewardGuideVisible"
                   @click.stop="toggleRewardGuide"
@@ -177,9 +180,17 @@
                   @click.stop
                 >
                   <p class="text-sm font-semibold text-gray-900 dark:text-white">
-                    {{ t('checkin.admin.rewardTiers') }}
+                    {{ rewardGuideTitle }}
                   </p>
-                  <div class="mt-2 max-h-72 overflow-y-auto overscroll-contain">
+                  <template v-if="randomEnabled">
+                    <p class="mt-2 min-w-0 break-all text-sm font-semibold leading-6 text-emerald-600 dark:text-emerald-400">
+                      {{ randomRewardText }}
+                    </p>
+                    <p class="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                      {{ t('checkin.randomRewardNotice') }}
+                    </p>
+                  </template>
+                  <div v-else class="mt-2 max-h-72 overflow-y-auto overscroll-contain">
                     <table class="w-full table-fixed border-separate border-spacing-y-1 text-xs">
                       <colgroup>
                         <col class="w-[30%]" />
@@ -220,7 +231,7 @@
                     </table>
                   </div>
                   <p
-                    v-if="rewardTierCapDay > 0"
+                    v-if="!randomEnabled && rewardTierCapDay > 0"
                     data-test="reward-tier-cap"
                     class="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400"
                   >
@@ -233,21 +244,30 @@
               data-test="next-reward"
               class="mt-2 flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 gap-y-0.5 tabular-nums"
             >
-              <span class="sr-only">{{ t('checkin.temporaryReward') }}:</span>
               <span
-                data-test="next-temporary-reward"
-                class="min-w-0 max-w-full break-all text-lg font-semibold leading-6 text-emerald-600 dark:text-emerald-400"
+                v-if="randomEnabled"
+                data-test="next-random-reward"
+                class="min-w-0 max-w-full break-all text-sm font-semibold leading-6 text-emerald-600 dark:text-emerald-400"
               >
-                {{ formatCredit(status.next_reward_amount) }}
+                {{ randomRewardText }}
               </span>
-              <span aria-hidden="true" class="text-sm text-gray-400 dark:text-gray-500">+</span>
-              <span class="sr-only">{{ t('checkin.permanentReward') }}:</span>
-              <span
-                data-test="next-permanent-reward"
-                class="min-w-0 max-w-full break-all text-lg font-semibold leading-6 text-indigo-600 dark:text-indigo-400"
-              >
-                {{ formatCredit(status.next_permanent_reward_amount || '0.00000000') }}
-              </span>
+              <template v-else>
+                <span class="sr-only">{{ t('checkin.temporaryReward') }}:</span>
+                <span
+                  data-test="next-temporary-reward"
+                  class="min-w-0 max-w-full break-all text-lg font-semibold leading-6 text-emerald-600 dark:text-emerald-400"
+                >
+                  {{ formatCredit(status.next_reward_amount) }}
+                </span>
+                <span aria-hidden="true" class="text-sm text-gray-400 dark:text-gray-500">+</span>
+                <span class="sr-only">{{ t('checkin.permanentReward') }}:</span>
+                <span
+                  data-test="next-permanent-reward"
+                  class="min-w-0 max-w-full break-all text-lg font-semibold leading-6 text-indigo-600 dark:text-indigo-400"
+                >
+                  {{ formatCredit(status.next_permanent_reward_amount || '0.00000000') }}
+                </span>
+              </template>
             </p>
           </div>
           <div data-test="checkin-stat-card" class="card flex min-w-0 flex-col p-4">
@@ -366,6 +386,7 @@ import {
 } from '@/api/checkin'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { checkinSuccessMessage, formatCheckinCredit, hasPermanentCheckinReward } from '@/utils/checkinReward'
 import { formatDecimalAmount } from '@/utils/format'
 
 interface CalendarCell {
@@ -400,13 +421,20 @@ let latestStatusRequest = 0
 const canCheckIn = computed(() => Boolean(status.value?.enabled && !status.value.today_checked_in && !submitting.value))
 // 站点强制全员自动签到：隐藏用户侧开关与重新确认流程，改为一行说明文案。
 const autoForcedByAdmin = computed(() => status.value?.auto_forced_by_admin === true)
+const randomEnabled = computed(() => status.value?.random_reward?.enabled ?? false)
+const effectiveAutoFeeBps = computed(() => randomEnabled.value ? 0 : status.value?.auto_fee_bps ?? 500)
+const randomRewardText = computed(() => t('checkin.randomRewardRange', {
+  min: formatCredit(status.value?.random_reward?.min_amount ?? '1.00'),
+  max: formatCredit(status.value?.random_reward?.max_amount ?? '1.00'),
+}))
+const rewardGuideTitle = computed(() => t(randomEnabled.value ? 'checkin.randomRewardTitle' : 'checkin.admin.rewardTiers'))
 const checkInButtonLabel = computed(() => {
   if (submitting.value) return t('checkin.checkingIn')
   if (!status.value?.enabled) return t('checkin.disabled')
   if (status.value.today_checked_in) return t('checkin.checkedIn')
   return t('checkin.checkIn')
 })
-const temporaryCreditText = computed(() => status.value ? formatCredit(status.value.temporary_credit_available) : '')
+const temporaryCreditText = computed(() => status.value ? `$${formatDecimalAmount(status.value.temporary_credit_available)}` : '')
 const rewardTiers = computed(() => status.value?.reward_tiers ?? [])
 const rewardTierCapDay = computed(() => rewardTiers.value[rewardTiers.value.length - 1]?.day ?? 0)
 const rewardGuideVisible = computed(
@@ -495,7 +523,9 @@ async function handleCheckIn() {
     const result = await checkIn(getOrCreateIdempotencyKey())
     applyCheckinResult(result)
     lastCheckinResult.value = result
-    appStore.showSuccess(t(result.already_checked_in ? 'checkin.alreadyCheckedIn' : 'checkin.checkInSucceeded'))
+    appStore.showSuccess(result.already_checked_in
+      ? t('checkin.alreadyCheckedIn')
+      : checkinSuccessMessage(result, t))
     await Promise.all([loadStatus(), refreshUserSilently()])
   } catch (error) {
     console.error('Failed to complete daily check-in:', error)
@@ -529,11 +559,16 @@ async function handleToggleAuto() {
   showConsentDialog.value = true
 }
 
-async function confirmAutoPreference() {
+async function confirmAutoPreference(payload?: { policyVersion: string; feeBps: number }) {
   if (preferenceSaving.value || autoForcedByAdmin.value) return
+  if (!payload?.policyVersion || payload.policyVersion !== status.value?.policy_version
+    || payload.feeBps !== effectiveAutoFeeBps.value) {
+    appStore.showError(t('checkin.auto.consentRequired'))
+    return
+  }
   preferenceSaving.value = true
   try {
-    const preference = await updateCheckinPreference(true, true, status.value?.policy_version, status.value?.auto_fee_bps)
+    const preference = await updateCheckinPreference(true, true, payload.policyVersion, payload.feeBps)
     status.value = status.value
       ? { ...status.value, auto_enabled: preference.auto_enabled, consent_valid: preference.consent_valid }
       : status.value
@@ -624,7 +659,7 @@ function getBeijingDate(): string {
 }
 
 function formatCredit(value: string): string {
-  return `$${formatDecimalAmount(value)}`
+  return formatCheckinCredit(value)
 }
 
 function formatBpsAsPercent(bps: number): string {

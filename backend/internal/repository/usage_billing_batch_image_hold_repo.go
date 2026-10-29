@@ -466,7 +466,21 @@ func (r *usageBillingRepository) reserveBatchImageCreditHold(
 	if !applied {
 		return nil, errors.New("batch image reserve dedup appeared without a hold ledger")
 	}
-	return createBatchImageCreditHoldReservation(ctx, tx, cmd, job, now)
+	var autoExchange service.BankAutoExchangeTxResult
+	if cmd.HoldAmount > 0 {
+		autoExchange, err = service.BankAutoExchangeInTx(ctx, tx, cmd.UserID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result, err := createBatchImageCreditHoldReservation(ctx, tx, cmd, job, now)
+	if err != nil {
+		return nil, err
+	}
+	if autoExchange.Exchanged {
+		result.AutoExchange = &autoExchange
+	}
+	return result, nil
 }
 
 func createBatchImageCreditHoldReservation(
@@ -1146,22 +1160,33 @@ func validateLegacyBatchImageFrozenAttribution(ctx context.Context, tx *sql.Tx, 
 	if err != nil {
 		return 0, 0, err
 	}
-	var attributed float64
+	var attributed, bankDeposit float64
 	if err := tx.QueryRowContext(ctx, `
-SELECT COALESCE(SUM(permanent_reserved_amount), 0)
+SELECT COALESCE(SUM(permanent_reserved_amount), 0),
+       COALESCE((SELECT frozen_deposit FROM bank_auto_exchange_preferences WHERE user_id = $1), 0)
 FROM batch_image_credit_holds
-WHERE user_id = $1 AND status = 'reserved'`, userID).Scan(&attributed); err != nil {
+WHERE user_id = $1 AND status = 'reserved'`, userID).Scan(&attributed, &bankDeposit); err != nil {
 		return 0, 0, fmt.Errorf("sum attributed legacy batch image frozen balance: %w", err)
 	}
 	attributed, err = normalizeBatchImageLedgerAmount(attributed)
 	if err != nil || attributed < 0 {
 		return 0, 0, errors.New("attributed batch image frozen balance is invalid")
 	}
+	bankDeposit, err = normalizeBatchImageLedgerAmount(bankDeposit)
+	if err != nil || bankDeposit < 0 {
+		return 0, 0, errors.New("bank auto exchange frozen deposit is invalid")
+	}
+	// Bank deposits cannot be attributed to legacy image holds; keep the
+	// original total frozen balance for subsequent settlement updates.
+	imageFrozen, err := subtractBatchImageLedgerAmount(frozen, bankDeposit)
+	if err != nil {
+		return 0, 0, err
+	}
 	required, err := addBatchImageLedgerAmount(attributed, holdAmount)
 	if err != nil {
 		return 0, 0, err
 	}
-	if frozen < required {
+	if imageFrozen < required {
 		return 0, 0, errors.New("legacy batch image frozen balance cannot be attributed safely")
 	}
 	return balance, frozen, nil
