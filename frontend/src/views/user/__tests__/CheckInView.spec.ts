@@ -95,9 +95,9 @@ const mountView = async () => {
         },
         CheckinSettingsCard: { template: '<div data-test="checkin-settings-card-stub" />' },
         CheckinConsentDialog: {
-          props: ['show', 'feeBps'],
+          props: ['show', 'feeBps', 'policyVersion'],
           emits: ['confirm', 'close'],
-          template: '<div v-if="show" data-test="consent-dialog"><button data-test="consent-confirm" @click="$emit(\'confirm\')" /></div>',
+          template: '<div v-if="show" data-test="consent-dialog"><button data-test="consent-confirm" @click="$emit(\'confirm\', { policyVersion, feeBps })" /></div>',
         },
         Icon: { template: '<i />' },
       },
@@ -151,7 +151,7 @@ describe('CheckInView', () => {
 
     const checkedDay = wrapper.get('[data-test="calendar-cell"][data-date="2026-07-03"]')
     expect(checkedDay.text()).toContain('$1.25')
-    expect(checkedDay.text()).toContain('$0.13')
+    expect(checkedDay.text()).toContain('$0.125')
   })
 
   it('keeps the five summary cards equal-height and gives reward types distinct accessible colors', async () => {
@@ -249,7 +249,7 @@ describe('CheckInView', () => {
       temporary_credit_available: upperBoundReward,
     }))
     const wrapper = await mountView()
-    const expectedAmount = '$1000000000000.00'
+    const expectedAmount = `$${upperBoundReward}`
     const rewardValues = [
       wrapper.get('[data-test="next-temporary-reward"]'),
       wrapper.get('[data-test="next-permanent-reward"]'),
@@ -267,10 +267,10 @@ describe('CheckInView', () => {
 
     expect(wrapper.get('[data-test="next-reward"]').classes()).toContain('flex-wrap')
     expect(wrapper.get('[data-test="monthly-reward-total"]').classes()).toContain('flex-wrap')
-    expect(wrapper.get('[data-test="temporary-credit"]').text()).toBe(expectedAmount)
+    expect(wrapper.get('[data-test="temporary-credit"]').text()).toBe('$1000000000000.00')
   })
 
-  it('rounds calendar rewards to two places and keeps them constrained inside narrow cells', async () => {
+  it('preserves calendar reward precision and keeps amounts constrained inside narrow cells', async () => {
     const upperBoundReward = '999999999999.99999999'
     getCheckinStatus.mockResolvedValueOnce(baseStatus({
       calendar: [
@@ -289,7 +289,7 @@ describe('CheckInView', () => {
     const regularCell = wrapper.get('[data-test="calendar-cell"][data-date="2026-07-03"]')
     const upperBoundCell = wrapper.get('[data-test="calendar-cell"][data-date="2026-07-04"]')
     expect(regularCell.get('[data-test="calendar-reward"]').text()).toContain('$1.25')
-    expect(upperBoundCell.get('[data-test="calendar-reward"]').text()).toContain('$1000000000000.00')
+    expect(upperBoundCell.get('[data-test="calendar-reward"]').text()).toContain(`$${upperBoundReward}`)
 
     for (const cell of [regularCell, upperBoundCell]) {
       const reward = cell.get('[data-test="calendar-reward"]')
@@ -317,11 +317,11 @@ describe('CheckInView', () => {
   })
 
   it.each([
-    ['0.00000001', '$0.00'],
-    ['0.00000101', '$0.00'],
-    ['999999999999.99999999', '$1000000000000.00'],
+    ['0.00000001', '$0.00000001'],
+    ['0.00000101', '$0.00000101'],
+    ['999999999999.99999999', '$999999999999.99999999'],
   ])(
-    'renders the server reward amount as a precise two-place value: %s',
+    'preserves the server reward amount without rounding nonzero rewards to zero: %s',
     async (rewardAmount, expected) => {
       getCheckinStatus.mockResolvedValueOnce(baseStatus({ next_reward_amount: rewardAmount }))
       const wrapper = await mountView()

@@ -241,7 +241,7 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		if err != nil {
 			return err
 		}
-		if autoExchange.Exchanged {
+		if autoExchange.Exchanged || autoExchange.Settled {
 			result.AutoExchange = &autoExchange
 			result.NewBalance = &autoExchange.PermanentBalance
 		}

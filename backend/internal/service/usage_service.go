@@ -161,7 +161,7 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 		if err != nil {
 			return nil, fmt.Errorf("auto exchange for usage billing: %w", err)
 		}
-		balanceUpdated = autoExchange.Exchanged
+		balanceUpdated = autoExchange.Exchanged || autoExchange.Settled
 		usageLogID := usageLog.ID
 		permanentBalanceCost, err := NewTemporaryCreditAllocationExecutor().Allocate(
 			txCtx,

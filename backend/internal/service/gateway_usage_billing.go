@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -165,11 +164,8 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 		}
 	} else {
 		if cost.ActualCost > 0 {
-			if dbent.TxFromContext(billingCtx) == nil && deps.billingCacheService != nil {
-				if err := deps.billingCacheService.autoExchangeIfNeeded(billingCtx, p.User.ID); err != nil {
-					slog.Warn("bank auto exchange before legacy deduction failed", "user_id", p.User.ID, "error", err)
-				}
-			}
+			// This permanent-only fallback cannot atomically consume exchanged grants.
+			// Auto exchange belongs to the unified billing transaction instead.
 			if err := deps.userRepo.DeductBalance(billingCtx, p.User.ID, cost.ActualCost); err != nil {
 				slog.Error("deduct balance failed", "user_id", p.User.ID, "error", err)
 			} else if deps.billingCacheService != nil {

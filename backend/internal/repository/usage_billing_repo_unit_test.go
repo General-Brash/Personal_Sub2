@@ -20,6 +20,15 @@ const (
 	overdraftBalanceDeductSQL   = `(?s)UPDATE users\s+SET balance = balance - \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$2 AND deleted_at IS NULL\s+RETURNING balance`
 )
 
+func expectUsageBillingAutoExchangeDisabled(mock sqlmock.Sqlmock, userID int64) {
+	mock.ExpectQuery(`(?s)SELECT balance::text, frozen_balance::text, temporary_credit_debt::text\s+FROM users`).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance", "temporary_credit_debt"}).AddRow("10.00000000", "0.00000000", "0.00000000"))
+	mock.ExpectQuery(`(?s)SELECT enabled, threshold::text, exchange_amount::text, frozen_deposit::text\s+FROM bank_auto_exchange_preferences`).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"enabled", "threshold", "exchange_amount", "frozen_deposit"}))
+}
+
 func TestApplyUsageBillingEffectsSkipsBalanceAllocationAfterEightDecimalZero(t *testing.T) {
 	ctx := context.Background()
 	db, mock, err := sqlmock.New()
@@ -104,6 +113,7 @@ func TestApplyUsageBillingEffects_FlagsBalanceOverdraft(t *testing.T) {
 	mock.ExpectBegin()
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
+	expectUsageBillingAutoExchangeDisabled(mock, 42)
 	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`(?s)SELECT id, remaining_amount\s+FROM temporary_credit_grants\s+WHERE user_id = \$1 AND remaining_amount > 0 AND available_at <= clock_timestamp\(\) AND expires_at > clock_timestamp\(\)\s+ORDER BY expires_at ASC, id ASC\s+FOR UPDATE`).
 		WithArgs(int64(42)).
@@ -141,6 +151,7 @@ func TestApplyUsageBillingEffects_ConsumesTemporaryCreditBeforePermanentBalance(
 	mock.ExpectBegin()
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
+	expectUsageBillingAutoExchangeDisabled(mock, 42)
 	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`(?s)SELECT id, remaining_amount\s+FROM temporary_credit_grants\s+WHERE user_id = \$1 AND remaining_amount > 0 AND available_at <= clock_timestamp\(\) AND expires_at > clock_timestamp\(\)\s+ORDER BY expires_at ASC, id ASC\s+FOR UPDATE`).
 		WithArgs(int64(42)).
@@ -177,6 +188,7 @@ func TestApplyUsageBillingEffects_UsesUsageLogIDWithoutRawRequestID(t *testing.T
 	mock.ExpectBegin()
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
+	expectUsageBillingAutoExchangeDisabled(mock, 42)
 	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`SELECT id, remaining_amount`).
 		WithArgs(int64(42)).
@@ -304,6 +316,7 @@ func TestUsageBillingRepositoryApply_RollsBackUsageLogAndTemporaryCreditWhenPerm
 	mock.ExpectQuery(`SELECT request_fingerprint\s+FROM usage_billing_dedup_archive`).
 		WithArgs("req-permanent-failure", int64(9)).
 		WillReturnError(sql.ErrNoRows)
+	expectUsageBillingAutoExchangeDisabled(mock, 42)
 	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`SELECT id, remaining_amount`).
 		WithArgs(int64(42)).

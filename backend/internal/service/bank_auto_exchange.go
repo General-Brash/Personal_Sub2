@@ -193,6 +193,7 @@ SET enabled = EXCLUDED.enabled, threshold = EXCLUDED.threshold,
 
 type BankAutoExchangeTxResult struct {
 	Exchanged        bool
+	Settled          bool
 	PermanentSpent   float64
 	TemporaryGranted float64
 	PermanentBalance float64
@@ -231,6 +232,27 @@ func BankAutoExchangeInTx(ctx context.Context, tx TemporaryCreditSQLExecutor, us
 	if err := scanBankAutoExchangeRow(ctx, tx, `SELECT clock_timestamp()`, nil, &businessNow); err != nil {
 		return result, fmt.Errorf("sample bank auto exchange clock: %w", err)
 	}
+	policy, err := loadBankPolicy(ctx, tx)
+	if err != nil {
+		return result, err
+	}
+	var dueAt sql.NullTime
+	if err := scanBankAutoExchangeRow(ctx, tx, `SELECT temporary_credit_debt_due_at FROM users WHERE id = $1`, []any{userID}, &dueAt); err != nil {
+		return result, fmt.Errorf("load bank auto exchange debt due date: %w", err)
+	}
+	// Reconcile again under the caller's lock: debt can become due after preflight.
+	_, unusedProcessed, forcedSettled, err := reconcileBankDebtLocked(ctx, tx, userID, balance, debt, dueAt, policy, businessNow)
+	if err != nil {
+		return result, err
+	}
+	result.Settled = unusedProcessed || forcedSettled
+	if result.Settled {
+		balance, _, debt, err = lockBankAutoExchangeUser(ctx, tx, userID)
+		if err != nil {
+			return result, err
+		}
+		result.PermanentBalance = balance
+	}
 	available, err := bankAutoExchangeTemporaryAvailable(ctx, tx, userID, businessNow, true)
 	if err != nil {
 		return result, err
@@ -239,10 +261,6 @@ func BankAutoExchangeInTx(ctx context.Context, tx TemporaryCreditSQLExecutor, us
 	// does require another full exchange, until available is strictly greater.
 	if (threshold > 0 && available >= threshold) || (threshold == 0 && available > 0) || balance < amount {
 		return result, nil
-	}
-	policy, err := loadBankPolicy(ctx, tx)
-	if err != nil {
-		return result, err
 	}
 	expiresAt, err := nextTemporaryCreditExpiry(businessNow)
 	if err != nil {
@@ -366,7 +384,7 @@ func (s *BankService) AutoExchangeIfNeeded(ctx context.Context, userID int64) er
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit bank auto exchange transaction: %w", err)
 	}
-	if result.Exchanged {
+	if result.Exchanged || result.Settled {
 		s.invalidateBankCredits(ctx, userID, true)
 	}
 	return nil

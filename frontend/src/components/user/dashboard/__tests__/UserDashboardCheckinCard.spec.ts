@@ -71,11 +71,11 @@ describe('UserDashboardCheckinCard', () => {
   })
 
   it.each([
-    ['0.00000001', '$0.00'],
-    ['0.00000101', '$0.00'],
-    ['999999999999.99999999', '$1000000000000.00'],
+    ['0.00000001', '$0.00000001'],
+    ['0.00000101', '$0.00000101'],
+    ['999999999999.99999999', '$999999999999.99999999'],
   ])(
-    'renders the server summary amount as a precise two-place value: %s',
+    'preserves the server summary amount without rounding nonzero rewards to zero: %s',
     async (rewardAmount, expected) => {
       getCheckinStatus.mockResolvedValueOnce({ ...status, next_reward_amount: rewardAmount })
       const wrapper = mount(UserDashboardCheckinCard, {
@@ -88,11 +88,11 @@ describe('UserDashboardCheckinCard', () => {
       })
       await flushPromises()
 
-      expect(wrapper.get('[data-test="dashboard-reward"]').text()).toContain(expected)
+      expect(wrapper.get('[data-test="dashboard-reward"]').text()).toBe(expected)
     }
   )
 
-  it('rounds upper-bound amounts and keeps them inside two-column metrics', async () => {
+  it('preserves upper-bound amounts and keeps them inside two-column metrics', async () => {
     const upperBoundAmount = '999999999999.99999999'
     getCheckinStatus.mockResolvedValueOnce({
       ...status,
@@ -111,7 +111,7 @@ describe('UserDashboardCheckinCard', () => {
 
     const reward = wrapper.get('[data-test="dashboard-reward"]')
     const temporaryCredit = wrapper.get('[data-test="dashboard-temporary-credit"]')
-    expect(reward.text()).toBe('$1000000000000.00')
+    expect(reward.text()).toBe(`$${upperBoundAmount}`)
     expect(temporaryCredit.text()).toBe('$1000000000000.00')
 
     for (const amount of [reward, temporaryCredit]) {

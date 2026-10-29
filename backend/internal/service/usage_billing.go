@@ -186,7 +186,7 @@ type UsageBillingApplyResult struct {
 	APIKeyQuotaExhausted      bool
 	NewBalance                *float64                  // post-update balance (nil = no permanent balance change)
 	PermanentBalanceDeduction *float64                  // amount not covered by temporary credit and deducted from permanent balance
-	AutoExchange              *BankAutoExchangeTxResult // non-nil only when permanent credit was exchanged, not charged as usage
+	AutoExchange              *BankAutoExchangeTxResult // non-nil when exchange or debt settlement changed credits, not a usage charge
 	BalanceOverdrafted        bool                      // true when the sufficient-balance guard missed and debt was still recorded
 	QuotaState                *AccountQuotaState        // post-increment quota state (nil = no quota increment)
 }

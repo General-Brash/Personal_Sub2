@@ -477,7 +477,7 @@ func (r *usageBillingRepository) reserveBatchImageCreditHold(
 	if err != nil {
 		return nil, err
 	}
-	if autoExchange.Exchanged {
+	if autoExchange.Exchanged || autoExchange.Settled {
 		result.AutoExchange = &autoExchange
 	}
 	return result, nil
