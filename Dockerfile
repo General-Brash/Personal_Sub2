@@ -8,8 +8,8 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.27.2-alpine
-ARG ALPINE_IMAGE=alpine:3.21
+ARG GOLANG_IMAGE=golang:1.27.3-alpine
+ARG ALPINE_IMAGE=alpine:3.24
 ARG POSTGRES_IMAGE=postgres:18-alpine
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
@@ -119,8 +119,9 @@ LABEL org.opencontainers.image.source="https://github.com/General-Brash/Personal
 LABEL org.opencontainers.image.documentation="https://github.com/General-Brash/Personal_Sub2#readme"
 LABEL org.opencontainers.image.url="https://github.com/General-Brash/Personal_Sub2"
 
-# Install runtime dependencies
-RUN apk add --no-cache \
+# Refresh runtime packages to apply security fixes from the current branch.
+RUN apk upgrade --no-cache && \
+    apk add --no-cache \
     ca-certificates \
     tzdata \
     su-exec \

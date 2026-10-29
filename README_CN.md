@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 是基于官方 Sub2API `v0.1.178` 开发并独立维护的个人版本，本次融合版本为 `v0.1.178-P1`。
+Personal_Sub2 是基于官方 Sub2API `v0.2.1` 开发并独立维护的个人版本，本次融合版本为 `v0.2.1-P4.2.1`。
 
 [English](README.md) | 中文 | [日本語](README_JA.md)
 
@@ -53,7 +53,7 @@ ghcr.io/general-brash/personal_sub2
 
 ## 从源码构建
 
-环境要求：Go 1.26.5、Node.js 20+、pnpm 9、PostgreSQL 和 Redis。
+环境要求：Go 1.27.3、Node.js 20+、pnpm 9、PostgreSQL 和 Redis。
 
 ```bash
 git clone https://github.com/General-Brash/Personal_Sub2.git

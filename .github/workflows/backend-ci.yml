@@ -92,7 +92,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.2'
+          go-version: '1.27.3'
           check-latest: false
           cache: true
           cache-dependency-path: backend/go.sum
@@ -100,7 +100,7 @@ jobs:
       - name: Verify Go version
         run: |
           go version
-          go version | grep -q 'go1.27.2'
+          go version | grep -q 'go1.27.3'
 
       - name: Unit tests
         working-directory: backend
@@ -199,7 +199,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.2'
+          go-version: '1.27.3'
           check-latest: false
           cache: true
           cache-dependency-path: backend/go.sum
@@ -207,7 +207,7 @@ jobs:
       - name: Verify Go version
         run: |
           go version
-          go version | grep -q 'go1.27.2'
+          go version | grep -q 'go1.27.3'
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9

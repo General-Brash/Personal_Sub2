@@ -7,8 +7,8 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.27.2-alpine
-ARG ALPINE_IMAGE=alpine:3.20
+ARG GOLANG_IMAGE=golang:1.27.3-alpine
+ARG ALPINE_IMAGE=alpine:3.24
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 
@@ -92,8 +92,9 @@ LABEL maintainer="General-Brash <github.com/General-Brash>"
 LABEL description="Personal_Sub2 - Personal AI API Gateway (official v0.2.1 integration)"
 LABEL org.opencontainers.image.source="https://github.com/General-Brash/Personal_Sub2"
 
-# Install runtime dependencies
-RUN apk add --no-cache \
+# Refresh runtime packages to apply security fixes from the current branch.
+RUN apk upgrade --no-cache && \
+    apk add --no-cache \
     ca-certificates \
     tzdata \
     curl \

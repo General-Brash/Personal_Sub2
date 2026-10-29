@@ -297,3 +297,72 @@ func TestOpenAIGatewayService_APIKeyRetriesOnlyExplicitlyRejectedNamespace(t *te
 	require.Equal(t, "second", gjson.GetBytes(upstream.bodies[1], "input.1.name").String())
 	require.Equal(t, "call_2", gjson.GetBytes(upstream.bodies[1], "input.1.call_id").String())
 }
+
+func TestOpenAIGatewayService_AzureResourceRecoveryBoundaries(t *testing.T) {
+	foreignError := `{"error":{"type":"invalid_request_error","message":"` + azureForeignResourceTestError + `"}}`
+	okBody := `{"id":"resp_azure","output":[],"usage":{"input_tokens":1,"output_tokens":1,"input_tokens_details":{"cached_tokens":0}}}`
+	for _, passthrough := range []bool{false, true} {
+		for _, tt := range []struct {
+			name        string
+			status      int
+			response    string
+			stream      bool
+			ids         bool
+			repeatError bool
+			wantCalls   int
+			wantError   bool
+		}{
+			{"JSON recovery", http.StatusBadRequest, foreignError, false, true, false, 2, false},
+			{"SSE recovery", http.StatusBadRequest, foreignError, true, true, false, 2, false},
+			{"persistent mismatch stops", http.StatusBadRequest, foreignError, false, true, true, 2, true},
+			{"permission error stays unchanged", http.StatusForbidden, foreignError, false, true, false, 1, true},
+			{"non Azure resource stays unchanged", http.StatusBadRequest, `{"error":{"message":"This object was created under a different subscription; resource access is denied"}}`, false, true, false, 1, true},
+			{"no changes means no retry", http.StatusBadRequest, foreignError, false, false, false, 1, true},
+			{"normal success retains IDs", http.StatusOK, okBody, false, true, false, 1, false},
+		} {
+			t.Run(fmt.Sprintf("passthrough=%v/%s", passthrough, tt.name), func(t *testing.T) {
+				idField := ""
+				if tt.ids {
+					idField = `"id":"msg_resource_a",`
+				}
+				body := []byte(fmt.Sprintf(`{"model":"gpt-5.5","stream":%t,"input":[{%s"type":"message","role":"user","content":[{"type":"input_text","text":"continue","nonce":9007199254740993}]}]}`, tt.stream, idField))
+				firstBody := &passthroughCloseTrackingReadCloser{Reader: strings.NewReader(tt.response)}
+				first := newOpenAIRejectedFieldTestResponse(tt.status, tt.response)
+				first.Body = firstBody
+				second := newOpenAIRejectedFieldTestResponse(http.StatusOK, okBody)
+				if tt.repeatError {
+					second = newOpenAIRejectedFieldTestResponse(http.StatusBadRequest, foreignError)
+				} else if tt.stream {
+					second.Header.Set("Content-Type", "text/event-stream")
+					second.Body = io.NopCloser(strings.NewReader("data: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\ndata: {\"type\":\"response.completed\",\"response\":" + okBody + "}\n\ndata: [DONE]\n\n"))
+				}
+				upstream := &httpUpstreamRecorder{responses: []*http.Response{first, second, newOpenAIRejectedFieldTestResponse(http.StatusOK, okBody)}}
+				account := newOpenAIRejectedFieldTestAccount()
+				account.Extra["openai_passthrough"] = passthrough
+				c := newOpenAIRejectedFieldTestContext(body)
+				SetOpenAIClientTransport(c, OpenAIClientTransportHTTP)
+				result, err := newOpenAIRejectedFieldTestService(upstream).Forward(context.Background(), c, account, body)
+				if tt.wantError {
+					require.Error(t, err)
+					require.Nil(t, result)
+				} else {
+					require.NoError(t, err)
+					require.NotNil(t, result)
+					require.EqualValues(t, 1, result.Usage.InputTokens)
+				}
+				require.Len(t, upstream.bodies, tt.wantCalls)
+				require.True(t, firstBody.closed)
+				require.Equal(t, tt.ids, gjson.GetBytes(upstream.bodies[0], "input.0.id").Exists())
+				for i, req := range upstream.requests {
+					require.Equal(t, upstream.requests[0].URL.String(), req.URL.String())
+					require.Equal(t, "Bearer sk-test", req.Header.Get("Authorization"))
+					require.EqualValues(t, len(upstream.bodies[i]), req.ContentLength)
+					require.Equal(t, "9007199254740993", gjson.GetBytes(upstream.bodies[i], "input.0.content.0.nonce").Raw)
+				}
+				if tt.wantCalls == 2 {
+					require.False(t, gjson.GetBytes(upstream.bodies[1], "input.0.id").Exists())
+				}
+			})
+		}
+	}
+}

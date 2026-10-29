@@ -311,6 +311,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	}
 
 	agentTaskRecoveryTried := false
+	azureResourceRetryTried := false
 	compactModelFallbackRetried := false
 	var resp *http.Response
 	for {
@@ -331,8 +332,9 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		}
 		if resp.StatusCode >= 400 {
 
-			// Peek only to identify an invalid task. Restore the body so the existing
-			// passthrough error handling sees the same response after recovery fails.
+			// Peek to identify an invalid task or an error-triggered Azure resource recovery.
+			// Restore the body so existing passthrough error handling sees the same response
+			// when recovery does not retry.
 			probeBody := s.readUpstreamErrorBody(resp)
 			_ = resp.Body.Close()
 			resp.Body = io.NopCloser(bytes.NewReader(probeBody))
@@ -345,9 +347,26 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 				continue
 			}
 
+			if !azureResourceRetryTried {
+				retryBody, changed, retryErr := normalizeOpenAIResponsesAzureResourceRetryBody(resp.StatusCode, body, probeBody, upstreamReq.URL)
+				if retryErr != nil {
+					return nil, fmt.Errorf("normalize passthrough Azure resource retry body: %w", retryErr)
+				}
+				if changed {
+					azureResourceRetryTried = true
+					body = retryBody
+					logger.FromContext(ctx).Info("OpenAI passthrough retrying once after Azure resource mismatch",
+						zap.String("component", "service.openai_gateway"),
+						zap.Int64("account_id", account.ID),
+						zap.Int("upstream_status_code", resp.StatusCode),
+					)
+					continue
+				}
+			}
+
 			// 透传模式默认保持原样代理；容量错误以及 API-key 上游的瞬时
 			// 5xx 应先触发多账号 failover，且此时尚未写入下游响应。
-			// probeBody 已在上方任务探测时读取过一次，直接复用避免重复读取。
+			// probeBody 已在上方恢复探测时读取过一次，直接复用避免重复读取。
 
 			upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(probeBody)))
 			if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(

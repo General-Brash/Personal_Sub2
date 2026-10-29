@@ -742,9 +742,14 @@ func TestGrokQuotaServiceQueryQuotaFreeFallsBackToGrok45(t *testing.T) {
 	require.True(t, result.HeadersObserved)
 
 	requests, bodies := upstream.snapshot()
-	require.Len(t, requests, 3)
-	responseCalls := 0
+	// QueryQuota also schedules a best-effort /v1/models refresh. Its
+	// background timing must not change the foreground quota assertions.
+	queryCalls, responseCalls := 0, 0
 	for i, req := range requests {
+		if req.URL.Path == "/v1/models" {
+			continue
+		}
+		queryCalls++
 		if req.URL.Path != "/v1/responses" {
 			continue
 		}
@@ -757,6 +762,7 @@ func TestGrokQuotaServiceQueryQuotaFreeFallsBackToGrok45(t *testing.T) {
 		require.False(t, gjson.GetBytes(bodies[i], "max_output_tokens").Exists())
 		require.False(t, gjson.GetBytes(bodies[i], "store").Exists())
 	}
+	require.Equal(t, 3, queryCalls)
 	require.Equal(t, 1, responseCalls)
 }
 

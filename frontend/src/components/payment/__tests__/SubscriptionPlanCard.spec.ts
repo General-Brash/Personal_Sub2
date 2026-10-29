@@ -121,8 +121,8 @@ describe("SubscriptionPlanCard", () => {
       purchase_limit_mode: 'calendar',
     });
 
-    expect(wrapper.get('[data-test="purchase-limit-periodic"]').text()).toContain('payment.purchaseLimit.calendarWeek');
-    expect(wrapper.get('[data-test="purchase-limit-total"]').text()).toContain('payment.purchaseLimit.total');
+    expect(wrapper.get('[data-test="purchase-limit-periodic"]').text()).toContain('Natural week');
+    expect(wrapper.get('[data-test="purchase-limit-total"]').text()).toContain('Total');
   });
 
   it("shows rolling-window purchase progress", () => {
@@ -136,7 +136,7 @@ describe("SubscriptionPlanCard", () => {
       total_purchase_remaining: 10,
     });
 
-    expect(wrapper.get('[data-test="purchase-limit-periodic"]').text()).toContain('payment.purchaseLimit.rollingMonth');
+    expect(wrapper.get('[data-test="purchase-limit-periodic"]').text()).toContain('Rolling 4 month(s)');
     expect(wrapper.get('[data-test="purchase-limit-periodic"]').text()).toContain('2/4');
   });
 
@@ -148,7 +148,7 @@ describe("SubscriptionPlanCard", () => {
 
     const button = wrapper.get('[data-test="subscription-plan-select"]');
     expect(button.attributes('disabled')).toBeDefined();
-    expect(button.text()).toContain('payment.purchaseLimit.exhausted');
+    expect(button.text()).toContain('Purchase limit reached');
   });
 
   it("renders daily temporary-credit benefit, duration, total and payment credit type", () => {
@@ -161,18 +161,18 @@ describe("SubscriptionPlanCard", () => {
     });
 
     const text = wrapper.text();
-    expect(text).toContain('commerce.subscription.dailyTemporaryBadge');
+    expect(text).toContain('Daily temporary credit');
     expect(text).toContain('$10.00');
-    expect(text).toContain('commerce.subscription.daysCount');
+    expect(text).toContain('3 days');
     expect(text).toContain('$30.00');
-    expect(text).toContain('commerce.creditType.temporary');
-    expect(text).toContain('commerce.subscription.renewalExtends');
+    expect(text).toContain('temporary credit');
+    expect(text).toContain('Renewals extend instead of stacking.');
   });
 
   it.each([
-    ['days', 2, '2payment.days'],
-    ['weeks', 2, '2payment.weeks'],
-    ['months', 2, '2payment.months'],
+    ['days', 2, '2days'],
+    ['weeks', 2, '2weeks'],
+    ['months', 2, '2months'],
   ])('renders legacy %s validity with the configured unit', (validityUnit, validityDays, expected) => {
     const text = mountPlanCard('openai', {
       validity_days: validityDays,
@@ -198,12 +198,12 @@ describe("SubscriptionPlanCard", () => {
 
   // #4607：管理端保存的单位是复数（months/weeks），此前用户侧只匹配单数
   // 'month'，「1 个月」的套餐卡片被显示成「1天」。测试环境的 vue-i18n 为
-  // runtime-only 构建，t() 原样返回 key，故按 key 断言单位分支。
+  // 当前 runtime 构建支持 JIT 消息编译，按英文 fixture 和实际插值断言单位分支。
   it("renders plural admin-form validity units instead of mislabeled days (#4607)", () => {
-    expect(mountPlanCard("openai", { validity_days: 1, validity_unit: "months" }).text()).toContain("/ payment.perMonth");
-    expect(mountPlanCard("openai", { validity_days: 3, validity_unit: "months" }).text()).toContain("/ 3payment.months");
-    expect(mountPlanCard("openai", { validity_days: 2, validity_unit: "weeks" }).text()).toContain("/ 2payment.weeks");
-    expect(mountPlanCard("openai", { validity_days: 30, validity_unit: "day" }).text()).toContain("/ 30payment.days");
+    expect(mountPlanCard("openai", { validity_days: 1, validity_unit: "months" }).text()).toContain("/ month");
+    expect(mountPlanCard("openai", { validity_days: 3, validity_unit: "months" }).text()).toContain("/ 3months");
+    expect(mountPlanCard("openai", { validity_days: 2, validity_unit: "weeks" }).text()).toContain("/ 2weeks");
+    expect(mountPlanCard("openai", { validity_days: 30, validity_unit: "day" }).text()).toContain("/ 30days");
   });
 
   it("uses the configured currency symbol while preserving USD for legacy plans", () => {
@@ -254,11 +254,11 @@ describe("SubscriptionPlanCard", () => {
       "items-center",
       "justify-end",
     ]));
-    expect(badge?.element.parentElement?.textContent).toContain("/ 30payment.days");
+    expect(badge?.element.parentElement?.textContent).toContain("/ 30days");
     expect(badge?.element.parentElement?.parentElement?.classList).toContain("shrink-0");
     expect(price?.element.parentElement?.parentElement?.classList).toContain("shrink-0");
     expect(wrapper.get("p").text()).toBe("Includes advanced models and priority support.");
-    expect(wrapper.get("button").text()).toBe("payment.subscribeNow");
+    expect(wrapper.get("button").text()).toBe("Subscribe now");
   });
 
   it("keeps short plan titles compact and aligned", () => {
@@ -274,6 +274,6 @@ describe("SubscriptionPlanCard", () => {
       "items-center",
       "justify-end",
     ]));
-    expect(badge?.element.parentElement?.textContent).toContain("/ 30payment.days");
+    expect(badge?.element.parentElement?.textContent).toContain("/ 30days");
   });
 });

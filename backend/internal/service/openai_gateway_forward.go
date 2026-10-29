@@ -952,6 +952,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 	httpInvalidEncryptedContentRetryTried := false
 	agentTaskRecoveryTried := false
+	azureResourceRetryTried := false
 	rejectedFieldRetryState := newOpenAIResponsesRejectedFieldRetryState(body)
 	for {
 		// Build upstream request
@@ -1026,6 +1027,19 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 					return nil, fmt.Errorf("agent identity task recovery failed: %w", err)
 				}
 				continue
+			}
+			if !azureResourceRetryTried {
+				if retryBody, changed, retryErr := normalizeOpenAIResponsesAzureResourceRetryBody(resp.StatusCode, body, respBody, upstreamReq.URL); retryErr != nil {
+					return nil, fmt.Errorf("normalize Azure resource Responses retry body: %w", retryErr)
+				} else if changed {
+					azureResourceRetryTried = true
+					body = retryBody
+					requestView = newOpenAIRequestView(body)
+					reqBody = nil
+					rejectedFieldRetryState.remember(body)
+					logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Retrying non-WSv2 request once after Azure resource mismatch (account: %s)", account.Name)
+					continue
+				}
 			}
 			respBody = s.redactAgentIdentitySensitiveBody(ctx, account, respBody)
 			resp.Body = io.NopCloser(bytes.NewReader(respBody))

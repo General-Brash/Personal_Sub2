@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 は、公式 Sub2API `v0.1.178` を基に個人で開発し、独立して保守しているバージョンです。この統合リリースは `v0.1.178-P1` です。
+Personal_Sub2 は、公式 Sub2API `v0.2.1` を基に個人で開発し、独立して保守しているバージョンです。この統合リリースは `v0.2.1-P4.2.1` です。
 
 [English](README.md) | [中文](README_CN.md) | 日本語
 
@@ -53,7 +53,7 @@ ghcr.io/general-brash/personal_sub2
 
 ## ソースからのビルド
 
-必要環境：Go 1.26.5、Node.js 20+、pnpm 9、PostgreSQL、Redis。
+必要環境：Go 1.27.3、Node.js 20+、pnpm 9、PostgreSQL、Redis。
 
 ```bash
 git clone https://github.com/General-Brash/Personal_Sub2.git

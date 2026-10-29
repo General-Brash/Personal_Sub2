@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.2.1`. This integration line is released as `v0.2.1-p4`.
+Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.2.1`. The current personal release is `v0.2.1-P4.2.1`.
 
 English | [中文](README_CN.md) | [日本語](README_JA.md)
 
@@ -56,7 +56,7 @@ See [`deploy/`](deploy/) for deployment files and runtime settings. For containe
 
 ## Build from Source
 
-Requirements: Go 1.27.0, Node.js 20+, pnpm 9, PostgreSQL, and Redis.
+Requirements: Go 1.27.3, Node.js 20+, pnpm 9, PostgreSQL, and Redis.
 
 ```bash
 git clone https://github.com/General-Brash/Personal_Sub2.git

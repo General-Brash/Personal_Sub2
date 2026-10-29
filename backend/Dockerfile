@@ -1,9 +1,9 @@
-FROM golang:1.27.2-alpine
+FROM golang:1.27.3-alpine
 
 WORKDIR /app
 
 # 安装必要的工具
-RUN apk add --no-cache git
+RUN apk upgrade --no-cache && apk add --no-cache git
 
 # 复制go.mod和go.sum
 COPY go.mod go.sum ./

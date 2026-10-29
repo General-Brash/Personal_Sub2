@@ -5,7 +5,7 @@
 # It only packages the pre-built binary, no compilation needed.
 # =============================================================================
 
-ARG ALPINE_IMAGE=alpine:3.21
+ARG ALPINE_IMAGE=alpine:3.24
 ARG POSTGRES_IMAGE=postgres:18-alpine
 
 FROM ${POSTGRES_IMAGE} AS pg-client
@@ -19,8 +19,9 @@ LABEL org.opencontainers.image.source="https://github.com/General-Brash/Personal
 LABEL org.opencontainers.image.documentation="https://github.com/General-Brash/Personal_Sub2#readme"
 LABEL org.opencontainers.image.url="https://github.com/General-Brash/Personal_Sub2"
 
-# Install runtime dependencies
-RUN apk add --no-cache \
+# Refresh runtime packages to apply security fixes from the current branch.
+RUN apk upgrade --no-cache && \
+    apk add --no-cache \
     ca-certificates \
     tzdata \
     curl \
@@ -54,7 +55,7 @@ RUN mkdir -p /app/data && chown -R sub2api:sub2api /app
 
 # Copy entrypoint script (fixes volume permissions then drops to sub2api)
 COPY deploy/docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh /app/sub2api
 
 EXPOSE 8080
 

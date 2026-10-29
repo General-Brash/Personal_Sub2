@@ -147,6 +147,44 @@ jobs:
             echo 'EOF'
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Build runtime validation image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/intent-classifier
+          file: ./services/intent-classifier/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: intent-classifier-ci:${{ steps.source.outputs.sha }}
+          cache-from: type=gha,scope=intent-classifier
+          provenance: false
+          sbom: false
+
+      - name: Verify minimal runtime before publication
+        shell: bash
+        env:
+          IMAGE_REF: intent-classifier-ci:${{ steps.source.outputs.sha }}
+        run: |
+          docker run --rm --network none --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --entrypoint /usr/local/bin/python "${IMAGE_REF}" \
+            -c 'import os,ssl,uuid,numpy,onnxruntime,tokenizers; from intent_classifier.cli import main; assert os.getuid() == 10001; assert "CPUExecutionProvider" in onnxruntime.get_available_providers()'
+          docker run --rm --network none "${IMAGE_REF}" --help
+          CONTAINER_ID="$(docker run -d --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --tmpfs /tmp:rw,size=64m \
+            --tmpfs /state:rw,uid=10001,gid=10001,mode=0700 \
+            -e INTENT_CLASSIFIER_ADMIN_TOKEN=runtime-ci-test-token "${IMAGE_REF}")"
+          trap 'docker rm -f "${CONTAINER_ID}" >/dev/null' EXIT
+          for attempt in $(seq 1 30); do
+            if docker exec "${CONTAINER_ID}" /usr/local/bin/python \
+              -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8080/health/live", timeout=2).read()'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs "${CONTAINER_ID}"
+          echo 'Classifier runtime did not become live' >&2
+          exit 1
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
