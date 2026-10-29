@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 是基于官方 Sub2API `v0.2.1` 开发并独立维护的个人版本，本次融合版本为 `v0.2.1-P4.2.1`。
+Personal_Sub2 是基于官方 Sub2API `v0.2.1` 开发并独立维护的个人版本，本次融合版本为 `v0.2.1-P4.3`。
 
 [English](README.md) | 中文 | [日本語](README_JA.md)
 

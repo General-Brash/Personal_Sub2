@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.2.1`. The current personal release is `v0.2.1-P4.2.1`.
+Personal_Sub2 is a personally developed and independently maintained edition based on official Sub2API `v0.2.1`. The current personal release is `v0.2.1-P4.3`.
 
 English | [中文](README_CN.md) | [日本語](README_JA.md)
 

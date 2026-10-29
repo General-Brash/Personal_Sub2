@@ -1,6 +1,6 @@
 # Personal_Sub2
 
-Personal_Sub2 は、公式 Sub2API `v0.2.1` を基に個人で開発し、独立して保守しているバージョンです。この統合リリースは `v0.2.1-P4.2.1` です。
+Personal_Sub2 は、公式 Sub2API `v0.2.1` を基に個人で開発し、独立して保守しているバージョンです。この統合リリースは `v0.2.1-P4.3` です。
 
 [English](README.md) | [中文](README_CN.md) | 日本語
 
