@@ -205,6 +205,86 @@ func TestGatewayServiceRecordUsage_UsesGroupRateWithoutReadingFloatDefault(t *te
 	require.Equal(t, groupRate, usageRepo.lastLog.RateMultiplier)
 }
 
+func TestGatewayServiceRecordUsage_AccountStatsPreservesCacheTTLBreakdown(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		customPricing bool
+		applyPricing  bool
+		wantStatsCost float64
+	}{
+		{name: "default_model_prices", wantStatsCost: 1.19},
+		{name: "custom_account_prices", customPricing: true, wantStatsCost: 2.38},
+		{name: "user_prices_applied_to_stats", applyPricing: true, wantStatsCost: 1.19},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			groupID := int64(901)
+			usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+			svc := newGatewayRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
+			svc.billingService = newTestBillingServiceWithPrices(map[string]*ModelPricing{
+				"claude-sonnet-4": {
+					InputPricePerToken:         0.001,
+					OutputPricePerToken:        0.002,
+					CacheCreationPricePerToken: 0.003,
+					CacheReadPricePerToken:     0.0005,
+					CacheCreation5mPrice:       0.003,
+					CacheCreation1hPrice:       0.005,
+					SupportsCacheBreakdown:     true,
+				},
+			})
+			channel := &Channel{ID: 1, Status: StatusActive, ApplyPricingToAccountStats: tt.applyPricing}
+			if tt.customPricing {
+				channel.AccountStatsPricingRules = []AccountStatsPricingRule{{
+					GroupIDs: []int64{groupID},
+					Pricing: []ChannelModelPricing{{
+						Models:            []string{"claude-sonnet-4"},
+						BillingMode:       BillingModeToken,
+						InputPrice:        testPtrFloat64(0.002),
+						OutputPrice:       testPtrFloat64(0.004),
+						CacheWritePrice:   testPtrFloat64(0.006),
+						CacheWrite1hPrice: testPtrFloat64(0.01),
+						CacheReadPrice:    testPtrFloat64(0.001),
+					}},
+				}}
+			}
+			svc.channelService = newTestChannelServiceForStats(t, channel, groupID, PlatformAnthropic)
+
+			err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+				Result: &ForwardResult{
+					RequestID: "gateway_cache_ttl_" + tt.name,
+					Usage: ClaudeUsage{
+						InputTokens:              100,
+						OutputTokens:             50,
+						CacheCreationInputTokens: 200,
+						CacheReadInputTokens:     300,
+						CacheCreation5mTokens:    80,
+						CacheCreation1hTokens:    120,
+					},
+					Model:         "claude-sonnet-4",
+					UpstreamModel: "claude-sonnet-4",
+					Duration:      time.Second,
+				},
+				APIKey: &APIKey{
+					ID: 501, GroupID: &groupID,
+					Group: &Group{ID: groupID, Platform: PlatformAnthropic, RateMultiplier: 0.75},
+				},
+				User:    &User{ID: 601},
+				Account: &Account{ID: 701},
+			})
+
+			require.NoError(t, err)
+			require.NotNil(t, usageRepo.lastLog)
+			log := usageRepo.lastLog
+			require.NotNil(t, log.AccountStatsCost)
+			require.InDelta(t, tt.wantStatsCost, *log.AccountStatsCost, 1e-12)
+			require.InDelta(t, 1.19, log.TotalCost, 1e-12)
+			require.InDelta(t, 0.8925, log.ActualCost, 1e-12)
+			require.Equal(t, 200, log.CacheCreationTokens)
+			require.Equal(t, 80, log.CacheCreation5mTokens)
+			require.Equal(t, 120, log.CacheCreation1hTokens)
+		})
+	}
+}
+
 func TestGatewayServiceRecordUsage_PreservesRequestedAndUpstreamModels(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	svc := newGatewayRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})

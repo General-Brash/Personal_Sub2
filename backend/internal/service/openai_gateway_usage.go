@@ -255,6 +255,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
 	}
 	longContextBillingGate := openAILongContextBillingGate(billingAccount)
+	billedModel := firstUsageBillingModel(billingModels)
 	cost, err = s.calculateOpenAIRecordUsageCost(
 		ctx,
 		result,
@@ -269,6 +270,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		optionalStringValue(result.ReasoningEffort),
 		longContextBillingGate,
 		pricingAt,
+		&billedModel,
 	)
 	if err != nil {
 		if !isUsagePricingUnavailableError(err) {
@@ -299,9 +301,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	); responseModel != "" && !strings.EqualFold(responseModel, baselineBillingModel) {
 		if identified, responseChannelPriced := s.hasIdentifiedOpenAIResponsePricing(ctx, responseModel, apiKey); identified {
 			responseModels := s.filterCNProviderBillingModelCandidates(ctx, account, apiKey, usageBillingModelCandidates(responseModel))
+			var responseBilledModel string
 			responseCost, responseErr := s.calculateOpenAIRecordUsageCost(
 				ctx, result, apiKey, responseModels, multiplier, imageMultiplier,
-				videoMultiplier, baseMultiplier, tokens, serviceTier, optionalStringValue(result.ReasoningEffort), longContextBillingGate, pricingAt,
+				videoMultiplier, baseMultiplier, tokens, serviceTier, optionalStringValue(result.ReasoningEffort), longContextBillingGate, pricingAt, &responseBilledModel,
 			)
 			// 基线定价源以 baselineBillingModel 为准：它正是 calculateOpenAIRecordUsageCost
 			// 内部做渠道定价判断时使用的模型，且"首候选有渠道价"必然意味着首候选就是实际
@@ -312,6 +315,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 					baselineBillingModel, responseModel, cost, responseCost)
 				billingModels = responseModels
 				cost = responseCost
+				billedModel = responseBilledModel
 			}
 		}
 	}
@@ -490,13 +494,34 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		usageLog.SubscriptionID = &subscription.ID
 	}
 
-	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
-	if apiKey.GroupID != nil {
-		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
-			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
-			tokens, cost.TotalCost,
-		)
+	// Refresh media pricing only for account accounting, after user pricing is complete.
+	accountPricingAPIKey := apiKey
+	if result.ImageCount > 0 || result.VideoCount > 0 {
+		accountPricingAPIKey = s.apiKeyWithFreshGroupMediaPricing(ctx, apiKey)
 	}
+
+	// Account raw cost uses model group pricing, then underlying defaults, without user multipliers.
+	groupID := int64(0)
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	}
+	accountStatsPricing := AccountStatsPricingContext{
+		Group:                     accountPricingAPIKey.Group,
+		RecalculateGroupPricing:   accountPricingAPIKey != apiKey,
+		BillingModel:              billedModel,
+		PricingAt:                 pricingAt,
+		LongContextBillingEnabled: longContextBillingGate,
+		SearchCount:               result.SearchCount,
+		WebSearchCalls:            result.WebSearchCalls,
+	}
+	if result.AudioUsage != nil {
+		accountStatsPricing.AudioMode = result.AudioUsage.Mode
+		accountStatsPricing.AudioUnits = result.AudioUsage.DurationOrUnits
+	}
+	applyAccountStatsCostWithPricingContext(ctx, usageLog, s.channelService, s.billingService,
+		account.ID, groupID, result.UpstreamModel, result.Model,
+		tokens, usageLog.TotalCost, &accountStatsPricing,
+	)
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
@@ -514,6 +539,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	usedUnifiedBilling, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
 		Cost:                  cost,
+		AccountStatsCost:      usageLog.AccountStatsCost,
 		User:                  user,
 		APIKey:                apiKey,
 		Account:               account,
@@ -581,14 +607,27 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	reasoningEffort string,
 	longContextBillingGate *bool,
 	pricingAt time.Time,
+	billedModels ...*string,
 ) (*CostBreakdown, error) {
 	billingModel := firstUsageBillingModel(billingModels)
+	recordBilledModel := func(model string, cost *CostBreakdown) {
+		if cost == nil {
+			return
+		}
+		for _, billedModel := range billedModels {
+			if billedModel != nil {
+				*billedModel = model
+			}
+		}
+	}
 	if result != nil && result.WebSearchCalls > 0 {
 		// Codex alpha/search 网页搜索按次计费：上游不返回 usage/token 字段，单价只取
 		// 分组覆盖价（nil 时默认 0.01 = 官方 $10/1000 次），不参与渠道级模型定价。
 		// 倍率与 image/video 按次口径一致：使用不含高峰因子的基础倍率
 		//（用户专属 > 分组 rate_multiplier > 系统默认），与分组表单的价格预览承诺一致。
-		return s.billingService.CalculateWebSearchCost(result.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), webSearchMultiplier), nil
+		cost := s.billingService.CalculateWebSearchCost(result.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), webSearchMultiplier)
+		recordBilledModel(billingModel, cost)
+		return cost, nil
 	}
 	if isGrokVideoUsageResult(result, billingModels) {
 		resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey)
@@ -596,21 +635,29 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 			resolved = s.billingService.resolveAdminDefaultMediaPricing(billingModel)
 		}
 		if resolved == nil || resolved.Mode != BillingModeToken {
-			return s.calculateOpenAIVideoCost(ctx, billingModel, apiKey, result, videoMultiplier), nil
+			cost := s.calculateOpenAIVideoCost(ctx, billingModel, apiKey, result, videoMultiplier)
+			recordBilledModel(billingModel, cost)
+			return cost, nil
 		}
 	}
 	if result != nil && result.AudioUsage != nil {
 		if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved != nil &&
 			(resolved.Mode == BillingModePerRequest) {
 			gid := apiKey.Group.ID
-			return s.billingService.CalculateCostUnified(CostInput{
+			cost, err := s.billingService.CalculateCostUnified(CostInput{
 				Ctx: ctx, Model: billingModel, GroupID: &gid, Group: apiKey.Group,
 				UsageUnits: result.AudioUsage.DurationOrUnits, SizeTier: result.AudioUsage.Mode,
 				RateMultiplier: webSearchMultiplier, Resolver: s.resolver, Resolved: resolved,
 			})
+			if err == nil {
+				recordBilledModel(billingModel, cost)
+			}
+			return cost, err
 		}
 		cfg := groupAudioPriceConfigFromAPIKey(apiKey)
-		return s.billingService.CalculateAudioCost(result.AudioUsage.Mode, result.AudioUsage.DurationOrUnits, cfg, webSearchMultiplier), nil
+		cost := s.billingService.CalculateAudioCost(result.AudioUsage.Mode, result.AudioUsage.DurationOrUnits, cfg, webSearchMultiplier)
+		recordBilledModel(billingModel, cost)
+		return cost, nil
 	}
 
 	if result != nil && result.ImageCount > 0 {
@@ -619,7 +666,9 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 			resolved = s.billingService.resolveAdminDefaultMediaPricing(billingModel)
 		}
 		if resolved == nil || resolved.Mode != BillingModeToken {
-			return s.calculateOpenAIImageCost(ctx, billingModel, apiKey, result, imageMultiplier), nil
+			cost := s.calculateOpenAIImageCost(ctx, billingModel, apiKey, result, imageMultiplier)
+			recordBilledModel(billingModel, cost)
+			return cost, nil
 		}
 	}
 
@@ -645,6 +694,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 			)
 			if err == nil {
 				tokenCost = cost
+				recordBilledModel(candidate, cost)
 				break
 			}
 			lastErr = err
@@ -676,6 +726,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		}
 		// Search-only (no model / pure tool path): allow search billing alone.
 		if searchCost != nil {
+			recordBilledModel(billingModel, searchCost)
 			return searchCost, nil
 		}
 		// 空候选按「无价可循」处理并携带 ErrModelPricingUnavailable：上层据此走

@@ -27,6 +27,7 @@ const messages: Record<string, string> = {
   'admin.usage.cacheReadCost': 'Cache Read Cost',
   'usage.inputTokenPrice': 'Input price',
   'usage.outputTokenPrice': 'Output price',
+  'usage.outputTps': 'Output TPS',
   'usage.perMillionTokens': '/ 1M tokens',
   'usage.serviceTier': 'Service tier',
   'usage.serviceTierPriority': 'Fast',
@@ -89,6 +90,7 @@ const DataTableStub = {
         <slot name="cell-billing_mode" :row="row" />
         <slot name="cell-tokens" :row="row" />
         <slot name="cell-cost" :row="row" />
+        <slot name="cell-latency" :row="row" />
         <slot name="cell-request_id" :row="row" />
         <slot name="cell-upstream_request_id" :row="row" />
       </div>
@@ -171,7 +173,7 @@ describe('admin UsageTable tooltip', () => {
     expect(wrapper.get('[data-testid="long-context-billing-marker"]').text()).toBe('x2')
   })
 
-  it('uses the requested precision for player usage records', () => {
+  it('uses four decimals for usage costs by default', () => {
     const wrapper = mount(UsageTable, {
       props: {
         data: [{
@@ -182,7 +184,6 @@ describe('admin UsageTable tooltip', () => {
         }],
         loading: false,
         columns: [],
-        costFractionDigits: 8,
       },
       global: {
         stubs: {
@@ -194,7 +195,44 @@ describe('admin UsageTable tooltip', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('$0.09288300')
+    expect(wrapper.text()).toContain('$0.0929')
+    expect(wrapper.text()).not.toContain('$0.09288300')
+  })
+
+  it.each([true, false])('shows output TPS for both account billing visibility modes: %s', (showAccountBilling) => {
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [{
+          ...baseImageRow,
+          request_id: 'req-output-tps',
+          billing_mode: 'token',
+          image_count: 0,
+          request_type: 'stream',
+          stream: true,
+          output_tokens: 186,
+          duration_ms: 9180,
+          first_token_ms: 3420,
+        }],
+        columns: [{ key: 'latency', label: 'Latency' }],
+        showAccountBilling,
+      },
+      global: {
+        stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true },
+      },
+    })
+
+    expect(wrapper.text()).toContain('Output TPS')
+    expect(wrapper.get('[data-testid="output-tps"]').text()).toBe('32.29 tok/s')
+  })
+
+  it('does not label per-image output as token throughput', () => {
+    const wrapper = mount(UsageTable, {
+      props: { data: [{ ...baseImageRow, duration_ms: 1000 }], columns: [] },
+      global: {
+        stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true },
+      },
+    })
+    expect(wrapper.get('[data-testid="output-tps"]').text()).toBe('-')
   })
 
   it('shows service tier and billing breakdown in cost tooltip', async () => {
@@ -241,10 +279,10 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('Account rate')
     expect(text).toContain('User billed')
     expect(text).toContain('Account billed')
-    expect(text).toContain('$0.09')
-    expect(text).toContain('$5.00 / 1M tokens')
-    expect(text).toContain('$30.00 / 1M tokens')
-    expect(text).toContain('$0.07')
+    expect(text).toContain('$0.0929')
+    expect(text).toContain('$5.0000 / 1M tokens')
+    expect(text).toContain('$30.0000 / 1M tokens')
+    expect(text).toContain('$0.0696')
   })
 
   it('shows requested and upstream models separately for admin rows', () => {
@@ -405,8 +443,8 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('Output size')
     expect(text).toContain('Per-image price')
     expect(text).toContain('Image total price')
-    expect(text).toContain('$0.20')
-    expect(text).toContain('$0.40')
+    expect(text).toContain('$0.2000')
+    expect(text).toContain('$0.4000')
     for (const value of expected) {
       expect(text).toContain(value)
     }

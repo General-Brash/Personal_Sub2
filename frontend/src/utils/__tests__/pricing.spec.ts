@@ -17,9 +17,9 @@ describe('price display formatting', () => {
     const calculated = calculateTokenPricePerMillion(1.23456789, 1_000_000)
 
     expect(calculated).toBeCloseTo(1.23456789, 8)
-    expect(formatTokenPricePerMillion(1.23456789, 1_000_000)).toBe('$1.23')
+    expect(formatTokenPricePerMillion(1.23456789, 1_000_000)).toBe('$1.2346')
     expect(
       formatTokenPricePerMillion(1.23456789, 1_000_000, { withCurrencySymbol: false })
-    ).toBe('1.23')
+    ).toBe('1.2346')
   })
 })

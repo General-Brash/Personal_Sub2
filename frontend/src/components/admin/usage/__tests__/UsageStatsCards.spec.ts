@@ -65,7 +65,7 @@ describe('UsageStatsCards', () => {
     expect(text).toContain('22')
   })
 
-  it('formats all displayed costs with two decimal places', () => {
+  it('formats all displayed costs with four decimal places', () => {
     const wrapper = mount(UsageStatsCards, {
       props: {
         stats: {
@@ -83,8 +83,8 @@ describe('UsageStatsCards', () => {
     })
 
     const text = wrapper.text()
-    expect(text).toContain('$12.35')
-    expect(text).toContain('Cost $8.77')
-    expect(text).toContain('Standard $4.32')
+    expect(text).toContain('$12.3450')
+    expect(text).toContain('Cost $8.7650')
+    expect(text).toContain('Standard $4.3210')
   })
 })

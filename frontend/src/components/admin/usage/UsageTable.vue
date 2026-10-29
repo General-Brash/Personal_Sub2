@@ -189,7 +189,7 @@
         </template>
 
         <template #cell-cost="{ row }">
-          <div class="text-sm">
+          <div class="whitespace-nowrap text-sm">
             <div class="flex items-center gap-1.5">
               <span class="font-medium text-green-600 dark:text-green-400">${{ formatUsageCost(row.actual_cost) }}</span>
               <span
@@ -216,7 +216,7 @@
 
         <!-- 合并首字/总耗时的健康度列：左侧色条上端随首字档、下端随总耗时档，中段(40%-60%)短渐变过渡，便于纵向扫视整体健康状况 -->
         <template #cell-latency="{ row }">
-          <div class="flex items-stretch gap-2">
+          <div class="flex min-h-[3.5rem] max-w-full items-stretch gap-2 md:min-w-[14rem]">
             <span
               class="w-1 shrink-0 rounded-full"
               :class="row.first_token_ms != null
@@ -224,18 +224,25 @@
                 : LATENCY_BAR_CLASSES[durationSeverity(row.duration_ms ?? 0)]"
               aria-hidden="true"
             ></span>
-            <div class="grid grid-cols-[max-content_max-content] items-baseline gap-x-2 gap-y-0.5 text-xs">
+            <div class="grid min-w-0 flex-1 grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 whitespace-normal text-left text-xs leading-4">
               <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyFirstToken') }}</span>
               <span v-if="row.first_token_ms != null" class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[firstTokenSeverity(row.first_token_ms)]">{{ formatDuration(row.first_token_ms) }}</span>
               <span v-else class="text-gray-400 dark:text-gray-500">-</span>
               <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyDuration') }}</span>
               <span class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]">{{ formatDuration(row.duration_ms) }}</span>
+              <span class="text-gray-400 dark:text-gray-500">{{ t('usage.outputTps') }}</span>
+              <span
+                data-testid="output-tps"
+                class="min-w-0 break-all font-medium tabular-nums text-gray-700 dark:text-gray-300"
+                :class="{ 'cursor-help underline decoration-dotted underline-offset-2': isUsageOutputTpsEstimated(row) }"
+                :title="isUsageOutputTpsEstimated(row) ? t('usage.outputTpsEstimatedHint') : undefined"
+              >{{ formatUsageOutputTps(row) }}</span>
             </div>
           </div>
         </template>
 
         <template #cell-created_at="{ value }">
-          <span class="text-sm text-gray-600 dark:text-gray-400">{{ formatDateTime(value) }}</span>
+          <span class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{{ formatDateTime(value) }}</span>
         </template>
 
         <template #cell-request_id="{ row }">
@@ -411,20 +418,27 @@
             <template v-if="tooltipData && !isImageUsage(tooltipData) && (!tooltipData.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN)">
               <div v-if="tooltipData && textInputTokens(tooltipData) > 0" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
-                <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, textInputTokens(tooltipData), { fractionDigits: costFractionDigits }) }} {{ t('usage.perMillionTokens') }}</span>
+                <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, textInputTokens(tooltipData)) }} {{ t('usage.perMillionTokens') }}</span>
               </div>
               <div v-if="tooltipData && hasImageInputTokens(tooltipData)" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.imageInputTokenPrice') }}</span>
-                <span class="font-medium text-fuchsia-300">{{ formatTokenPricePerMillion(tooltipData.image_input_cost ?? 0, tooltipData.image_input_tokens, { fractionDigits: costFractionDigits }) }} {{ t('usage.perMillionTokens') }}</span>
+                <span class="font-medium text-fuchsia-300">{{ formatTokenPricePerMillion(tooltipData.image_input_cost, tooltipData.image_input_tokens) }} {{ t('usage.perMillionTokens') }}</span>
               </div>
               <div v-if="tooltipData && tooltipData.output_cost > 0 && textOutputTokens(tooltipData) > 0" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.outputTokenPrice') }}</span>
-                <span class="font-medium text-violet-300">{{ formatTokenPricePerMillion(tooltipData.output_cost, textOutputTokens(tooltipData), { fractionDigits: costFractionDigits }) }} {{ t('usage.perMillionTokens') }}</span>
+                <span class="font-medium text-violet-300">{{ formatTokenPricePerMillion(tooltipData.output_cost, textOutputTokens(tooltipData)) }} {{ t('usage.perMillionTokens') }}</span>
               </div>
               <div v-if="tooltipData && hasImageOutputTokens(tooltipData)" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.imageOutputTokenPrice') }}</span>
-                <span class="font-medium text-pink-300">{{ formatTokenPricePerMillion(tooltipData.image_output_cost ?? 0, tooltipData.image_output_tokens, { fractionDigits: costFractionDigits }) }} {{ t('usage.perMillionTokens') }}</span>
+                <span class="font-medium text-pink-300">{{ formatTokenPricePerMillion(tooltipData.image_output_cost, tooltipData.image_output_tokens) }} {{ t('usage.perMillionTokens') }}</span>
               </div>
+              <template v-if="tooltipData.cache_read_tokens > 0">
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('usage.cacheReadEffectiveTokenPrice') }}</span>
+                  <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.cache_read_cost, tooltipData.cache_read_tokens) }} {{ t('usage.perMillionTokens') }}</span>
+                </div>
+                <div class="max-w-sm whitespace-normal text-[11px] text-gray-400">{{ t('usage.cacheReadEffectiveTokenPriceHint') }}</div>
+              </template>
             </template>
             <template v-else-if="tooltipData && isImageUsage(tooltipData)">
               <div class="flex items-center justify-between gap-4">
@@ -453,14 +467,14 @@
               </div>
               <div class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.imageUnitPrice') }}</span>
-                <span class="font-medium text-sky-300">${{ formatUsageCost(imageUnitPrice(tooltipData)) }}</span>
+                <span class="font-medium text-sky-300">{{ imagePricePerUnit == null ? '-' : '$' + formatUsageCost(imagePricePerUnit) }}</span>
               </div>
               <div class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.imageTotalPrice') }}</span>
                 <span class="font-medium text-white">${{ formatUsageCost(tooltipData.total_cost) }}</span>
               </div>
             </template>
-            <div v-else class="flex items-center justify-between gap-4">
+            <div v-else-if="tooltipData?.billing_mode === BILLING_MODE_PER_REQUEST" class="flex items-center justify-between gap-4">
               <span class="text-gray-400">{{ t('usage.unitPrice') }}</span>
               <span class="font-medium text-sky-300">${{ formatUsageCost(tooltipData?.total_cost) }}</span>
             </div>
@@ -491,8 +505,13 @@
             <span class="font-semibold text-green-400">${{ formatUsageCost(tooltipData?.actual_cost) }}</span>
           </div>
           <!-- Account billing (separated from user billing) -->
-          <template v-if="showAccountBilling">
+          <template v-if="showAccountBilling && tooltipData">
             <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
+              <span class="text-gray-400">{{ t('usage.accountStatsBaseCost') }}</span>
+              <span class="font-medium text-white">${{ formatUsageCost(tooltipData.account_stats_cost ?? tooltipData.total_cost) }}</span>
+            </div>
+            <div class="max-w-sm whitespace-normal text-[11px] text-gray-400">{{ t('usage.accountStatsBaseCostHint') }}</div>
+            <div class="flex items-center justify-between gap-6">
               <span class="text-gray-400">{{ t('usage.accountMultiplier') }}</span>
               <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.account_rate_multiplier ?? 1) }}x</span>
             </div>
@@ -518,9 +537,10 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { formatDateTime, formatMoneyDisplay, formatReasoningEffort } from '@/utils/format'
+import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
-import { formatTokenPricePerMillion } from '@/utils/usagePricing'
+import { calculateTokenUnitPrice, formatTokenPricePerMillion, formatUsageCost } from '@/utils/usagePricing'
+import { formatUsageOutputTps, isUsageOutputTpsEstimated } from '@/utils/usageMetrics'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
 import {
@@ -533,11 +553,11 @@ import {
 } from '@/utils/latencyHealth'
 import {
   BILLING_MODE_TOKEN,
+  BILLING_MODE_PER_REQUEST,
   getBillingModeLabel,
   getBillingModeBadgeClass,
   isImageUsage,
   getDisplayBillingMode,
-  imageUnitPrice,
 } from '@/utils/billingMode'
 import {
   formatImageBillingSize,
@@ -578,8 +598,6 @@ interface Props {
   defaultSortOrder?: 'asc' | 'desc'
   showAccountBilling?: boolean
   showUpstreamEndpoint?: boolean
-  /** Cost precision for usage records; admin defaults to two decimals. */
-  costFractionDigits?: number
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
   flat?: boolean
 }
@@ -591,7 +609,6 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'asc',
   showAccountBilling: true,
   showUpstreamEndpoint: true,
-  costFractionDigits: 2,
   flat: false
 })
 const emit = defineEmits<{
@@ -602,11 +619,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const appStore = useAppStore()
 const copiedRequestId = ref<string | null>(null)
-const showAccountBilling = props.showAccountBilling
+const showAccountBilling = computed(() => props.showAccountBilling)
 const showUpstreamEndpoint = props.showUpstreamEndpoint
-const costFractionDigits = props.costFractionDigits
-const formatUsageCost = (amount: string | number | null | undefined): string =>
-  formatMoneyDisplay(amount, costFractionDigits)
 const ipGeoBatchLoading = ref(false)
 
 const showIpGeoToolbar = computed(() => props.columns.some((col) => col.key === 'ip_address'))
@@ -675,6 +689,9 @@ const copyUpstreamRequestId = (upstreamRequestId: string) =>
 const tooltipVisible = ref(false)
 const tooltipPosition = ref({ x: 0, y: 0 })
 const tooltipData = ref<AdminUsageLog | null>(null)
+const imagePricePerUnit = computed(() =>
+  calculateTokenUnitPrice(tooltipData.value?.total_cost, tooltipData.value?.image_count)
+)
 
 // Tooltip state - token
 const tokenTooltipVisible = ref(false)
@@ -709,7 +726,7 @@ const formatUserAgent = (ua: string): string => {
 
 // 超过 1 分钟简化为 "Xm Ys"，免去人工换算（超过 1 小时再进位为 "Xh Ym"）
 const formatDuration = (ms: number | null | undefined): string => {
-  if (ms == null) return '-'
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return '-'
   if (ms < 1000) return `${ms}ms`
   if (ms < 60_000) return `${(ms / 1000).toFixed(2)}s`
   const totalSec = Math.round(ms / 1000)

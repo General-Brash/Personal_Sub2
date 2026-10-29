@@ -42,7 +42,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import type { UserBreakdownItem } from '@/types'
-import { formatMoneyDisplay } from '@/utils/format'
+import { formatUsageCost as formatCost } from '@/utils/usagePricing'
 
 const { t } = useI18n()
 
@@ -64,5 +64,4 @@ const formatTokens = (value: number): string => {
   return value.toLocaleString()
 }
 
-const formatCost = formatMoneyDisplay
 </script>
