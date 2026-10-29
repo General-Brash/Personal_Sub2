@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -64,7 +63,7 @@ INSERT INTO temporary_credit_grants
 VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, $11)
 RETURNING id, user_id, source, checkin_id, amount, remaining_amount, available_at, expires_at, notes, granted_by, created_at, updated_at`,
 		grant.UserID, grant.Source, nullableInt64(grant.CheckinID), nullableInt64(grant.MallPurchaseID), nullableInt64(grant.DailySubscriptionID), nullableDate(grant.ScheduledDate),
-		strconv.FormatFloat(grant.Amount, 'f', 8, 64), grant.AvailableAt(), expiresAt, grant.Notes, nullableInt64(grant.GrantedBy),
+		grant.LedgerAmount(), grant.AvailableAt(), expiresAt, grant.Notes, nullableInt64(grant.GrantedBy),
 	).Scan(&out.ID, &out.UserID, &source, &checkinID, &out.Amount, &out.RemainingAmount, &persistedAvailableAt, &persistedExpiresAt, &out.Notes, &grantedBy, &out.CreatedAt, &out.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create temporary credit grant: %w", err)

@@ -23,6 +23,11 @@ type BankAPIService interface {
 	RepayAtomic(ctx context.Context, userID int64, source service.BankRepaySource, amount float64, claim *service.IdempotencyAtomicClaim) (*service.BankRepayResult, error)
 }
 
+type BankAutoExchangeAPIService interface {
+	GetAutoExchangePreference(ctx context.Context, userID int64) (*service.BankAutoExchangePreference, error)
+	UpdateAutoExchangePreferenceAtomic(ctx context.Context, userID int64, enabled bool, threshold, exchangeAmount float64, claim *service.IdempotencyAtomicClaim) (*service.BankAutoExchangePreference, error)
+}
+
 type BankHandler struct {
 	service BankAPIService
 }
@@ -42,6 +47,68 @@ type bankExchangeRequest struct {
 type bankRepayRequest struct {
 	Source string `json:"source"`
 	Amount string `json:"amount"`
+}
+
+type bankAutoExchangeRequest struct {
+	Enabled        *bool  `json:"enabled"`
+	Threshold      string `json:"threshold"`
+	ExchangeAmount string `json:"exchange_amount"`
+}
+
+// GetAutoExchange handles GET /api/v1/bank/auto-exchange.
+func (h *BankHandler) GetAutoExchange(c *gin.Context) {
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	bankService, ok := h.service.(BankAutoExchangeAPIService)
+	if !ok {
+		response.InternalError(c, "Bank auto exchange service is not configured")
+		return
+	}
+	preference, err := bankService.GetAutoExchangePreference(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, preference)
+}
+
+// UpdateAutoExchange handles PUT /api/v1/bank/auto-exchange.
+func (h *BankHandler) UpdateAutoExchange(c *gin.Context) {
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	if strings.TrimSpace(c.GetHeader("Idempotency-Key")) == "" {
+		response.ErrorFrom(c, service.ErrIdempotencyKeyRequired)
+		return
+	}
+	bankService, ok := h.service.(BankAutoExchangeAPIService)
+	if !ok {
+		response.InternalError(c, "Bank auto exchange service is not configured")
+		return
+	}
+	req, err := decodeBankAutoExchangeRequest(c)
+	if err != nil {
+		response.ErrorFrom(c, service.ErrBankAutoExchangeSettingsInvalid)
+		return
+	}
+	threshold, err := service.ParseStrictLedgerAmount(req.Threshold)
+	if err != nil || threshold > 5 {
+		response.ErrorFrom(c, service.ErrBankAutoExchangeSettingsInvalid)
+		return
+	}
+	amount, err := service.ParseStrictLedgerAmount(req.ExchangeAmount)
+	if err != nil || amount < 0.5 || amount > 5 {
+		response.ErrorFrom(c, service.ErrBankAutoExchangeSettingsInvalid)
+		return
+	}
+	executeUserAtomicIdempotentJSON(c, "user.bank.auto-exchange", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context, claim *service.IdempotencyAtomicClaim) (any, error) {
+		return bankService.UpdateAutoExchangePreferenceAtomic(ctx, subject.UserID, *req.Enabled, threshold, amount, claim)
+	})
 }
 
 // GetStatus handles GET /api/v1/bank/status.
@@ -248,6 +315,29 @@ func decodeBankRepayRequest(c *gin.Context) (bankRepayRequest, error) {
 	}
 	if req.Source == "" || strings.TrimSpace(req.Amount) == "" {
 		return bankRepayRequest{}, errors.New("source and amount are required")
+	}
+	return req, nil
+}
+
+func decodeBankAutoExchangeRequest(c *gin.Context) (bankAutoExchangeRequest, error) {
+	if c == nil || c.Request == nil || c.Request.Body == nil {
+		return bankAutoExchangeRequest{}, errors.New("request body is required")
+	}
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	var req bankAutoExchangeRequest
+	if err := decoder.Decode(&req); err != nil {
+		return bankAutoExchangeRequest{}, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return bankAutoExchangeRequest{}, errors.New("request body must contain one object")
+		}
+		return bankAutoExchangeRequest{}, err
+	}
+	if req.Enabled == nil || req.Threshold == "" || req.ExchangeAmount == "" {
+		return bankAutoExchangeRequest{}, errors.New("enabled, threshold and exchange_amount are required")
 	}
 	return req, nil
 }

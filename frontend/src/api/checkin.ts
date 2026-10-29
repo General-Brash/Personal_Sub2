@@ -18,7 +18,14 @@ export interface CheckinRewardTier {
   permanent_amount: string
 }
 
+export interface CheckinRandomRewardPolicy {
+  enabled: boolean
+  min_amount: string
+  max_amount: string
+}
+
 export interface CheckinStatus {
+  random_reward?: CheckinRandomRewardPolicy
   enabled: boolean
   today_checked_in: boolean
   current_streak_day: number
@@ -92,6 +99,7 @@ export interface CheckinAdminPendingRefresh {
 }
 
 export interface CheckinAdminSettings {
+  random_reward?: CheckinRandomRewardPolicy
   enabled: boolean
   max_reward_day: number
   reward_tiers: CheckinRewardTier[]
@@ -109,6 +117,7 @@ export interface CheckinAdminSettings {
 }
 
 export interface CheckinAdminSettingsUpdate {
+  random_reward?: CheckinRandomRewardPolicy
   enabled: boolean
   max_reward_day: number
   reward_tiers: CheckinRewardTier[]

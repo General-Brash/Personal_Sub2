@@ -22,7 +22,8 @@
         <div class="min-w-0 flex-1">
           <p class="truncate font-medium text-gray-900 dark:text-white">{{ user.email }}</p>
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {{ t('admin.users.currentBalance') }}: ${{ formatDecimalAmount(user.balance) }}
+            {{ creditType === 'temporary' ? t('checkin.admin.temporaryCredit') : t('checkin.admin.permanentCredit') }}:
+            ${{ formatDecimalAmount(currentBalance) }}
           </p>
         </div>
       </div>
@@ -187,7 +188,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI, type GrantTemporaryCreditResult } from '@/api/admin'
@@ -200,11 +201,14 @@ type CreditType = 'permanent' | 'temporary'
 
 const amountPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,8})?$/
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   show: boolean
   user: AdminUser | null
   operation: 'add' | 'subtract'
-}>()
+  initialCreditType?: 'permanent' | 'temporary'
+}>(), {
+  initialCreditType: 'permanent',
+})
 const emit = defineEmits<{
   (event: 'close'): void
   (event: 'success'): void
@@ -214,6 +218,9 @@ const appStore = useAppStore()
 
 const submitting = ref(false)
 const creditType = ref<CreditType>('permanent')
+const currentBalance = computed(() => creditType.value === 'temporary'
+  ? (props.user?.temporary_credit_available ?? 0)
+  : (props.user?.balance ?? 0))
 const idempotencyKey = ref('')
 const grantResult = ref<GrantTemporaryCreditResult | null>(null)
 const form = reactive({ amount: '', notes: '' })
@@ -227,17 +234,17 @@ interface RequestGuard {
 }
 
 watch(
-  [() => props.show, () => props.user?.id, () => props.operation],
+  [() => props.show, () => props.user?.id, () => props.operation, () => props.initialCreditType],
   ([visible]) => {
     sessionToken += 1
     activeRequestToken = 0
     submitting.value = false
     idempotencyKey.value = ''
     grantResult.value = null
+    creditType.value = props.operation === 'subtract' ? 'permanent' : props.initialCreditType
     if (!visible) return
     form.amount = ''
     form.notes = ''
-    creditType.value = 'permanent'
   },
   { immediate: true },
 )

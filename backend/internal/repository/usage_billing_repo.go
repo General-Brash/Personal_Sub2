@@ -13,11 +13,18 @@ import (
 )
 
 type usageBillingRepository struct {
-	db *sql.DB
+	db                         *sql.DB
+	availableCreditInvalidator service.AvailableCreditInvalidator
 }
 
 func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
 	return &usageBillingRepository{db: sqlDB}
+}
+
+func (r *usageBillingRepository) SetAvailableCreditInvalidator(invalidator service.AvailableCreditInvalidator) {
+	if r != nil {
+		r.availableCreditInvalidator = invalidator
+	}
 }
 
 func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (_ *service.UsageBillingApplyResult, err error) {
@@ -202,6 +209,18 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 		return nil, err
 	}
 	tx = nil
+	if result.AutoExchange != nil && r.availableCreditInvalidator != nil {
+		if invalidator, ok := r.availableCreditInvalidator.(interface {
+			InvalidateUserBalance(context.Context, int64) error
+		}); ok {
+			if err := invalidator.InvalidateUserBalance(ctx, cmd.UserID); err != nil {
+				logger.LegacyPrintf("repository.usage_billing", "invalidate balance cache after batch image auto exchange failed: user=%d err=%v", cmd.UserID, err)
+			}
+		}
+		if err := r.availableCreditInvalidator.InvalidateAvailableCredit(ctx, cmd.UserID); err != nil {
+			logger.LegacyPrintf("repository.usage_billing", "invalidate available credit after batch image auto exchange failed: user=%d err=%v", cmd.UserID, err)
+		}
+	}
 	return result, nil
 }
 
@@ -217,6 +236,14 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		reference, err := temporaryCreditReferenceForUsageBilling(cmd)
 		if err != nil {
 			return err
+		}
+		autoExchange, err := service.BankAutoExchangeInTx(ctx, tx, cmd.UserID)
+		if err != nil {
+			return err
+		}
+		if autoExchange.Exchanged || autoExchange.Settled {
+			result.AutoExchange = &autoExchange
+			result.NewBalance = &autoExchange.PermanentBalance
 		}
 		permanentBalanceCost, err := service.NewTemporaryCreditAllocationExecutor().Allocate(
 			ctx,

@@ -60,7 +60,7 @@
                 <Icon name="creditCard" size="md" />
               </span>
               <div class="min-w-0">
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('bank.balances.permanent') }}</p>
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('bank.balances.permanentSpendable') }}</p>
                 <p
                   data-test="permanent-balance"
                   class="mt-1 break-all font-mono text-xl font-semibold text-gray-900 dark:text-white"
@@ -69,6 +69,13 @@
                   {{ formatAmount(status.permanent_balance) }}
                 </p>
               </div>
+            </div>
+            <div v-if="autoExchangePreference" class="mt-3 flex flex-wrap items-center justify-between gap-1 text-xs text-gray-500 dark:text-gray-400">
+              <span class="inline-flex items-center gap-1.5">
+                <Icon name="lock" size="sm" />
+                {{ t('bank.autoExchange.currentDeposit') }}
+              </span>
+              <span data-test="auto-exchange-frozen-deposit" class="break-all font-mono">{{ formatMoneyDisplay(autoExchangePreference.frozen_deposit, 8) }}</span>
             </div>
             <p v-if="isNegative(status.permanent_balance)" class="mt-3 text-xs text-red-600 dark:text-red-400">
               {{ t('bank.balances.negativeBlocked') }}
@@ -315,6 +322,30 @@
             class="mt-5 space-y-4"
             @submit.prevent="submitExchange"
           >
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <button
+                data-test="auto-exchange-button"
+                type="button"
+                class="btn btn-secondary inline-flex min-h-10 max-w-full items-center justify-center gap-2"
+                aria-haspopup="dialog"
+                :aria-expanded="showAutoExchangeDialog"
+                :disabled="autoExchangeLoading || autoExchangeSaving"
+                @click="openAutoExchange"
+              >
+                <Icon name="cog" size="sm" />
+                <span class="min-w-0 break-words">{{ t('bank.autoExchange.title') }}</span>
+              </button>
+              <span
+                data-test="auto-exchange-state"
+                class="text-xs font-medium"
+                :class="autoExchangePreference?.enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'"
+                aria-live="polite"
+              >
+                {{ autoExchangePreference
+                  ? t(autoExchangePreference.enabled ? 'bank.autoExchange.enabled' : 'bank.autoExchange.disabled')
+                  : t('bank.common.unavailable') }}
+              </span>
+            </div>
             <div v-if="status.exchange_progress" data-test="exchange-progress-summary" class="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2 sm:grid-cols-4">
               <div class="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/20">
                 <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('finance.bank.currentDay') }}</p>
@@ -600,6 +631,95 @@
     </div>
 
     <BaseDialog
+      :show="showAutoExchangeDialog"
+      :title="t('bank.autoExchange.title')"
+      width="normal"
+      :close-on-click-outside="false"
+      :close-on-escape="!autoExchangeSaving"
+      :show-close-button="!autoExchangeSaving"
+      @close="closeAutoExchange"
+    >
+      <div v-if="autoExchangeLoading" data-test="auto-exchange-loading" role="status" :aria-label="t('bank.autoExchange.loading')" class="flex min-h-40 items-center justify-center">
+        <Icon name="refresh" size="lg" class="animate-spin text-primary-600" />
+      </div>
+      <div v-else-if="autoExchangeLoadFailed" data-test="auto-exchange-load-error" class="flex min-h-40 flex-col items-center justify-center gap-3 text-center">
+        <p role="alert" class="text-sm text-gray-600 dark:text-gray-300">{{ autoExchangeError }}</p>
+        <button type="button" class="btn btn-secondary inline-flex min-h-10 items-center gap-2" :disabled="autoExchangeLoading" @click="loadAutoExchange">
+          <Icon name="refresh" size="sm" />
+          {{ t('bank.actions.reload') }}
+        </button>
+      </div>
+      <form v-else id="bank-auto-exchange-form" class="space-y-5" :aria-busy="autoExchangeSaving" @submit.prevent="saveAutoExchange">
+        <div class="flex items-center justify-between gap-4">
+          <span id="bank-auto-exchange-enabled-label" class="text-sm font-medium text-gray-900 dark:text-white">{{ t('bank.autoExchange.enable') }}</span>
+          <Toggle v-model="autoExchangeDraft.enabled" data-test="auto-exchange-enabled" aria-labelledby="bank-auto-exchange-enabled-label" :disabled="autoExchangeSaving" />
+        </div>
+        <div>
+          <label for="bank-auto-exchange-threshold" class="input-label">{{ t('bank.autoExchange.threshold') }}</label>
+          <input
+            id="bank-auto-exchange-threshold"
+            v-model.trim="autoExchangeDraft.threshold"
+            data-test="auto-exchange-threshold"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            class="input mt-1 min-w-0 font-mono"
+            :class="autoExchangeThresholdError ? 'input-error' : ''"
+            :disabled="autoExchangeSaving"
+            :aria-invalid="Boolean(autoExchangeThresholdError)"
+            aria-describedby="bank-auto-exchange-threshold-feedback"
+          />
+          <p id="bank-auto-exchange-threshold-feedback" class="mt-1.5" :class="autoExchangeThresholdError ? 'input-error-text' : 'input-hint'">
+            {{ autoExchangeThresholdError || (parseScaledAmount(autoExchangeDraft.threshold) === 0n
+              ? t('bank.autoExchange.triggerExhausted')
+              : t('bank.autoExchange.triggerBelow', { amount: formatMoneyDisplay(autoExchangeDraft.threshold, 8) })) }}
+          </p>
+        </div>
+        <div>
+          <label for="bank-auto-exchange-amount" class="input-label">{{ t('bank.autoExchange.exchangeAmount') }}</label>
+          <input
+            id="bank-auto-exchange-amount"
+            v-model.trim="autoExchangeDraft.exchange_amount"
+            data-test="auto-exchange-amount"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            class="input mt-1 min-w-0 font-mono"
+            :class="autoExchangeAmountError ? 'input-error' : ''"
+            :disabled="autoExchangeSaving"
+            :aria-invalid="Boolean(autoExchangeAmountError)"
+            :aria-describedby="autoExchangeAmountError ? 'bank-auto-exchange-amount-error' : undefined"
+          />
+          <p v-if="autoExchangeAmountError" id="bank-auto-exchange-amount-error" class="input-error-text mt-1.5">{{ autoExchangeAmountError }}</p>
+        </div>
+        <dl class="space-y-3 border-t border-gray-100 pt-4 text-sm dark:border-dark-700" aria-live="polite">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <dt class="text-gray-500 dark:text-gray-400">{{ t('bank.autoExchange.requiredDeposit') }}</dt>
+            <dd class="min-w-0 break-all font-mono text-gray-900 dark:text-white"><output for="bank-auto-exchange-amount" data-test="auto-exchange-deposit-preview">{{ prospectiveAutoExchangeDeposit === null ? t('bank.common.unavailable') : formatMoneyDisplay(prospectiveAutoExchangeDeposit, 8) }}</output></dd>
+          </div>
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <dt class="text-gray-500 dark:text-gray-400">{{ t('bank.autoExchange.currentDeposit') }}</dt>
+            <dd class="min-w-0 break-all font-mono text-gray-900 dark:text-white">{{ autoExchangePreference ? formatMoneyDisplay(autoExchangePreference.frozen_deposit, 8) : t('bank.common.unavailable') }}</dd>
+          </div>
+          <div v-if="autoExchangeDepositChange !== null && autoExchangeDepositChange !== 0n" class="flex flex-wrap items-start justify-between gap-2">
+            <dt class="text-gray-500 dark:text-gray-400">{{ t(autoExchangeDepositChange > 0n ? 'bank.autoExchange.freezeOnSave' : 'bank.autoExchange.releaseOnSave') }}</dt>
+            <dd data-test="auto-exchange-deposit-change" class="min-w-0 break-all font-mono text-gray-900 dark:text-white">{{ formatMoneyDisplay(formatScaledAmount(autoExchangeDepositChange > 0n ? autoExchangeDepositChange : -autoExchangeDepositChange), 8) }}</dd>
+          </div>
+        </dl>
+        <p v-if="autoExchangeError" data-test="auto-exchange-save-error" role="alert" class="input-error-text">{{ autoExchangeError }}</p>
+      </form>
+      <template #footer>
+        <div class="flex flex-wrap justify-end gap-3">
+          <button type="button" class="btn btn-secondary" :disabled="autoExchangeSaving" @click="closeAutoExchange">{{ t('bank.actions.cancel') }}</button>
+          <button data-test="auto-exchange-save" type="submit" form="bank-auto-exchange-form" class="btn btn-primary inline-flex min-w-20 items-center justify-center gap-2" :disabled="!canSaveAutoExchange">
+            <Icon v-if="autoExchangeSaving" name="refresh" size="sm" class="animate-spin" />
+            {{ autoExchangeSaving ? t('bank.actions.saving') : t('bank.actions.save') }}
+          </button>
+        </div>
+      </template>
+    </BaseDialog>
+
+    <BaseDialog
       :show="showSettingsDialog"
       :title="t('bank.settings.title')"
       width="normal"
@@ -709,12 +829,16 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import {
   exchangePermanentForTemporary,
+  getBankAutoExchange,
   getBankLedger,
   getBankSettings,
   getBankStatus,
   repayBankDebt,
   requestBankAdvance,
+  updateBankAutoExchange,
   updateBankSettings,
+  type BankAutoExchangePreference,
+  type BankAutoExchangeSettings,
   type BankRepaySource,
   type BankExchangeTier,
   type BankLedgerItem,
@@ -724,6 +848,7 @@ import {
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
+import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -802,6 +927,24 @@ const repayTouched = ref(false)
 const advanceSubmitting = ref(false)
 const exchangeSubmitting = ref(false)
 const repaySubmitting = ref(false)
+const autoExchangePreference = ref<BankAutoExchangePreference | null>(null)
+const showAutoExchangeDialog = ref(false)
+const autoExchangeLoading = ref(false)
+const autoExchangeLoadFailed = ref(false)
+const autoExchangeSaving = ref(false)
+const autoExchangeError = ref('')
+const autoExchangeDraft = reactive<BankAutoExchangeSettings>({
+  enabled: false,
+  threshold: '1.00000000',
+  exchange_amount: '1.00000000',
+})
+interface AutoExchangePendingMutation {
+  accountId: number
+  payload: string
+  key: string
+}
+let pendingAutoExchangeMutation: AutoExchangePendingMutation | null = null
+let latestAutoExchangeRequest = 0
 const showSettingsDialog = ref(false)
 const settingsLoading = ref(false)
 const settingsLoadFailed = ref(false)
@@ -830,6 +973,37 @@ const settingsForm = reactive<SettingsForm>({
   early_repay_permanent_ratio: '',
   exchange_tiers: [],
 })
+
+const autoExchangeThresholdError = computed(() => {
+  const threshold = parseScaledAmount(autoExchangeDraft.threshold)
+  return threshold === null || threshold < 0n || threshold > 5n * amountScale
+    ? t('bank.autoExchange.invalidThreshold')
+    : ''
+})
+const autoExchangeAmountError = computed(() => {
+  const amount = parseScaledAmount(autoExchangeDraft.exchange_amount)
+  return amount === null || amount < amountScale / 2n || amount > 5n * amountScale
+    ? t('bank.autoExchange.invalidAmount')
+    : ''
+})
+const prospectiveAutoExchangeDeposit = computed(() => {
+  const amount = parseScaledAmount(autoExchangeDraft.exchange_amount)
+  return amount === null || autoExchangeAmountError.value ? null : formatScaledAmount(amount * 2n)
+})
+const autoExchangeDepositChange = computed(() => {
+  const current = parseScaledAmount(autoExchangePreference.value?.frozen_deposit)
+  const next = autoExchangeDraft.enabled ? parseScaledAmount(prospectiveAutoExchangeDeposit.value) : 0n
+  return current === null || next === null ? null : next - current
+})
+const canSaveAutoExchange = computed(() => Boolean(
+  showAutoExchangeDialog.value
+  && autoExchangePreference.value
+  && !autoExchangeLoading.value
+  && !autoExchangeLoadFailed.value
+  && !autoExchangeSaving.value
+  && !autoExchangeThresholdError.value
+  && !autoExchangeAmountError.value,
+))
 
 const hasInvalidPermanentBalance = computed(() => Boolean(
   status.value && parseScaledAmount(status.value.permanent_balance) === null,
@@ -1053,13 +1227,15 @@ const canSubmitRepay = computed(() => Boolean(
 
 async function loadStatus(background = false, refreshUserAfter = true): Promise<void> {
   const request = ++latestStatusRequest
+  const accountId = authStore.user?.id
   if (background) refreshing.value = true
   else if (!status.value) loading.value = true
   loadFailed.value = false
   try {
     const nextStatus = await getBankStatus()
-    if (request !== latestStatusRequest) return
+    if (request !== latestStatusRequest || accountId !== authStore.user?.id) return
     status.value = nextStatus
+    if (nextStatus.auto_exchange) autoExchangePreference.value = { ...nextStatus.auto_exchange }
     if (refreshUserAfter) await refreshUserSilently()
   } catch (error) {
     if (request !== latestStatusRequest) return
@@ -1191,6 +1367,130 @@ async function submitRepay(): Promise<void> {
     repaySubmitting.value = false
   }
 }
+
+async function openAutoExchange(): Promise<void> {
+  if (autoExchangeLoading.value || autoExchangeSaving.value) return
+  closeExchangeTierTooltip()
+  showAutoExchangeDialog.value = true
+  await loadAutoExchange()
+}
+
+async function loadAutoExchange(): Promise<void> {
+  if (!showAutoExchangeDialog.value || autoExchangeLoading.value || autoExchangeSaving.value) return
+  const request = ++latestAutoExchangeRequest
+  const accountId = authStore.user?.id
+  autoExchangeLoading.value = true
+  autoExchangeLoadFailed.value = false
+  autoExchangeError.value = ''
+  try {
+    const preference = await getBankAutoExchange()
+    if (request !== latestAutoExchangeRequest || accountId !== authStore.user?.id) return
+    autoExchangePreference.value = { ...preference }
+    Object.assign(autoExchangeDraft, {
+      enabled: preference.enabled,
+      threshold: preference.threshold,
+      exchange_amount: preference.exchange_amount,
+    })
+    if (status.value) status.value = { ...status.value, auto_exchange: preference }
+  } catch (error) {
+    if (request !== latestAutoExchangeRequest || accountId !== authStore.user?.id) return
+    autoExchangeLoadFailed.value = true
+    autoExchangeError.value = errorMessage(error, t('bank.autoExchange.loadFailed'))
+  } finally {
+    if (request === latestAutoExchangeRequest) autoExchangeLoading.value = false
+  }
+}
+
+function closeAutoExchange(): void {
+  if (autoExchangeSaving.value) return
+  ++latestAutoExchangeRequest
+  showAutoExchangeDialog.value = false
+  autoExchangeLoading.value = false
+  autoExchangeError.value = ''
+}
+
+async function saveAutoExchange(): Promise<void> {
+  if (!canSaveAutoExchange.value || authStore.user?.id === undefined) return
+  const threshold = parseScaledAmount(autoExchangeDraft.threshold)
+  const amount = parseScaledAmount(autoExchangeDraft.exchange_amount)
+  if (threshold === null || amount === null) return
+  const settings: BankAutoExchangeSettings = {
+    enabled: autoExchangeDraft.enabled,
+    threshold: formatScaledAmount(threshold),
+    exchange_amount: formatScaledAmount(amount),
+  }
+  const pending = getAutoExchangePendingMutation(authStore.user.id, JSON.stringify(settings))
+  const request = ++latestAutoExchangeRequest
+  autoExchangeSaving.value = true
+  autoExchangeError.value = ''
+  try {
+    const preference = await updateBankAutoExchange(settings, pending.key)
+    clearAutoExchangePendingMutation(pending)
+    if (request !== latestAutoExchangeRequest || pending.accountId !== authStore.user?.id) return
+    // Do not let an older status response overwrite the just-saved preference.
+    ++latestStatusRequest
+    autoExchangePreference.value = { ...preference }
+    if (status.value) status.value = { ...status.value, auto_exchange: preference }
+    appStore.showSuccess(t('bank.autoExchange.saved'))
+    await Promise.all([loadStatus(true, false), loadLedger(1, true), refreshUserSilently()])
+    if (request === latestAutoExchangeRequest) showAutoExchangeDialog.value = false
+  } catch (error) {
+    if (request !== latestAutoExchangeRequest || pending.accountId !== authStore.user?.id) return
+    const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : ''
+    autoExchangeError.value = code === 'BANK_AUTO_EXCHANGE_DEPOSIT_INSUFFICIENT'
+      ? t('bank.autoExchange.insufficientDeposit')
+      : code === 'INVALID_BANK_AUTO_EXCHANGE_SETTINGS'
+        ? t('bank.autoExchange.invalidSettings')
+        : errorMessage(error, t('bank.autoExchange.saveFailed'))
+  } finally {
+    if (request === latestAutoExchangeRequest) autoExchangeSaving.value = false
+  }
+}
+
+function getAutoExchangePendingMutation(accountId: number, payload: string): AutoExchangePendingMutation {
+  if (pendingAutoExchangeMutation?.accountId === accountId && pendingAutoExchangeMutation.payload === payload) {
+    return pendingAutoExchangeMutation
+  }
+  const storageKey = `bank-auto-exchange-idempotency-${accountId}`
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey) || 'null') as Partial<AutoExchangePendingMutation> | null
+    if (stored?.accountId === accountId && stored.payload === payload && typeof stored.key === 'string' && stored.key) {
+      pendingAutoExchangeMutation = { accountId, payload, key: stored.key }
+      return pendingAutoExchangeMutation
+    }
+  } catch {
+    // In-memory keys still protect retries when browser storage is unavailable.
+  }
+  pendingAutoExchangeMutation = { accountId, payload, key: createIdempotencyKey('bank-auto-exchange') }
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(pendingAutoExchangeMutation))
+  } catch {
+    // Keep the pending in-memory key until this payload succeeds or changes.
+  }
+  return pendingAutoExchangeMutation
+}
+
+function clearAutoExchangePendingMutation(pending: AutoExchangePendingMutation): void {
+  if (pendingAutoExchangeMutation?.key === pending.key) pendingAutoExchangeMutation = null
+  const storageKey = `bank-auto-exchange-idempotency-${pending.accountId}`
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey) || 'null') as Partial<AutoExchangePendingMutation> | null
+    if (stored?.key === pending.key) localStorage.removeItem(storageKey)
+  } catch {
+    // Browser storage is optional; the successful in-memory request is cleared.
+  }
+}
+
+watch(() => authStore.user?.id, () => {
+  ++latestAutoExchangeRequest
+  autoExchangePreference.value = null
+  showAutoExchangeDialog.value = false
+  autoExchangeLoading.value = false
+  autoExchangeLoadFailed.value = false
+  autoExchangeSaving.value = false
+  autoExchangeError.value = ''
+  pendingAutoExchangeMutation = null
+})
 
 async function openSettings(): Promise<void> {
   if (!authStore.isAdmin) return
@@ -1499,6 +1799,8 @@ function operationLabel(operation: string): string {
   const key = ({
     advance: 'bank.operations.advance',
     exchange: 'bank.operations.exchange',
+    auto_exchange_deposit_freeze: 'bank.operations.autoExchangeDepositFreeze',
+    auto_exchange_deposit_release: 'bank.operations.autoExchangeDepositRelease',
     debt_offset: 'bank.operations.debtOffset',
     permanent_settlement: 'bank.operations.permanentSettlement',
     unused_advance_repayment: 'bank.operations.unusedAdvanceRepayment',
@@ -1691,6 +1993,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  ++latestAutoExchangeRequest
   window.removeEventListener('popstate', syncBankModeFromExternalNavigation)
   window.removeEventListener('hashchange', syncBankModeFromExternalNavigation)
   removeExchangeTierTooltipListeners()

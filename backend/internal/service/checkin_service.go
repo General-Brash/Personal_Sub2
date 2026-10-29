@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 var (
@@ -57,6 +59,7 @@ type CheckinStatus struct {
 	ConsentValid                     bool                           `json:"consent_valid"`
 	AutoForcedByAdmin                bool                           `json:"auto_forced_by_admin"`
 	PolicyVersion                    string                         `json:"policy_version,omitempty"`
+	RandomReward                     *CheckinRandomRewardPolicy     `json:"random_reward,omitempty"`
 	NormalEnabled                    bool                           `json:"normal_enabled"`
 	NormalMinBps                     int                            `json:"normal_min_bps"`
 	NormalMaxBps                     int                            `json:"normal_max_bps"`
@@ -416,6 +419,8 @@ type persistedCheckin struct {
 	autoFeeBps            int
 	policyVersion         string
 	randomRuleVersion     string
+	exactRewardAmount     string
+	exactBaseRewardAmount string
 }
 
 func loadLatestCheckin(ctx context.Context, queryer sqlQueryer, userID int64) (*string, int, error) {
@@ -471,39 +476,75 @@ func loadCheckinGrant(ctx context.Context, tx *sql.Tx, checkinID int64) (*Tempor
 }
 
 func loadCheckinCalendar(ctx context.Context, queryer sqlQueryer, userID int64, monthStart, monthEnd string) ([]DailyCheckinCalendarEntry, float64, float64, error) {
+	calendar, monthlyRewardTotal, monthlyPermanentRewardTotal, err := loadCheckinCalendarExact(ctx, queryer, userID, monthStart, monthEnd)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	rewardTotal, err := strconv.ParseFloat(monthlyRewardTotal, 64)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("convert legacy monthly daily checkin rewards: %w", err)
+	}
+	permanentRewardTotal, err := strconv.ParseFloat(monthlyPermanentRewardTotal, 64)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("convert legacy monthly daily checkin permanent rewards: %w", err)
+	}
+	return calendar, rewardTotal, permanentRewardTotal, nil
+}
+
+func loadCheckinCalendarExact(ctx context.Context, queryer sqlQueryer, userID int64, monthStart, monthEnd string) ([]DailyCheckinCalendarEntry, string, string, error) {
 	rows, err := queryer.QueryContext(ctx, `
 SELECT checkin_date::text, streak_day, reward_day, reward_amount, permanent_reward_amount
 FROM daily_checkins
 WHERE user_id = $1 AND checkin_date >= $2 AND checkin_date < $3
 ORDER BY checkin_date ASC`, userID, monthStart, monthEnd)
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("load daily checkin calendar: %w", err)
+		return nil, "", "", fmt.Errorf("load daily checkin calendar: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	calendar := make([]DailyCheckinCalendarEntry, 0)
 	for rows.Next() {
 		entry := DailyCheckinCalendarEntry{}
-		var rewardAmount float64
-		var permanentRewardAmount float64
-		if err := rows.Scan(&entry.CheckinDate, &entry.StreakDay, &entry.RewardDay, &rewardAmount, &permanentRewardAmount); err != nil {
-			return nil, 0, 0, fmt.Errorf("scan daily checkin calendar: %w", err)
+		if err := rows.Scan(&entry.CheckinDate, &entry.StreakDay, &entry.RewardDay, &entry.RewardAmount, &entry.PermanentRewardAmount); err != nil {
+			return nil, "", "", fmt.Errorf("scan daily checkin calendar: %w", err)
 		}
-		entry.RewardAmount = formatLedgerAmount(rewardAmount)
-		entry.PermanentRewardAmount = formatLedgerAmount(permanentRewardAmount)
+		entry.RewardAmount, err = canonicalizeCheckinCalendarAmount(entry.RewardAmount)
+		if err != nil {
+			return nil, "", "", fmt.Errorf("parse daily checkin calendar reward: %w", err)
+		}
+		entry.PermanentRewardAmount, err = canonicalizeCheckinCalendarAmount(entry.PermanentRewardAmount)
+		if err != nil {
+			return nil, "", "", fmt.Errorf("parse daily checkin calendar permanent reward: %w", err)
+		}
 		calendar = append(calendar, entry)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, 0, fmt.Errorf("iterate daily checkin calendar: %w", err)
+		return nil, "", "", fmt.Errorf("iterate daily checkin calendar: %w", err)
 	}
 
-	var monthlyRewardTotal, monthlyPermanentRewardTotal float64
+	var monthlyRewardTotal, monthlyPermanentRewardTotal string
 	err = queryer.QueryRowContext(ctx, `SELECT COALESCE(SUM(reward_amount), 0), COALESCE(SUM(permanent_reward_amount), 0) FROM daily_checkins WHERE user_id = $1 AND checkin_date >= $2 AND checkin_date < $3`, userID, monthStart, monthEnd).
 		Scan(&monthlyRewardTotal, &monthlyPermanentRewardTotal)
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("sum monthly daily checkin rewards: %w", err)
+		return nil, "", "", fmt.Errorf("sum monthly daily checkin rewards: %w", err)
+	}
+	monthlyRewardTotal, err = canonicalizeCheckinCalendarAmount(monthlyRewardTotal)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("parse monthly daily checkin rewards: %w", err)
+	}
+	monthlyPermanentRewardTotal, err = canonicalizeCheckinCalendarAmount(monthlyPermanentRewardTotal)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("parse monthly daily checkin permanent rewards: %w", err)
 	}
 	return calendar, monthlyRewardTotal, monthlyPermanentRewardTotal, nil
+}
+
+func canonicalizeCheckinCalendarAmount(value string) (string, error) {
+	amount, err := decimal.NewFromString(value)
+	if err != nil {
+		return "", err
+	}
+	return amount.StringFixed(8), nil
 }
 
 func addCheckinPermanentBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) error {

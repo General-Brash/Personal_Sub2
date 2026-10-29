@@ -29,6 +29,7 @@ func expectUsageServiceTemporaryOnlyCommit(mock sqlmock.Sqlmock, requestID, amou
 	mock.ExpectExec(`INSERT INTO usage_logs`).
 		WithArgs(requestID).
 		WillReturnResult(sqlmock.NewResult(100, 1))
+	expectUsageServiceAutoExchangeDisabled(mock, 42)
 	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`SELECT id, remaining_amount`).
 		WithArgs(int64(42)).
@@ -40,6 +41,17 @@ func expectUsageServiceTemporaryOnlyCommit(mock sqlmock.Sqlmock, requestID, amou
 		WithArgs(int64(11), int64(100), nil, amount).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
+}
+
+func expectUsageServiceAutoExchangeDisabled(mock interface {
+	ExpectQuery(string) *sqlmock.ExpectedQuery
+}, userID int64) {
+	mock.ExpectQuery(`(?s)SELECT balance::text, frozen_balance::text, temporary_credit_debt::text\s+FROM users`).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance", "temporary_credit_debt"}).AddRow("10.00000000", "0.00000000", "0.00000000"))
+	mock.ExpectQuery(`(?s)SELECT enabled, threshold::text, exchange_amount::text, frozen_deposit::text\s+FROM bank_auto_exchange_preferences`).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"enabled", "threshold", "exchange_amount", "frozen_deposit"}))
 }
 
 func TestUsageServiceCreateInvalidatesAvailableCreditOnlyAfterCommittedCharge(t *testing.T) {
@@ -85,6 +97,7 @@ func TestUsageServiceCreateInvalidatesAvailableCreditOnlyAfterCommittedCharge(t 
 		mock.ExpectExec(`INSERT INTO usage_logs`).
 			WithArgs("usage-available-credit-rollback").
 			WillReturnResult(sqlmock.NewResult(100, 1))
+		expectUsageServiceAutoExchangeDisabled(mock, 42)
 		expectTemporaryCreditUserLock(mock, 42)
 		mock.ExpectQuery(`SELECT id, remaining_amount`).
 			WithArgs(int64(42)).

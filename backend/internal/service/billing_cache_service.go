@@ -976,6 +976,13 @@ func (s *BillingCacheService) balanceBelowEligibilityThreshold(balance float64) 
 
 // checkBalanceEligibility 检查余额模式资格
 func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userID int64) error {
+	if err := s.autoExchangeIfNeeded(ctx, userID); err != nil {
+		if s.circuitBreaker != nil {
+			s.circuitBreaker.OnFailure(err)
+		}
+		logger.LegacyPrintf("service.billing_cache", "ALERT: bank auto exchange precheck failed for user %d: %v", userID, err)
+		return ErrBillingServiceUnavailable.WithCause(err)
+	}
 	balance, err := s.GetAvailableCredit(ctx, userID)
 	if err != nil {
 		if s.circuitBreaker != nil {
@@ -996,6 +1003,19 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 		return ErrInsufficientBalance
 	}
 
+	return nil
+}
+
+// This own-transaction preflight is only used outside usage transactions.
+func (s *BillingCacheService) autoExchangeIfNeeded(ctx context.Context, userID int64) error {
+	if s == nil {
+		return nil
+	}
+	if exchanger, ok := s.permanentBalanceCheck.(interface {
+		AutoExchangeIfNeeded(context.Context, int64) error
+	}); ok {
+		return exchanger.AutoExchangeIfNeeded(ctx, userID)
+	}
 	return nil
 }
 

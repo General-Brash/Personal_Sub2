@@ -63,6 +63,18 @@ func ProvideSchedulerCache(rdb *redis.Client, cfg *config.Config) service.Schedu
 	return newSchedulerCacheWithChunkSizes(rdb, mgetChunkSize, writeChunkSize)
 }
 
+// ProvideUsageBillingRepository adds optional post-commit cache invalidation
+// while leaving the repository constructor and billing interface unchanged.
+func ProvideUsageBillingRepository(client *ent.Client, sqlDB *sql.DB, invalidator service.AvailableCreditInvalidator) service.UsageBillingRepository {
+	repo := NewUsageBillingRepository(client, sqlDB)
+	if configurable, ok := repo.(interface {
+		SetAvailableCreditInvalidator(service.AvailableCreditInvalidator)
+	}); ok {
+		configurable.SetAvailableCreditInvalidator(invalidator)
+	}
+	return repo
+}
+
 // ProviderSet is the Wire provider set for all repositories
 var ProviderSet = wire.NewSet(
 	NewUserRepository,
@@ -85,7 +97,7 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementRepository,
 	NewAnnouncementReadRepository,
 	NewUsageLogRepository,
-	NewUsageBillingRepository,
+	ProvideUsageBillingRepository,
 	NewBatchImageRepository,
 	NewIdempotencyRepository,
 	NewUsageCleanupRepository,

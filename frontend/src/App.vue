@@ -12,6 +12,7 @@ import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
 import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, useAdminComplianceStore, useAdminSettingsStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
+import { checkinSuccessMessage } from '@/utils/checkinReward'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -25,7 +26,7 @@ const adminSettingsStore = useAdminSettingsStore()
 
 function onAutomaticCheckinCompleted(result: CheckinResult) {
   window.dispatchEvent(new CustomEvent('personal-checkin-completed', { detail: result }))
-  if (!result.already_checked_in) appStore.showSuccess(t('checkin.checkInSucceeded'))
+  if (!result.already_checked_in) appStore.showSuccess(checkinSuccessMessage(result, t))
   void authStore.refreshUser().catch((error) => console.warn('Failed to refresh check-in balance:', error))
 }
 

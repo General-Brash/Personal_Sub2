@@ -72,6 +72,59 @@ func TestBankPolicyDefaultsAndValidation(t *testing.T) {
 	require.ErrorIs(t, policy.Validate(), ErrBankPolicyInvalid)
 }
 
+func TestBankAutoExchangeInTxSettlesDueDebtBeforeBudgeting(t *testing.T) {
+	ctx := context.Background()
+	client, mock := newUsageServiceAvailableCreditInvalidationTestClient(t)
+	mock.ExpectBegin()
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	executor, err := temporaryCreditExecutorFromEntTx(tx)
+	require.NoError(t, err)
+	userID := int64(42)
+	now := time.Date(2026, time.July, 19, 8, 0, 0, 0, time.UTC)
+	userLock := `(?s)SELECT balance::text, frozen_balance::text, temporary_credit_debt::text\s+FROM users`
+	mock.ExpectQuery(userLock).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance", "temporary_credit_debt"}).AddRow("1.00000000", "2.00000000", "1.00000000"))
+	mock.ExpectQuery(`(?s)SELECT enabled, threshold::text, exchange_amount::text, frozen_deposit::text\s+FROM bank_auto_exchange_preferences`).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"enabled", "threshold", "exchange_amount", "frozen_deposit"}).AddRow(true, "1.00000000", "1.00000000", "2.00000000"))
+	mock.ExpectQuery(`SELECT clock_timestamp\(\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"clock_timestamp"}).AddRow(now))
+	expectBankPolicy(mock, DefaultBankPolicy())
+	mock.ExpectQuery(`SELECT temporary_credit_debt_due_at FROM users`).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"temporary_credit_debt_due_at"}).AddRow(now))
+	expectNoExpiredBankAdvance(mock, userID, now)
+	mock.ExpectQuery("UPDATE bank_loans").
+		WithArgs(now, "1.00000000", userID).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(9)))
+	mock.ExpectExec("UPDATE users").
+		WithArgs("1.00000000", now, userID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO bank_ledger").
+		WithArgs(userID, int64(9), "-1.00000000", "-1.00000000", "1.00000000", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery(userLock).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"balance", "frozen_balance", "temporary_credit_debt"}).AddRow("0.00000000", "2.00000000", "0.00000000"))
+	mock.ExpectQuery(`SELECT COALESCE\(SUM\(remaining_amount\), 0\)::text`).
+		WithArgs(userID, now).
+		WillReturnRows(sqlmock.NewRows([]string{"available"}).AddRow("0.00000000"))
+	mock.ExpectRollback()
+
+	result, err := BankAutoExchangeInTx(ctx, executor, userID)
+
+	require.NoError(t, err)
+	require.True(t, result.Settled)
+	require.False(t, result.Exchanged)
+	require.Zero(t, result.PermanentBalance)
+	require.Zero(t, result.PermanentSpent)
+	require.Zero(t, result.TemporaryGranted)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestSettleBankDebtLockedBeforeDueDoesNothing(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

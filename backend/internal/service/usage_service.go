@@ -157,6 +157,11 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 		if usageLog.ID <= 0 {
 			return nil, errors.New("created usage log id is required for temporary credit consumption")
 		}
+		autoExchange, err := BankAutoExchangeInTx(txCtx, executor, req.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("auto exchange for usage billing: %w", err)
+		}
+		balanceUpdated = autoExchange.Exchanged || autoExchange.Settled
 		usageLogID := usageLog.ID
 		permanentBalanceCost, err := NewTemporaryCreditAllocationExecutor().Allocate(
 			txCtx,
@@ -176,33 +181,38 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 		}
 	}
 
+	availableCreditChanged := inserted && ledgerActualCost > 0
 	if ownsTransaction {
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("commit transaction: %w", err)
 		}
-		s.invalidateUsageCaches(ctx, req.UserID, balanceUpdated, inserted && req.ActualCost > 0)
+		s.invalidateUsageCaches(ctx, req.UserID, balanceUpdated, availableCreditChanged)
 		return usageLog, nil
 	}
 
-	if inserted && req.ActualCost > 0 && s.availableCreditInvalidator != nil {
+	if balanceUpdated || availableCreditChanged {
 		tx.OnCommit(func(next dbent.Committer) dbent.Committer {
 			return dbent.CommitFunc(func(commitCtx context.Context, committedTx *dbent.Tx) error {
 				if err := next.Commit(commitCtx, committedTx); err != nil {
 					return err
 				}
-				_ = s.availableCreditInvalidator.InvalidateAvailableCredit(commitCtx, req.UserID)
+				s.invalidateUsageCaches(commitCtx, req.UserID, balanceUpdated, availableCreditChanged)
 				return nil
 			})
 		})
 	}
 
-	// Keep the existing auth-cache behavior unchanged for outer transactions.
-	s.invalidateUsageCaches(ctx, req.UserID, balanceUpdated, false)
-
 	return usageLog, nil
 }
 
 func (s *UsageService) invalidateUsageCaches(ctx context.Context, userID int64, balanceUpdated, availableCreditChanged bool) {
+	if balanceUpdated {
+		if invalidator, ok := s.availableCreditInvalidator.(interface {
+			InvalidateUserBalance(context.Context, int64) error
+		}); ok {
+			_ = invalidator.InvalidateUserBalance(ctx, userID)
+		}
+	}
 	if balanceUpdated && s.authCacheInvalidator != nil {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}

@@ -67,6 +67,7 @@ type DailyCheckinPolicyV2 struct {
 	// AutoForceAll 表示站点为所有用户强制开启自动签到（手续费必须为 0）。
 	// 它只影响运行时闸门与展示，绝不参与 EffectiveCheckinPolicyVersion 的哈希。
 	AutoForceAll         bool                          `json:"auto_force_all"`
+	RandomReward         *CheckinRandomRewardPolicy    `json:"random_reward,omitempty"`
 	Normal               DailyCheckinRandomV2          `json:"normal"`
 	Super                DailyCheckinSuperV2           `json:"super"`
 	PendingRefresh       *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
@@ -81,7 +82,21 @@ type DailyCheckinPolicyV2 struct {
 // 手续费非 0 时强制开关一律不生效：这是运行时的双重保险，避免历史脏数据
 // 在用户从未同意的情况下产生手续费扣减。
 func (p DailyCheckinPolicyV2) forcedAutoCheckin() bool {
-	return p.AutoForceAll && p.AutoFeeBps == 0
+	return p.AutoForceAll && p.EffectiveAutoFeeBps() == 0
+}
+
+func (p DailyCheckinPolicyV2) EffectiveAutoFeeBps() int {
+	if p.RandomReward != nil && p.RandomReward.Enabled {
+		return 0
+	}
+	return p.AutoFeeBps
+}
+
+func (p DailyCheckinPolicyV2) RandomRewardPolicy() CheckinRandomRewardPolicy {
+	if p.RandomReward == nil {
+		return DefaultCheckinRandomRewardPolicy()
+	}
+	return *p.RandomReward
 }
 
 type DailyCheckinRandomV2 struct {
@@ -107,6 +122,7 @@ type checkinPolicyV2Wire struct {
 	RefreshTime          string                        `json:"refresh_time"`
 	AutoFeeBps           *int                          `json:"auto_fee_bps"`
 	AutoForceAll         bool                          `json:"auto_force_all"`
+	RandomReward         *CheckinRandomRewardPolicy    `json:"random_reward,omitempty"`
 	Normal               json.RawMessage               `json:"normal"`
 	Super                json.RawMessage               `json:"super"`
 	PendingRefresh       *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
@@ -120,6 +136,7 @@ type checkinPolicyV2StoredWire struct {
 	RefreshTime          string                        `json:"refresh_time"`
 	AutoFeeBps           int                           `json:"auto_fee_bps"`
 	AutoForceAll         bool                          `json:"auto_force_all"`
+	RandomReward         CheckinRandomRewardPolicy     `json:"random_reward"`
 	PendingRefresh       *DailyCheckinPendingV2        `json:"pending_refresh,omitempty"`
 	RefreshEffectiveAt   *time.Time                    `json:"refresh_effective_at,omitempty"`
 	ConsentCompatibility []checkinConsentCompatibility `json:"consent_compatibility,omitempty"`
@@ -138,11 +155,13 @@ type DailyCheckinSuperWire struct {
 }
 
 func DefaultDailyCheckinPolicyV2() DailyCheckinPolicyV2 {
+	randomReward := DefaultCheckinRandomRewardPolicy()
 	return DailyCheckinPolicyV2{
-		Version:     "checkin-v2-default",
-		RefreshTime: "00:00",
-		AutoFeeBps:  defaultCheckinAutoFeeBps,
-		Normal:      DailyCheckinRandomV2{Enabled: false, MinBps: defaultCheckinRandomBps, MaxBps: defaultCheckinRandomBps},
+		Version:      "checkin-v2-default",
+		RefreshTime:  "00:00",
+		AutoFeeBps:   defaultCheckinAutoFeeBps,
+		RandomReward: &randomReward,
+		Normal:       DailyCheckinRandomV2{Enabled: false, MinBps: defaultCheckinRandomBps, MaxBps: defaultCheckinRandomBps},
 		Super: DailyCheckinSuperV2{
 			Enabled: false,
 			MinBps:  defaultCheckinRandomBps,
@@ -159,9 +178,12 @@ func (p DailyCheckinPolicyV2) Validate() error {
 	if p.AutoFeeBps < 0 || p.AutoFeeBps > 10000 {
 		return ErrDailyCheckinPolicyInvalid
 	}
+	if _, _, err := p.RandomRewardPolicy().centsRange(); err != nil {
+		return err
+	}
 	// 全员强制自动签到必须零手续费：用户没有机会单独同意费率，任何非 0 费率
 	// 都会变成未经同意的扣减，所以这里直接拒绝保存。
-	if p.AutoForceAll && p.AutoFeeBps != 0 {
+	if p.AutoForceAll && p.EffectiveAutoFeeBps() != 0 {
 		return ErrCheckinForcedAutoFeeNotZero
 	}
 	if p.PendingRefresh != nil {
@@ -229,6 +251,7 @@ func parseDailyCheckinPolicyV2(raw string) (DailyCheckinPolicyV2, error) {
 		RefreshTime:          strings.TrimSpace(wire.RefreshTime),
 		AutoFeeBps:           *wire.AutoFeeBps,
 		AutoForceAll:         wire.AutoForceAll,
+		RandomReward:         wire.RandomReward,
 		Normal:               normal,
 		Super:                DailyCheckinSuperV2{Enabled: superWire.Enabled, MinBps: superWire.MinBps, MaxBps: superWire.MaxBps, Cost: cost},
 		PendingRefresh:       wire.PendingRefresh,
@@ -241,6 +264,11 @@ func parseDailyCheckinPolicyV2(raw string) (DailyCheckinPolicyV2, error) {
 	if policy.Version == "" {
 		policy.Version = "checkin-v2"
 	}
+	randomReward, err := policy.RandomRewardPolicy().normalized()
+	if err != nil {
+		return DailyCheckinPolicyV2{}, err
+	}
+	policy.RandomReward = &randomReward
 	if err := policy.Validate(); err != nil {
 		return DailyCheckinPolicyV2{}, err
 	}
@@ -256,6 +284,7 @@ func (p DailyCheckinPolicyV2) settingValue() (string, error) {
 		RefreshTime:          p.RefreshTime,
 		AutoFeeBps:           p.AutoFeeBps,
 		AutoForceAll:         p.AutoForceAll,
+		RandomReward:         p.RandomRewardPolicy(),
 		PendingRefresh:       p.PendingRefresh,
 		RefreshEffectiveAt:   p.RefreshEffectiveAt,
 		ConsentCompatibility: normalizeCheckinConsentCompatibility(p.ConsentCompatibility),
@@ -300,6 +329,7 @@ type checkinPolicyRuleVersionWire struct {
 	AutoFeeBps         int                           `json:"auto_fee_bps"`
 	PendingRefresh     *checkinPendingRefreshVersion `json:"pending_refresh,omitempty"`
 	RefreshEffectiveAt string                        `json:"refresh_effective_at,omitempty"`
+	RandomReward       *CheckinRandomRewardPolicy    `json:"random_reward,omitempty"`
 }
 
 type checkinPendingRefreshVersion struct {
@@ -340,12 +370,18 @@ func EffectiveCheckinPolicyVersion(base *DailyCheckinPolicy, extended DailyCheck
 		MaxRewardDay:       0,
 		RewardTiers:        tiers,
 		RefreshTime:        strings.TrimSpace(extended.RefreshTime),
-		AutoFeeBps:         extended.AutoFeeBps,
+		AutoFeeBps:         extended.EffectiveAutoFeeBps(),
 		PendingRefresh:     pending,
 		RefreshEffectiveAt: canonicalCheckinTimePtr(extended.RefreshEffectiveAt),
 	}
 	if base != nil {
 		wire.MaxRewardDay = base.MaxRewardDay
+	}
+	if randomReward := extended.RandomRewardPolicy(); randomReward.Enabled {
+		if normalized, err := randomReward.normalized(); err == nil {
+			randomReward = normalized
+		}
+		wire.RandomReward = &randomReward
 	}
 	raw, _ := json.Marshal(wire)
 	sum := sha256.Sum256(raw)
@@ -442,7 +478,7 @@ func checkinPolicyVersionIgnoringFee(base *DailyCheckinPolicy, extended DailyChe
 // and therefore must not invalidate it.
 func checkinPolicyChangeIsFeeReduction(currentBase *DailyCheckinPolicy, current DailyCheckinPolicyV2, nextBase *DailyCheckinPolicy, next DailyCheckinPolicyV2, now time.Time) bool {
 	active := current.EffectiveAt(now)
-	if next.AutoFeeBps >= active.AutoFeeBps {
+	if next.EffectiveAutoFeeBps() >= active.EffectiveAutoFeeBps() {
 		return false
 	}
 	return checkinPolicyVersionIgnoringFee(nextBase, next) == checkinPolicyVersionIgnoringFee(currentBase, active)
@@ -544,7 +580,7 @@ func parseCheckinPolicyBundle(values map[string]string) (*DailyCheckinPolicy, Da
 		return nil, DailyCheckinPolicyV2{}, err
 	}
 	extended.Version = EffectiveCheckinPolicyVersion(base, extended)
-	if extended.legacyGameFields {
+	if extended.legacyGameFields && !extended.RandomRewardPolicy().Enabled {
 		extended.ConsentCompatibility = addCheckinConsentCompatibility(
 			extended.ConsentCompatibility,
 			legacyCheckinConsentVersion(base, extended),
@@ -658,6 +694,15 @@ func prepareCheckinPolicyV2Change(base *DailyCheckinPolicy, current DailyCheckin
 	if expected != active.Version {
 		return ErrCheckinPolicyVersionStale
 	}
+	if updated.RandomReward == nil {
+		randomReward := active.RandomRewardPolicy()
+		updated.RandomReward = &randomReward
+	}
+	randomReward, err := updated.RandomReward.normalized()
+	if err != nil {
+		return err
+	}
+	updated.RandomReward = &randomReward
 	updated.RefreshTime = strings.TrimSpace(updated.RefreshTime)
 	// This anchor is server-owned. Retaining it keeps a short transition period
 	// unchanged when an unrelated setting is saved before its next reset.

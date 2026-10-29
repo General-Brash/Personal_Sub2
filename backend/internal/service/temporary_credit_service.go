@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 var ErrTemporaryCreditAmountMustBePositive = errors.New("temporary credit amount must be positive")
@@ -50,6 +52,7 @@ type TemporaryCreditGrant struct {
 	ScheduledDate       *time.Time
 	Amount              float64
 	RemainingAmount     float64
+	exactAmount         string
 	availableAt         time.Time
 	expiresAt           time.Time
 	Notes               string
@@ -68,6 +71,15 @@ func (g TemporaryCreditGrant) AvailableAt() time.Time {
 // to inject an arbitrary value into repository grant creation.
 func (g TemporaryCreditGrant) ExpiresAt() time.Time {
 	return g.expiresAt
+}
+
+// LedgerAmount preserves the internal exact check-in amount at persistence.
+// Other grant sources retain their existing float64 serialization.
+func (g TemporaryCreditGrant) LedgerAmount() string {
+	if g.Source == TemporaryCreditSourceCheckin && g.exactAmount != "" {
+		return g.exactAmount
+	}
+	return strconv.FormatFloat(g.Amount, 'f', 8, 64)
 }
 
 type TemporaryCreditConsumptionReference struct {
@@ -97,6 +109,7 @@ type CreateTemporaryCreditGrantInput struct {
 	// captured an authoritative business instant. Public callers cannot choose
 	// an arbitrary expiry and continue to use the service clock.
 	businessNow *time.Time
+	exactAmount string
 	availableAt *time.Time
 	expiresAt   *time.Time
 }
@@ -208,10 +221,22 @@ func (s *TemporaryCreditService) CreateGrantTx(ctx context.Context, tx *sql.Tx, 
 
 func (s *TemporaryCreditService) newGrant(input CreateTemporaryCreditGrantInput) (TemporaryCreditGrant, error) {
 	amount := input.Amount
+	exactAmount := ""
+	if input.exactAmount != "" {
+		value, err := decimal.NewFromString(input.exactAmount)
+		if err != nil || input.Source != TemporaryCreditSourceCheckin || input.CheckinID == nil ||
+			!value.IsPositive() || !value.LessThan(decimal.NewFromInt(1000000000000)) || !value.Equal(value.Truncate(2)) {
+			return TemporaryCreditGrant{}, ErrTemporaryCreditAmountInvalid
+		}
+		exactAmount = value.StringFixed(8)
+		amount, _ = value.Float64()
+	}
 	if err := ValidateTemporaryCreditAmount(amount); err != nil {
 		return TemporaryCreditGrant{}, err
 	}
-	amount, _ = normalizeLedgerAmount(amount)
+	if exactAmount == "" {
+		amount, _ = normalizeLedgerAmount(amount)
+	}
 	businessNow := s.now()
 	if input.businessNow != nil {
 		businessNow = *input.businessNow
@@ -236,6 +261,7 @@ func (s *TemporaryCreditService) newGrant(input CreateTemporaryCreditGrantInput)
 		ScheduledDate:       input.ScheduledDate,
 		Amount:              amount,
 		RemainingAmount:     amount,
+		exactAmount:         exactAmount,
 		availableAt:         availableAt,
 		expiresAt:           expiresAt,
 		Notes:               input.Notes,
@@ -305,7 +331,11 @@ func validateTemporaryCreditGrant(grant TemporaryCreditGrant) error {
 	if err := ValidateTemporaryCreditAmount(grant.Amount); err != nil {
 		return err
 	}
-	remaining, err := normalizeLedgerAmount(grant.RemainingAmount)
+	remaining := grant.RemainingAmount
+	var err error
+	if grant.exactAmount == "" {
+		remaining, err = normalizeLedgerAmount(remaining)
+	}
 	if err != nil || remaining < 0 || remaining-grant.Amount > ledgerAmountEpsilon {
 		return fmt.Errorf("temporary credit remaining amount must be between zero and amount")
 	}

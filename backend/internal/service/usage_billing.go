@@ -184,10 +184,11 @@ type AccountQuotaState struct {
 type UsageBillingApplyResult struct {
 	Applied                   bool
 	APIKeyQuotaExhausted      bool
-	NewBalance                *float64           // post-deduction balance (nil = no balance deduction)
-	PermanentBalanceDeduction *float64           // amount not covered by temporary credit and deducted from permanent balance
-	BalanceOverdrafted        bool               // true when the sufficient-balance guard missed and debt was still recorded
-	QuotaState                *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	NewBalance                *float64                  // post-update balance (nil = no permanent balance change)
+	PermanentBalanceDeduction *float64                  // amount not covered by temporary credit and deducted from permanent balance
+	AutoExchange              *BankAutoExchangeTxResult // non-nil when exchange or debt settlement changed credits, not a usage charge
+	BalanceOverdrafted        bool                      // true when the sufficient-balance guard missed and debt was still recorded
+	QuotaState                *AccountQuotaState        // post-increment quota state (nil = no quota increment)
 }
 
 func permanentBalanceCacheDeduction(result *UsageBillingApplyResult) (float64, bool) {
@@ -313,6 +314,7 @@ func MatchesBatchImageBalanceHoldFingerprint(existing string, c *BatchImageBalan
 
 type BatchImageBalanceHoldResult struct {
 	Applied                 bool
+	AutoExchange            *BankAutoExchangeTxResult
 	NewBalance              *float64
 	FrozenBalance           *float64
 	TemporaryReservedAmount float64

@@ -108,7 +108,7 @@ func (s *CheckinService) UpdatePreference(ctx context.Context, userID int64, aut
 	if autoEnabled && !accepted {
 		return nil, ErrCheckinConsentRequired
 	}
-	if autoEnabled && (expectedPolicy != extended.ConsentVersion() || expectedFeeBps != extended.AutoFeeBps) {
+	if autoEnabled && (expectedPolicy != extended.ConsentVersion() || expectedFeeBps != extended.EffectiveAutoFeeBps()) {
 		return nil, ErrCheckinPolicyVersionStale
 	}
 	var consentVersion string
@@ -116,7 +116,7 @@ func (s *CheckinService) UpdatePreference(ctx context.Context, userID int64, aut
 	var consentedAt any
 	if autoEnabled {
 		consentVersion = extended.ConsentVersion()
-		consentFee = extended.AutoFeeBps
+		consentFee = extended.EffectiveAutoFeeBps()
 		consentedAt = s.now().UTC()
 	}
 	_, err = tx.ExecContext(ctx, `
@@ -165,13 +165,13 @@ FROM daily_checkin_preferences WHERE user_id = $1`, userID).Scan(
 
 func decorateCheckinPreference(preference CheckinPreference, policy DailyCheckinPolicyV2) *CheckinPreference {
 	preference.CurrentPolicyVersion = policy.ConsentVersion()
-	preference.CurrentFeeBps = policy.AutoFeeBps
+	preference.CurrentFeeBps = policy.EffectiveAutoFeeBps()
 	// Consent records the fee ceiling the user agreed to ("at most N bps"), so a
 	// lower actual fee is still within consent; only a fee above the agreed
 	// ceiling requires re-consent.
 	preference.ConsentValid = preference.AutoEnabled &&
 		policy.AcceptsConsentVersion(preference.ConsentPolicyVersion) &&
-		preference.ConsentFeeBps >= policy.AutoFeeBps
+		preference.ConsentFeeBps >= policy.EffectiveAutoFeeBps()
 	// 全员强制期间只覆盖展示值，绝不回写用户偏好：关闭开关后必须能回到用户原值。
 	if policy.forcedAutoCheckin() {
 		preference.AutoForcedByAdmin = true
@@ -254,7 +254,7 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 	forceAll := extended.forcedAutoCheckin()
 	consentValid := forceAll || (preference.AutoEnabled &&
 		extended.AcceptsConsentVersion(preference.ConsentPolicyVersion) &&
-		preference.ConsentFeeBps >= extended.AutoFeeBps)
+		preference.ConsentFeeBps >= extended.EffectiveAutoFeeBps())
 	if mode == CheckinModeDirectAuto && !forceAll && (!preference.AutoEnabled || !consentValid) {
 		return nil, ErrCheckinConsentRequired
 	}
@@ -281,24 +281,37 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 	if err != nil {
 		return nil, err
 	}
+	randomRuleVersion := ""
+	exactRewardAmount := ""
+	if randomReward := extended.RandomRewardPolicy(); randomReward.Enabled {
+		cents, err := s.sampleCheckinRandomReward(randomReward)
+		if err != nil {
+			return nil, err
+		}
+		exactRewardAmount = formatCheckinRandomCents(cents) + "000000"
+		baseReward, _ = decimal.NewFromInt(cents).Shift(-2).Float64()
+		permanentReward = 0
+		randomRuleVersion = checkinAmountRandomRuleVersion
+	}
 	if baseReward <= 0 {
 		return nil, ErrCheckinRewardZero
 	}
 
 	multiplierBps := defaultCheckinRandomBps
-	randomRuleVersion := ""
 	superCost := 0.0
 	rewardAmount := baseReward
 	switch mode {
 	case CheckinModeDirectAuto:
-		fee := checkinBasisPointAmount(baseReward, extended.AutoFeeBps)
-		rewardAmount = floor8(baseReward - fee)
+		if feeBps := extended.EffectiveAutoFeeBps(); randomRuleVersion == "" || feeBps != 0 {
+			fee := checkinBasisPointAmount(baseReward, feeBps)
+			rewardAmount = floor8(baseReward - fee)
+		}
 	}
 	if rewardAmount < 0 {
 		return nil, ErrCheckinRewardZero
 	}
 
-	checkin, err := insertCheckinV2(ctx, tx, userID, period, streakDay, rewardDay, baseReward, permanentReward, rewardAmount, mode, multiplierBps, superCost, extended.AutoFeeBps, extended.ConsentVersion(), randomRuleVersion)
+	checkin, err := insertCheckinV2(ctx, tx, userID, period, streakDay, rewardDay, baseReward, permanentReward, rewardAmount, mode, multiplierBps, superCost, extended.EffectiveAutoFeeBps(), extended.ConsentVersion(), randomRuleVersion, exactRewardAmount)
 	if errors.Is(err, sql.ErrNoRows) {
 		existing, loadErr := loadCheckinByPeriodOrDate(ctx, tx, userID, period.ID, period.Date)
 		if loadErr != nil {
@@ -340,6 +353,7 @@ func (s *CheckinService) checkInV2(ctx context.Context, userID int64, mode Check
 			Source:      TemporaryCreditSourceCheckin,
 			CheckinID:   &checkinID,
 			Amount:      rewardAmount,
+			exactAmount: exactRewardAmount,
 			businessNow: &businessNow,
 		})
 		if err != nil {
@@ -367,18 +381,22 @@ FROM daily_checkins
 WHERE user_id = $1 AND business_period_key = $2
 ORDER BY id DESC
 LIMIT 1`, userID, periodID).Scan(
-		&checkin.id, &checkin.date, &checkin.streakDay, &checkin.rewardDay, &checkin.rewardAmount, &checkin.permanentRewardAmount,
-		&checkin.mode, &checkin.periodID, &checkin.periodStartAt, &checkin.periodEndAt, &checkin.baseRewardAmount,
+		&checkin.id, &checkin.date, &checkin.streakDay, &checkin.rewardDay, &checkin.exactRewardAmount, &checkin.permanentRewardAmount,
+		&checkin.mode, &checkin.periodID, &checkin.periodStartAt, &checkin.periodEndAt, &checkin.exactBaseRewardAmount,
 		&checkin.multiplierBps, &checkin.superCost, &checkin.autoFeeBps, &checkin.policyVersion, &checkin.randomRuleVersion,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return checkin, nil
+	return hydrateCheckinV2Amounts(checkin)
 }
 
-func insertCheckinV2(ctx context.Context, tx *sql.Tx, userID int64, period CheckinPeriod, streakDay, rewardDay int, baseReward, permanentReward, rewardAmount float64, mode CheckinMode, multiplierBps int, superCost float64, autoFeeBps int, policyVersion, randomRuleVersion string) (*persistedCheckin, error) {
+func insertCheckinV2(ctx context.Context, tx *sql.Tx, userID int64, period CheckinPeriod, streakDay, rewardDay int, baseReward, permanentReward, rewardAmount float64, mode CheckinMode, multiplierBps int, superCost float64, autoFeeBps int, policyVersion, randomRuleVersion string, exactAmount ...string) (*persistedCheckin, error) {
 	checkin := &persistedCheckin{}
+	rewardValue, baseValue := formatLedgerAmount(rewardAmount), formatLedgerAmount(baseReward)
+	if randomRuleVersion == checkinAmountRandomRuleVersion && len(exactAmount) > 0 && exactAmount[0] != "" {
+		rewardValue, baseValue = exactAmount[0], exactAmount[0]
+	}
 	err := tx.QueryRowContext(ctx, `
 INSERT INTO daily_checkins
     (user_id, checkin_date, streak_day, reward_day, reward_amount, permanent_reward_amount,
@@ -389,27 +407,47 @@ ON CONFLICT DO NOTHING
 RETURNING id, checkin_date::text, streak_day, reward_day, reward_amount, permanent_reward_amount,
           mode, business_period_key, period_start_at, period_end_at, base_reward_amount,
           multiplier_bps, super_cost, auto_fee_bps, policy_version, random_rule_version`,
-		userID, period.Date, streakDay, rewardDay, formatLedgerAmount(rewardAmount), formatLedgerAmount(permanentReward),
-		period.ID, period.StartAt, period.NextReset, mode, formatLedgerAmount(baseReward),
+		userID, period.Date, streakDay, rewardDay, rewardValue, formatLedgerAmount(permanentReward),
+		period.ID, period.StartAt, period.NextReset, mode, baseValue,
 		multiplierBps, formatLedgerAmount(superCost), autoFeeBps, policyVersion, randomRuleVersion,
 	).Scan(
-		&checkin.id, &checkin.date, &checkin.streakDay, &checkin.rewardDay, &checkin.rewardAmount, &checkin.permanentRewardAmount,
-		&checkin.mode, &checkin.periodID, &checkin.periodStartAt, &checkin.periodEndAt, &checkin.baseRewardAmount,
+		&checkin.id, &checkin.date, &checkin.streakDay, &checkin.rewardDay, &checkin.exactRewardAmount, &checkin.permanentRewardAmount,
+		&checkin.mode, &checkin.periodID, &checkin.periodStartAt, &checkin.periodEndAt, &checkin.exactBaseRewardAmount,
 		&checkin.multiplierBps, &checkin.superCost, &checkin.autoFeeBps, &checkin.policyVersion, &checkin.randomRuleVersion,
 	)
 	if err != nil {
 		return nil, err
 	}
+	return hydrateCheckinV2Amounts(checkin)
+}
+
+func hydrateCheckinV2Amounts(checkin *persistedCheckin) (*persistedCheckin, error) {
+	reward, err := decimal.NewFromString(checkin.exactRewardAmount)
+	if err != nil {
+		return nil, fmt.Errorf("parse persisted checkin reward: %w", err)
+	}
+	base, err := decimal.NewFromString(checkin.exactBaseRewardAmount)
+	if err != nil {
+		return nil, fmt.Errorf("parse persisted checkin base reward: %w", err)
+	}
+	checkin.rewardAmount, _ = reward.Float64()
+	checkin.baseRewardAmount, _ = base.Float64()
+	checkin.exactRewardAmount = reward.StringFixed(8)
+	checkin.exactBaseRewardAmount = base.StringFixed(8)
 	return checkin, nil
 }
 
 func newCheckinV2Result(checkin *persistedCheckin, grant *TemporaryCreditGrant, period CheckinPeriod, already bool) *CheckinResult {
+	rewardAmount, baseRewardAmount := formatLedgerAmount(checkin.rewardAmount), formatLedgerAmount(checkin.baseRewardAmount)
+	if checkin.randomRuleVersion == checkinAmountRandomRuleVersion {
+		rewardAmount, baseRewardAmount = checkin.exactRewardAmount, checkin.exactBaseRewardAmount
+	}
 	return &CheckinResult{
 		AlreadyCheckedIn:       already,
 		CheckinDate:            checkin.date,
 		StreakDay:              checkin.streakDay,
 		RewardDay:              checkin.rewardDay,
-		RewardAmount:           formatLedgerAmount(checkin.rewardAmount),
+		RewardAmount:           rewardAmount,
 		PermanentRewardAmount:  formatLedgerAmount(checkin.permanentRewardAmount),
 		TemporaryCreditGrantID: grant.ID,
 		ExpiresAt:              grant.ExpiresAt().UTC(),
@@ -417,7 +455,7 @@ func newCheckinV2Result(checkin *persistedCheckin, grant *TemporaryCreditGrant, 
 		BusinessPeriodID:       checkin.periodID,
 		PeriodStartAt:          checkin.periodStartAt.UTC(),
 		NextResetAt:            checkin.periodEndAt.UTC(),
-		BaseRewardAmount:       formatLedgerAmount(checkin.baseRewardAmount),
+		BaseRewardAmount:       baseRewardAmount,
 		MultiplierBps:          checkin.multiplierBps,
 		SuperCost:              formatLedgerAmount(checkin.superCost),
 		AutoFeeBps:             checkin.autoFeeBps,
@@ -467,7 +505,7 @@ func (s *CheckinService) getStatusV2(ctx context.Context, userID int64, requeste
 	if err != nil {
 		return nil, err
 	}
-	calendar, monthlyRewardTotal, monthlyPermanentRewardTotal, err := loadCheckinCalendar(ctx, s.db, userID, monthStart, monthEnd)
+	calendar, monthlyRewardTotal, monthlyPermanentRewardTotal, err := loadCheckinCalendarExact(ctx, s.db, userID, monthStart, monthEnd)
 	if err != nil {
 		return nil, err
 	}
@@ -497,6 +535,12 @@ func (s *CheckinService) getStatusV2(ctx context.Context, userID int64, requeste
 	if err != nil {
 		return nil, err
 	}
+	randomReward := extended.RandomRewardPolicy()
+	rewardTiers := dailyCheckinRewardTierStatuses(policy)
+	if randomReward.Enabled {
+		nextRewardAmount, nextPermanentRewardAmount = 0, 0
+		rewardTiers = make([]DailyCheckinRewardTierStatus, 0)
+	}
 	periodStartUTC := period.StartAt.UTC()
 	nextResetUTC := period.NextReset.UTC()
 	status := &CheckinStatus{
@@ -508,19 +552,20 @@ func (s *CheckinService) getStatusV2(ctx context.Context, userID int64, requeste
 		NextPermanentRewardAmount:        formatLedgerAmount(nextPermanentRewardAmount),
 		TemporaryCreditAvailable:         formatLedgerAmount(available),
 		TemporaryCreditEarliestExpiresAt: earliestExpiry,
-		MonthlyRewardTotal:               formatLedgerAmount(monthlyRewardTotal),
-		MonthlyPermanentRewardTotal:      formatLedgerAmount(monthlyPermanentRewardTotal),
-		RewardTiers:                      dailyCheckinRewardTierStatuses(policy),
+		MonthlyRewardTotal:               monthlyRewardTotal,
+		MonthlyPermanentRewardTotal:      monthlyPermanentRewardTotal,
+		RewardTiers:                      rewardTiers,
 		Calendar:                         calendar,
 		BusinessPeriodID:                 period.ID,
 		PeriodStartAt:                    &periodStartUTC,
 		NextResetAt:                      &nextResetUTC,
 		Mode:                             CheckinModeDirect,
-		AutoFeeBps:                       extended.AutoFeeBps,
+		AutoFeeBps:                       extended.EffectiveAutoFeeBps(),
 		AutoEnabled:                      decoratedPreference.AutoEnabled,
 		ConsentValid:                     decoratedPreference.ConsentValid,
 		AutoForcedByAdmin:                decoratedPreference.AutoForcedByAdmin,
 		PolicyVersion:                    extended.ConsentVersion(),
+		RandomReward:                     &randomReward,
 	}
 	if existing != nil {
 		status.Mode = existing.mode

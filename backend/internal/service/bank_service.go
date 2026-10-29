@@ -253,15 +253,16 @@ type BankExchangeProgress struct {
 }
 
 type BankStatus struct {
-	PermanentBalance                 string               `json:"permanent_balance"`
-	TemporaryCreditAvailable         string               `json:"temporary_credit_available"`
-	TemporaryCreditEarliestExpiresAt *time.Time           `json:"temporary_credit_earliest_expires_at"`
-	TemporaryDebt                    string               `json:"temporary_debt"`
-	TemporaryDebtDueAt               *time.Time           `json:"temporary_debt_due_at"`
-	ActiveAdvance                    *BankAdvanceStatus   `json:"active_advance"`
-	Policy                           BankPolicyDTO        `json:"policy"`
-	Ledger                           []BankLedgerItem     `json:"ledger"`
-	ExchangeProgress                 BankExchangeProgress `json:"exchange_progress"`
+	PermanentBalance                 string                     `json:"permanent_balance"`
+	TemporaryCreditAvailable         string                     `json:"temporary_credit_available"`
+	TemporaryCreditEarliestExpiresAt *time.Time                 `json:"temporary_credit_earliest_expires_at"`
+	TemporaryDebt                    string                     `json:"temporary_debt"`
+	TemporaryDebtDueAt               *time.Time                 `json:"temporary_debt_due_at"`
+	ActiveAdvance                    *BankAdvanceStatus         `json:"active_advance"`
+	Policy                           BankPolicyDTO              `json:"policy"`
+	Ledger                           []BankLedgerItem           `json:"ledger"`
+	ExchangeProgress                 BankExchangeProgress       `json:"exchange_progress"`
+	AutoExchange                     BankAutoExchangePreference `json:"auto_exchange"`
 }
 
 type BankAdvanceResult struct {
@@ -383,7 +384,7 @@ var bankPolicyKeys = []string{
 	SettingKeyBankEarlyRepayPermanentRatio,
 }
 
-func loadBankPolicy(ctx context.Context, q bankQueryer) (BankPolicy, error) {
+func loadBankPolicy(ctx context.Context, q TemporaryCreditSQLExecutor) (BankPolicy, error) {
 	policy := DefaultBankPolicy()
 	args := make([]any, 0, len(bankPolicyKeys))
 	placeholders := make([]string, 0, len(bankPolicyKeys))
@@ -616,6 +617,10 @@ WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&balance, &debt, &debtDue); 
 	if err != nil {
 		return nil, err
 	}
+	autoExchange, err := s.GetAutoExchangePreference(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 	if earliestExpiry != nil {
 		utc := earliestExpiry.UTC()
 		earliestExpiry = &utc
@@ -635,6 +640,7 @@ WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&balance, &debt, &debtDue); 
 		Policy:                           policy.DTO(),
 		Ledger:                           ledger,
 		ExchangeProgress:                 bankExchangeProgress(policy.ExchangeTiers, localDate, dailyExchanged),
+		AutoExchange:                     *autoExchange,
 	}, nil
 }
 
@@ -1190,7 +1196,7 @@ WHERE user_id = $1
 
 func settleUnusedAdvanceLocked(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx TemporaryCreditSQLExecutor,
 	userID int64,
 	debt float64,
 	policy BankPolicy,
@@ -1198,7 +1204,7 @@ func settleUnusedAdvanceLocked(
 ) (float64, bool, error) {
 	var loanID, grantID int64
 	var loanDebt, remaining float64
-	err := tx.QueryRowContext(ctx, `
+	err := scanBankAutoExchangeRow(ctx, tx, `
 SELECT loan.id, loan.grant_id, loan.debt_remaining, credit_grant.remaining_amount
 FROM bank_loans AS loan
 JOIN temporary_credit_grants AS credit_grant ON credit_grant.id = loan.grant_id
@@ -1208,7 +1214,7 @@ WHERE loan.user_id = $1
   AND loan.grant_expires_at <= $2
 ORDER BY loan.id
 LIMIT 1
-FOR UPDATE OF loan, credit_grant`, userID, now).Scan(&loanID, &grantID, &loanDebt, &remaining)
+FOR UPDATE OF loan, credit_grant`, []any{userID, now}, &loanID, &grantID, &loanDebt, &remaining)
 	if errors.Is(err, sql.ErrNoRows) {
 		return debt, false, nil
 	}
@@ -1236,7 +1242,7 @@ FOR UPDATE OF loan, credit_grant`, userID, now).Scan(&loanID, &grantID, &loanDeb
 	debtReduction, _ = normalizeLedgerAmount(debtReduction)
 	debtAfter := debt
 	if debtReduction > ledgerAmountEpsilon {
-		if err := tx.QueryRowContext(ctx, `
+		if err := scanBankAutoExchangeRow(ctx, tx, `
 UPDATE users
 SET temporary_credit_debt = GREATEST(temporary_credit_debt - $1, 0),
     temporary_credit_debt_due_at = CASE
@@ -1245,7 +1251,7 @@ SET temporary_credit_debt = GREATEST(temporary_credit_debt - $1, 0),
     END,
     updated_at = $2
 WHERE id = $3 AND deleted_at IS NULL
-RETURNING temporary_credit_debt`, formatLedgerAmount(debtReduction), now, userID).Scan(&debtAfter); err != nil {
+RETURNING temporary_credit_debt`, []any{formatLedgerAmount(debtReduction), now, userID}, &debtAfter); err != nil {
 			return 0, false, fmt.Errorf("reduce bank debt from unused advance: %w", err)
 		}
 		debtAfter, err = normalizeDerivedLedgerAmount(debtAfter)
@@ -1300,7 +1306,7 @@ VALUES ($1, 'unused_advance_repayment', $2, $3, 0, $4, $5, $6, $7, $8)`,
 
 func reconcileBankDebtLocked(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx TemporaryCreditSQLExecutor,
 	userID int64,
 	balance, debt float64,
 	dueAt sql.NullTime,
@@ -1456,7 +1462,7 @@ FOR UPDATE`, userID).Scan(&balance, &debt, &dueAt)
 
 func settleBankDebtLocked(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx TemporaryCreditSQLExecutor,
 	userID int64,
 	balance, debt float64,
 	dueAt sql.NullTime,
@@ -1474,7 +1480,7 @@ func settleBankDebtLocked(
 		return false, ErrBankPolicyInvalid
 	}
 	var loanID sql.NullInt64
-	err = tx.QueryRowContext(ctx, `
+	err = scanBankAutoExchangeRow(ctx, tx, `
 UPDATE bank_loans
 SET debt_remaining = 0,
     status = 'settled',
@@ -1482,7 +1488,7 @@ SET debt_remaining = 0,
     settlement_permanent_amount = $2,
     updated_at = $1
 WHERE user_id = $3 AND status = 'active'
-RETURNING id`, now, formatLedgerAmount(permanentAmount), userID).Scan(&loanID)
+RETURNING id`, []any{now, formatLedgerAmount(permanentAmount), userID}, &loanID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("settle active bank loan: %w", err)
 	}

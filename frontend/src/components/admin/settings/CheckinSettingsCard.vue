@@ -47,6 +47,20 @@
         />
       </div>
 
+      <div class="flex items-center justify-between gap-4">
+        <label
+          for="daily-checkin-random-enabled"
+          class="text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          {{ t('checkin.admin.randomEnabled') }}
+        </label>
+        <Toggle
+          id="daily-checkin-random-enabled"
+          v-model="form.random_reward.enabled"
+          :aria-label="t('checkin.admin.randomEnabled')"
+        />
+      </div>
+
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
           <label for="daily-checkin-refresh-time" class="input-label">刷新时间（Asia/Shanghai）</label>
@@ -64,10 +78,13 @@
             step="0.01"
             required
             class="input"
-            :disabled="form.auto_force_all"
+            :disabled="form.random_reward.enabled || form.auto_force_all"
           />
+          <p v-if="form.random_reward.enabled" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('checkin.admin.randomFeeHint') }}
+          </p>
           <p
-            v-if="form.auto_force_all"
+            v-else-if="form.auto_force_all"
             data-testid="checkin-auto-force-all-fee-hint"
             class="mt-1 text-xs text-gray-500 dark:text-gray-400"
           >
@@ -100,7 +117,40 @@
         {{ effectivePreview }}
       </p>
 
-      <div class="max-w-xs">
+      <div v-if="form.random_reward.enabled" class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label for="daily-checkin-random-min" class="input-label">
+            {{ t('checkin.admin.randomMinAmount') }}
+          </label>
+          <input
+            id="daily-checkin-random-min"
+            v-model="form.random_reward.min_amount"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            required
+            class="input font-mono"
+            @keydown.enter.prevent="saveSettings"
+          />
+        </div>
+        <div>
+          <label for="daily-checkin-random-max" class="input-label">
+            {{ t('checkin.admin.randomMaxAmount') }}
+          </label>
+          <input
+            id="daily-checkin-random-max"
+            v-model="form.random_reward.max_amount"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            required
+            class="input font-mono"
+            @keydown.enter.prevent="saveSettings"
+          />
+        </div>
+      </div>
+
+      <div v-if="!form.random_reward.enabled" class="max-w-xs">
         <label for="daily-checkin-max-reward-day" class="input-label">
           {{ t('checkin.admin.maxRewardDay') }}
         </label>
@@ -118,7 +168,7 @@
         />
       </div>
 
-      <div>
+      <div v-if="!form.random_reward.enabled">
         <h3 class="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('checkin.admin.rewardTiers') }}
         </h3>
@@ -189,12 +239,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getCheckinSettingsV2, updateCheckinSettingsV2, type CheckinAdminSettings } from '@/api/checkin'
+import { getCheckinSettingsV2, updateCheckinSettingsV2, type CheckinAdminSettings, type CheckinRandomRewardPolicy } from '@/api/checkin'
+import { compareDecimalAmounts } from '@/utils/format'
 import { useAppStore } from '@/stores/app'
 import Icon from '@/components/icons/Icon.vue'
 import Toggle from '@/components/common/Toggle.vue'
 
 const amountPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,8})?$/
+const randomAmountPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/
 const MAX_REWARD_DAY = 365
 
 const { t } = useI18n()
@@ -206,13 +258,18 @@ const props = withDefaults(defineProps<{
   showHeader: true,
 })
 
-type CheckinSettingsForm = Omit<CheckinAdminSettings, 'reviewed' | 'normal' | 'super'>
+type CheckinSettingsForm = Omit<CheckinAdminSettings, 'reviewed' | 'normal' | 'super' | 'random_reward'> & {
+  random_reward: CheckinRandomRewardPolicy
+}
 
 const loading = ref(true)
 const saving = ref(false)
 const loadError = ref(false)
+let applyingSettings = false
+let savedRandomRange = { min_amount: '1.00', max_amount: '1.00' }
 const form = reactive<CheckinSettingsForm>({
   enabled: false,
+  random_reward: { enabled: false, ...savedRandomRange },
   max_reward_day: 7,
   reward_tiers: Array.from({ length: 7 }, (_, index) => ({
     day: index + 1,
@@ -242,14 +299,18 @@ function bpsEditor(read: () => number, write: (bps: number) => void, scale: numb
     },
   })
 }
-const autoFeePercent = bpsEditor(() => form.auto_fee_bps, value => { form.auto_fee_bps = value }, 100)
+const autoFeePercent = bpsEditor(
+  () => form.random_reward.enabled ? 0 : form.auto_fee_bps,
+  value => { if (!form.random_reward.enabled) form.auto_fee_bps = value },
+  100,
+)
 
-// 全员强制自动签到必须零手续费：用户没有机会单独同意费率，所以开启开关时
-// 直接把费率归零并禁用输入框，后端同样会拒绝非 0 费率的保存。
+// Fixed-mode forced auto check-in requires zero fees. Random mode and server
+// reloads must preserve the stored fixed-mode fee instead of clearing it.
 watch(
   () => form.auto_force_all,
   (forced) => {
-    if (forced) form.auto_fee_bps = 0
+    if (forced && !form.random_reward.enabled && !applyingSettings) form.auto_fee_bps = 0
   },
   { flush: 'sync' },
 )
@@ -288,6 +349,18 @@ watch(
 )
 
 function applySettings(settings: CheckinAdminSettings) {
+  applyingSettings = true
+  form.random_reward = {
+    enabled: settings.random_reward?.enabled ?? false,
+    min_amount: formatEditableAmount(settings.random_reward?.min_amount ?? '1.00'),
+    max_amount: formatEditableAmount(settings.random_reward?.max_amount ?? '1.00'),
+  }
+  if (isValidRandomRange(form.random_reward)) {
+    savedRandomRange = {
+      min_amount: form.random_reward.min_amount,
+      max_amount: form.random_reward.max_amount,
+    }
+  }
   form.enabled = settings.enabled
   form.max_reward_day = settings.max_reward_day
   form.reward_tiers = settings.reward_tiers.map((tier) => ({
@@ -301,6 +374,7 @@ function applySettings(settings: CheckinAdminSettings) {
   form.auto_force_all = settings.auto_force_all ?? false
   form.pending_refresh = settings.pending_refresh ?? null
   form.next_reset_at = settings.next_reset_at ?? null
+  applyingSettings = false
 }
 
 function formatDateTime(value: string): string {
@@ -325,6 +399,13 @@ function isValidPositiveAmount(value: string): boolean {
 
 function isValidNonNegativeAmount(value: string): boolean {
   return amountPattern.test(value)
+}
+
+function isValidRandomRange(range: Pick<CheckinRandomRewardPolicy, 'min_amount' | 'max_amount'>): boolean {
+  return randomAmountPattern.test(range.min_amount) &&
+    randomAmountPattern.test(range.max_amount) &&
+    compareDecimalAmounts(range.min_amount, '0.01') >= 0 &&
+    compareDecimalAmounts(range.min_amount, range.max_amount) <= 0
 }
 
 function isValidMaxRewardDay(value: unknown): value is number {
@@ -363,9 +444,22 @@ async function saveSettings() {
     appStore.showError(t('checkin.admin.invalidRewardAmount'))
     return
   }
-  if (form.auto_force_all && form.auto_fee_bps !== 0) {
+  const effectiveFeeBps = form.random_reward.enabled ? 0 : form.auto_fee_bps
+  if (form.auto_force_all && effectiveFeeBps !== 0) {
     appStore.showError(t('checkin.admin.autoForceAllFeeMustBeZero'))
     return
+  }
+  const randomRangeValid = isValidRandomRange(form.random_reward)
+  if (form.random_reward.enabled && !randomRangeValid) {
+    appStore.showError(t('checkin.admin.invalidRandomRange'))
+    return
+  }
+  const randomReward: CheckinRandomRewardPolicy = {
+    enabled: form.random_reward.enabled,
+    ...(randomRangeValid ? {
+      min_amount: form.random_reward.min_amount,
+      max_amount: form.random_reward.max_amount,
+    } : savedRandomRange),
   }
   const rewardTiers = form.reward_tiers.slice(0, form.max_reward_day)
   if (
@@ -396,6 +490,7 @@ async function saveSettings() {
       refresh_time: form.refresh_time,
       auto_fee_bps: form.auto_fee_bps,
       auto_force_all: form.auto_force_all,
+      random_reward: randomReward,
     })
     applySettings(saved)
     appStore.showSuccess(t('checkin.admin.settingsSaved'))

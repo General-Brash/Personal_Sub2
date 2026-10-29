@@ -26,17 +26,17 @@
         <div class="min-w-0 rounded-lg bg-gray-50 p-3 dark:bg-dark-800">
           <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.nextReward') }}</p>
           <p data-test="dashboard-reward" class="mt-1 min-w-0 max-w-full break-all text-sm font-semibold leading-5 text-primary-600 dark:text-primary-400">
-            {{ formatCredit(status.next_reward_amount) }}
+            {{ randomEnabled ? randomRewardText : formatCredit(status.next_reward_amount) }}
           </p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.rewardDay', { day: status.next_reward_day }) }}</p>
-          <p data-test="dashboard-permanent-reward" class="mt-1 min-w-0 max-w-full break-all text-xs font-semibold leading-5 text-indigo-600 dark:text-indigo-400">
+          <p v-if="!randomEnabled" class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.rewardDay', { day: status.next_reward_day }) }}</p>
+          <p v-if="!randomEnabled" data-test="dashboard-permanent-reward" class="mt-1 min-w-0 max-w-full break-all text-xs font-semibold leading-5 text-indigo-600 dark:text-indigo-400">
             +{{ formatCredit(status.next_permanent_reward_amount || '0.00000000') }} {{ t('checkin.permanentReward') }}
           </p>
         </div>
         <div class="min-w-0 rounded-lg bg-gray-50 p-3 dark:bg-dark-800">
           <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.temporaryCreditAvailable') }}</p>
           <p data-test="dashboard-temporary-credit" class="mt-1 min-w-0 max-w-full break-all text-sm font-semibold leading-5 text-emerald-600 dark:text-emerald-400">
-            {{ formatCredit(status.temporary_credit_available) }}
+            ${{ formatDecimalAmount(status.temporary_credit_available) }}
           </p>
         </div>
         <div class="min-w-0 rounded-lg bg-gray-50 p-3 dark:bg-dark-800">
@@ -79,6 +79,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getCheckinStatus, type CheckinStatus } from '@/api/checkin'
 import Icon from '@/components/icons/Icon.vue'
+import { formatCheckinCredit } from '@/utils/checkinReward'
 import { formatDecimalAmount } from '@/utils/format'
 
 const props = defineProps<{
@@ -90,6 +91,11 @@ const localStatus = ref<CheckinStatus | null>(null)
 const localLoading = ref(true)
 const status = computed(() => props.status === undefined ? localStatus.value : props.status)
 const loading = computed(() => props.loading ?? localLoading.value)
+const randomEnabled = computed(() => status.value?.random_reward?.enabled ?? false)
+const randomRewardText = computed(() => t('checkin.randomRewardRange', {
+  min: formatCredit(status.value?.random_reward?.min_amount ?? '1.00'),
+  max: formatCredit(status.value?.random_reward?.max_amount ?? '1.00'),
+}))
 
 const todayStatus = computed(() => {
   if (!status.value?.enabled) return t('checkin.disabled')
@@ -118,7 +124,7 @@ function getBeijingMonth(): string {
 }
 
 function formatCredit(value: string): string {
-  return `$${formatDecimalAmount(value)}`
+  return formatCheckinCredit(value)
 }
 
 function formatExpiry(value: string | null): string {

@@ -693,6 +693,8 @@ SELECT bl.id, bl.user_id, COALESCE(NULLIF(u.username, ''), u.email), u.email,
 	       bl.operation,
 	       ''::text, 'credit'::text,
        CASE
+           WHEN bl.operation IN ('auto_exchange_deposit_freeze', 'auto_exchange_deposit_release')
+               THEN ABS((bl.metadata->>'frozen_balance_delta')::numeric)
            WHEN bl.operation = 'exchange_expiry_refund' THEN GREATEST(bl.permanent_delta, 0)
            WHEN bl.operation IN ('exchange', 'early_repay_permanent', 'permanent_settlement') THEN GREATEST(-bl.permanent_delta, 0)
            WHEN bl.operation IN ('early_repay_temporary', 'debt_offset', 'unused_advance_repayment') THEN GREATEST(-bl.temporary_delta, 0)

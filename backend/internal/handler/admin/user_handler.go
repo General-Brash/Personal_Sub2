@@ -22,7 +22,8 @@ import (
 // UserWithConcurrency wraps AdminUser with current concurrency info
 type UserWithConcurrency struct {
 	dto.AdminUser
-	CurrentConcurrency int `json:"current_concurrency"`
+	CurrentConcurrency       int     `json:"current_concurrency"`
+	TemporaryCreditAvailable float64 `json:"temporary_credit_available"`
 }
 
 // UserHandler handles admin user management
@@ -135,11 +136,12 @@ func (h *UserHandler) List(c *gin.Context) {
 	}
 
 	filters := service.UserListFilters{
-		Status:     c.Query("status"),
-		Role:       c.Query("role"),
-		Search:     search,
-		GroupName:  strings.TrimSpace(c.Query("group_name")),
-		Attributes: parseAttributeFilters(c),
+		Status:                          c.Query("status"),
+		Role:                            c.Query("role"),
+		Search:                          search,
+		GroupName:                       strings.TrimSpace(c.Query("group_name")),
+		Attributes:                      parseAttributeFilters(c),
+		IncludeTemporaryCreditAvailable: true,
 	}
 	var tierErr error
 	filters.Tier, tierErr = service.NormalizeUserListTier(c.Query("tier"))
@@ -196,7 +198,8 @@ func (h *UserHandler) List(c *gin.Context) {
 	out := make([]UserWithConcurrency, len(users))
 	for i := range users {
 		out[i] = UserWithConcurrency{
-			AdminUser: *dto.UserFromServiceAdmin(&users[i]),
+			AdminUser:                *dto.UserFromServiceAdmin(&users[i]),
+			TemporaryCreditAvailable: users[i].TemporaryCreditAvailable,
 		}
 		if info := loadInfo[users[i].ID]; info != nil {
 			out[i].CurrentConcurrency = info.CurrentConcurrency

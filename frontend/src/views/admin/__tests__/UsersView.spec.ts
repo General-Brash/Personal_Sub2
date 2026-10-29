@@ -477,7 +477,7 @@ describe('admin UsersView', () => {
     expect(wrapper.get('[data-test="edit-user"]').attributes('disabled')).toBeDefined()
   })
 
-  it('opens the reused user history modal from the balance audit entry', async () => {
+  it('opens matching recharge types from balances and keeps history in the action menu', async () => {
     const wrapper = mount(UsersView, {
       global: {
         stubs: {
@@ -508,9 +508,31 @@ describe('admin UsersView', () => {
 
     await flushPromises()
 
-    const balanceButton = wrapper.findAll('button').find((button) => button.text() === '$0.00')
-    expect(balanceButton).toBeDefined()
-    await balanceButton?.trigger('click')
+    const balanceButtons = wrapper.findAll('button').filter((button) => button.text() === '$0.00')
+    expect(balanceButtons).toHaveLength(2)
+    const balanceModal = wrapper.findComponent({ name: 'UserBalanceModal' })
+    for (const [index, creditType] of ['permanent', 'temporary'].entries()) {
+      await balanceButtons[index].trigger('click')
+      expect(balanceModal.props('show')).toBe(true)
+      expect(balanceModal.props('user').id).toBe(42)
+      expect(balanceModal.props('operation')).toBe('add')
+      expect(balanceModal.props('initialCreditType')).toBe(creditType)
+      balanceModal.vm.$emit('close')
+      await flushPromises()
+    }
+
+    const depositButtons = wrapper.findAll('button').filter((button) => button.text() === 'admin.users.deposit')
+    expect(depositButtons).toHaveLength(1)
+    await depositButtons[0].trigger('click')
+    expect(balanceModal.props('initialCreditType')).toBe('permanent')
+    balanceModal.vm.$emit('close')
+    await flushPromises()
+
+    await wrapper.get('.action-menu-trigger').trigger('click')
+    const auditButton = wrapper.get('.action-menu-content').findAll('button')
+      .find((button) => button.text() === 'checkin.admin.audit')
+    expect(auditButton).toBeDefined()
+    await auditButton?.trigger('click')
 
     const historyModal = wrapper.findComponent({ name: 'UserBalanceHistoryModal' })
     expect(historyModal.props('show')).toBe(true)

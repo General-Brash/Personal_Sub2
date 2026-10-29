@@ -51,30 +51,32 @@ type checkinAdminSuperDTO struct {
 }
 
 type checkinAdminPolicyV2DTO struct {
-	Enabled         bool                           `json:"enabled"`
-	MaxRewardDay    int                            `json:"max_reward_day"`
-	RewardTiers     []checkinRewardTierDTO         `json:"reward_tiers"`
-	Version         string                         `json:"version"`
-	RefreshTime     string                         `json:"refresh_time"`
-	AutoFeeBps      int                            `json:"auto_fee_bps"`
-	AutoForceAll    bool                           `json:"auto_force_all"`
-	Reviewed        bool                           `json:"reviewed"`
-	Normal          checkinAdminRandomDTO          `json:"normal"`
-	Super           checkinAdminSuperDTO           `json:"super"`
-	ExpectedVersion string                         `json:"expected_version,omitempty"`
-	PendingRefresh  *service.DailyCheckinPendingV2 `json:"pending_refresh,omitempty"`
-	NextResetAt     *time.Time                     `json:"next_reset_at,omitempty"`
+	Enabled         bool                              `json:"enabled"`
+	MaxRewardDay    int                               `json:"max_reward_day"`
+	RewardTiers     []checkinRewardTierDTO            `json:"reward_tiers"`
+	Version         string                            `json:"version"`
+	RefreshTime     string                            `json:"refresh_time"`
+	AutoFeeBps      int                               `json:"auto_fee_bps"`
+	AutoForceAll    bool                              `json:"auto_force_all"`
+	RandomReward    service.CheckinRandomRewardPolicy `json:"random_reward"`
+	Reviewed        bool                              `json:"reviewed"`
+	Normal          checkinAdminRandomDTO             `json:"normal"`
+	Super           checkinAdminSuperDTO              `json:"super"`
+	ExpectedVersion string                            `json:"expected_version,omitempty"`
+	PendingRefresh  *service.DailyCheckinPendingV2    `json:"pending_refresh,omitempty"`
+	NextResetAt     *time.Time                        `json:"next_reset_at,omitempty"`
 }
 
 type checkinAdminPolicyV2UpdateDTO struct {
-	Enabled         bool                   `json:"enabled"`
-	MaxRewardDay    int                    `json:"max_reward_day"`
-	RewardTiers     []checkinRewardTierDTO `json:"reward_tiers"`
-	Version         string                 `json:"version"`
-	RefreshTime     string                 `json:"refresh_time"`
-	AutoFeeBps      int                    `json:"auto_fee_bps"`
-	AutoForceAll    bool                   `json:"auto_force_all"`
-	ExpectedVersion string                 `json:"expected_version,omitempty"`
+	Enabled         bool                               `json:"enabled"`
+	MaxRewardDay    int                                `json:"max_reward_day"`
+	RewardTiers     []checkinRewardTierDTO             `json:"reward_tiers"`
+	Version         string                             `json:"version"`
+	RefreshTime     string                             `json:"refresh_time"`
+	AutoFeeBps      int                                `json:"auto_fee_bps"`
+	AutoForceAll    bool                               `json:"auto_force_all"`
+	RandomReward    *service.CheckinRandomRewardPolicy `json:"random_reward,omitempty"`
+	ExpectedVersion string                             `json:"expected_version,omitempty"`
 }
 
 func (dto checkinAdminPolicyV2UpdateDTO) toPolicy() (*service.DailyCheckinPolicy, *service.DailyCheckinPolicyV2, error) {
@@ -94,6 +96,7 @@ func (dto checkinAdminPolicyV2UpdateDTO) toPolicy() (*service.DailyCheckinPolicy
 		&service.DailyCheckinPolicyV2{
 			Version: dto.Version, RefreshTime: dto.RefreshTime, AutoFeeBps: dto.AutoFeeBps,
 			AutoForceAll: dto.AutoForceAll,
+			RandomReward: dto.RandomReward,
 		}, nil
 }
 
@@ -110,6 +113,7 @@ func newCheckinAdminPolicyV2DTO(base *service.DailyCheckinPolicy, extended servi
 	return checkinAdminPolicyV2DTO{
 		Enabled: base.Enabled, MaxRewardDay: base.MaxRewardDay, RewardTiers: tiers,
 		Version: extended.Version, RefreshTime: extended.RefreshTime, AutoFeeBps: extended.AutoFeeBps, AutoForceAll: extended.AutoForceAll, Reviewed: extended.ReviewApproved,
+		RandomReward:   extended.RandomRewardPolicy(),
 		Normal:         checkinAdminRandomDTO{Enabled: extended.Normal.Enabled, MinBps: extended.Normal.MinBps, MaxBps: extended.Normal.MaxBps},
 		Super:          checkinAdminSuperDTO{Enabled: extended.Super.Enabled, MinBps: extended.Super.MinBps, MaxBps: extended.Super.MaxBps, Cost: strconv.FormatFloat(extended.Super.Cost, 'f', 8, 64)},
 		PendingRefresh: extended.PendingRefresh, NextResetAt: nextResetAt,
