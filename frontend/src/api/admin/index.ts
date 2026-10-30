@@ -37,6 +37,7 @@ import adminComplianceAPI from './compliance'
 import auditAPI from './audit'
 import pluginsAPI from './plugins'
 import oidcProviderAPI, { OIDC_PROVIDER_PERMISSIONS } from './oidcProvider'
+import serverAutoRetryAPI from './serverAutoRetry'
 
 /**
  * Unified admin API object for convenient access
@@ -75,7 +76,8 @@ export const adminAPI = {
   compliance: adminComplianceAPI,
   audit: auditAPI,
   plugins: pluginsAPI,
-  oidcProvider: oidcProviderAPI
+  oidcProvider: oidcProviderAPI,
+  serverAutoRetry: serverAutoRetryAPI
 }
 
 export {
@@ -113,12 +115,14 @@ export {
   auditAPI,
   pluginsAPI,
   oidcProviderAPI,
+  serverAutoRetryAPI,
   OIDC_PROVIDER_PERMISSIONS
 }
 
 export default adminAPI
 
 // Re-export types used by components
+export type { ServerAutoRetryConfig, ServerAutoRetryEvent, ServerAutoRetryEventsResponse } from './serverAutoRetry'
 export type { AuditLog, AuditLogQuery, AuditLogListResponse } from './audit'
 export type {
   OidcAuditEvent,

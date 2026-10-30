@@ -2,8 +2,10 @@ package service
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -39,7 +41,55 @@ func TestNormalizeOpenAIResponsesWebSocketCompatibilityBody_CompactionIsOptIn(t 
 	}
 }
 
-const azureForeignResourceTestError = "The requested item was created under a different Azure OpenAI resource. Use the same resource that created the item to access it."
+const (
+	azureForeignResourceTestError     = "The requested item was created under a different Azure OpenAI resource. Use the same resource that created the item to access it."
+	maskedForeignResourceTestError    = "The requested item was created under a different *** OpenAI resource. Use the same resource that created the item to access it."
+	maskedForeignResourceTestResponse = `{"error":{"code":null,"message":"OpenAI Responses bad request: ` + maskedForeignResourceTestError + ` [trace_id=test_trace]","param":"","type":"invalid_request_error"}}`
+)
+
+func TestNormalizeOpenAIResponsesAzureResourceRetryBodyResourceMessageVariants(t *testing.T) {
+	body := []byte(`{"input":[{"type":"message","id":"msg_old","role":"user","content":"continue"}]}`)
+	tests := []struct {
+		name    string
+		message string
+		recover bool
+	}{
+		{"legacy singular without guidance", "The requested item was created under a different Azure OpenAI resource.", true},
+		{"legacy plural without guidance", "The requested items were created under a different Azure OpenAI resource.", true},
+		{"legacy uppercase without guidance", "THE REQUESTED ITEM WAS CREATED UNDER A DIFFERENT AZURE OPENAI RESOURCE.", true},
+		{"masked production message", "OpenAI Responses bad request: " + maskedForeignResourceTestError + " [trace_id=test_trace]", true},
+		{"plain OpenAI resource", strings.ReplaceAll(maskedForeignResourceTestError, "*** ", ""), true},
+		{"qualified resource", strings.ReplaceAll(maskedForeignResourceTestError, "***", "Microsoft Azure"), true},
+		{"hyphenated qualifier", strings.ReplaceAll(maskedForeignResourceTestError, "***", "Custom-Provider"), true},
+		{"plural masked resource", "The requested items were created under a different *** OpenAI resource. Use the same resource that created the items to access them.", true},
+		{"uppercase masked resource", strings.ToUpper(maskedForeignResourceTestError), true},
+		{"folded whitespace", "The requested item WAS\tCREATED under  a different\t*** OPENAI resource.\nUse the SAME resource\tthat created the item to access it.", true},
+		{"masked resource without guidance", "The requested item was created under a different *** OpenAI resource.", false},
+		{"negated masked resource", strings.ReplaceAll(maskedForeignResourceTestError, "was created", "was not created"), false},
+		{"negated resource clause", "The requested item was created under a different API version, not a different OpenAI resource. Use the same resource that created the item to access it.", false},
+		{"unpunctuated negation", "The requested item was created under a different API version not a different OpenAI resource. Use the same resource that created the item to access it.", false},
+		{"non-OpenAI resource", "The requested item was created under a different non-OpenAI resource. Use the same resource that created the item to access it.", false},
+		{"incomplete guidance", "The requested item was created under a different *** OpenAI resource. Use the same resource that created the item.", false},
+		{"unrelated sentences", "The requested item was created under a different subscription. OpenAI resource access is denied. Use the same resource that created the item to access it.", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response, err := json.Marshal(map[string]any{"error": map[string]any{
+				"code": nil, "param": "", "type": "invalid_request_error", "message": tt.message,
+			}})
+			require.NoError(t, err)
+			got, changed, err := normalizeOpenAIResponsesAzureResourceRetryBody(http.StatusBadRequest, body, response, nil)
+			require.NoError(t, err)
+			require.Equal(t, tt.recover, changed)
+			if !tt.recover {
+				require.Equal(t, body, got)
+				return
+			}
+			require.False(t, gjson.GetBytes(got, "input.0.id").Exists())
+			require.Equal(t, "continue", gjson.GetBytes(got, "input.0.content").String())
+		})
+	}
+}
 
 func TestNormalizeOpenAIResponsesAzureResourceRetryBodyRejectsNonTargetErrors(t *testing.T) {
 	body := []byte(`{"input":[{"type":"message","id":"msg_old","role":"user","content":"continue"}]}`)
@@ -60,6 +110,12 @@ func TestNormalizeOpenAIResponsesAzureResourceRetryBodyRejectsNonTargetErrors(t 
 		{"quoted resource explanation", http.StatusBadRequest, `{"error":{"code":"unsupported_parameter","param":"max_output_tokens","message":"Unsupported parameter: max_output_tokens. Not caused by an item created under a different Azure OpenAI resource."}}`},
 		{"negated resource mismatch", http.StatusBadRequest, `{"error":{"message":"The requested item was not created under a different Azure OpenAI resource."}}`},
 		{"nested business text", http.StatusBadRequest, `{"error":{"code":"bad_request","metadata":{"message":"` + azureForeignResourceTestError + `"}}}`},
+		{"masked http success", http.StatusOK, maskedForeignResourceTestResponse},
+		{"masked not found", http.StatusNotFound, maskedForeignResourceTestResponse},
+		{"masked raw text", http.StatusBadRequest, maskedForeignResourceTestError},
+		{"masked unrelated parameter", http.StatusBadRequest, `{"error":{"param":"model","message":"` + maskedForeignResourceTestError + `"}}`},
+		{"masked field rejection", http.StatusBadRequest, `{"error":{"code":"unsupported_parameter","message":"` + maskedForeignResourceTestError + `"}}`},
+		{"masked nested business text", http.StatusBadRequest, `{"error":{"metadata":{"message":"` + maskedForeignResourceTestError + `"}}}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -73,35 +129,45 @@ func TestNormalizeOpenAIResponsesAzureResourceRetryBodyRejectsNonTargetErrors(t 
 
 func TestNormalizeOpenAIResponsesAzureResourceRetryBodyPreservesContextAndBusinessJSON(t *testing.T) {
 	body := []byte(`{"previous_response_id":"resp_keep","metadata":{"nonce":9007199254740993},"input":[{"type":"message","id":"msg_old","role":"user","content":[{"type":"input_text","text":"hi","nonce":9007199254740993}]},{"type":"reasoning","id":"rs_old","encrypted_content":"opaque","summary":[{"type":"summary_text","text":"budget is 1000"}]},{"type":"reasoning","encrypted_content":"opaque-only"},{"type":"function_call","id":"fc_old","call_id":"call_keep","name":"run","namespace":"mcp__keep","arguments":"{\"id\":\"business\",\"nonce\":9007199254740993}"},{"type":"function_call_output","id":"fc_output","call_id":"call_keep","output":[{"type":"encrypted_content","encrypted_content":"stale"},{"type":"input_text","text":"keep","id":"nested"}]},{"type":"item_reference","id":"msg_reference"},{"type":"agent_message","id":"msg_past","content":[{"type":"encrypted_content","encrypted_content":"stale-task"}]},{"type":"agent_message","id":"msg_current","content":[{"type":"encrypted_content","encrypted_content":"current-task"}]},{"type":"additional_tools","id":"marker_id"}]}`)
-	response := []byte(`{"error":{"message":"` + azureForeignResourceTestError + `"}}`)
 	upstreamURL, err := url.Parse("https://azure-relay.example/v1/responses")
 	require.NoError(t, err)
-	got, changed, err := normalizeOpenAIResponsesAzureResourceRetryBody(http.StatusBadRequest, body, response, upstreamURL)
-	require.NoError(t, err)
-	require.True(t, changed)
-	require.True(t, gjson.ValidBytes(got))
-	items := gjson.GetBytes(got, "input").Array()
-	require.Len(t, items, 8)
-	for i, item := range items {
-		if i != 4 {
-			require.False(t, item.Get("id").Exists())
-		}
+	for _, tt := range []struct {
+		name     string
+		response string
+	}{
+		{"legacy Azure error", `{"error":{"message":"` + azureForeignResourceTestError + `"}}`},
+		{"masked production error", maskedForeignResourceTestResponse},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			response := []byte(tt.response)
+			got, changed, err := normalizeOpenAIResponsesAzureResourceRetryBody(http.StatusBadRequest, body, response, upstreamURL)
+			require.NoError(t, err)
+			require.True(t, changed)
+			require.True(t, gjson.ValidBytes(got))
+			items := gjson.GetBytes(got, "input").Array()
+			require.Len(t, items, 8)
+			for i, item := range items {
+				if i != 4 {
+					require.False(t, item.Get("id").Exists())
+				}
+			}
+			require.Equal(t, "9007199254740993", items[0].Get("content.0.nonce").Raw)
+			require.Equal(t, "message", items[1].Get("type").String())
+			require.Contains(t, items[1].Get("content.0.text").String(), "budget is 1000")
+			require.NotContains(t, items[1].Raw, "opaque")
+			require.Equal(t, "call_keep", items[2].Get("call_id").String())
+			require.Equal(t, "mcp__keep", items[2].Get("namespace").String())
+			require.Equal(t, gjson.GetBytes(body, "input.3.arguments").Raw, items[2].Get("arguments").Raw)
+			require.Equal(t, "call_keep", items[3].Get("call_id").String())
+			require.Equal(t, "[encrypted content omitted]", items[3].Get("output.0.text").String())
+			require.Equal(t, "nested", items[3].Get("output.1.id").String())
+			require.Equal(t, "msg_reference", items[4].Get("id").String())
+			require.Equal(t, "[encrypted content omitted]", items[5].Get("content.0.text").String())
+			require.Equal(t, gjson.GetBytes(body, "input.7.content").Raw, items[6].Get("content").Raw)
+			require.Equal(t, gjson.GetBytes(body, "metadata").Raw, gjson.GetBytes(got, "metadata").Raw)
+			require.Equal(t, "resp_keep", gjson.GetBytes(got, "previous_response_id").String())
+		})
 	}
-	require.Equal(t, "9007199254740993", items[0].Get("content.0.nonce").Raw)
-	require.Equal(t, "message", items[1].Get("type").String())
-	require.Contains(t, items[1].Get("content.0.text").String(), "budget is 1000")
-	require.NotContains(t, items[1].Raw, "opaque")
-	require.Equal(t, "call_keep", items[2].Get("call_id").String())
-	require.Equal(t, "mcp__keep", items[2].Get("namespace").String())
-	require.Equal(t, gjson.GetBytes(body, "input.3.arguments").Raw, items[2].Get("arguments").Raw)
-	require.Equal(t, "call_keep", items[3].Get("call_id").String())
-	require.Equal(t, "[encrypted content omitted]", items[3].Get("output.0.text").String())
-	require.Equal(t, "nested", items[3].Get("output.1.id").String())
-	require.Equal(t, "msg_reference", items[4].Get("id").String())
-	require.Equal(t, "[encrypted content omitted]", items[5].Get("content.0.text").String())
-	require.Equal(t, gjson.GetBytes(body, "input.7.content").Raw, items[6].Get("content").Raw)
-	require.Equal(t, gjson.GetBytes(body, "metadata").Raw, gjson.GetBytes(got, "metadata").Raw)
-	require.Equal(t, "resp_keep", gjson.GetBytes(got, "previous_response_id").String())
 }
 
 func TestNormalizeOpenAIResponsesAzureResourceRetryBodyPreservesPlaintextReasoning(t *testing.T) {

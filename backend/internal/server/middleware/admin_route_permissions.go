@@ -3,6 +3,9 @@ package middleware
 // Exact method + Gin route-pattern authorization inventory.
 // Unknown routes are never inferred from their prefix and are denied.
 var adminRoutePermissionMap = map[string]string{
+	"GET /api/v1/admin/server-auto-retry/config":                                            "system.settings.manage",
+	"PUT /api/v1/admin/server-auto-retry/config":                                            "system.settings.manage",
+	"GET /api/v1/admin/server-auto-retry/events":                                            "system.settings.manage",
 	"GET /api/v1/admin/model-plaza/pricing":                                                 "models.pricing.read",
 	"GET /api/v1/admin/model-plaza/pricing/overrides":                                       "models.pricing.read",
 	"PUT /api/v1/admin/model-plaza/pricing":                                                 "models.pricing.write",

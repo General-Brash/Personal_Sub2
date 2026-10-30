@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -20,14 +21,18 @@ const (
 	openAIResponsesAzureEncryptedPart      = `{"type":"input_text","text":"[encrypted content omitted]"}`
 )
 
+// Relays can redact the resource qualifier. Restrict it to qualifier tokens and
+// require adjacent same-resource guidance before cleaning input.
+var openAIResponsesForeignResourceMessagePattern = regexp.MustCompile(`\b(?:was|were) created under a different ((?:[[:alnum:]_*-]+ )*)openai resource\.? use the same resource that created the items? to access (?:it|them)\b`)
+
 // normalizeOpenAIResponsesAzureResourceRetryBody ports the foreign-resource
 // recovery in CC Switch v4.0.21, issue #8877, commit
 // 96f01af07fddc80790c2fe4fd80c4a073a06074a (opaque_state_rectifier.rs and
 // providers/codex_compaction.rs). It is a pure request-body helper: HTTP callers
 // supply the actual upstreamReq.URL and own the one-retry guard. It does not
 // handle WS errors, SSE/HTTP 200 business errors, or other opaque-state failures.
-// Unlike the broader upstream detector, only the specific Azure HTTP 400
-// foreign-resource message triggers recovery; raw response text is not used.
+// Recovery requires an Azure HTTP 400 resource mismatch or a compatible message
+// with explicit same-resource guidance; raw response text is not used.
 func normalizeOpenAIResponsesAzureResourceRetryBody(statusCode int, body, responseBody []byte, upstreamURL *url.URL) ([]byte, bool, error) {
 	if statusCode != http.StatusBadRequest || !gjson.ValidBytes(responseBody) {
 		return body, false, nil
@@ -63,9 +68,7 @@ func normalizeOpenAIResponsesAzureResourceRetryBody(statusCode int, body, respon
 			continue
 		}
 		text := message.String()
-		// Match an affirmative resource mismatch, not "was not created".
-		if strings.Contains(text, "was created under a different Azure OpenAI resource") ||
-			strings.Contains(text, "were created under a different Azure OpenAI resource") {
+		if openAIResponsesForeignResourceMessageMatches(text) {
 			foreignResource = true
 		}
 		if strings.Contains(text, "compaction") {
@@ -200,6 +203,27 @@ func normalizeOpenAIResponsesAzureResourceRetryBody(statusCode int, body, respon
 		return body, false, fmt.Errorf("replace Azure resource retry input: %w", err)
 	}
 	return normalized, true, nil
+}
+
+func openAIResponsesForeignResourceMessageMatches(text string) bool {
+	normalized := strings.ToLower(strings.Join(strings.Fields(text), " "))
+	// Keep the legacy Azure form, including messages without recovery guidance.
+	if strings.Contains(normalized, "was created under a different azure openai resource") ||
+		strings.Contains(normalized, "were created under a different azure openai resource") {
+		return true
+	}
+	match := openAIResponsesForeignResourceMessagePattern.FindStringSubmatch(normalized)
+	if len(match) != 2 {
+		return false
+	}
+	// A qualifier must not negate or contrast the resource mismatch.
+	for _, word := range strings.Fields(match[1]) {
+		switch word {
+		case "not", "no", "never", "but", "rather", "instead":
+			return false
+		}
+	}
+	return true
 }
 
 func openAIResponsesAzureItemType(item gjson.Result) string {

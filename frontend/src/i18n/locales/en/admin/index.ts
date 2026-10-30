@@ -9,6 +9,7 @@ import promptAudit from './promptAudit'
 import plugins from './plugins'
 import secondaryReview from './secondaryReview'
 import oidcProvider from './oidcProvider'
+import serverAutoRetry from './serverAutoRetry'
 
 export default {
   ...overview,
@@ -22,4 +23,5 @@ export default {
   ...plugins,
   ...secondaryReview,
   ...oidcProvider,
+  ...serverAutoRetry,
 }

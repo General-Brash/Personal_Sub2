@@ -136,6 +136,9 @@ type SettingService struct {
 	openAICodexVersionSF        singleflight.Group
 	codexRestrictionPolicyCache atomic.Value // *cachedCodexRestrictionPolicy
 	codexRestrictionPolicySF    singleflight.Group
+	serverAutoRetryCache        atomic.Value // *cachedServerAutoRetryConfig
+	serverAutoRetrySF           singleflight.Group
+	serverAutoRetryMu           sync.Mutex
 
 	cyberSessionBlockRuntimeCache atomic.Value // *cachedCyberSessionBlockRuntime
 	cyberSessionBlockRuntimeSF    singleflight.Group

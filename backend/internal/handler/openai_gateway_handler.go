@@ -469,6 +469,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	// 解析渠道级模型映射
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
 	forwardBody := openAIModelMappedBody(body, channelMapping.Mapped, channelMapping.MappedModel, h.gatewayService.ReplaceModelInBody)
+	retryContext := h.gatewayService.BeginServerAutoRetry(c, body)
+	defer func() { retryContext.Final(c, false, "") }()
 	seedOpenAIForwardImageIntentHint(c, channelMapping.Mapped, imageIntent)
 	forwardModel := openAIChannelForwardModel(channelMapping, reqModel)
 	c.Request = c.Request.WithContext(service.WithOpenAIForwardModel(
@@ -556,6 +558,20 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 	c.Request = c.Request.WithContext(pricingCtx)
+	var retrySelection *service.AccountSelectionResult
+	defer func() {
+		if retrySelection != nil && retrySelection.ReleaseFunc != nil {
+			retrySelection.ReleaseFunc()
+		}
+	}()
+	selectRetryAccount := func(excluded map[int64]struct{}) (*service.AccountSelectionResult, service.OpenAIAccountScheduleDecision, error) {
+		selectionCtx, finishWait := retryContext.SelectionContext(c.Request.Context())
+		defer finishWait()
+		return h.gatewayService.SelectAccountWithSchedulerForCapability(
+			selectionCtx, apiKey.GroupID, previousResponseID, sessionHash, forwardModel, excluded,
+			service.OpenAIUpstreamTransportAny, requiredCapability, requireCompact, false, !imageIntent, requestPlatform,
+		)
+	}
 
 	for {
 		// Streaming Forward intentionally detaches the upstream request so usage can
@@ -566,20 +582,21 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		}
 		// Select account supporting the requested model
 		reqLog.Debug("openai.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
-		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithSchedulerForCapability(
-			c.Request.Context(),
-			apiKey.GroupID,
-			previousResponseID,
-			sessionHash,
-			forwardModel,
-			failedAccountIDs,
-			service.OpenAIUpstreamTransportAny,
-			requiredCapability,
-			requireCompact,
-			false,
-			!imageIntent,
-			requestPlatform,
-		)
+		var selection *service.AccountSelectionResult
+		var scheduleDecision service.OpenAIAccountScheduleDecision
+		var err error
+		if retrySelection != nil {
+			selection, retrySelection = retrySelection, nil
+		} else {
+			selection, scheduleDecision, err = selectRetryAccount(failedAccountIDs)
+		}
+		if retryContext.Governed && retryContext.RemainingWait() <= 0 {
+			if selection != nil && selection.ReleaseFunc != nil {
+				selection.ReleaseFunc()
+			}
+			h.handleFailoverExhausted(c, retryContext.Stop(c, "retry_wait_budget_exhausted"), streamStarted)
+			return
+		}
 		if err != nil {
 			if failoverClientGone(c) {
 				reqLog.Info("openai.account_select_aborted_client_disconnected", zap.Error(err))
@@ -644,6 +661,22 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			zap.Float64("load_skew", scheduleDecision.LoadSkew),
 		)
 		account := selection.Account
+		if retryContext.Governed {
+			selectionCtx, finishWait := retryContext.SelectionContext(c.Request.Context())
+			originalRequest := c.Request
+			c.Request = c.Request.WithContext(selectionCtx)
+			eligible := h.gatewayService.RefreshServerAutoRetrySelection(c, selection, apiKey.GroupID, forwardModel, requestPlatform, requireCompact, requiredCapability)
+			c.Request = originalRequest
+			finishWait()
+			if !eligible {
+				if selection.ReleaseFunc != nil {
+					selection.ReleaseFunc()
+				}
+				h.handleFailoverExhausted(c, retryContext.Stop(c, "retry_account_ineligible"), streamStarted || c.Writer.Written())
+				return
+			}
+			account = selection.Account
+		}
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
 		reqLog.Debug("openai.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
 		setOpsSelectedAccount(c, account.ID, account.Platform)
@@ -660,6 +693,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		}
 		if slotResult != openAISlotAcquireOK {
 			return
+		}
+		if retryContext.Governed {
+			account = selection.Account
 		}
 		if pricingErr := h.gatewayService.PreflightResponsesRequestPricing(c.Request.Context(), apiKey, account, reqModel, channelMapping, body); pricingErr != nil {
 			if accountReleaseFunc != nil {
@@ -694,6 +730,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		// 从不可变的 canonical forwardBody 派生本次尝试 body 并整块剔除上游私有的加密
 		// reasoning item（含耦合的 id/summary），避免非透传上游 400 拒绝 Kiro reasoning 形态。
 		attemptBody := h.deriveOpenAIForwardAttemptBody(reqLog, forwardBody, account, &passthroughFailoverState)
+		attemptBody = retryContext.BodyForAttempt(attemptBody)
 		result, err := func() (*service.OpenAIForwardResult, error) {
 			defer func() {
 				if accountReleaseFunc != nil {
@@ -774,6 +811,95 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			} else {
 				var failoverErr *service.UpstreamFailoverError
 				if errors.As(err, &failoverErr) {
+					if target := failoverErr.ServerAutoRetry; target != nil {
+						lastFailoverErr = failoverErr
+						if target.StopReason != "" || !openAIRequestAllowsFailoverReplay(c) || !openAIForwardMayFailover(c, writerSizeBeforeForward, failoverErr) || retryContext.HasSemanticOutput {
+							if target.StopReason == "" {
+								target.StopReason = "response_output_or_canceled"
+							}
+							if !failoverClientGone(c) {
+								h.handleFailoverExhausted(c, failoverErr, streamStarted || c.Writer.Written())
+							}
+							return
+						}
+						var next *service.AccountSelectionResult
+						if retryContext.PreferOther(target) && switchCount < maxAccountSwitches {
+							excluded := make(map[int64]struct{}, len(failedAccountIDs)+1)
+							for id := range failedAccountIDs {
+								excluded[id] = struct{}{}
+							}
+							excluded[account.ID] = struct{}{}
+							for candidates := 0; candidates < 64; candidates++ {
+								candidate, _, selectErr := selectRetryAccount(excluded)
+								if selectErr != nil || candidate == nil || candidate.Account == nil {
+									if candidate != nil && candidate.ReleaseFunc != nil {
+										candidate.ReleaseFunc()
+									}
+									break
+								}
+								if service.ServerAutoRetryIndependentAccount(account, candidate.Account) && retryContext.Matches(c, candidate.Account) {
+									next = candidate
+									break
+								}
+								excluded[candidate.Account.ID] = struct{}{}
+								if candidate.ReleaseFunc != nil {
+									candidate.ReleaseFunc()
+								}
+							}
+						}
+						if next != nil {
+							if openAIFirstOutputFailoverExhausted(failoverErr, &firstOutputTimeoutSwitchCount) {
+								if next.ReleaseFunc != nil {
+									next.ReleaseFunc()
+								}
+								h.handleFailoverExhausted(c, retryContext.Stop(c, "first_output_switch_limit"), streamStarted || c.Writer.Written())
+								return
+							}
+							if h.gatewayService.ShouldStopOpenAIOAuth429Failover(account, failoverErr.StatusCode, switchCount+1, &oauth429FailoverState) {
+								if next.ReleaseFunc != nil {
+									next.ReleaseFunc()
+								}
+								h.handleFailoverExhausted(c, retryContext.Stop(c, "oauth429_switch_limit"), streamStarted || c.Writer.Written())
+								return
+							}
+						}
+						wait, planErr := retryContext.Plan(c, target, next != nil)
+						if planErr != nil {
+							if next != nil && next.ReleaseFunc != nil {
+								next.ReleaseFunc()
+							}
+							h.handleFailoverExhausted(c, retryContext.Stop(c, target.StopReason), streamStarted || c.Writer.Written())
+							return
+						}
+						if next == nil {
+							next = h.gatewayService.ServerAutoRetrySameAccountSelection(selection, retryContext.RemainingWait())
+						} else {
+							failedAccountIDs[account.ID] = struct{}{}
+							switchCount++
+							h.gatewayService.RecordOpenAIAccountSwitch()
+							if wait > 0 && next.Acquired {
+								if next.ReleaseFunc != nil {
+									next.ReleaseFunc()
+								}
+								next = h.gatewayService.ServerAutoRetrySameAccountSelection(next, retryContext.RemainingWait())
+							}
+						}
+						if sleepErr := retryContext.Sleep(c, wait); sleepErr != nil {
+							if next.ReleaseFunc != nil {
+								next.ReleaseFunc()
+							}
+							if !failoverClientGone(c) {
+								h.handleFailoverExhausted(c, retryContext.Stop(c, "retry_wait_canceled_or_exhausted"), streamStarted || c.Writer.Written())
+							}
+							return
+						}
+						if c.Writer.Written() {
+							streamStarted = true
+						}
+						retrySelection = next
+						continue
+					}
+					retryContext.NoteFailure(failoverErr.StatusCode)
 					if failoverClientGone(c) {
 						reqLog.Info("openai.failover_aborted_client_disconnected",
 							zap.Int64("account_id", account.ID),
@@ -812,10 +938,17 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 								zap.Int("retry_count", sameAccountRetryCount[account.ID]),
 								zap.Duration("retry_delay", retryDelay),
 							)
-							select {
-							case <-c.Request.Context().Done():
-								return
-							case <-time.After(retryDelay):
+							if retryContext.Governed {
+								if sleepErr := retryContext.Sleep(c, retryDelay); sleepErr != nil {
+									h.handleFailoverExhausted(c, retryContext.Stop(c, "retry_wait_budget_exhausted"), streamStarted || c.Writer.Written())
+									return
+								}
+							} else {
+								select {
+								case <-c.Request.Context().Done():
+									return
+								case <-time.After(retryDelay):
+								}
 							}
 							continue
 						}
@@ -852,6 +985,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					continue
 				}
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, account.GetMappedModel(reqModel), false, nil)
+				retryContext.NoteFailure(http.StatusBadGateway)
 				upstreamErrorAlreadyCommunicated := openAIForwardErrorAlreadyCommunicated(c, writerSizeBeforeForward, err)
 				wroteFallback := false
 				if !upstreamErrorAlreadyCommunicated {
@@ -884,6 +1018,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
 		submitResponsesUsage(result)
+		retryContext.Final(c, err == nil, "")
 		reqLog.Debug("openai.request_completed",
 			zap.Int64("account_id", account.ID),
 			zap.Int("switch_count", switchCount),
@@ -2052,6 +2187,23 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 	// 终检与准入后绑定使用选号结果携带的门：composite 等跨分组调度解析出的
 	// 门只存在于调度栈的局部 ctx，必须经选号结果重放到本函数的 ctx 上。
 	ctx := service.ContextWithSelectionProfitGate(c.Request.Context(), selection)
+	retryContext := service.ServerAutoRetryFromContext(c)
+	if retryContext != nil && retryContext.Governed {
+		waitStart := time.Now()
+		defer func() { retryContext.Wait += time.Since(waitStart) }()
+		if retryContext.RemainingWait() <= 0 {
+			if selection.ReleaseFunc != nil {
+				selection.ReleaseFunc()
+			}
+			h.handleFailoverExhausted(c, retryContext.Stop(c, "retry_wait_budget_exhausted"), *streamStarted || c.Writer.Written())
+			return nil, openAISlotAcquireFailed
+		}
+		if selection.WaitPlan != nil {
+			plan := *selection.WaitPlan
+			plan.Timeout = min(plan.Timeout, retryContext.RemainingWait())
+			selection.WaitPlan = &plan
+		}
+	}
 	account := selection.Account
 	if selection.Acquired {
 		latest, vetoed, reason := h.gatewayService.ProfitControlVetoLatest(ctx, account)
@@ -3157,6 +3309,35 @@ func (h *OpenAIGatewayHandler) handleConcurrencyError(c *gin.Context, err error,
 func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, streamStarted bool) {
 	if failoverErr == nil {
 		h.handleFailoverExhaustedSimple(c, http.StatusBadGateway, streamStarted)
+		return
+	}
+	if failoverErr.ServerAutoRetry != nil && c.Writer.Written() && inboundIsResponses(c) {
+		target := failoverErr.ServerAutoRetry
+		status, errType, message := h.mapUpstreamError(failoverErr.StatusCode)
+		if h.errorPassthroughService != nil && len(failoverErr.ResponseBody) > 0 {
+			if rule := h.errorPassthroughService.MatchRule("openai", failoverErr.StatusCode, failoverErr.ResponseBody); rule != nil {
+				status = failoverErr.StatusCode
+				if !rule.PassthroughCode && rule.ResponseCode != nil {
+					status = *rule.ResponseCode
+				}
+				message = service.ExtractUpstreamErrorMessage(failoverErr.ResponseBody)
+				if !rule.PassthroughBody && rule.CustomMessage != nil {
+					message = *rule.CustomMessage
+				}
+				if rule.SkipMonitoring {
+					c.Set(service.OpsSkipPassthroughKey, true)
+				}
+				errType = "upstream_error"
+			}
+		}
+		service.SetOpsUpstreamError(c, target.SemanticStatus, message, "")
+		if c.GetBool("server_auto_retry_terminal_written") {
+			return
+		}
+		c.Set("server_auto_retry_terminal_written", true)
+		service.MarkResponseCommitted(c)
+		service.MarkOpsStreamError(c, errType, message, status)
+		writeResponsesFailedSSE(c, errType, target.Reason, message)
 		return
 	}
 	if failoverErr.IsOpenAIRequestBodyTooLarge() {

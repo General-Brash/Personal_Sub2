@@ -148,10 +148,16 @@ func (s *OpsSystemLogSink) WriteLogEvent(event *logger.LogEvent) {
 }
 
 func (s *OpsSystemLogSink) shouldIndex(event *logger.LogEvent) bool {
+	if event == nil {
+		return false
+	}
 	if event != nil && event.Fields != nil {
 		if skip, _ := event.Fields[logger.OpsSystemLogSkipField].(bool); skip {
 			return false
 		}
+	}
+	if event.Message == "server_auto_retry.retry_attempt" || event.Message == "server_auto_retry.final" {
+		return true
 	}
 	level := strings.ToLower(strings.TrimSpace(event.Level))
 	switch level {

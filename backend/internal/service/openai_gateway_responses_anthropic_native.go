@@ -122,6 +122,11 @@ func (s *OpenAIGatewayService) forwardResponsesViaNativeAnthropic(
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
 
+	if retry := ServerAutoRetryFromContext(c); retry != nil {
+		if dispatchErr := retry.BeforeDispatch(c, account); dispatchErr != nil {
+			return nil, dispatchErr
+		}
+	}
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	if err != nil {
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, true)

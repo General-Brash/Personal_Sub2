@@ -202,6 +202,7 @@ type OpsSystemLogFilter struct {
 
 	Level     string
 	Component string
+	Messages  []string // Exact messages, combined with OR before pagination.
 
 	RequestID       string
 	ClientRequestID string

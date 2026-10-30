@@ -186,10 +186,9 @@ func opsErrorLogsOrderBy(filter *service.OpsErrorLogFilter) string {
 	case "model":
 		column = "COALESCE(NULLIF(TRIM(e.requested_model), ''), e.model)"
 	case "status_code":
-		// 与展示列/过滤保持同义:列表展示 COALESCE(upstream_status_code, status_code, 0),
-		// status_code 过滤也用同一表达式,故排序必须一致——否则 recovered upstream 行
-		//（status_code<400 但展示上游 5xx）排序键与显示值/分页切分不符。
-		column = "COALESCE(e.upstream_status_code, e.status_code, 0)"
+		// Match display and filtering: retry-final failures use semantic status;
+		// legacy recovered upstream rows continue to show the upstream status.
+		column = "(CASE WHEN e.error_type = 'server_auto_retry_error' THEN COALESCE(e.status_code, 0) ELSE COALESCE(e.upstream_status_code, e.status_code, 0) END)"
 	default:
 		column = "e.created_at"
 	}
@@ -240,7 +239,7 @@ SELECT
   COALESCE(e.error_owner, ''),
   COALESCE(e.error_source, ''),
   e.severity,
-  COALESCE(e.upstream_status_code, e.status_code, 0),
+  (CASE WHEN e.error_type = 'server_auto_retry_error' THEN COALESCE(e.status_code, 0) ELSE COALESCE(e.upstream_status_code, e.status_code, 0) END),
   COALESCE(e.platform, ''),
   COALESCE(e.model, ''),
   COALESCE(e.resolved, false),
@@ -411,7 +410,7 @@ SELECT
   COALESCE(e.error_owner, ''),
   COALESCE(e.error_source, ''),
   e.severity,
-  COALESCE(e.upstream_status_code, e.status_code, 0),
+  (CASE WHEN e.error_type = 'server_auto_retry_error' THEN COALESCE(e.status_code, 0) ELSE COALESCE(e.upstream_status_code, e.status_code, 0) END),
   COALESCE(e.platform, ''),
   COALESCE(e.model, ''),
   COALESCE(e.resolved, false),
@@ -978,12 +977,12 @@ func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
 	}
 	if len(filter.StatusCodes) > 0 {
 		args = append(args, pq.Array(filter.StatusCodes))
-		clauses = append(clauses, "COALESCE(e.upstream_status_code, e.status_code, 0) = ANY($"+itoa(len(args))+")")
+		clauses = append(clauses, "(CASE WHEN e.error_type = 'server_auto_retry_error' THEN COALESCE(e.status_code, 0) ELSE COALESCE(e.upstream_status_code, e.status_code, 0) END) = ANY($"+itoa(len(args))+")")
 	} else if filter.StatusCodesOther {
 		// "Other" means: status codes not in the common list.
 		known := []int{400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504, 529}
 		args = append(args, pq.Array(known))
-		clauses = append(clauses, "NOT (COALESCE(e.upstream_status_code, e.status_code, 0) = ANY($"+itoa(len(args))+"))")
+		clauses = append(clauses, "NOT ((CASE WHEN e.error_type = 'server_auto_retry_error' THEN COALESCE(e.status_code, 0) ELSE COALESCE(e.upstream_status_code, e.status_code, 0) END) = ANY($"+itoa(len(args))+"))")
 	}
 	// Exact correlation keys (preferred for request↔upstream linkage).
 	if rid := strings.TrimSpace(filter.RequestID); rid != "" {
@@ -1094,6 +1093,15 @@ func buildOpsSystemLogsWhere(filter *service.OpsSystemLogFilter) (string, []any,
 		if v := strings.TrimSpace(filter.Component); v != "" {
 			args = append(args, v)
 			clauses = append(clauses, "COALESCE(l.component,'') = $"+itoa(len(args)))
+			hasConstraint = true
+		}
+		if len(filter.Messages) > 0 {
+			placeholders := make([]string, 0, len(filter.Messages))
+			for _, message := range filter.Messages {
+				args = append(args, message)
+				placeholders = append(placeholders, "$"+itoa(len(args)))
+			}
+			clauses = append(clauses, "l.message IN ("+strings.Join(placeholders, ",")+")")
 			hasConstraint = true
 		}
 		if v := strings.TrimSpace(filter.RequestID); v != "" {

@@ -19,6 +19,8 @@ import (
 
 // Forward forwards request to OpenAI API
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *OpenAIForwardResult, err error) {
+	retryContext := s.BeginServerAutoRetry(c, body)
+	retryContext.PrepareAttempt(s, account, body, false)
 	requestedReasoningEffort := RequestedReasoningEffortFromContext(ctx)
 	if requestedReasoningEffort == nil {
 		requestedReasoningEffort = CanonicalRequestedReasoningEffort(body)
@@ -952,11 +954,13 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 	httpInvalidEncryptedContentRetryTried := false
 	agentTaskRecoveryTried := false
-	azureResourceRetryTried := false
+	retryContext.PrepareAttempt(s, account, body, imageIntent)
 	rejectedFieldRetryState := newOpenAIResponsesRejectedFieldRetryState(body)
 	for {
 		// Build upstream request
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+		upstreamCtx, releaseRetryGuard := retryContext.GuardUpstream(upstreamCtx)
+		defer releaseRetryGuard()
 		var headerGuard *openAIFirstOutputHeaderGuard
 		if firstOutputTimeout > 0 {
 			upstreamCtx, headerGuard = newOpenAIFirstOutputHeaderGuard(
@@ -981,6 +985,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 
 		// Send request
+		if dispatchErr := retryContext.BeforeDispatch(c, account); dispatchErr != nil {
+			if headerGuard != nil {
+				headerGuard.close()
+			}
+			return nil, dispatchErr
+		}
 		upstreamStart := time.Now()
 		resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
@@ -1010,12 +1020,16 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		if headerGuard != nil {
 			resp.Body = &openAIRequestContextReadCloser{ReadCloser: resp.Body, cleanup: headerGuard.close}
 		}
+		retryContext.NoteResponse(resp)
 
 		// Handle error response
 		if resp.StatusCode >= 400 {
 			respBody := s.readUpstreamErrorBody(resp)
 			_ = resp.Body.Close()
 			resp.Body = io.NopCloser(bytes.NewReader(respBody))
+			if hit, _, _ := detectOpenAICyberPolicy(respBody); hit {
+				return s.handleErrorResponse(ctx, resp, c, account, body, billingModel)
+			}
 
 			upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 			upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
@@ -1028,18 +1042,23 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				}
 				continue
 			}
-			if !azureResourceRetryTried {
-				if retryBody, changed, retryErr := normalizeOpenAIResponsesAzureResourceRetryBody(resp.StatusCode, body, respBody, upstreamReq.URL); retryErr != nil {
-					return nil, fmt.Errorf("normalize Azure resource Responses retry body: %w", retryErr)
-				} else if changed {
-					azureResourceRetryTried = true
-					body = retryBody
+			if targetErr, recoveryErr := s.serverAutoRetryHTTPError(c, account, resp, body, respBody, upstreamReq.URL); recoveryErr != nil {
+				return nil, recoveryErr
+			} else if targetErr != nil {
+				if targetErr.ServerAutoRetry.Reason == "azure400" && targetErr.ServerAutoRetry.StopReason == "" {
+					if _, planErr := retryContext.Plan(c, targetErr.ServerAutoRetry, false); planErr != nil {
+						return nil, planErr
+					}
+					body = bytes.Clone(retryContext.CompliantBody)
 					requestView = newOpenAIRequestView(body)
 					reqBody = nil
 					rejectedFieldRetryState.remember(body)
-					logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Retrying non-WSv2 request once after Azure resource mismatch (account: %s)", account.Name)
 					continue
 				}
+				if resp.StatusCode == http.StatusTooManyRequests && targetErr.ServerAutoRetry.StopReason != "safety_policy" {
+					s.handleFailoverSideEffects(ctx, resp, account, respBody, upstreamModel)
+				}
+				return nil, targetErr
 			}
 			respBody = s.redactAgentIdentitySensitiveBody(ctx, account, respBody)
 			resp.Body = io.NopCloser(bytes.NewReader(respBody))
