@@ -54,6 +54,8 @@ type ServerAutoRetryContext struct {
 	CurrentAccount                                                                *Account
 	GuardStop                                                                     func() bool
 	LastUpstreamRequestID                                                         string
+
+	TerminalEventSeen bool
 }
 
 func ServerAutoRetryFromContext(c *gin.Context) *ServerAutoRetryContext {
@@ -199,8 +201,10 @@ func (r *ServerAutoRetryContext) BeforeDispatch(c *gin.Context, account *Account
 	if r == nil {
 		return nil
 	}
-	if err := r.OriginalContext.Err(); err != nil {
-		return err
+	if r.DispatchCount > 0 {
+		if err := r.OriginalContext.Err(); err != nil {
+			return err
+		}
 	}
 	if r.Governed && (r.HasSemanticOutput || r.UsageEvidence == "nonzero") {
 		return r.Stop(c, "semantic_output_or_positive_usage")
@@ -236,7 +240,7 @@ func (r *ServerAutoRetryContext) BeforeDispatch(c *gin.Context, account *Account
 	if r.Governed {
 		r.log(c, "server_auto_retry.retry_attempt", "retry")
 	}
-	r.HasSemanticOutput, r.UsageEvidence = false, "unknown"
+	r.HasSemanticOutput, r.UsageEvidence, r.TerminalEventSeen = false, "unknown", false
 	return nil
 }
 
@@ -282,10 +286,10 @@ func (r *ServerAutoRetryContext) Observe(payload []byte, eventType string) {
 	}
 }
 
-// Until semantic output, the original client's cancellation/deadline remains
-// authoritative. Once output starts, retain the existing detached usage drain.
+// Retries follow the original client's cancellation until semantic output;
+// the initial detached request retains its existing usage-drain behavior.
 func (r *ServerAutoRetryContext) GuardUpstream(ctx context.Context) (context.Context, func()) {
-	if r == nil || !r.AttemptEligible && !r.Governed {
+	if r == nil || r.DispatchCount == 0 || !r.AttemptEligible && !r.Governed {
 		return ctx, func() {}
 	}
 	guarded, cancel := context.WithCancel(ctx)
@@ -487,7 +491,8 @@ func (s *OpenAIGatewayService) serverAutoRetryTarget(c *gin.Context, account *Ac
 		err.NextAccountAction = NextAccountStop
 	}
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{Platform: account.Platform, AccountID: account.ID, AccountName: account.Name,
-		UpstreamStatusCode: status, UpstreamRequestID: target.UpstreamRequestID, Kind: "server_auto_retry", Message: reason})
+		ProxyID: opsUpstreamProxyID(account), ProxyName: opsUpstreamProxyName(account), Passthrough: c.GetBool("openai_passthrough"),
+		UpstreamStatusCode: status, UpstreamRequestID: target.UpstreamRequestID, Kind: "failover", Reason: reason, Message: reason})
 	return err
 }
 
@@ -525,7 +530,7 @@ func (r *ServerAutoRetryContext) Plan(c *gin.Context, target *ServerAutoRetryTar
 		return 0, r.Stop(c, "no_eligible_independent_account")
 	}
 	wait := time.Duration(0)
-	if target.Reason != "azure400" && !(switched && target.Reason == "rate_limit") {
+	if target.Reason != "azure400" && (!switched || target.Reason != "rate_limit") {
 		base := r.Config.EmptyBackoffBaseMS
 		if target.Reason == "rate_limit" {
 			base = r.Config.RateLimitBackoffBaseMS
@@ -558,7 +563,11 @@ func (r *ServerAutoRetryContext) RemainingWait() time.Duration {
 	if r == nil {
 		return 0
 	}
-	return max(0, time.Duration(r.Config.MaxTotalRetryWaitMS)*time.Millisecond-r.Wait)
+	remaining := time.Duration(r.Config.MaxTotalRetryWaitMS)*time.Millisecond - r.Wait
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
 }
 
 func (r *ServerAutoRetryContext) Sleep(c *gin.Context, delay time.Duration) error {
@@ -655,10 +664,16 @@ func serverAutoRetryAfter(headers http.Header, now time.Time) time.Duration {
 			if seconds >= float64(math.MaxInt64)/float64(time.Second) {
 				wait = time.Duration(math.MaxInt64)
 			} else {
-				wait = max(wait, time.Duration(seconds*float64(time.Second)))
+				retryAfter := time.Duration(seconds * float64(time.Second))
+				if retryAfter > wait {
+					wait = retryAfter
+				}
 			}
 		} else if at, err := http.ParseTime(value); err == nil && at.After(now) {
-			wait = max(wait, at.Sub(now))
+			retryAfter := at.Sub(now)
+			if retryAfter > wait {
+				wait = retryAfter
+			}
 		}
 	}
 	for _, value := range headers.Values("retry-after-ms") {
@@ -669,7 +684,10 @@ func serverAutoRetryAfter(headers http.Header, now time.Time) time.Duration {
 			if ms >= float64(math.MaxInt64)/float64(time.Millisecond) {
 				wait = time.Duration(math.MaxInt64)
 			} else {
-				wait = max(wait, time.Duration(ms*float64(time.Millisecond)))
+				retryAfter := time.Duration(ms * float64(time.Millisecond))
+				if retryAfter > wait {
+					wait = retryAfter
+				}
 			}
 		}
 	}
@@ -745,11 +763,14 @@ func (s *OpenAIGatewayService) serverAutoRetryStreamEvent(c *gin.Context, accoun
 	if r == nil || !r.AttemptEligible {
 		return nil
 	}
+	if openAIStreamEventTypeIsTerminal(eventType) {
+		r.TerminalEventSeen = true
+	}
 	if eventType == "" && len(bytes.TrimSpace(payload)) != 0 && string(bytes.TrimSpace(payload)) != "[DONE]" {
 		r.HasSemanticOutput = true
 	}
 	r.Observe(payload, eventType)
-	if string(bytes.TrimSpace(payload)) == "[DONE]" && !r.HasSemanticOutput {
+	if string(bytes.TrimSpace(payload)) == "[DONE]" && !r.TerminalEventSeen && !r.HasSemanticOutput {
 		return s.serverAutoRetryTarget(c, account, resp, nil, "no_output_terminal_missing", nil)
 	}
 	if hit, _, _ := detectOpenAICyberPolicy(payload); hit {
