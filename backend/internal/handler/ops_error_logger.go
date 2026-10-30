@@ -709,6 +709,26 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		}
 
 		status := c.Writer.Status()
+		var retryFinal *service.OpsServerAutoRetryMetadata
+		if value, ok := c.Get("server_auto_retry_final"); ok {
+			if fields, ok := value.(map[string]any); ok {
+				metadata := service.DecodeOpsServerAutoRetryMetadata(fields)
+				if metadata.Outcome == "failed" {
+					if metadata.SemanticStatus == nil || *metadata.SemanticStatus < 400 {
+						semanticStatus := http.StatusBadGateway
+						if metadata.RawHTTPStatus != nil && *metadata.RawHTTPStatus >= 400 {
+							semanticStatus = *metadata.RawHTTPStatus
+						} else if metadata.Reason == "rate_limit" {
+							semanticStatus = http.StatusTooManyRequests
+						}
+						metadata.SemanticStatus = &semanticStatus
+					}
+					retryFinal = &metadata
+					// Only the recorded business result changes; never rewrite committed HTTP.
+					status = *metadata.SemanticStatus
+				}
+			}
+		}
 		if status < 400 {
 			// Even when the client request succeeds, we still want to persist upstream error attempts
 			// (retries/failover) so ops can observe upstream instability that gets "covered" by retries.
@@ -969,6 +989,13 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		}
 
 		body := w.buf.Bytes()
+		if retryFinal != nil {
+			body, _ = json.Marshal(gin.H{
+				"error": gin.H{"type": "upstream_error", "code": retryFinal.Reason,
+					"message": "Server auto retry failed: " + retryFinal.Reason + " (" + retryFinal.StopReason + ")"},
+				"server_auto_retry": retryFinal,
+			})
+		}
 		parsed := parseOpsErrorResponse(body)
 
 		// Skip logging if a passthrough rule with skip_monitoring=true matched.
@@ -1073,6 +1100,9 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		}
 		applyOpsLatencyFieldsFromContext(c, entry)
 		applyOpsUpstreamFieldsFromContext(c, entry)
+		if retryFinal != nil {
+			applyOpsServerAutoRetryFinal(entry, retryFinal)
+		}
 
 		if apiKey != nil {
 			entry.APIKeyID = &apiKey.ID
@@ -1261,6 +1291,36 @@ func applyOpsLatencyFieldsFromContext(c *gin.Context, entry *service.OpsInsertEr
 	entry.UpstreamLatencyMs = getContextLatencyMs(c, service.OpsUpstreamLatencyMsKey)
 	entry.ResponseLatencyMs = getContextLatencyMs(c, service.OpsResponseLatencyMsKey)
 	entry.TimeToFirstTokenMs = getContextLatencyMs(c, service.OpsTimeToFirstTokenMsKey)
+}
+
+func applyOpsServerAutoRetryFinal(entry *service.OpsInsertErrorLogInput, metadata *service.OpsServerAutoRetryMetadata) {
+	entry.ErrorType = "server_auto_retry_error"
+	entry.ErrorPhase, entry.ErrorOwner, entry.ErrorSource = "upstream", "provider", "upstream_http"
+	entry.IsBusinessLimited = false
+	entry.UpstreamStatusCode = metadata.RawHTTPStatus
+	if metadata.AccountID != nil {
+		entry.AccountID = metadata.AccountID
+	}
+	message := entry.ErrorMessage
+	entry.UpstreamErrorMessage = &message
+	detail := entry.ErrorBody
+	entry.UpstreamErrorDetail = &detail
+	event := &service.OpsUpstreamErrorEvent{
+		AtUnixMs: entry.CreatedAt.UnixMilli(), Platform: entry.Platform,
+		Kind: "server_auto_retry.final", Stage: "upstream", Reason: metadata.Reason,
+		Message: message, ServerAutoRetry: metadata,
+	}
+	if metadata.RawHTTPStatus != nil {
+		event.UpstreamStatusCode = *metadata.RawHTTPStatus
+	}
+	if entry.AccountID != nil {
+		event.AccountID = *entry.AccountID
+	}
+	if metadata.UpstreamRequestID != nil {
+		event.UpstreamRequestID = *metadata.UpstreamRequestID
+	}
+	// Copy the slice before appending so existing attempt context stays unchanged.
+	entry.UpstreamErrors = append(append([]*service.OpsUpstreamErrorEvent{}, entry.UpstreamErrors...), event)
 }
 
 // applyOpsUpstreamFieldsFromContext captures attempt-level upstream context.

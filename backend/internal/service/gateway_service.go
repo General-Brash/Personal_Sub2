@@ -675,6 +675,7 @@ type UpstreamFailoverError struct {
 	NextAccountAction        NextAccountAction
 	ClientStatusCode         int
 	ClientMessage            string
+	ServerAutoRetry          *ServerAutoRetryTarget
 }
 
 func (e *UpstreamFailoverError) Error() string {

@@ -110,6 +110,11 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 			return nil, buildErr
 		}
 
+		if retry := ServerAutoRetryFromContext(c); retry != nil {
+			if dispatchErr := retry.BeforeDispatch(c, account); dispatchErr != nil {
+				return nil, dispatchErr
+			}
+		}
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if err != nil {

@@ -487,10 +487,9 @@
                   <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.admin.permanentCredit') }}</span>
                   <button
                     type="button"
-                    :disabled="!canAdjustBalance"
-                    :title="writeActionTitle('users.balance.adjust') || t('checkin.admin.permanentCredit')"
+                    :title="t('checkin.admin.permanentHistory')"
                     class="font-medium text-gray-900 underline decoration-dashed decoration-gray-300 underline-offset-4 transition-colors hover:text-primary-600 disabled:cursor-not-allowed dark:text-white dark:decoration-dark-500 dark:hover:text-primary-400"
-                    @click.stop="handleDeposit(row, 'permanent')"
+                    @click.stop="handleBalanceHistory(row, 'permanent')"
                   >
                     ${{ value.toFixed(2) }}
                   </button>
@@ -499,10 +498,9 @@
                   <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('checkin.admin.temporaryCredit') }}</span>
                   <button
                     type="button"
-                    :disabled="!canAdjustBalance"
-                    :title="writeActionTitle('users.balance.adjust') || t('checkin.admin.temporaryCredit')"
+                    :title="t('checkin.admin.audit')"
                     class="font-medium text-gray-900 underline decoration-dashed decoration-gray-300 underline-offset-4 transition-colors hover:text-primary-600 disabled:cursor-not-allowed dark:text-white dark:decoration-dark-500 dark:hover:text-primary-400"
-                    @click.stop="handleDeposit(row, 'temporary')"
+                    @click.stop="handleBalanceHistory(row, 'temporary')"
                   >
                     ${{ (row.temporary_credit_available ?? 0).toFixed(2) }}
                   </button>
@@ -886,7 +884,7 @@
     <AdminPermissionsPanel :show="showAdminPermissionsPanel" :user-id="adminPermissionsUser?.id" @close="closeAdminPermissionsPanel" @changed="loadUsers" />
     <UserEntitlementPanel :show="showUserEntitlementPanel" :user-id="entitlementUser?.id" :user-ids="entitlementTargets" @close="closeUserEntitlementPanel" @changed="loadUsers" />
     <UserBalanceModal :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" :initial-credit-type="balanceCreditType" @close="closeBalanceModal" @success="loadUsers" />
-    <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
+    <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" :initial-credit-type="balanceHistoryCreditType" :hide-actions="!canAdjustBalance" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
     <GroupReplaceModal :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
     <UserAttributesConfigModal :show="showAttributesModal" @close="handleAttributesModalClose" />
     <BaseDialog :show="showInvitationAdmin" title="邀请管理" width="wide" @close="showInvitationAdmin = false"><InvitationAdministrationCard /></BaseDialog>
@@ -894,7 +892,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -1752,6 +1750,7 @@ const balanceCreditType = ref<'permanent' | 'temporary'>('permanent')
 // Balance History modal state
 const showBalanceHistoryModal = ref(false)
 const balanceHistoryUser = ref<AdminUser | null>(null)
+const balanceHistoryCreditType = ref<'permanent' | 'temporary'>('temporary')
 
 // 计算剩余天数
 const getDaysRemaining = (expiresAt: string): number => {
@@ -2047,28 +2046,34 @@ const closeBalanceModal = () => {
   balanceCreditType.value = 'permanent'
 }
 
-const handleBalanceHistory = (user: AdminUser) => {
+const handleBalanceHistory = (user: AdminUser, creditType: 'permanent' | 'temporary' = 'temporary') => {
   balanceHistoryUser.value = user
+  balanceHistoryCreditType.value = creditType
   showBalanceHistoryModal.value = true
 }
 
 const closeBalanceHistoryModal = () => {
   showBalanceHistoryModal.value = false
   balanceHistoryUser.value = null
+  balanceHistoryCreditType.value = 'temporary'
 }
 
 // Handle deposit from balance history modal
-const handleDepositFromHistory = () => {
-  if (balanceHistoryUser.value) {
-    handleDeposit(balanceHistoryUser.value, 'permanent')
-  }
+const handleDepositFromHistory = async (creditType: 'permanent' | 'temporary') => {
+  if (!canAdjustBalance.value || !balanceHistoryUser.value) return
+  const user = balanceHistoryUser.value
+  closeBalanceHistoryModal()
+  await nextTick()
+  handleDeposit(user, creditType)
 }
 
 // Handle withdraw from balance history modal
-const handleWithdrawFromHistory = () => {
-  if (balanceHistoryUser.value) {
-    handleWithdraw(balanceHistoryUser.value)
-  }
+const handleWithdrawFromHistory = async () => {
+  if (!canAdjustBalance.value || !balanceHistoryUser.value) return
+  const user = balanceHistoryUser.value
+  closeBalanceHistoryModal()
+  await nextTick()
+  handleWithdraw(user)
 }
 
 // 滚动时关闭菜单

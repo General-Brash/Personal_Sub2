@@ -44,6 +44,149 @@ func (s *OpsService) ListSystemLogs(ctx context.Context, filter *OpsSystemLogFil
 	return result, nil
 }
 
+// Pointer fields distinguish missing evidence from an observed zero or false.
+type OpsServerAutoRetryMetadata struct {
+	Reason            string  `json:"reason"`
+	RawHTTPStatus     *int    `json:"raw_http_status"`
+	SemanticStatus    *int    `json:"semantic_status"`
+	AccountID         *int64  `json:"account_id"`
+	DispatchCount     *int    `json:"dispatch_count"`
+	RetryCount        *int    `json:"retry_count"`
+	SwitchCount       *int    `json:"switch_count"`
+	WaitMS            *int64  `json:"wait_ms"`
+	ResponseCommitted *bool   `json:"response_committed"`
+	HasSemanticOutput *bool   `json:"has_semantic_output"`
+	UsageEvidence     string  `json:"usage_evidence"`
+	StopReason        string  `json:"stop_reason"`
+	Outcome           string  `json:"outcome"`
+	UpstreamRequestID *string `json:"upstream_request_id"`
+}
+
+type OpsServerAutoRetryEvent struct {
+	ID        int64     `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	RequestID string    `json:"request_id"`
+	EventType string    `json:"event_type"`
+	OpsServerAutoRetryMetadata
+}
+
+type OpsServerAutoRetryEventList struct {
+	Items    []*OpsServerAutoRetryEvent `json:"items"`
+	Total    int                        `json:"total"`
+	Page     int                        `json:"page"`
+	PageSize int                        `json:"page_size"`
+}
+
+func DecodeOpsServerAutoRetryMetadata(fields map[string]any) OpsServerAutoRetryMetadata {
+	metadata := OpsServerAutoRetryMetadata{}
+	for name, target := range map[string]any{
+		"reason": &metadata.Reason, "raw_http_status": &metadata.RawHTTPStatus,
+		"semantic_status": &metadata.SemanticStatus, "account_id": &metadata.AccountID,
+		"dispatch_count": &metadata.DispatchCount, "retry_count": &metadata.RetryCount,
+		"switch_count": &metadata.SwitchCount, "wait_ms": &metadata.WaitMS,
+		"response_committed": &metadata.ResponseCommitted, "has_semantic_output": &metadata.HasSemanticOutput,
+		"usage_evidence": &metadata.UsageEvidence, "stop_reason": &metadata.StopReason,
+		"outcome": &metadata.Outcome, "upstream_request_id": &metadata.UpstreamRequestID,
+	} {
+		if value, ok := fields[name]; ok {
+			if raw, err := json.Marshal(value); err == nil {
+				if err := json.Unmarshal(raw, target); err != nil {
+					// Unmarshal can allocate a pointer before rejecting its value.
+					// Reset it rather than expose a fabricated zero/false.
+					switch pointer := target.(type) {
+					case **int:
+						*pointer = nil
+					case **int64:
+						*pointer = nil
+					case **bool:
+						*pointer = nil
+					case **string:
+						*pointer = nil
+					case *string:
+						*pointer = ""
+					}
+				}
+			}
+		}
+	}
+	for _, value := range []*string{&metadata.Reason, &metadata.UsageEvidence, &metadata.StopReason, &metadata.Outcome} {
+		*value = truncateString(strings.TrimSpace(*value), 128)
+		if *value == "" {
+			*value = "unknown"
+		}
+	}
+	for _, status := range []**int{&metadata.RawHTTPStatus, &metadata.SemanticStatus} {
+		if *status != nil && (**status < 100 || **status > 599) {
+			*status = nil
+		}
+	}
+	for _, count := range []**int{&metadata.DispatchCount, &metadata.RetryCount, &metadata.SwitchCount} {
+		if *count != nil && **count < 0 {
+			*count = nil
+		}
+	}
+	if metadata.WaitMS != nil && *metadata.WaitMS < 0 {
+		metadata.WaitMS = nil
+	}
+	if metadata.AccountID != nil && *metadata.AccountID <= 0 {
+		metadata.AccountID = nil
+	}
+	if metadata.UpstreamRequestID != nil {
+		value := truncateString(strings.TrimSpace(*metadata.UpstreamRequestID), 128)
+		metadata.UpstreamRequestID = &value
+		if value == "" {
+			metadata.UpstreamRequestID = nil
+		}
+	}
+	return metadata
+}
+
+// Historical events remain readable even when monitoring or retries are disabled.
+func (s *OpsService) ListServerAutoRetryEvents(ctx context.Context, requestID string, page, pageSize int) (*OpsServerAutoRetryEventList, error) {
+	if s == nil || s.opsRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	if page > int(^uint(0)>>1)/pageSize {
+		return nil, infraerrors.BadRequest("INVALID_SERVER_AUTO_RETRY_PAGE", "page is too large")
+	}
+	logs, err := s.opsRepo.ListSystemLogs(ctx, &OpsSystemLogFilter{
+		RequestID: strings.TrimSpace(requestID), Page: page, PageSize: pageSize,
+		Messages: []string{"server_auto_retry.retry_attempt", "server_auto_retry.final"},
+	})
+	if err != nil {
+		return nil, infraerrors.InternalServer("SERVER_AUTO_RETRY_EVENTS_FAILED", "Failed to list retry events").WithCause(err)
+	}
+	out := &OpsServerAutoRetryEventList{Items: []*OpsServerAutoRetryEvent{}, Page: page, PageSize: pageSize}
+	if logs == nil {
+		return out, nil
+	}
+	out.Total, out.Page, out.PageSize = logs.Total, logs.Page, logs.PageSize
+	for _, logEntry := range logs.Logs {
+		if logEntry == nil {
+			continue
+		}
+		metadata := DecodeOpsServerAutoRetryMetadata(logEntry.Extra)
+		if metadata.AccountID == nil && logEntry.AccountID != nil {
+			value := *logEntry.AccountID
+			metadata.AccountID = &value
+		}
+		out.Items = append(out.Items, &OpsServerAutoRetryEvent{
+			ID: logEntry.ID, Timestamp: logEntry.CreatedAt, RequestID: logEntry.RequestID,
+			EventType: logEntry.Message, OpsServerAutoRetryMetadata: metadata,
+		})
+	}
+	return out, nil
+}
+
 func (s *OpsService) CleanupSystemLogs(ctx context.Context, filter *OpsSystemLogCleanupFilter, operatorID int64) (int64, error) {
 	if err := s.RequireMonitoringEnabled(ctx); err != nil {
 		return 0, err

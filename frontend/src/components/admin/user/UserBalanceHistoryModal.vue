@@ -36,9 +36,11 @@
             </p>
           </div>
           <div class="flex-shrink-0 text-right">
-            <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('admin.users.currentBalance') }}</p>
+            <p class="text-xs text-gray-500 dark:text-dark-400">
+              {{ t(viewMode === 'permanent' ? 'checkin.admin.permanentCredit' : 'checkin.admin.temporaryCredit') }}
+            </p>
             <p class="text-xl font-bold text-gray-900 dark:text-white">
-              ${{ formatDecimalAmount(user.balance) }}
+              ${{ formatDecimalAmount(viewMode === 'permanent' ? user.balance : (user.temporary_credit_available ?? 0)) }}
             </p>
           </div>
         </div>
@@ -97,13 +99,13 @@
             v-if="!hideActions"
             type="button"
             class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
-            @click="emit('deposit')"
+            @click="emit('deposit', viewMode)"
           >
             <Icon name="plus" size="sm" class="text-emerald-500" :stroke-width="2" />
             {{ t('admin.users.deposit') }}
           </button>
           <button
-            v-if="!hideActions"
+            v-if="!hideActions && viewMode === 'permanent'"
             type="button"
             class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
             @click="emit('withdraw')"
@@ -293,19 +295,22 @@ interface HistoryState {
   requestSequence: number
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   show: boolean
   user: AdminUser | null
   hideActions?: boolean
-}>()
+  initialCreditType?: HistoryView
+}>(), {
+  initialCreditType: 'temporary',
+})
 const emit = defineEmits<{
   (event: 'close'): void
-  (event: 'deposit'): void
+  (event: 'deposit', creditType: HistoryView): void
   (event: 'withdraw'): void
 }>()
 const { t } = useI18n()
 
-const viewMode = ref<HistoryView>('temporary')
+const viewMode = ref<HistoryView>(props.initialCreditType)
 const balanceHistory = ref<BalanceHistoryItem[]>([])
 const temporaryCredits = ref<TemporaryCreditAuditItem[]>([])
 const permanentState = reactive<HistoryState>(createHistoryState())
@@ -349,14 +354,14 @@ const typeOptions = computed(() => [
 ])
 
 watch(
-  [() => props.show, () => props.user?.id],
-  ([visible, userID]) => {
+  [() => props.show, () => props.user?.id, () => props.initialCreditType],
+  ([visible, userID, initialCreditType]) => {
     if (!visible || !userID) {
       invalidateHistoryRequests()
       return
     }
     resetHistory()
-    viewMode.value = 'temporary'
+    viewMode.value = initialCreditType
     typeFilter.value = ''
     void loadHistory(1)
   },

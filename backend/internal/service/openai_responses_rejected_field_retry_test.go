@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func TestOpenAIResponsesRejectedFieldRetryStateRejectsDuplicateBodyAndCap(t *testing.T) {
@@ -315,6 +316,11 @@ func TestOpenAIGatewayService_AzureResourceRecoveryBoundaries(t *testing.T) {
 			{"JSON recovery", http.StatusBadRequest, foreignError, false, true, false, 2, false},
 			{"SSE recovery", http.StatusBadRequest, foreignError, true, true, false, 2, false},
 			{"persistent mismatch stops", http.StatusBadRequest, foreignError, false, true, true, 2, true},
+			{"masked JSON recovery", http.StatusBadRequest, maskedForeignResourceTestResponse, false, true, false, 2, false},
+			{"masked SSE recovery", http.StatusBadRequest, maskedForeignResourceTestResponse, true, true, false, 2, false},
+			{"persistent masked mismatch stops", http.StatusBadRequest, maskedForeignResourceTestResponse, false, true, true, 2, true},
+			{"masked permission error stays unchanged", http.StatusForbidden, maskedForeignResourceTestResponse, false, true, false, 1, true},
+			{"masked no changes means no retry", http.StatusBadRequest, maskedForeignResourceTestResponse, false, false, false, 1, true},
 			{"permission error stays unchanged", http.StatusForbidden, foreignError, false, true, false, 1, true},
 			{"non Azure resource stays unchanged", http.StatusBadRequest, `{"error":{"message":"This object was created under a different subscription; resource access is denied"}}`, false, true, false, 1, true},
 			{"no changes means no retry", http.StatusBadRequest, foreignError, false, false, false, 1, true},
@@ -325,13 +331,13 @@ func TestOpenAIGatewayService_AzureResourceRecoveryBoundaries(t *testing.T) {
 				if tt.ids {
 					idField = `"id":"msg_resource_a",`
 				}
-				body := []byte(fmt.Sprintf(`{"model":"gpt-5.5","stream":%t,"input":[{%s"type":"message","role":"user","content":[{"type":"input_text","text":"continue","nonce":9007199254740993}]}]}`, tt.stream, idField))
+				body := []byte(fmt.Sprintf(`{"model":"gpt-5.5","stream":%t,"previous_response_id":"resp_keep","metadata":{"nonce":9007199254740993},"input":[{%s"type":"message","role":"user","content":[{"type":"input_text","text":"continue","nonce":9007199254740993}]},{"type":"function_call","name":"run","call_id":"call_keep","arguments":"{\"id\":\"business\",\"nonce\":9007199254740993}"},{"type":"function_call_output","call_id":"call_keep","output":"tool output"}]}`, tt.stream, idField))
 				firstBody := &passthroughCloseTrackingReadCloser{Reader: strings.NewReader(tt.response)}
 				first := newOpenAIRejectedFieldTestResponse(tt.status, tt.response)
 				first.Body = firstBody
 				second := newOpenAIRejectedFieldTestResponse(http.StatusOK, okBody)
 				if tt.repeatError {
-					second = newOpenAIRejectedFieldTestResponse(http.StatusBadRequest, foreignError)
+					second = newOpenAIRejectedFieldTestResponse(http.StatusBadRequest, tt.response)
 				} else if tt.stream {
 					second.Header.Set("Content-Type", "text/event-stream")
 					second.Body = io.NopCloser(strings.NewReader("data: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\ndata: {\"type\":\"response.completed\",\"response\":" + okBody + "}\n\ndata: [DONE]\n\n"))
@@ -358,11 +364,50 @@ func TestOpenAIGatewayService_AzureResourceRecoveryBoundaries(t *testing.T) {
 					require.Equal(t, "Bearer sk-test", req.Header.Get("Authorization"))
 					require.EqualValues(t, len(upstream.bodies[i]), req.ContentLength)
 					require.Equal(t, "9007199254740993", gjson.GetBytes(upstream.bodies[i], "input.0.content.0.nonce").Raw)
+					require.Equal(t, "call_keep", gjson.GetBytes(upstream.bodies[i], "input.1.call_id").String())
+					require.Equal(t, "call_keep", gjson.GetBytes(upstream.bodies[i], "input.2.call_id").String())
 				}
 				if tt.wantCalls == 2 {
 					require.False(t, gjson.GetBytes(upstream.bodies[1], "input.0.id").Exists())
+					expected, err := sjson.DeleteBytes(upstream.bodies[0], "input.0.id")
+					require.NoError(t, err)
+					require.Equal(t, string(expected), string(upstream.bodies[1]))
 				}
 			})
 		}
+	}
+}
+
+func TestOpenAIGatewayService_AzureResourceRecoveryRetriesOnlyOnce(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.5","stream":false,"input":[{"type":"message","id":"msg_resource_a","role":"user","content":"continue"},{"type":"compaction","encrypted_content":"opaque"}]}`)
+	compactionError := `{"error":{"type":"invalid_request_error","message":"` + maskedForeignResourceTestError + ` The compaction item is from another resource."}}`
+	for _, passthrough := range []bool{false, true} {
+		t.Run(fmt.Sprintf("passthrough=%v", passthrough), func(t *testing.T) {
+			upstream := &httpUpstreamRecorder{responses: []*http.Response{
+				newOpenAIRejectedFieldTestResponse(http.StatusBadRequest, maskedForeignResourceTestResponse),
+				newOpenAIRejectedFieldTestResponse(http.StatusBadRequest, compactionError),
+				newOpenAIRejectedFieldTestResponse(http.StatusOK, namespaceForwardOKResponse),
+			}}
+			account := newOpenAIRejectedFieldTestAccount()
+			account.Credentials["base_url"] = "https://api.openai.com"
+			account.Extra["openai_passthrough"] = passthrough
+			c := newOpenAIRejectedFieldTestContext(body)
+			SetOpenAIClientTransport(c, OpenAIClientTransportHTTP)
+			result, err := newOpenAIRejectedFieldTestService(upstream).Forward(context.Background(), c, account, body)
+			require.Error(t, err)
+			require.Nil(t, result)
+			require.Len(t, upstream.bodies, 2)
+			require.False(t, gjson.GetBytes(upstream.bodies[1], "input.0.id").Exists())
+			require.Equal(t, "opaque", gjson.GetBytes(upstream.bodies[1], "input.1.encrypted_content").String())
+
+			// The second error could clean the retained compaction; the one-retry
+			// guard, not an unchanged payload, must prevent a third request.
+			retryBody, changed, err := normalizeOpenAIResponsesAzureResourceRetryBody(
+				http.StatusBadRequest, upstream.bodies[1], []byte(compactionError), upstream.requests[1].URL,
+			)
+			require.NoError(t, err)
+			require.True(t, changed)
+			require.False(t, gjson.GetBytes(retryBody, "input.1.encrypted_content").Exists())
+		})
 	}
 }

@@ -229,8 +229,9 @@ type OpsUpstreamErrorEvent struct {
 	ProxyName string `json:"proxy_name"`
 
 	// Outcome
-	UpstreamStatusCode int    `json:"upstream_status_code,omitempty"`
-	UpstreamRequestID  string `json:"upstream_request_id,omitempty"`
+	UpstreamStatusCode int                         `json:"upstream_status_code,omitempty"`
+	UpstreamRequestID  string                      `json:"upstream_request_id,omitempty"`
+	ServerAutoRetry    *OpsServerAutoRetryMetadata `json:"server_auto_retry,omitempty"`
 
 	// UpstreamURL is the actual upstream URL that was called (host + path, query/fragment stripped).
 	// Helps debug 404/routing errors by showing which endpoint was targeted.

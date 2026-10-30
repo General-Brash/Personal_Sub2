@@ -482,6 +482,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/server-auto-retry',
+    name: 'AdminServerAutoRetry',
+    component: () => import('@/views/admin/ServerAutoRetryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Server Auto Retry',
+      titleKey: 'admin.serverAutoRetry.title'
+    }
+  },
+  {
     path: '/admin/audit-logs',
     name: 'AdminAuditLogs',
     component: () => import('@/views/admin/AuditLogView.vue'),

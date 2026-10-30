@@ -79,7 +79,7 @@ error_base AS (
     is_business_limited AS is_business_limited,
     error_owner AS error_owner,
     status_code AS client_status_code,
-    COALESCE(upstream_status_code, status_code, 0) AS effective_status_code
+    (CASE WHEN error_type = 'server_auto_retry_error' THEN COALESCE(status_code, 0) ELSE COALESCE(upstream_status_code, status_code, 0) END) AS effective_status_code
   FROM ops_error_logs
   -- Exclude count_tokens requests from error metrics as they are informational probes
   WHERE created_at >= $1 AND created_at < $2

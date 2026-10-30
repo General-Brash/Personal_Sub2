@@ -94,6 +94,9 @@ func RegisterAdminRoutes(
 
 		// 系统设置
 		registerSettingsRoutes(admin, h)
+		admin.GET("/server-auto-retry/config", h.Admin.Setting.GetServerAutoRetryConfig)
+		admin.PUT("/server-auto-retry/config", h.Admin.Setting.UpdateServerAutoRetryConfig)
+		admin.GET("/server-auto-retry/events", h.Admin.Setting.ListServerAutoRetryEvents)
 
 		// 模型广场展示管理（隐藏/排序/置顶 + 收敛开关）
 		modelPlazaAdmin := admin.Group("/model-plaza")
