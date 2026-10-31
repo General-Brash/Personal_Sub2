@@ -1,0 +1,41 @@
+diff --git a/dist/commonjs/index.d.ts b/dist/commonjs/index.d.ts
+index 2247bba1b3d19e4de64150ba4d44bd82de532d5f..db730ae77e63701f8140f8712d1466cd3ecd71e4 100644
+--- a/dist/commonjs/index.d.ts
++++ b/dist/commonjs/index.d.ts
+@@ -182,4 +182,5 @@ export declare class Minimatch {
+ export { escape } from './escape.js';
+ export { unescape } from './unescape.js';
+ export type { Form };
++export { minimatch as default };
+ //# sourceMappingURL=index.d.ts.map
+diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+index eb1c915f43b2debf5faa7ac3a73c262a161c7a4f..55d4c1326222f94b9becd31d3d9dd0b5bbb45288 100644
+--- a/dist/commonjs/index.js
++++ b/dist/commonjs/index.js
+@@ -1547,4 +1547,6 @@ Object.defineProperty(exports, "unescape", { enumerable: true, get: function ()
+ exports.minimatch.Minimatch = Minimatch;
+ exports.minimatch.escape = escape_js_1.escape;
+ exports.minimatch.unescape = unescape_js_1.unescape;
++Object.assign(exports.minimatch, exports);
++module.exports = exports.minimatch;
+ //# sourceMappingURL=index.js.map
+diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+index 2247bba1b3d19e4de64150ba4d44bd82de532d5f..db730ae77e63701f8140f8712d1466cd3ecd71e4 100644
+--- a/dist/esm/index.d.ts
++++ b/dist/esm/index.d.ts
+@@ -182,4 +182,5 @@ export declare class Minimatch {
+ export { escape } from './escape.js';
+ export { unescape } from './unescape.js';
+ export type { Form };
++export { minimatch as default };
+ //# sourceMappingURL=index.d.ts.map
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 1dc27e67064fcbf1f3dce34aa3ea1a134b7be168..31ebd3e67ced7685d709649fcb08daf60fc21f35 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -1536,4 +1536,5 @@ export { unescape } from './unescape.js';
+ minimatch.Minimatch = Minimatch;
+ minimatch.escape = escape;
+ minimatch.unescape = unescape;
++export default minimatch;
+ //# sourceMappingURL=index.js.map

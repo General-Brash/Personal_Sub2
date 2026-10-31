@@ -70,8 +70,9 @@
       "source-map-js@<1.2.2": ">=1.2.2",
       "yaml@>=1.0.0 <1.10.3": "1.10.3",
       "katex@<0.18.2": "0.18.2",
-      "minimatch@>=3.0.0 <3.1.4": "3.1.4",
-      "minimatch@>=9.0.0 <9.0.9": "9.0.9",
+      "minimatch": "11.0.3",
+      "glob@>=9.0.0 <=14.0.1": "14.0.2",
+      "rimraf@3.0.2": "4.4.1",
       "brace-expansion@>=1.0.0 <1.1.21": "1.1.21",
       "brace-expansion@>=2.0.0 <2.1.7": "2.1.7",
       "picomatch@>=2.0.0 <2.3.2": "2.3.2",
@@ -84,6 +85,9 @@
       "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
       "browserslist@>=4.0.0 <4.28.7": "4.28.7",
       "baseline-browser-mapping@>=2.0.0 <2.11.0": "2.11.0"
+    },
+    "patchedDependencies": {
+      "minimatch@11.0.3": "patches/minimatch@11.0.3.patch"
     }
   }
 }
