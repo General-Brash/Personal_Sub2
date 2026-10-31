@@ -196,8 +196,8 @@ func TestOpenAIFirstOutputDynamicScannerLimitsOnlyWhileGuardIsActive(t *testing.
 }
 
 func TestOpenAIFirstOutputStageOverflowIsAtomicAndCleanupRemovesSpool(t *testing.T) {
-	stage := newOpenAIFirstOutputStage(70 * 1024)
-	payload := bytes.Repeat([]byte("x"), 68*1024)
+	stage := newOpenAIFirstOutputStage(openAIFirstOutputStageMemoryLimit + 6*1024)
+	payload := bytes.Repeat([]byte("x"), openAIFirstOutputStageMemoryLimit+4*1024)
 	n, err := stage.Write(payload)
 	require.NoError(t, err)
 	require.Equal(t, len(payload), n)
@@ -230,8 +230,8 @@ func TestOpenAIFirstOutputStageOverflowIsAtomicAndCleanupRemovesSpool(t *testing
 }
 
 func TestOpenAIFirstOutputStageCommitCopiesSpoolAndRemovesTemp(t *testing.T) {
-	stage := newOpenAIFirstOutputStage(80 * 1024)
-	payload := bytes.Repeat([]byte("z"), 68*1024)
+	stage := newOpenAIFirstOutputStage(openAIFirstOutputStageMemoryLimit + 6*1024)
+	payload := bytes.Repeat([]byte("z"), openAIFirstOutputStageMemoryLimit+4*1024)
 	_, err := stage.Write(payload)
 	require.NoError(t, err)
 	path := stage.tempPath
@@ -277,7 +277,7 @@ func TestOpenAIFirstOutputStageUnlinkFailurePermanentlyFallsBackToMemoryAndRetri
 		return os.Remove(path)
 	}
 
-	payload := bytes.Repeat([]byte("m"), 68*1024)
+	payload := bytes.Repeat([]byte("m"), openAIFirstOutputStageMemoryLimit+4*1024)
 	_, err := stage.Write(payload)
 	require.NoError(t, err)
 	require.True(t, stage.memoryOnly)

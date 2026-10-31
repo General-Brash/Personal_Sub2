@@ -23,7 +23,7 @@ import (
 )
 
 const serverAutoRetryKey = "server_auto_retry_context"
-const serverAutoRetryPreambleLimit = 64 << 10
+const serverAutoRetryPreambleLimit = 512 << 10
 
 type serverAutoRetryContextKey struct{}
 

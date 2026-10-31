@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	openAIFirstOutputStageMemoryLimit        = 64 * 1024
+	openAIFirstOutputStageMemoryLimit        = 256 * 1024
 	openAIFirstOutputStageMaxBytes           = 8 * 1024 * 1024
 	openAIFirstOutputScannerFramingAllowance = 64
 	openAIFirstOutputGuardQueueSize          = 1
