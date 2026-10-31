@@ -12,6 +12,8 @@ export default {
     ordinaryOpenAIResponses: 'Ordinary OpenAI HTTP Responses',
     azure400: 'Azure400 Error',
     azureRule: 'Structured HTTP400 resource mismatch: existing Azure errors or an explicit direction to use the original OpenAI resource. At most one compliant recovery.',
+    azure400StripInputIds: 'Strip historical item IDs before sending',
+    azure400StripInputIdsHelp: 'When enabled, ordinary history items have only their top-level input id removed (preserving item_reference.id, call_id, tool associations, and nested fields). Resource-bound reasoning items are replaced with ordinary summary messages, or dropped under the Azure400 recovery policy when no readable summary exists.',
     emptyResponse: 'Empty Response',
     emptyRule: 'Rate limit, explicit zero usage without output, or no-output EOF / missing terminal event.',
     retries: 'Additional attempts',

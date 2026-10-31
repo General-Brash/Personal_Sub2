@@ -957,6 +957,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	retryContext.PrepareAttempt(s, account, body, imageIntent)
 	rejectedFieldRetryState := newOpenAIResponsesRejectedFieldRetryState(body)
 	for {
+		body, err = prepareOpenAIResponsesAzureInputIDs(c, body)
+		if err != nil {
+			return nil, fmt.Errorf("prepare Azure Responses input IDs: %w", err)
+		}
 		// Build upstream request
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 		upstreamCtx, releaseRetryGuard := retryContext.GuardUpstream(upstreamCtx)

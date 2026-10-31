@@ -316,6 +316,10 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	compactModelFallbackRetried := false
 	var resp *http.Response
 	for {
+		body, err = prepareOpenAIResponsesAzureInputIDs(c, body)
+		if err != nil {
+			return nil, fmt.Errorf("prepare Azure Responses input IDs: %w", err)
+		}
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 		upstreamCtx, releaseRetryGuard := retryContext.GuardUpstream(upstreamCtx)
 		defer releaseRetryGuard()
@@ -1415,6 +1419,8 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	}
 	retryContext := ServerAutoRetryFromContext(c)
 	guardRetry := retryContext != nil && retryContext.AttemptEligible
+	observeRetryEvents := retryContext != nil && (retryContext.AttemptEligible ||
+		retryContext.RateLimitAttemptEligible && retryContext.Config.Enabled && retryContext.Matches(c, account))
 	attemptHeadersApplied := false
 	applyAttemptHeaders := func() {
 		if attemptHeadersApplied {
@@ -1516,7 +1522,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			dataBytes := []byte(data)
 			trimmedData := strings.TrimSpace(data)
 			rawEventType := strings.TrimSpace(gjson.GetBytes(dataBytes, "type").String())
-			if guardRetry {
+			if observeRetryEvents {
 				if targetErr := s.serverAutoRetryStreamEvent(c, account, resp, dataBytes, rawEventType); targetErr != nil {
 					return resultWithUsage(), targetErr
 				}
