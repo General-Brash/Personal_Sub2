@@ -14,6 +14,7 @@ export interface ServerAutoRetryConfig {
   }
   max_additional_attempts: number
   max_total_retry_wait_ms: number
+  azure400_strip_input_ids: boolean
   azure400: { enabled: boolean; max_retries: number }
   empty_response: { enabled: boolean; max_retries: number }
   empty_retry_strategy: EmptyRetryStrategy
@@ -61,6 +62,7 @@ export function recommendedServerAutoRetryConfig(): ServerAutoRetryConfig {
     scope: { platform: 'openai', group_ids: [], account_ids: [], models: [] },
     max_additional_attempts: 3,
     max_total_retry_wait_ms: 30000,
+    azure400_strip_input_ids: false,
     azure400: { enabled: true, max_retries: 1 },
     empty_response: { enabled: true, max_retries: 2 },
     empty_retry_strategy: 'same_then_switch',

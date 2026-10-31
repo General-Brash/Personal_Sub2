@@ -12,6 +12,8 @@ export default {
     ordinaryOpenAIResponses: 'OpenAI 普通 HTTP Responses',
     azure400: 'Azure400报错',
     azureRule: '结构化 HTTP400 资源不匹配：既有 Azure 错误，或明确指引使用原 OpenAI 资源；最多一次合规恢复。',
+    azure400StripInputIds: '发送前移除历史项 ID',
+    azure400StripInputIdsHelp: '启用后，在 OpenAI Responses 请求发往上游前，普通历史项仅移除 input 顶层 id（保留 item_reference.id、call_id、工具关联及嵌套字段）；资源绑定的 reasoning 项改为普通摘要消息，无可读摘要时按 Azure400 恢复策略丢弃。',
     emptyResponse: '空回',
     emptyRule: '含限速、明确全零 usage 且无输出、无输出的 EOF / 缺终止事件。',
     retries: '追加次数',

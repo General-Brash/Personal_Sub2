@@ -55,6 +55,8 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	}
 	retryContext := ServerAutoRetryFromContext(c)
 	guardRetry := retryContext != nil && retryContext.AttemptEligible
+	observeRetryEvents := retryContext != nil && (retryContext.AttemptEligible ||
+		retryContext.RateLimitAttemptEligible && retryContext.Config.Enabled && retryContext.Matches(c, account))
 	guardFirstOutput := firstOutputTimeout > 0 || guardRetry
 	var attemptResponseHeaders http.Header
 	if guardFirstOutput {
@@ -470,7 +472,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			dataBytes := []byte(data)
 			eventTypeRaw := gjson.GetBytes(dataBytes, "type").String()
 			eventType := strings.TrimSpace(eventTypeRaw)
-			if guardRetry {
+			if observeRetryEvents {
 				if targetErr := s.serverAutoRetryStreamEvent(c, account, resp, dataBytes, eventType); targetErr != nil {
 					streamEarlyErr = targetErr
 					return

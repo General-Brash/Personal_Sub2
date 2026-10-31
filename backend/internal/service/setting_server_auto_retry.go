@@ -36,6 +36,7 @@ type ServerAutoRetryConfig struct {
 	MaxAdditionalAttempts  int                  `json:"max_additional_attempts"`
 	MaxTotalRetryWaitMS    int                  `json:"max_total_retry_wait_ms"`
 	Azure400               ServerAutoRetryRule  `json:"azure400"`
+	Azure400StripInputIDs  bool                 `json:"azure400_strip_input_ids"`
 	EmptyResponse          ServerAutoRetryRule  `json:"empty_response"`
 	EmptyRetryStrategy     string               `json:"empty_retry_strategy"`
 	SameAccountRetries     int                  `json:"same_account_retries"`
@@ -88,14 +89,14 @@ func ValidateServerAutoRetryConfig(cfg ServerAutoRetryConfig) error {
 			return invalid("scope.models must contain nonempty model names without surrounding whitespace")
 		}
 	}
-	if cfg.MaxAdditionalAttempts < 0 || cfg.MaxAdditionalAttempts > 5 {
-		return invalid("max_additional_attempts must be between 0 and 5")
+	if cfg.MaxAdditionalAttempts < 0 || cfg.MaxAdditionalAttempts > 30 {
+		return invalid("max_additional_attempts must be between 0 and 30")
 	}
 	if cfg.Azure400.MaxRetries < 0 || cfg.Azure400.MaxRetries > 1 || cfg.Azure400.MaxRetries > cfg.MaxAdditionalAttempts {
 		return invalid("azure400.max_retries must be between 0 and 1 and not exceed max_additional_attempts")
 	}
-	if cfg.EmptyResponse.MaxRetries < 0 || cfg.EmptyResponse.MaxRetries > 5 || cfg.EmptyResponse.MaxRetries > cfg.MaxAdditionalAttempts {
-		return invalid("empty_response.max_retries must be between 0 and 5 and not exceed max_additional_attempts")
+	if cfg.EmptyResponse.MaxRetries < 0 || cfg.EmptyResponse.MaxRetries > 30 || cfg.EmptyResponse.MaxRetries > cfg.MaxAdditionalAttempts {
+		return invalid("empty_response.max_retries must be between 0 and 30 and not exceed max_additional_attempts")
 	}
 	if cfg.SameAccountRetries < 0 || cfg.SameAccountRetries > cfg.EmptyResponse.MaxRetries {
 		return invalid("same_account_retries must be between 0 and empty_response.max_retries")

@@ -39,21 +39,22 @@ type ServerAutoRetryTarget struct {
 
 // A single logical request owns all dispatches, including Forward re-entry.
 type ServerAutoRetryContext struct {
-	Config                                                                        ServerAutoRetryConfig
-	OriginalContext                                                               context.Context
-	OriginalFingerprint                                                           string
-	OriginalBody, CompliantBody                                                   []byte
-	DispatchCount, RetryCount, SwitchCount                                        int
-	Wait                                                                          time.Duration
-	AzureRetries, EmptyRetries, SameAccountRetries                                int
-	Governed, EmptyEligible, AttemptEligible, CrossAccountSafe, HasSemanticOutput bool
-	UsageEvidence                                                                 string
-	Last, Pending                                                                 *ServerAutoRetryTarget
-	LastAccountID                                                                 int64
-	Finalized                                                                     bool
-	CurrentAccount                                                                *Account
-	GuardStop                                                                     func() bool
-	LastUpstreamRequestID                                                         string
+	Config                                                                                ServerAutoRetryConfig
+	OriginalContext                                                                       context.Context
+	OriginalFingerprint                                                                   string
+	OriginalBody, CompliantBody                                                           []byte
+	DispatchCount, RetryCount, SwitchCount                                                int
+	Wait                                                                                  time.Duration
+	AzureRetries, EmptyRetries, SameAccountRetries                                        int
+	Governed, EmptyEligible, AttemptEligible, RateLimitEligible, RateLimitAttemptEligible bool
+	CrossAccountSafe, HasSemanticOutput                                                   bool
+	UsageEvidence                                                                         string
+	Last, Pending                                                                         *ServerAutoRetryTarget
+	LastAccountID                                                                         int64
+	Finalized                                                                             bool
+	CurrentAccount                                                                        *Account
+	GuardStop                                                                             func() bool
+	LastUpstreamRequestID                                                                 string
 
 	TerminalEventSeen bool
 }
@@ -86,13 +87,14 @@ func (s *OpenAIGatewayService) BeginServerAutoRetry(c *gin.Context, body []byte)
 		config = s.settingService.GetServerAutoRetryConfig(c.Request.Context())
 	}
 	fingerprint := sha256.Sum256(body)
+	path := strings.TrimRight(c.Request.URL.Path, "/")
+	responsesEligible := c.Request.Method == http.MethodPost &&
+		(path == "/v1/responses" || path == "/openai/v1/responses" || path == "/responses" || path == "/backend-api/codex/responses") &&
+		!isOpenAIResponsesCompactPath(c) && !isOpenAINativeCompactionV2(c) && !isOpenAICompatMessagesBridgeBody(body)
 	retry := &ServerAutoRetryContext{Config: config, OriginalContext: c.Request.Context(),
 		OriginalFingerprint: hex.EncodeToString(fingerprint[:]), OriginalBody: bytes.Clone(body), CompliantBody: bytes.Clone(body),
-		CrossAccountSafe: serverAutoRetryReplaySafe(body), UsageEvidence: "unknown"}
-	path := strings.TrimRight(c.Request.URL.Path, "/")
-	retry.EmptyEligible = c.Request.Method == http.MethodPost &&
-		(path == "/v1/responses" || path == "/openai/v1/responses" || path == "/responses" || path == "/backend-api/codex/responses") &&
-		!isOpenAIResponsesCompactPath(c) && !isOpenAINativeCompactionV2(c) && !isOpenAICompatMessagesBridgeBody(body) && serverAutoRetrySafeTools(body)
+		CrossAccountSafe: serverAutoRetryReplaySafe(body), UsageEvidence: "unknown", RateLimitEligible: responsesEligible}
+	retry.EmptyEligible = responsesEligible && serverAutoRetrySafeTools(body)
 	c.Set(serverAutoRetryKey, retry)
 	c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), serverAutoRetryContextKey{}, retry))
 	return retry
@@ -191,10 +193,12 @@ func (r *ServerAutoRetryContext) PrepareAttempt(s *OpenAIGatewayService, account
 		return
 	}
 	r.CurrentAccount = account
-	r.AttemptEligible = r.EmptyEligible && account != nil && account.Platform == PlatformOpenAI &&
+	accountEligible := account != nil && account.Platform == PlatformOpenAI &&
 		!shouldForwardOpenAIResponsesViaRawChatCompletions(account) && !account.IsAnthropicProtocol() &&
-		!s.isAgentIdentityAccount(r.OriginalContext, account) && !imageIntent && serverAutoRetrySafeTools(body) &&
+		!s.isAgentIdentityAccount(r.OriginalContext, account) && !imageIntent &&
 		(!account.IsOpenAIPassthroughEnabled() || account.Type == AccountTypeAPIKey)
+	r.AttemptEligible = r.EmptyEligible && accountEligible && serverAutoRetrySafeTools(body)
+	r.RateLimitAttemptEligible = r.RateLimitEligible && accountEligible
 }
 
 func (r *ServerAutoRetryContext) BeforeDispatch(c *gin.Context, account *Account) error {
@@ -212,7 +216,8 @@ func (r *ServerAutoRetryContext) BeforeDispatch(c *gin.Context, account *Account
 	if r.Governed && r.RemainingWait() <= 0 {
 		return r.Stop(c, "retry_wait_budget_exhausted")
 	}
-	if r.Governed && r.Last != nil && r.Last.Reason != "azure400" && !r.AttemptEligible {
+	if r.Governed && r.Last != nil && r.Last.Reason != "azure400" && !r.AttemptEligible &&
+		(r.Last.Reason != "rate_limit" || !r.RateLimitAttemptEligible) {
 		return r.Stop(c, "unsupported_replay_route")
 	}
 	if r.Governed && r.DispatchCount >= 1+r.Config.MaxAdditionalAttempts {
@@ -388,11 +393,17 @@ func serverAutoRetryRateLimited(status int, payload []byte) bool {
 	if !errorObject.IsObject() {
 		errorObject = root.Get("error")
 	}
-	if !errorObject.IsObject() {
-		return status == http.StatusTooManyRequests
+	message := ""
+	identifiers := ""
+	if errorObject.IsObject() {
+		message = errorObject.Get("message").String()
+		identifiers = errorObject.Get("code").String() + " " + errorObject.Get("type").String()
 	}
-	message := strings.ToLower(strings.Join(strings.Fields(errorObject.Get("message").String()), " "))
-	identifiers := strings.ToLower(errorObject.Get("code").String() + " " + errorObject.Get("type").String())
+	if strings.TrimSpace(message) == "" {
+		message = extractOpenAISSEErrorMessage(payload)
+	}
+	message = strings.ToLower(strings.Join(strings.Fields(message), " "))
+	identifiers = strings.ToLower(identifiers)
 	combined := identifiers + " " + message
 	for _, marker := range []string{"context_length", "context window", "context_window", "maximum context", "content_policy", "cyber_policy", "policy", "safety", "authentication", "unauthorized", "invalid_api_key", "permission", "forbidden", "insufficient_quota", "quota_exceeded", "billing_hard_limit", "credit balance", "quota has been exhausted", "exceeded your current quota"} {
 		if strings.Contains(combined, marker) {
@@ -418,7 +429,7 @@ func serverAutoRetryRateLimited(status int, payload []byte) bool {
 
 func (s *OpenAIGatewayService) serverAutoRetryTarget(c *gin.Context, account *Account, resp *http.Response, payload []byte, reason string, compliant []byte) *UpstreamFailoverError {
 	r := ServerAutoRetryFromContext(c)
-	if r == nil || reason != "azure400" && !r.AttemptEligible {
+	if r == nil {
 		return nil
 	}
 	status := resp.StatusCode
@@ -427,6 +438,13 @@ func (s *OpenAIGatewayService) serverAutoRetryTarget(c *gin.Context, account *Ac
 			return nil
 		}
 		reason = "rate_limit"
+	}
+	if reason == "rate_limit" {
+		if !r.AttemptEligible && (!r.RateLimitAttemptEligible || !r.Config.Enabled || !r.Matches(c, account)) {
+			return nil
+		}
+	} else if reason != "azure400" && !r.AttemptEligible {
+		return nil
 	}
 	semantic := http.StatusBadGateway
 	if reason == "rate_limit" {
@@ -760,7 +778,8 @@ func (s *OpenAIGatewayService) serverAutoRetryHTTPError(c *gin.Context, account 
 
 func (s *OpenAIGatewayService) serverAutoRetryStreamEvent(c *gin.Context, account *Account, resp *http.Response, payload []byte, eventType string) *UpstreamFailoverError {
 	r := ServerAutoRetryFromContext(c)
-	if r == nil || !r.AttemptEligible {
+	rateLimitEligible := r != nil && r.RateLimitAttemptEligible && r.Config.Enabled && r.Matches(c, account)
+	if r == nil || !r.AttemptEligible && !rateLimitEligible {
 		return nil
 	}
 	if openAIStreamEventTypeIsTerminal(eventType) {
@@ -797,6 +816,9 @@ func (s *OpenAIGatewayService) serverAutoRetryStreamEvent(c *gin.Context, accoun
 		}
 		return nil
 	}
+	if !r.AttemptEligible {
+		return nil
+	}
 	if eventType == "response.completed" || eventType == "response.done" {
 		if gjson.GetBytes(payload, "response").IsObject() && serverAutoRetryUsageEvidence(payload) == "zero" && r.UsageEvidence == "zero" && !r.HasSemanticOutput &&
 			!serverAutoRetryHasError(payload) {
@@ -816,10 +838,14 @@ func (s *OpenAIGatewayService) serverAutoRetryStreamEvent(c *gin.Context, accoun
 // frames, not arbitrary business text, before the existing JSON conversion.
 func (s *OpenAIGatewayService) serverAutoRetryUnary(c *gin.Context, resp *http.Response, body []byte) *UpstreamFailoverError {
 	r := ServerAutoRetryFromContext(c)
-	if r == nil || !r.AttemptEligible {
+	if r == nil {
 		return nil
 	}
 	account := r.CurrentAccount
+	rateLimitEligible := r.RateLimitAttemptEligible && r.Config.Enabled && r.Matches(c, account)
+	if !r.AttemptEligible && !rateLimitEligible {
+		return nil
+	}
 	if len(bytes.TrimSpace(body)) == 0 {
 		return s.serverAutoRetryTarget(c, account, resp, nil, "no_output_terminal_missing", nil)
 	}
@@ -854,6 +880,9 @@ func (s *OpenAIGatewayService) serverAutoRetryUnary(c *gin.Context, resp *http.R
 	r.Observe(body, "")
 	if target := s.serverAutoRetryTarget(c, account, resp, body, "", nil); target != nil {
 		return target
+	}
+	if !r.AttemptEligible {
+		return nil
 	}
 	status := gjson.GetBytes(body, "status").String()
 	if status == "" {

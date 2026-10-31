@@ -88,6 +88,7 @@ function cloneConfig(value: ServerAutoRetryConfig): ServerAutoRetryConfig {
     },
     max_additional_attempts: value.max_additional_attempts,
     max_total_retry_wait_ms: value.max_total_retry_wait_ms,
+    azure400_strip_input_ids: value.azure400_strip_input_ids,
     azure400: { enabled: value.azure400.enabled, max_retries: value.azure400.max_retries },
     empty_response: { enabled: value.empty_response.enabled, max_retries: value.empty_response.max_retries },
     empty_retry_strategy: value.empty_retry_strategy,
@@ -142,9 +143,9 @@ function scopeLabel(kind: 'groups' | 'accounts' | 'models'): string {
 function validationError(value: ServerAutoRetryConfig): string {
   if (!value || value.schema_version !== 1 || value.scope?.platform !== 'openai') return t(`${key}.invalidSchema`)
   const ranges: Array<[string, unknown, number, number]> = [
-    ['maxAdditionalAttempts', value.max_additional_attempts, 0, 5],
+    ['maxAdditionalAttempts', value.max_additional_attempts, 0, 30],
     ['azure400', value.azure400?.max_retries, 0, Math.min(1, value.max_additional_attempts)],
-    ['emptyResponse', value.empty_response?.max_retries, 0, Math.min(5, value.max_additional_attempts)],
+    ['emptyResponse', value.empty_response?.max_retries, 0, Math.min(30, value.max_additional_attempts)],
     ['sameAccountRetries', value.same_account_retries, 0, value.empty_response?.max_retries],
     ['maxTotalWait', value.max_total_retry_wait_ms, 0, maxDurationMS],
     ...waitFields.map(field => [field.label, value[field.key], 0, maxDurationMS] as [string, unknown, number, number])
@@ -155,7 +156,7 @@ function validationError(value: ServerAutoRetryConfig): string {
     }
   }
   if (
-    [value.enabled, value.azure400?.enabled, value.empty_response?.enabled, value.respect_retry_after].some(item => typeof item !== 'boolean') ||
+    [value.enabled, value.azure400_strip_input_ids, value.azure400?.enabled, value.empty_response?.enabled, value.respect_retry_after].some(item => typeof item !== 'boolean') ||
     !emptyStrategies.includes(value.empty_retry_strategy) ||
     !rateLimitStrategies.includes(value.rate_limit_retry_strategy) ||
     ![value.scope.group_ids, value.scope.account_ids].every(ids => Array.isArray(ids) && ids.every(id => Number.isSafeInteger(id) && id > 0)) ||
@@ -463,7 +464,7 @@ onBeforeUnmount(() => {
             <label for="retry-enabled" class="text-sm font-medium">{{ t(`${key}.masterSwitch`) }}</label><Toggle id="retry-enabled" v-model="draft.enabled" :aria-label="t(`${key}.masterSwitch`)" />
           </div>
           <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
-            <label class="block min-w-0"><span class="input-label">{{ t(`${key}.maxAdditionalAttempts`) }}</span><input v-model.number="draft.max_additional_attempts" class="input" type="number" min="0" max="5" step="1" required /></label>
+            <label class="block min-w-0"><span class="input-label">{{ t(`${key}.maxAdditionalAttempts`) }}</span><input v-model.number="draft.max_additional_attempts" class="input" type="number" min="0" max="30" step="1" required /></label>
             <label class="block min-w-0"><span class="input-label">{{ t(`${key}.maxTotalWait`) }}</span><input v-model.number="draft.max_total_retry_wait_ms" class="input" type="number" min="0" :max="maxDurationMS" step="1" required /></label>
             <label class="block min-w-0"><span class="input-label">{{ t(`${key}.schemaVersion`) }}</span><input :value="draft.schema_version" class="input" type="number" readonly /></label>
           </div>
@@ -505,11 +506,18 @@ onBeforeUnmount(() => {
           <section class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700">
             <div class="flex items-center justify-between gap-3"><label for="retry-azure" class="text-sm font-semibold">{{ t(`${key}.azure400`) }}</label><Toggle id="retry-azure" v-model="draft.azure400.enabled" :aria-label="t(`${key}.azure400`)" /></div>
             <label class="block"><span class="input-label">{{ t(`${key}.retries`) }}</span><input v-model.number="draft.azure400.max_retries" class="input sm:max-w-48" type="number" min="0" :max="Math.min(1, draft.max_additional_attempts)" step="1" required /></label>
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <label for="retry-azure-strip-input-ids" class="text-sm font-medium">{{ t(`${key}.azure400StripInputIds`) }}</label>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t(`${key}.azure400StripInputIdsHelp`) }}</p>
+              </div>
+              <Toggle id="retry-azure-strip-input-ids" v-model="draft.azure400_strip_input_ids" :aria-label="t(`${key}.azure400StripInputIds`)" />
+            </div>
           </section>
           <section class="min-w-0 space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700">
             <div class="flex items-center justify-between gap-3"><label for="retry-empty" class="text-sm font-semibold">{{ t(`${key}.emptyResponse`) }}</label><Toggle id="retry-empty" v-model="draft.empty_response.enabled" :aria-label="t(`${key}.emptyResponse`)" /></div>
             <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-              <label class="block min-w-0"><span class="input-label">{{ t(`${key}.retries`) }}</span><input v-model.number="draft.empty_response.max_retries" class="input" type="number" min="0" :max="Math.min(5, draft.max_additional_attempts)" step="1" required /></label>
+              <label class="block min-w-0"><span class="input-label">{{ t(`${key}.retries`) }}</span><input v-model.number="draft.empty_response.max_retries" class="input" type="number" min="0" :max="Math.min(30, draft.max_additional_attempts)" step="1" required /></label>
               <label class="block min-w-0"><span class="input-label">{{ t(`${key}.sameAccountRetries`) }}</span><input v-model.number="draft.same_account_retries" class="input" type="number" min="0" :max="draft.empty_response.max_retries" step="1" required /></label>
               <div class="min-w-0"><label for="retry-empty-strategy" class="input-label">{{ t(`${key}.emptyStrategy`) }}</label><Select id="retry-empty-strategy" v-model="draft.empty_retry_strategy" :options="emptyStrategyOptions" :aria-label="t(`${key}.emptyStrategy`)" :disabled="saving" /></div>
               <div class="min-w-0"><label for="retry-rate-strategy" class="input-label">{{ t(`${key}.rateLimitStrategy`) }}</label><Select id="retry-rate-strategy" v-model="draft.rate_limit_retry_strategy" :options="rateLimitStrategyOptions" :aria-label="t(`${key}.rateLimitStrategy`)" :disabled="saving" /></div>

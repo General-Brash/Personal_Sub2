@@ -112,25 +112,11 @@ func normalizeOpenAIResponsesAzureResourceRetryBody(statusCode int, body, respon
 			// Resource-bound reasoning cannot be replayed, but its plaintext
 			// summary remains useful. Rebuild it as an ordinary history message
 			// instead of retaining a provider-specific item that requires its id.
-			var summaries []string
-			for _, summary := range item.Get("summary").Array() {
-				text := summary.Get("text")
-				if summary.Get("type").String() == "summary_text" && text.Type == gjson.String && text.String() != "" {
-					summaries = append(summaries, text.String())
-				}
+			message, hasSummary, err := openAIResponsesAzureReasoningSummaryMessage(item)
+			if err != nil {
+				return body, false, fmt.Errorf("preserve input.%d reasoning summary: %w", index, err)
 			}
-			if len(summaries) > 0 {
-				message, err := json.Marshal(map[string]any{
-					"type": "message",
-					"role": "user",
-					"content": []map[string]string{{
-						"type": "input_text",
-						"text": openAIResponsesAzureSummaryPrefix + "\n" + strings.Join(summaries, "\n"),
-					}},
-				})
-				if err != nil {
-					return body, false, fmt.Errorf("preserve input.%d reasoning summary: %w", index, err)
-				}
+			if hasSummary {
 				rebuilt = append(rebuilt, message)
 			}
 			changed = true
@@ -178,18 +164,15 @@ func normalizeOpenAIResponsesAzureResourceRetryBody(statusCode int, body, respon
 			changed = changed || partsChanged
 		}
 
-		// A resource mismatch invalidates even well-formed msg/fc IDs, and
-		// non-string IDs too. item_reference needs its id to remain meaningful.
-		// Strip only the input object's top-level id, never call_id or nested
-		// business fields; protocol markers receive no other transformations.
-		if itemType != "item_reference" && item.Get("id").Exists() {
-			var err error
-			itemBody, err = sjson.DeleteBytes(itemBody, "id")
-			if err != nil {
-				return body, false, fmt.Errorf("delete input.%d.id: %w", index, err)
-			}
-			changed = true
+		// A resource mismatch invalidates even well-formed msg/fc IDs. Keep the
+		// same narrow top-level-only policy as proactive input-ID stripping.
+		var idChanged bool
+		var err error
+		itemBody, idChanged, err = openAIResponsesAzureStripInputItemID(itemBody, itemType)
+		if err != nil {
+			return body, false, fmt.Errorf("delete input.%d.id: %w", index, err)
 		}
+		changed = changed || idChanged
 		rebuilt = append(rebuilt, itemBody)
 	}
 	if !changed {
@@ -203,6 +186,42 @@ func normalizeOpenAIResponsesAzureResourceRetryBody(statusCode int, body, respon
 		return body, false, fmt.Errorf("replace Azure resource retry input: %w", err)
 	}
 	return normalized, true, nil
+}
+
+func openAIResponsesAzureReasoningSummaryMessage(item gjson.Result) ([]byte, bool, error) {
+	var summaries []string
+	for _, summary := range item.Get("summary").Array() {
+		text := summary.Get("text")
+		if summary.Get("type").String() == "summary_text" && text.Type == gjson.String && text.String() != "" {
+			summaries = append(summaries, text.String())
+		}
+	}
+	if len(summaries) == 0 {
+		return nil, false, nil
+	}
+	message, err := json.Marshal(map[string]any{
+		"type": "message",
+		"role": "user",
+		"content": []map[string]string{{
+			"type": "input_text",
+			"text": openAIResponsesAzureSummaryPrefix + "\n" + strings.Join(summaries, "\n"),
+		}},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	return message, true, nil
+}
+
+func openAIResponsesAzureStripInputItemID(itemBody []byte, itemType string) ([]byte, bool, error) {
+	if itemType == "item_reference" || !gjson.GetBytes(itemBody, "id").Exists() {
+		return itemBody, false, nil
+	}
+	updated, err := sjson.DeleteBytes(itemBody, "id")
+	if err != nil {
+		return itemBody, false, err
+	}
+	return updated, true, nil
 }
 
 func openAIResponsesForeignResourceMessageMatches(text string) bool {
