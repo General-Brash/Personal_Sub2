@@ -217,7 +217,7 @@ func (r *ServerAutoRetryContext) BeforeDispatch(c *gin.Context, account *Account
 		return r.Stop(c, "retry_wait_budget_exhausted")
 	}
 	if r.Governed && r.Last != nil && r.Last.Reason != "azure400" && !r.AttemptEligible &&
-		!(r.Last.Reason == "rate_limit" && r.RateLimitAttemptEligible) {
+		(r.Last.Reason != "rate_limit" || !r.RateLimitAttemptEligible) {
 		return r.Stop(c, "unsupported_replay_route")
 	}
 	if r.Governed && r.DispatchCount >= 1+r.Config.MaxAdditionalAttempts {
