@@ -725,6 +725,14 @@ func (r *opsRepository) BatchInsertSystemLogs(ctx context.Context, inputs []*ser
 	return inserted, nil
 }
 
+// Match strings.TrimSpace so SQL groups and the retry-event request IDs agree.
+const opsSystemLogTrimmedRequestIDSQL = `BTRIM(COALESCE(l.request_id, ''), E' \t\n\r\f\013\u0085\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000')`
+
+const opsSystemLogRequestGroupKeySQL = `CASE
+  WHEN NULLIF(` + opsSystemLogTrimmedRequestIDSQL + `, '') IS NOT NULL THEN 'request:' || ` + opsSystemLogTrimmedRequestIDSQL + `
+  ELSE 'log:' || l.id::text
+END`
+
 func (r *opsRepository) ListSystemLogs(ctx context.Context, filter *service.OpsSystemLogFilter) (*service.OpsSystemLogList, error) {
 	if r == nil || r.db == nil {
 		return nil, fmt.Errorf("nil ops repository")
@@ -744,17 +752,23 @@ func (r *opsRepository) ListSystemLogs(ctx context.Context, filter *service.OpsS
 	if pageSize > 200 {
 		pageSize = 200
 	}
+	if page > int(^uint(0)>>1)/pageSize {
+		return nil, fmt.Errorf("system log page is too large")
+	}
 
 	where, args, _ := buildOpsSystemLogsWhere(filter)
 	countSQL := "SELECT COUNT(*) FROM ops_system_logs l " + where
+	if filter.GroupByRequest {
+		countSQL = "SELECT COUNT(DISTINCT (" + opsSystemLogRequestGroupKeySQL + ")) FROM ops_system_logs l " + where
+	}
 	var total int
 	if err := r.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, err
 	}
 
 	offset := (page - 1) * pageSize
-	argsWithLimit := append(args, pageSize, offset)
-	query := `
+	argsWithLimit := append(append([]any(nil), args...), pageSize, offset)
+	selectSQL := `
 SELECT
   l.id,
   l.created_at,
@@ -770,10 +784,31 @@ SELECT
   COALESCE(l.platform, ''),
   COALESCE(l.model, ''),
   COALESCE(l.extra::text, '{}')
-FROM ops_system_logs l
-` + where + `
+`
+	query := selectSQL + "FROM ops_system_logs l\n" + where + `
 ORDER BY l.created_at DESC, l.id DESC
 LIMIT $` + itoa(len(args)+1) + ` OFFSET $` + itoa(len(args)+2)
+	if filter.GroupByRequest {
+		// Select logical requests before retrieving their full matching history.
+		// The newest real row supplies both ordering keys, preserving ID ties.
+		query = `WITH matching_logs AS MATERIALIZED (
+  SELECT l.id, l.created_at, ` + opsSystemLogRequestGroupKeySQL + ` AS request_group_key
+  FROM ops_system_logs l ` + where + `
+), newest_requests AS (
+  SELECT DISTINCT ON (request_group_key)
+    request_group_key, created_at AS newest_at, id AS newest_id
+  FROM matching_logs
+  ORDER BY request_group_key, created_at DESC, id DESC
+), selected_requests AS (
+  SELECT * FROM newest_requests
+  ORDER BY newest_at DESC, newest_id DESC
+  LIMIT $` + itoa(len(args)+1) + ` OFFSET $` + itoa(len(args)+2) + `
+)
+` + selectSQL + `FROM selected_requests g
+JOIN matching_logs m ON m.request_group_key = g.request_group_key
+JOIN ops_system_logs l ON l.id = m.id
+ORDER BY g.newest_at DESC, g.newest_id DESC, l.created_at ASC, l.id ASC`
+	}
 
 	rows, err := r.db.QueryContext(ctx, query, argsWithLimit...)
 	if err != nil {
@@ -830,13 +865,117 @@ LIMIT $` + itoa(len(args)+1) + ` OFFSET $` + itoa(len(args)+2)
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 
-	return &service.OpsSystemLogList{
+	result := &service.OpsSystemLogList{
 		Logs:     logs,
 		Total:    total,
 		Page:     page,
 		PageSize: pageSize,
-	}, nil
+	}
+	if isOpsServerAutoRetryLogFilter(filter) && len(logs) > 0 {
+		identities, err := r.listServerAutoRetryIdentities(ctx, logs)
+		if err != nil {
+			return nil, err
+		}
+		result.ServerAutoRetryIdentities = identities
+	}
+	return result, nil
+}
+
+func isOpsServerAutoRetryLogFilter(filter *service.OpsSystemLogFilter) bool {
+	if filter == nil || len(filter.Messages) == 0 {
+		return false
+	}
+	for _, message := range filter.Messages {
+		if message != "server_auto_retry.retry_attempt" && message != "server_auto_retry.final" {
+			return false
+		}
+	}
+	return true
+}
+
+func (r *opsRepository) listServerAutoRetryIdentities(ctx context.Context, logs []*service.OpsSystemLog) (map[int64]service.OpsServerAutoRetryIdentity, error) {
+	logIDs := make([]int64, 0, len(logs))
+	requestIDs := make([]string, 0, len(logs))
+	userIDs := make([]int64, 0, len(logs))
+	accountIDs := make([]int64, 0, len(logs))
+	for _, entry := range logs {
+		if entry == nil {
+			continue
+		}
+		userID, accountID := int64(0), int64(0)
+		if entry.UserID != nil && *entry.UserID > 0 {
+			userID = *entry.UserID
+		}
+		metadata := service.DecodeOpsServerAutoRetryMetadata(entry.Extra)
+		if metadata.AccountID != nil {
+			accountID = *metadata.AccountID
+		} else if entry.AccountID != nil && *entry.AccountID > 0 {
+			accountID = *entry.AccountID
+		}
+		logIDs = append(logIDs, entry.ID)
+		requestID := entry.RequestID
+		if strings.TrimSpace(requestID) == "" {
+			requestID = ""
+		}
+		requestIDs = append(requestIDs, requestID)
+		userIDs = append(userIDs, userID)
+		accountIDs = append(accountIDs, accountID)
+	}
+	// Resolve each missing request identity once, and only when all stored
+	// request relationships agree. Upstream account ownership is not user identity.
+	rows, err := r.db.QueryContext(ctx, `
+WITH retry_logs AS MATERIALIZED (
+  SELECT * FROM UNNEST($1::bigint[], $2::text[], $3::bigint[], $4::bigint[])
+    AS t(log_id, request_id, user_id, account_id)
+), unresolved_requests AS (
+  SELECT DISTINCT request_id FROM retry_logs WHERE user_id = 0 AND request_id <> ''
+), historical_users AS MATERIALIZED (
+  SELECT requests.request_id, evidence.user_id
+  FROM unresolved_requests requests
+  CROSS JOIN LATERAL (
+    SELECT CASE WHEN COUNT(DISTINCT stored.user_id) = 1 THEN MIN(stored.user_id) END AS user_id
+    FROM (
+      SELECT l.user_id FROM ops_system_logs l WHERE l.request_id = requests.request_id AND l.user_id > 0
+      UNION ALL
+      SELECT u.user_id FROM usage_logs u WHERE u.request_id = requests.request_id AND u.user_id > 0
+      UNION ALL
+      SELECT e.user_id FROM ops_error_logs e WHERE e.request_id = requests.request_id AND e.user_id > 0
+    ) stored
+  ) evidence
+)
+SELECT t.log_id, COALESCE(NULLIF(t.user_id, 0), h.user_id),
+  COALESCE(u.username, ''), COALESCE(u.email, ''), COALESCE(a.name, '')
+FROM retry_logs t
+LEFT JOIN historical_users h ON h.request_id = t.request_id
+LEFT JOIN users u ON u.id = COALESCE(NULLIF(t.user_id, 0), h.user_id)
+LEFT JOIN accounts a ON a.id = t.account_id
+`, pq.Array(logIDs), pq.Array(requestIDs), pq.Array(userIDs), pq.Array(accountIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	identities := make(map[int64]service.OpsServerAutoRetryIdentity, len(logs))
+	for rows.Next() {
+		var logID int64
+		var userID sql.NullInt64
+		var identity service.OpsServerAutoRetryIdentity
+		if err := rows.Scan(&logID, &userID, &identity.UserName, &identity.UserEmail, &identity.AccountName); err != nil {
+			return nil, err
+		}
+		if userID.Valid && userID.Int64 > 0 {
+			value := userID.Int64
+			identity.UserID = &value
+		}
+		identities[logID] = identity
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return identities, nil
 }
 
 func (r *opsRepository) DeleteSystemLogs(ctx context.Context, filter *service.OpsSystemLogCleanupFilter) (int64, error) {
@@ -1106,7 +1245,11 @@ func buildOpsSystemLogsWhere(filter *service.OpsSystemLogFilter) (string, []any,
 		}
 		if v := strings.TrimSpace(filter.RequestID); v != "" {
 			args = append(args, v)
-			clauses = append(clauses, "COALESCE(l.request_id,'') = $"+itoa(len(args)))
+			column := "COALESCE(l.request_id,'')"
+			if filter.GroupByRequest {
+				column = opsSystemLogTrimmedRequestIDSQL
+			}
+			clauses = append(clauses, column+" = $"+itoa(len(args)))
 			hasConstraint = true
 		}
 		if v := strings.TrimSpace(filter.ClientRequestID); v != "" {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -32,8 +32,56 @@ const configError = ref('')
 const events = ref<ServerAutoRetryEvent[]>([])
 const eventsLoading = ref(false)
 const eventsError = ref('')
+const pageSizePreferenceKey = 'admin.serverAutoRetry.requestsPerPage'
+const columnsPreferenceKey = 'admin.serverAutoRetry.visibleColumns'
+const requestPageSizes = [10, 20, 40]
+const requestPageSizeOptions = requestPageSizes.map(value => ({ value, label: String(value) }))
+const informationColumns = [
+  { id: 'timestamp', label: 'timestamp', width: 10 },
+  { id: 'user', label: 'requestUser', width: 14 },
+  { id: 'accountName', label: 'accountName', width: 11 },
+  { id: 'accountId', label: 'accountId', width: 6 },
+  { id: 'reason', label: 'reason', width: 11 },
+  { id: 'httpSemantic', label: 'httpSemantic', width: 9 },
+  { id: 'counts', label: 'counts', width: 9 },
+  { id: 'wait', label: 'wait', width: 7 },
+  { id: 'evidence', label: 'evidence', width: 9 },
+  { id: 'usage', label: 'usage', width: 8 },
+  { id: 'result', label: 'finalResult', width: 12 }
+] as const
+type InformationColumn = typeof informationColumns[number]['id']
+
+function readPreference(storageKey: string): unknown {
+  try {
+    const value = localStorage.getItem(storageKey)
+    return value === null ? undefined : JSON.parse(value)
+  } catch {
+    return undefined
+  }
+}
+
+function writePreference(storageKey: string, value: unknown) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(value))
+  } catch {
+    // Storage may be unavailable; the current session remains usable.
+  }
+}
+
+const savedPageSize = readPreference(pageSizePreferenceKey)
+const savedColumns = readPreference(columnsPreferenceKey)
 const page = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(typeof savedPageSize === 'number' && requestPageSizes.includes(savedPageSize) ? savedPageSize : 20)
+const visibleColumns = ref<InformationColumn[]>(Array.isArray(savedColumns)
+  ? informationColumns.filter(column => savedColumns.includes(column.id)).map(column => column.id)
+  : informationColumns.map(column => column.id))
+const displayedColumns = computed(() => informationColumns.filter(column => visibleColumns.value.includes(column.id)))
+const tableWidth = computed(() => `${17 + displayedColumns.value.reduce((width, column) => width + column.width, 0)}rem`)
+const columnsOpen = ref(false)
+const columnsButton = ref<HTMLButtonElement | null>(null)
+const columnsMenu = ref<HTMLDivElement | null>(null)
+const columnsMenuStyle = ref({ left: '0px', top: '0px', width: '288px', maxHeight: '448px' })
+const expandedRequests = ref(new Set<string>())
 const total = ref(0)
 const requestId = ref('')
 const appliedRequestId = computed(() => typeof route.query.request_id === 'string' ? route.query.request_id.trim() : '')
@@ -75,6 +123,175 @@ const rules = computed(() => config.value ? [
   { name: 'azure400', description: 'azureRule', ...config.value.azure400 },
   { name: 'emptyResponse', description: 'emptyRule', ...config.value.empty_response }
 ] : [])
+
+interface RequestGroup {
+  key: string
+  requestId: string
+  events: ServerAutoRetryEvent[]
+  summary: ServerAutoRetryEvent
+  complete: boolean
+  accounts: Array<{ id: number | null; name: string | null }>
+}
+
+function knownText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function knownId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
+function isFinalEvent(event: ServerAutoRetryEvent): boolean {
+  const eventType = knownText(event.event_type)
+  if (eventType) return eventType === 'final' || eventType === 'server_auto_retry.final'
+  return ['success', 'succeeded', 'failed', 'failure', 'stopped'].includes(event.outcome ?? '')
+}
+
+function cumulativeMaximum(items: ServerAutoRetryEvent[], field: 'dispatch_count' | 'retry_count' | 'switch_count' | 'wait_ms'): number | undefined {
+  return items.reduce<number | undefined>((maximum, event) => {
+    const value = event[field]
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? Math.max(maximum ?? 0, value) : maximum
+  }, undefined)
+}
+
+function summarizeRequest(items: ServerAutoRetryEvent[]): ServerAutoRetryEvent {
+  const latestFirst = [...items].reverse()
+  const latest = latestFirst.find(isFinalEvent) ?? latestFirst[0]!
+  const userId = latestFirst.find(event => knownId(event.user_id))?.user_id
+  const userEvents = latestFirst.filter(event => !knownId(event.user_id) || event.user_id === userId)
+  const accountId = latestFirst.find(event => knownId(event.account_id))?.account_id
+  const accountEvents = latestFirst.filter(event => !knownId(event.account_id) || event.account_id === accountId)
+  return {
+    ...latest,
+    user_id: userId,
+    user_name: userEvents.map(event => knownText(event.user_name)).find(Boolean),
+    user_email: userEvents.map(event => knownText(event.user_email)).find(Boolean),
+    account_id: accountId,
+    account_name: accountEvents.map(event => knownText(event.account_name)).find(Boolean),
+    dispatch_count: cumulativeMaximum(items, 'dispatch_count'),
+    retry_count: cumulativeMaximum(items, 'retry_count'),
+    switch_count: cumulativeMaximum(items, 'switch_count'),
+    wait_ms: cumulativeMaximum(items, 'wait_ms')
+  }
+}
+
+const requestGroups = computed<RequestGroup[]>(() => {
+  const groups = new Map<string, { requestId: string; items: Array<{ event: ServerAutoRetryEvent; index: number }> }>()
+  events.value.forEach((event, index) => {
+    const requestId = knownText(event.request_id) ?? ''
+    const groupKey = requestId ? `request:${requestId}` : `event:${event.id ?? 'missing'}:${index}`
+    let group = groups.get(groupKey)
+    if (!group) {
+      group = { requestId, items: [] }
+      groups.set(groupKey, group)
+    }
+    group.items.push({ event, index })
+  })
+  return [...groups].map(([groupKey, group]) => {
+    const items = group.items.sort((a, b) => {
+      const aTime = Date.parse(a.event.timestamp ?? '')
+      const bTime = Date.parse(b.event.timestamp ?? '')
+      if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return aTime - bTime
+      if (a.event.id != null && b.event.id != null) {
+        const idOrder = String(a.event.id).localeCompare(String(b.event.id), 'en', { numeric: true })
+        if (idOrder) return idOrder
+      }
+      return Number(isFinalEvent(a.event)) - Number(isFinalEvent(b.event)) || a.index - b.index
+    }).map(item => item.event)
+    const accounts = new Map<string, { id: number | null; name: string | null }>()
+    for (const event of items) {
+      if (!knownId(event.account_id)) continue
+      const id = event.account_id
+      const name = knownText(event.account_name) ?? null
+      const accountKey = `id:${id}`
+      const previous = accounts.get(accountKey)
+      accounts.set(accountKey, { id, name: name ?? previous?.name ?? null })
+    }
+    for (const event of items) {
+      const name = knownText(event.account_name)
+      if (knownId(event.account_id) || !name || [...accounts.values()].some(account => account.name === name)) continue
+      accounts.set(`name:${name}`, { id: null, name })
+    }
+    return {
+      key: groupKey, requestId: group.requestId, events: items,
+      summary: summarizeRequest(items), complete: items.some(isFinalEvent), accounts: [...accounts.values()]
+    }
+  })
+})
+
+function toggleRequest(groupKey: string) {
+  const next = new Set(expandedRequests.value)
+  if (next.has(groupKey)) next.delete(groupKey)
+  else next.add(groupKey)
+  expandedRequests.value = next
+}
+
+function detailsId(groupKey: string): string {
+  return `retry-details-${encodeURIComponent(groupKey)}`
+}
+
+function eventLabel(event: ServerAutoRetryEvent): string {
+  if (isFinalEvent(event)) return t(`${key}.finalEvent`)
+  return knownText(event.event_type) ? enumLabel('eventTypes', event.event_type) : t(`${key}.recordedEvent`)
+}
+
+function accountListLabel(group: RequestGroup): string {
+  return group.accounts.map(account => `${account.name ?? t(`${key}.unknown`)}${account.id !== null ? ` (#${account.id})` : ''}`).join(', ')
+}
+
+function toggleColumn(column: InformationColumn) {
+  visibleColumns.value = visibleColumns.value.includes(column)
+    ? visibleColumns.value.filter(value => value !== column)
+    : [...visibleColumns.value, column]
+  writePreference(columnsPreferenceKey, visibleColumns.value)
+}
+
+function positionColumnsMenu() {
+  if (!columnsOpen.value || !columnsButton.value) return
+  const rect = columnsButton.value.getBoundingClientRect()
+  if (rect.bottom < 0 || rect.top > window.innerHeight) {
+    columnsOpen.value = false
+    return
+  }
+  const width = Math.min(288, window.innerWidth - 16)
+  const below = Math.max(0, window.innerHeight - rect.bottom - 16)
+  const above = Math.max(0, rect.top - 16)
+  const openAbove = below < 320 && above > below
+  const height = Math.min(448, openAbove ? above : below)
+  columnsMenuStyle.value = {
+    left: `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`,
+    top: `${openAbove ? Math.max(8, rect.top - height - 8) : rect.bottom + 8}px`,
+    width: `${width}px`, maxHeight: `${height}px`
+  }
+}
+
+async function toggleColumnsMenu() {
+  columnsOpen.value = !columnsOpen.value
+  if (!columnsOpen.value) return
+  positionColumnsMenu()
+  await nextTick()
+  columnsMenu.value?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
+}
+
+function onColumnsOutside(event: Event) {
+  if (!columnsOpen.value || !(event.target instanceof Node)) return
+  if (!columnsButton.value?.contains(event.target) && !columnsMenu.value?.contains(event.target)) columnsOpen.value = false
+}
+
+function onColumnsKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !columnsOpen.value) return
+  event.preventDefault()
+  columnsOpen.value = false
+  columnsButton.value?.focus()
+}
+
+function onColumnsFocusout(event: FocusEvent) {
+  if (!event.relatedTarget) return
+  if (event.relatedTarget instanceof Node &&
+    (columnsMenu.value?.contains(event.relatedTarget) || columnsButton.value?.contains(event.relatedTarget))) return
+  columnsOpen.value = false
+}
 
 function cloneConfig(value: ServerAutoRetryConfig): ServerAutoRetryConfig {
   return {
@@ -191,15 +408,17 @@ async function loadEvents() {
   eventsError.value = ''
   try {
     const result = await serverAutoRetryAPI.listEvents({
-      page: page.value, page_size: pageSize.value,
+      page: page.value, page_size: pageSize.value, grouped: true,
       ...(appliedRequestId.value ? { request_id: appliedRequestId.value } : {})
     }, controller.signal)
     if (controller.signal.aborted || disposed) return
     if (!result || !Array.isArray(result.items) || !Number.isSafeInteger(result.total) || result.total < 0 ||
-      !Number.isSafeInteger(result.page) || result.page < 1 || !Number.isSafeInteger(result.page_size) || result.page_size < 1) {
+      !Number.isSafeInteger(result.page) || result.page < 1 || !requestPageSizes.includes(result.page_size)) {
       throw new Error(t(`${key}.invalidResponse`))
     }
     events.value = result.items.filter((item): item is ServerAutoRetryEvent => !!item && typeof item === 'object')
+    const groupKeys = new Set(requestGroups.value.map(group => group.key))
+    expandedRequests.value = new Set([...expandedRequests.value].filter(groupKey => groupKeys.has(groupKey)))
     total.value = result.total
     page.value = result.page
     pageSize.value = result.page_size
@@ -326,12 +545,16 @@ function refresh() {
 }
 
 function changePage(value: number) {
+  expandedRequests.value = new Set()
   page.value = value
   void loadEvents()
 }
 
-function changePageSize(value: number) {
+function changePageSize(value: SelectOption['value']) {
+  if (typeof value !== 'number' || !requestPageSizes.includes(value) || value === pageSize.value) return
   pageSize.value = value
+  writePreference(pageSizePreferenceKey, value)
+  expandedRequests.value = new Set()
   page.value = 1
   void loadEvents()
 }
@@ -348,17 +571,28 @@ async function filterRequest(value = requestId.value) {
 }
 
 watch(() => route.query.request_id, value => {
+  expandedRequests.value = new Set()
   requestId.value = typeof value === 'string' ? value : ''
   page.value = 1
   void loadEvents()
 }, { immediate: true })
 
-onMounted(() => { void loadConfig() })
+onMounted(() => {
+  void loadConfig()
+  document.addEventListener('pointerdown', onColumnsOutside)
+  document.addEventListener('keydown', onColumnsKeydown)
+  window.addEventListener('resize', positionColumnsMenu)
+  window.addEventListener('scroll', positionColumnsMenu, true)
+})
 onBeforeUnmount(() => {
   disposed = true
   configRequest?.abort()
   eventsRequest?.abort()
   accountsRequest?.abort()
+  document.removeEventListener('pointerdown', onColumnsOutside)
+  document.removeEventListener('keydown', onColumnsKeydown)
+  window.removeEventListener('resize', positionColumnsMenu)
+  window.removeEventListener('scroll', positionColumnsMenu, true)
 })
 </script>
 
@@ -423,38 +657,117 @@ onBeforeUnmount(() => {
       <section class="min-w-0 space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <h3 class="text-sm font-semibold">{{ t(`${key}.recentEvents`) }}</h3>
-          <form class="flex w-full items-center gap-2 sm:w-auto" @submit.prevent="filterRequest()">
-            <input v-model="requestId" class="input min-w-0 sm:w-72" :aria-label="t(`${key}.requestId`)" :placeholder="t(`${key}.requestId`)" />
-            <button type="submit" class="retry-icon btn btn-secondary" :title="t('common.search')" :aria-label="t('common.search')"><Icon name="search" /></button>
-            <button v-if="requestId || route.query.request_id" type="button" class="retry-icon btn btn-secondary" :title="t('common.reset')" :aria-label="t('common.reset')" @click="filterRequest('')"><Icon name="x" /></button>
-            <button type="button" class="retry-icon btn btn-secondary" :title="t('common.refresh')" :aria-label="t('common.refresh')" :disabled="eventsLoading" @click="loadEvents"><Icon name="refresh" :class="eventsLoading && 'animate-spin'" /></button>
+          <form class="retry-filter" @submit.prevent="filterRequest()">
+            <button ref="columnsButton" type="button" class="retry-columns-button btn btn-secondary" :title="t(`${key}.columnSettings`)" :aria-label="t(`${key}.columnSettings`)" :aria-expanded="columnsOpen" aria-controls="retry-columns-menu" aria-haspopup="dialog" @click="toggleColumnsMenu">
+              <Icon name="cog" size="sm" class="shrink-0" /><span>{{ t(`${key}.columnSettings`) }}</span>
+            </button>
+            <input v-model="requestId" class="retry-search input min-w-0" :aria-label="t(`${key}.requestId`)" :placeholder="t(`${key}.requestId`)" />
+            <div class="retry-filter-actions flex items-center justify-end gap-2">
+              <button type="submit" class="retry-icon btn btn-secondary" :title="t('common.search')" :aria-label="t('common.search')"><Icon name="search" /></button>
+              <button v-if="requestId || route.query.request_id" type="button" class="retry-icon btn btn-secondary" :title="t('common.reset')" :aria-label="t('common.reset')" @click="filterRequest('')"><Icon name="x" /></button>
+              <button type="button" class="retry-icon btn btn-secondary" :title="t('common.refresh')" :aria-label="t('common.refresh')" :disabled="eventsLoading" @click="loadEvents"><Icon name="refresh" :class="eventsLoading && 'animate-spin'" /></button>
+            </div>
           </form>
         </div>
+        <Teleport to="body">
+          <div v-if="columnsOpen" id="retry-columns-menu" ref="columnsMenu" class="retry-columns-menu border border-gray-200 bg-white p-2 text-sm text-gray-900 shadow-lg dark:border-dark-700 dark:bg-dark-800 dark:text-gray-100" :style="columnsMenuStyle" role="dialog" :aria-label="t(`${key}.columnSettings`)" @focusout="onColumnsFocusout">
+            <label v-for="column in informationColumns" :key="column.id" class="flex cursor-pointer items-center gap-3 rounded px-2 py-2 hover:bg-gray-100 dark:hover:bg-dark-700">
+              <input type="checkbox" class="h-4 w-4 shrink-0 accent-primary-600" :checked="visibleColumns.includes(column.id)" @change="toggleColumn(column.id)" />
+              <span class="min-w-0 break-words">{{ t(`${key}.${column.label}`) }}</span>
+            </label>
+          </div>
+        </Teleport>
         <div v-if="eventsLoading" class="flex items-center justify-center gap-2 py-10 text-sm text-gray-500" role="status"><Icon name="refresh" class="animate-spin" />{{ t('common.loading') }}</div>
         <div v-else-if="eventsError" class="flex flex-wrap items-center gap-3 py-6 text-sm text-red-600 dark:text-red-400" role="alert"><span class="min-w-0 break-words">{{ eventsError }}</span><button type="button" class="retry-icon btn btn-secondary" :title="t('common.refresh')" :aria-label="t('common.refresh')" @click="loadEvents"><Icon name="refresh" /></button></div>
         <p v-else-if="!events.length" class="py-10 text-center text-sm text-gray-500 dark:text-gray-400">{{ t(`${key}.noEvents`) }}</p>
         <div v-else class="min-w-0 overflow-x-auto border-y border-gray-200 dark:border-dark-700">
-          <table class="retry-table w-full table-fixed text-left text-xs">
-            <thead class="bg-gray-100 text-gray-600 dark:bg-dark-800 dark:text-gray-300"><tr>
-              <th class="w-40">{{ t(`${key}.timestamp`) }}</th><th class="w-56">{{ t(`${key}.requestId`) }}</th><th class="w-44">{{ t(`${key}.reason`) }}</th>
-              <th class="w-36">{{ t(`${key}.httpSemantic`) }}</th><th class="w-20">{{ t(`${key}.account`) }}</th><th class="w-36">{{ t(`${key}.counts`) }}</th>
-              <th class="w-28">{{ t(`${key}.wait`) }}</th><th class="w-28">{{ t(`${key}.evidence`) }}</th><th class="w-32">{{ t(`${key}.usage`) }}</th><th class="w-48">{{ t(`${key}.stopReason`) }} / {{ t(`${key}.outcome`) }}</th>
-            </tr></thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-dark-700"><tr v-for="(event, index) in events" :key="`${event.id ?? 'event'}-${index}`" class="align-top hover:bg-gray-100/70 dark:hover:bg-dark-800/70">
-              <td>{{ timeLabel(event.timestamp) }}</td>
-              <td><router-link v-if="event.request_id" :to="{ path: '/admin/server-auto-retry', query: { request_id: event.request_id } }" class="break-all font-mono text-primary-600 hover:underline dark:text-primary-400" :title="event.request_id">{{ event.request_id }}</router-link><span v-else>{{ t(`${key}.unknown`) }}</span><div v-if="event.upstream_request_id" class="mt-1 break-all text-gray-500"><span>{{ t(`${key}.upstreamRequestId`) }}: </span><span class="font-mono">{{ event.upstream_request_id }}</span></div></td>
-              <td>{{ enumLabel('reasons', event.reason) }}</td>
-              <td><div>{{ t(`${key}.rawHTTP`) }}: {{ numberLabel(event.raw_http_status) }}</div><div>{{ t(`${key}.semantic`) }}: {{ statusLabel(event.semantic_status) }}</div></td>
-              <td>{{ numberLabel(event.account_id) }}</td>
-              <td><div>{{ t(`${key}.dispatch`) }}: {{ numberLabel(event.dispatch_count) }}</div><div>{{ t(`${key}.retry`) }}: {{ numberLabel(event.retry_count) }}</div><div>{{ t(`${key}.switch`) }}: {{ numberLabel(event.switch_count) }}</div></td>
-              <td>{{ typeof event.wait_ms === 'number' ? t(`${key}.waitValue`, { value: numberLabel(event.wait_ms) }) : t(`${key}.unknown`) }}</td>
-              <td><div :title="t(`${key}.output`)">{{ booleanLabel(event.has_semantic_output) }}</div><div :title="t(`${key}.committed`)">{{ booleanLabel(event.response_committed) }}</div></td>
-              <td>{{ enumLabel('usageEvidence', event.usage_evidence) }}</td>
-              <td><div class="break-words" :title="event.stop_reason || undefined">{{ enumLabel('stopReasons', event.stop_reason) }}</div><div class="mt-1 font-medium">{{ enumLabel('outcomes', event.outcome) }}</div></td>
-            </tr></tbody>
+          <table class="retry-table w-full table-fixed text-left text-xs" :style="{ minWidth: tableWidth }">
+            <colgroup><col style="width: 17rem" /><col v-for="column in displayedColumns" :key="column.id" :style="{ width: column.width + 'rem' }" /></colgroup>
+            <thead class="bg-gray-100 text-gray-600 dark:bg-dark-800 dark:text-gray-300">
+              <tr><th scope="col">{{ t(key + '.requestId') }}</th><th v-for="column in displayedColumns" :key="column.id" scope="col">{{ t(key + '.' + column.label) }}</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-dark-700">
+              <template v-for="group in requestGroups" :key="group.key">
+                <tr class="align-top hover:bg-gray-100/70 dark:hover:bg-dark-800/70">
+                  <th scope="row" class="font-normal">
+                    <div class="grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-2">
+                      <button type="button" class="retry-expand btn btn-secondary" :title="t(key + (expandedRequests.has(group.key) ? '.collapseRequest' : '.expandRequest'), { request: group.requestId || t(key + '.unknown') })" :aria-label="t(key + (expandedRequests.has(group.key) ? '.collapseRequest' : '.expandRequest'), { request: group.requestId || t(key + '.unknown') })" :aria-expanded="expandedRequests.has(group.key)" :aria-controls="detailsId(group.key)" @click="toggleRequest(group.key)">
+                        <Icon :name="expandedRequests.has(group.key) ? 'chevronDown' : 'chevronRight'" size="sm" />
+                      </button>
+                      <div class="min-w-0 space-y-1">
+                        <router-link v-if="group.requestId" :to="{ path: '/admin/server-auto-retry', query: { request_id: group.requestId } }" class="break-all font-mono text-primary-600 hover:underline dark:text-primary-400" :title="group.requestId">{{ group.requestId }}</router-link>
+                        <span v-else>{{ t(key + '.unknown') }}</span>
+                        <div class="font-semibold tabular-nums">{{ t(key + '.cumulativeRetries', { count: numberLabel(group.summary.retry_count) }) }}</div>
+                        <div class="text-gray-500 dark:text-gray-400">{{ t(key + '.eventCount', { count: group.events.length }) }} / {{ t(key + (group.complete ? '.finalEvent' : '.partialRequest')) }}</div>
+                        <div v-if="group.accounts.length > 1" class="font-medium text-amber-700 dark:text-amber-400" :title="accountListLabel(group)">{{ t(key + '.multipleAccounts', { count: group.accounts.length }) }}</div>
+                        <div v-else-if="(group.summary.switch_count ?? 0) > 0" class="font-medium text-amber-700 dark:text-amber-400">{{ t(key + '.accountsSwitched', { count: group.summary.switch_count }) }}</div>
+                        <div v-if="group.summary.upstream_request_id" class="break-all text-gray-500 dark:text-gray-400">{{ t(key + '.upstreamRequestId') }}: <span class="font-mono">{{ group.summary.upstream_request_id }}</span></div>
+                      </div>
+                    </div>
+                  </th>
+                  <td v-for="column in displayedColumns" :key="column.id">
+                    <template v-if="column.id === 'timestamp'">{{ timeLabel(group.summary.timestamp) }}</template>
+                    <template v-else-if="column.id === 'user'">
+                      <div class="font-medium">{{ knownText(group.summary.user_name) || knownText(group.summary.user_email) || t(key + '.unknown') }}</div>
+                      <div v-if="knownText(group.summary.user_name) && knownText(group.summary.user_email)" class="text-gray-500 dark:text-gray-400">{{ group.summary.user_email }}</div>
+                      <div class="mt-1 text-gray-500 dark:text-gray-400">{{ t(key + '.userId') }}: {{ knownId(group.summary.user_id) ? numberLabel(group.summary.user_id) : t(key + '.unknown') }}</div>
+                    </template>
+                    <template v-else-if="column.id === 'accountName'">
+                      <div>{{ knownText(group.summary.account_name) || t(key + '.unknown') }}</div>
+                      <div v-if="group.accounts.length > 1" class="mt-1 text-gray-500 dark:text-gray-400" :title="accountListLabel(group)">{{ t(key + '.multipleAccounts', { count: group.accounts.length }) }}</div>
+                    </template>
+                    <template v-else-if="column.id === 'accountId'">{{ knownId(group.summary.account_id) ? numberLabel(group.summary.account_id) : t(key + '.unknown') }}</template>
+                    <template v-else-if="column.id === 'reason'">{{ enumLabel('reasons', group.summary.reason) }}</template>
+                    <template v-else-if="column.id === 'httpSemantic'"><div>{{ t(key + '.rawHTTP') }}: {{ numberLabel(group.summary.raw_http_status) }}</div><div>{{ t(key + '.semantic') }}: {{ statusLabel(group.summary.semantic_status) }}</div></template>
+                    <template v-else-if="column.id === 'counts'"><div>{{ t(key + '.dispatch') }}: {{ numberLabel(group.summary.dispatch_count) }}</div><div class="font-semibold">{{ t(key + '.retry') }}: {{ numberLabel(group.summary.retry_count) }}</div><div>{{ t(key + '.switch') }}: {{ numberLabel(group.summary.switch_count) }}</div></template>
+                    <template v-else-if="column.id === 'wait'">{{ typeof group.summary.wait_ms === 'number' ? t(key + '.waitValue', { value: numberLabel(group.summary.wait_ms) }) : t(key + '.unknown') }}</template>
+                    <template v-else-if="column.id === 'evidence'"><div>{{ t(key + '.output') }}: {{ booleanLabel(group.summary.has_semantic_output) }}</div><div>{{ t(key + '.committed') }}: {{ booleanLabel(group.summary.response_committed) }}</div></template>
+                    <template v-else-if="column.id === 'usage'">{{ enumLabel('usageEvidence', group.summary.usage_evidence) }}</template>
+                    <template v-else-if="column.id === 'result'"><div :title="group.summary.stop_reason || undefined">{{ enumLabel('stopReasons', group.summary.stop_reason) }}</div><div class="mt-1 font-medium">{{ enumLabel('outcomes', group.summary.outcome) }}</div></template>
+                  </td>
+                </tr>
+                <tr v-if="expandedRequests.has(group.key)" :id="detailsId(group.key)">
+                  <td :colspan="displayedColumns.length + 1" class="bg-gray-50 dark:bg-dark-900">
+                    <section :aria-label="t(key + '.requestTimeline', { request: group.requestId || t(key + '.unknown') })" class="retry-timeline">
+                      <h4 class="mb-2 text-xs font-semibold">{{ t(key + '.requestTimeline', { request: group.requestId || t(key + '.unknown') }) }}</h4>
+                      <ol class="divide-y divide-gray-200 dark:divide-dark-700">
+                        <li v-for="(event, index) in group.events" :key="String(event.id ?? 'event') + '-' + index" class="py-3">
+                          <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <span class="font-semibold">{{ eventLabel(event) }}</span>
+                            <span>{{ t(key + '.eventNumber', { count: index + 1 }) }}</span>
+                            <span>{{ timeLabel(event.timestamp) }}</span>
+                            <span v-if="event.id != null" class="text-gray-500 dark:text-gray-400">{{ t(key + '.eventId') }}: {{ event.id }}</span>
+                          </div>
+                          <dl class="grid min-w-0 grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            <div class="min-w-0"><dt class="retry-label">{{ t(key + '.requestUser') }}</dt><dd class="break-words">{{ knownText(event.user_name) || knownText(event.user_email) || t(key + '.unknown') }}<div v-if="knownText(event.user_name) && knownText(event.user_email)">{{ event.user_email }}</div><div>{{ t(key + '.userId') }}: {{ knownId(event.user_id) ? numberLabel(event.user_id) : t(key + '.unknown') }}</div></dd></div>
+                            <div class="min-w-0"><dt class="retry-label">{{ t(key + '.accountName') }}</dt><dd class="break-words">{{ knownText(event.account_name) || t(key + '.unknown') }}<div>{{ t(key + '.accountId') }}: {{ knownId(event.account_id) ? numberLabel(event.account_id) : t(key + '.unknown') }}</div></dd></div>
+                            <div><dt class="retry-label">{{ t(key + '.reason') }}</dt><dd>{{ enumLabel('reasons', event.reason) }}</dd></div>
+                            <div><dt class="retry-label">{{ t(key + '.httpSemantic') }}</dt><dd>{{ t(key + '.rawHTTP') }}: {{ numberLabel(event.raw_http_status) }}<div>{{ t(key + '.semantic') }}: {{ statusLabel(event.semantic_status) }}</div></dd></div>
+                            <div><dt class="retry-label">{{ t(key + '.counts') }}</dt><dd>{{ t(key + '.dispatch') }}: {{ numberLabel(event.dispatch_count) }}<div>{{ t(key + '.retry') }}: {{ numberLabel(event.retry_count) }}</div><div>{{ t(key + '.switch') }}: {{ numberLabel(event.switch_count) }}</div></dd></div>
+                            <div><dt class="retry-label">{{ t(key + '.wait') }}</dt><dd>{{ typeof event.wait_ms === 'number' ? t(key + '.waitValue', { value: numberLabel(event.wait_ms) }) : t(key + '.unknown') }}</dd></div>
+                            <div><dt class="retry-label">{{ t(key + '.evidence') }}</dt><dd>{{ t(key + '.output') }}: {{ booleanLabel(event.has_semantic_output) }}<div>{{ t(key + '.committed') }}: {{ booleanLabel(event.response_committed) }}</div></dd></div>
+                            <div><dt class="retry-label">{{ t(key + '.usage') }}</dt><dd>{{ enumLabel('usageEvidence', event.usage_evidence) }}</dd></div>
+                            <div><dt class="retry-label">{{ t(key + '.stopReason') }}</dt><dd>{{ enumLabel('stopReasons', event.stop_reason) }}</dd></div>
+                            <div><dt class="retry-label">{{ t(key + '.outcome') }}</dt><dd class="font-medium">{{ enumLabel('outcomes', event.outcome) }}</dd></div>
+                            <div class="min-w-0"><dt class="retry-label">{{ t(key + '.upstreamRequestId') }}</dt><dd class="break-all font-mono">{{ knownText(event.upstream_request_id) || t(key + '.unknown') }}</dd></div>
+                          </dl>
+                        </li>
+                      </ol>
+                    </section>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
           </table>
         </div>
-        <Pagination v-if="total > 0 && !eventsError" :total="total" :page="page" :page-size="pageSize" :show-page-size-selector="false" @update:page="changePage" @update:page-size="changePageSize" />
+        <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600 dark:text-gray-300">
+          <span>{{ t(key + '.requestTotal', { count: total }) }}</span>
+          <div class="flex items-center gap-2">
+            <label for="retry-requests-per-page">{{ t(key + '.requestsPerPage') }}</label>
+            <Select id="retry-requests-per-page" class="retry-page-size w-20 shrink-0" :model-value="pageSize" :options="requestPageSizeOptions" :aria-label="t(key + '.requestsPerPage')" @update:model-value="changePageSize" />
+          </div>
+        </div>
+        <Pagination v-if="total > 0 && !eventsError" :total="total" :page="page" :page-size="pageSize" :show-page-size-selector="false" @update:page="changePage" />
       </section>
     </div>
     <BaseDialog :show="settingsOpen" :title="t(`${key}.settings`)" width="wide" :close-on-escape="!saving" :show-close-button="!saving" @close="closeSettings">
@@ -541,6 +854,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.retry-page {
+  container-type: inline-size;
+}
 .retry-icon {
   width: 2.25rem;
   height: 2.25rem;
@@ -552,8 +868,59 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   color: rgb(107 114 128);
 }
-.retry-table {
-  min-width: 95rem;
+.retry-filter {
+  display: grid;
+  width: 100%;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+.retry-columns-button {
+  height: 2.25rem;
+  gap: 0.5rem;
+  padding: 0 0.625rem;
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+.retry-search {
+  width: 100%;
+  height: 2.25rem;
+}
+.retry-filter-actions {
+  grid-column: 1 / -1;
+}
+.retry-columns-menu {
+  position: fixed;
+  z-index: 100;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 0.375rem;
+}
+.retry-expand {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+.retry-timeline {
+  width: min(72rem, calc(100vw - 5rem));
+  width: min(72rem, calc(100cqw - 1.5rem));
+  max-width: 100%;
+  min-width: 0;
+}
+.retry-page-size :deep(.select-trigger) {
+  height: 2.25rem;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.625rem;
+}
+@media (min-width: 640px) {
+  .retry-filter {
+    width: auto;
+    max-width: 100%;
+    grid-template-columns: max-content minmax(5rem, 18rem) max-content;
+  }
+  .retry-filter-actions {
+    grid-column: auto;
+  }
 }
 .retry-table th,
 .retry-table td {

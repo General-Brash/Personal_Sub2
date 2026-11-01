@@ -68,6 +68,7 @@ export interface BankLedgerItem {
   debt_delta: BankAmount
   debt_before: BankAmount
   debt_after: BankAmount
+  metadata?: Record<string, unknown> | null
   created_at: string
 }
 

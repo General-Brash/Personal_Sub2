@@ -79,6 +79,15 @@ func requireServerAutoRetryFields(raw, template []byte, prefix string) error {
 
 func (h *SettingHandler) ListServerAutoRetryEvents(c *gin.Context) {
 	page, pageSize := 1, 50
+	grouped := false
+	if raw, present := c.GetQuery("grouped"); present {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			response.BadRequest(c, "grouped must be a boolean")
+			return
+		}
+		grouped = value
+	}
 	for name, target := range map[string]*int{"page": &page, "page_size": &pageSize} {
 		if raw, present := c.GetQuery(name); present {
 			value, err := strconv.Atoi(raw)
@@ -96,7 +105,7 @@ func (h *SettingHandler) ListServerAutoRetryEvents(c *gin.Context) {
 		response.BadRequest(c, "page is too large")
 		return
 	}
-	result, err := h.opsService.ListServerAutoRetryEvents(c.Request.Context(), strings.TrimSpace(c.Query("request_id")), page, pageSize)
+	result, err := h.opsService.ListServerAutoRetryEvents(c.Request.Context(), strings.TrimSpace(c.Query("request_id")), page, pageSize, grouped)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

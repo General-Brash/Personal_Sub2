@@ -242,6 +242,7 @@ export default {
     operations: {
       advance: 'Temporary credit advance',
       exchange: 'Permanent credit exchange',
+      autoExchange: 'Auto exchange',
       autoExchangeDepositFreeze: 'Auto exchange deposit freeze',
       autoExchangeDepositRelease: 'Auto exchange deposit release',
       debtOffset: 'Temporary credit debt offset',

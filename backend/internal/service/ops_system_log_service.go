@@ -50,6 +50,7 @@ type OpsServerAutoRetryMetadata struct {
 	RawHTTPStatus     *int    `json:"raw_http_status"`
 	SemanticStatus    *int    `json:"semantic_status"`
 	AccountID         *int64  `json:"account_id"`
+	AccountName       string  `json:"account_name,omitempty"`
 	DispatchCount     *int    `json:"dispatch_count"`
 	RetryCount        *int    `json:"retry_count"`
 	SwitchCount       *int    `json:"switch_count"`
@@ -67,6 +68,9 @@ type OpsServerAutoRetryEvent struct {
 	Timestamp time.Time `json:"timestamp"`
 	RequestID string    `json:"request_id"`
 	EventType string    `json:"event_type"`
+	UserID    *int64    `json:"user_id"`
+	UserName  string    `json:"user_name,omitempty"`
+	UserEmail string    `json:"user_email,omitempty"`
 	OpsServerAutoRetryMetadata
 }
 
@@ -81,7 +85,7 @@ func DecodeOpsServerAutoRetryMetadata(fields map[string]any) OpsServerAutoRetryM
 	metadata := OpsServerAutoRetryMetadata{}
 	for name, target := range map[string]any{
 		"reason": &metadata.Reason, "raw_http_status": &metadata.RawHTTPStatus,
-		"semantic_status": &metadata.SemanticStatus, "account_id": &metadata.AccountID,
+		"semantic_status": &metadata.SemanticStatus, "account_id": &metadata.AccountID, "account_name": &metadata.AccountName,
 		"dispatch_count": &metadata.DispatchCount, "retry_count": &metadata.RetryCount,
 		"switch_count": &metadata.SwitchCount, "wait_ms": &metadata.WaitMS,
 		"response_committed": &metadata.ResponseCommitted, "has_semantic_output": &metadata.HasSemanticOutput,
@@ -131,6 +135,7 @@ func DecodeOpsServerAutoRetryMetadata(fields map[string]any) OpsServerAutoRetryM
 	if metadata.AccountID != nil && *metadata.AccountID <= 0 {
 		metadata.AccountID = nil
 	}
+	metadata.AccountName = truncateString(strings.TrimSpace(metadata.AccountName), 256)
 	if metadata.UpstreamRequestID != nil {
 		value := truncateString(strings.TrimSpace(*metadata.UpstreamRequestID), 128)
 		metadata.UpstreamRequestID = &value
@@ -142,7 +147,7 @@ func DecodeOpsServerAutoRetryMetadata(fields map[string]any) OpsServerAutoRetryM
 }
 
 // Historical events remain readable even when monitoring or retries are disabled.
-func (s *OpsService) ListServerAutoRetryEvents(ctx context.Context, requestID string, page, pageSize int) (*OpsServerAutoRetryEventList, error) {
+func (s *OpsService) ListServerAutoRetryEvents(ctx context.Context, requestID string, page, pageSize int, grouped ...bool) (*OpsServerAutoRetryEventList, error) {
 	if s == nil || s.opsRepo == nil {
 		return nil, infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
 	}
@@ -160,7 +165,8 @@ func (s *OpsService) ListServerAutoRetryEvents(ctx context.Context, requestID st
 	}
 	logs, err := s.opsRepo.ListSystemLogs(ctx, &OpsSystemLogFilter{
 		RequestID: strings.TrimSpace(requestID), Page: page, PageSize: pageSize,
-		Messages: []string{"server_auto_retry.retry_attempt", "server_auto_retry.final"},
+		Messages:       []string{"server_auto_retry.retry_attempt", "server_auto_retry.final"},
+		GroupByRequest: len(grouped) > 0 && grouped[0],
 	})
 	if err != nil {
 		return nil, infraerrors.InternalServer("SERVER_AUTO_RETRY_EVENTS_FAILED", "Failed to list retry events").WithCause(err)
@@ -175,12 +181,27 @@ func (s *OpsService) ListServerAutoRetryEvents(ctx context.Context, requestID st
 			continue
 		}
 		metadata := DecodeOpsServerAutoRetryMetadata(logEntry.Extra)
-		if metadata.AccountID == nil && logEntry.AccountID != nil {
+		if metadata.AccountID == nil && logEntry.AccountID != nil && *logEntry.AccountID > 0 {
 			value := *logEntry.AccountID
 			metadata.AccountID = &value
 		}
+		identity := logs.ServerAutoRetryIdentities[logEntry.ID]
+		if metadata.AccountName == "" {
+			metadata.AccountName = truncateString(strings.TrimSpace(identity.AccountName), 256)
+		}
+		userID := identity.UserID
+		if logEntry.UserID != nil && *logEntry.UserID > 0 {
+			value := *logEntry.UserID
+			userID = &value
+		}
+		eventRequestID := logEntry.RequestID
+		if len(grouped) > 0 && grouped[0] {
+			eventRequestID = strings.TrimSpace(eventRequestID)
+		}
 		out.Items = append(out.Items, &OpsServerAutoRetryEvent{
-			ID: logEntry.ID, Timestamp: logEntry.CreatedAt, RequestID: logEntry.RequestID,
+			ID: logEntry.ID, Timestamp: logEntry.CreatedAt, RequestID: eventRequestID,
+			UserID: userID, UserName: truncateString(strings.TrimSpace(identity.UserName), 256),
+			UserEmail: truncateString(strings.TrimSpace(identity.UserEmail), 256),
 			EventType: logEntry.Message, OpsServerAutoRetryMetadata: metadata,
 		})
 	}

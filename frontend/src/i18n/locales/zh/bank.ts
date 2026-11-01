@@ -242,6 +242,7 @@ export default {
     operations: {
       advance: '临时额度预支',
       exchange: '永久额度兑换',
+      autoExchange: '自动兑换',
       autoExchangeDepositFreeze: '自动兑换押金冻结',
       autoExchangeDepositRelease: '自动兑换押金解冻',
       debtOffset: '临时额度抵债',

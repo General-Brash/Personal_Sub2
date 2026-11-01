@@ -15,6 +15,8 @@ var (
 	ErrBankAutoExchangeDepositInsufficient = infraerrors.Conflict("BANK_AUTO_EXCHANGE_DEPOSIT_INSUFFICIENT", "spendable permanent balance is insufficient for the auto exchange deposit")
 )
 
+const bankAutoExchangeNote = "\u81ea\u52a8\u5151\u6362"
+
 type BankAutoExchangePreference struct {
 	Enabled        bool   `json:"enabled"`
 	Threshold      string `json:"threshold"`
@@ -307,8 +309,8 @@ RETURNING balance::text`, []any{formatLedgerAmount(amount), userID}, &balanceAft
 		if err := scanBankAutoExchangeRow(ctx, tx, `
 INSERT INTO temporary_credit_grants
     (user_id, source, amount, remaining_amount, available_at, expires_at, notes)
-VALUES ($1, $2, $3, $3, $4, $5, '') RETURNING id`,
-			[]any{userID, TemporaryCreditSourceBankExchange, formatLedgerAmount(temporaryAmount), businessNow, expiresAt}, &grantID); err != nil {
+VALUES ($1, $2, $3, $3, $4, $5, $6) RETURNING id`,
+			[]any{userID, TemporaryCreditSourceBankExchange, formatLedgerAmount(temporaryAmount), businessNow, expiresAt, bankAutoExchangeNote}, &grantID); err != nil {
 			return result, fmt.Errorf("create bank auto exchange grant: %w", err)
 		}
 		var dailyAfterRaw string
@@ -339,6 +341,7 @@ VALUES ($1, 'exchange', $2, $1, $3, $4, 0, $5, $5, $6)`, userID, grantID,
 			formatLedgerAmount(-amount), formatLedgerAmount(temporaryAmount), formatLedgerAmount(debt),
 			marshalBankMetadata(map[string]any{
 				"auto_exchange": true, "threshold": preference.Threshold,
+				"notes":           bankAutoExchangeNote,
 				"exchange_amount": preference.ExchangeAmount, "frozen_deposit": preference.FrozenDeposit,
 				"exchange_rate":  formatLedgerAmount(policy.ExchangeRate),
 				"exchange_tiers": bankExchangeTierDTOs(policy.ExchangeTiers), "tier_allocations": allocations,

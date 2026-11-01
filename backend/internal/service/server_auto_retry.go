@@ -655,11 +655,18 @@ func (r *ServerAutoRetryContext) fields(c *gin.Context, outcome string) map[stri
 		target = &ServerAutoRetryTarget{}
 	}
 	requestID, _ := r.OriginalContext.Value(ctxkey.RequestID).(string)
-	return map[string]any{"request_id": requestID, "reason": target.Reason, "raw_http_status": target.RawHTTPStatus,
+	fields := map[string]any{"request_id": requestID, "reason": target.Reason, "raw_http_status": target.RawHTTPStatus,
 		"semantic_status": target.SemanticStatus, "account_id": r.LastAccountID, "dispatch_count": r.DispatchCount,
 		"retry_count": r.RetryCount, "switch_count": r.SwitchCount, "wait_ms": r.Wait.Milliseconds(),
 		"response_committed": c != nil && c.Writer != nil && c.Writer.Written(), "has_semantic_output": r.HasSemanticOutput,
 		"usage_evidence": r.UsageEvidence, "stop_reason": target.StopReason, "outcome": outcome, "upstream_request_id": target.UpstreamRequestID}
+	if userID, ok := r.OriginalContext.Value(ctxkey.UserID).(int64); ok && userID > 0 {
+		fields["user_id"] = userID
+	}
+	if account := r.CurrentAccount; account != nil && account.ID == r.LastAccountID && strings.TrimSpace(account.Name) != "" {
+		fields["account_name"] = account.Name
+	}
+	return fields
 }
 
 func (r *ServerAutoRetryContext) log(c *gin.Context, message, outcome string) {

@@ -25,7 +25,7 @@ func TestOIDCProviderClientSecretTTLDefaultAndBounds(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	cfg, err := Load()
 	require.NoError(t, err)
-	require.Equal(t, 90*86400, cfg.OIDCProvider.ClientSecretTTLSeconds)
+	require.Equal(t, 365*86400, cfg.OIDCProvider.ClientSecretTTLSeconds)
 	require.Equal(t, 86400, cfg.OIDCProvider.ClientSecretMaxOverlapSeconds)
 	p := cfg.OIDCProvider
 	p.EncryptionKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
@@ -51,5 +51,5 @@ func TestOIDCProviderOldOverlapConfigKeepsIndependentDefault(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.Equal(t, 3600, cfg.OIDCProvider.ClientSecretMaxOverlapSeconds)
-	require.Equal(t, 90*86400, cfg.OIDCProvider.ClientSecretTTLSeconds)
+	require.Equal(t, 365*86400, cfg.OIDCProvider.ClientSecretTTLSeconds)
 }

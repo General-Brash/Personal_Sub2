@@ -32,10 +32,15 @@ export interface ServerAutoRetryEvent {
   id?: number | string | null
   timestamp?: string | null
   request_id?: string | null
+  event_type?: string | null
+  user_id?: number | null
+  user_name?: string | null
+  user_email?: string | null
   reason?: string | null
   raw_http_status?: number | null
   semantic_status?: number | string | null
   account_id?: number | null
+  account_name?: string | null
   dispatch_count?: number | null
   retry_count?: number | null
   switch_count?: number | null
@@ -49,6 +54,7 @@ export interface ServerAutoRetryEvent {
 }
 
 export interface ServerAutoRetryEventsResponse {
+  // grouped=true includes all events for selected requests; pagination counts requests.
   items: ServerAutoRetryEvent[]
   total: number
   page: number
@@ -87,7 +93,7 @@ export async function updateConfig(config: ServerAutoRetryConfig): Promise<Serve
 }
 
 export async function listEvents(
-  params: { page: number; page_size: number; request_id?: string },
+  params: { page: number; page_size: number; request_id?: string; grouped?: boolean },
   signal?: AbortSignal
 ): Promise<ServerAutoRetryEventsResponse> {
   const { data } = await apiClient.get<ServerAutoRetryEventsResponse>('/admin/server-auto-retry/events', {

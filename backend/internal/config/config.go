@@ -2188,7 +2188,7 @@ func setDefaults() {
 	viper.SetDefault("oidc_provider.clock_skew_seconds", 60)
 	viper.SetDefault("oidc_provider.jwks_cache_max_age_seconds", 300)
 	viper.SetDefault("oidc_provider.client_secret_max_overlap_seconds", 86400)
-	viper.SetDefault("oidc_provider.client_secret_ttl_seconds", 86400*90)
+	viper.SetDefault("oidc_provider.client_secret_ttl_seconds", 86400*365)
 	viper.SetDefault("oidc_provider.require_pkce_s256", true)
 	viper.SetDefault("oidc_provider.authorization_response_iss", true)
 	viper.SetDefault("oidc_provider.allowed_scopes", []string{"openid", "profile", "email", "roles", "offline_access"})

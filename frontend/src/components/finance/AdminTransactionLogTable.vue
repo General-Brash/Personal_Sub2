@@ -55,7 +55,7 @@
           <p class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ row.product_name }}</p>
           <p class="mt-0.5 text-xs text-gray-400">{{ productTypeLabel(row.product_type) }}</p>
         </div>
-        <span v-else data-test="bank-operation" class="text-sm text-gray-700 dark:text-gray-300">{{ bankOperationLabel(row.operation) }}</span>
+        <span v-else data-test="bank-operation" class="text-sm text-gray-700 dark:text-gray-300">{{ bankOperationLabel(row.operation, row.metadata) }}</span>
       </template>
 
       <template #cell-payment="{ row }">
@@ -191,8 +191,8 @@ function productTypeLabel(value: string): string {
   return value === 'subscription' ? t('finance.transactions.subscription') : t('finance.transactions.currency')
 }
 
-function bankOperationLabel(operation: string): string {
-  return translateBankOperation(operation, t as FinanceTranslate)
+function bankOperationLabel(operation: string, metadata?: Record<string, unknown> | null): string {
+  return translateBankOperation(operation, t as FinanceTranslate, metadata)
 }
 
 function formatTransactionAmount(row: MallTransactionItem | BankTransactionItem): string {

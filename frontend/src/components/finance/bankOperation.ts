@@ -12,8 +12,15 @@ const bankOperationKeys: Record<string, string> = {
   early_repay_permanent: 'bank.operations.earlyRepayPermanent',
 }
 
-export function bankOperationLabel(operation: string | null | undefined, t: FinanceTranslate): string {
+export function bankOperationLabel(
+  operation: string | null | undefined,
+  t: FinanceTranslate,
+  metadata?: Record<string, unknown> | null,
+): string {
   const normalized = String(operation || '').trim()
+  if (normalized === 'exchange' && (metadata?.auto_exchange === true || metadata?.notes === '\u81ea\u52a8\u5151\u6362')) {
+    return t('bank.operations.autoExchange')
+  }
   const key = bankOperationKeys[normalized]
   if (key) return t(key)
   return normalized || t('finance.unknownOperation')

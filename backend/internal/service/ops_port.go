@@ -213,8 +213,9 @@ type OpsSystemLogFilter struct {
 	Model           string
 	Query           string
 
-	Page     int
-	PageSize int
+	Page           int
+	PageSize       int
+	GroupByRequest bool // Paginate request groups, returning every matching log in each group.
 }
 
 type OpsSystemLogCleanupFilter struct {
@@ -240,6 +241,16 @@ type OpsSystemLogList struct {
 	Total    int             `json:"total"`
 	Page     int             `json:"page"`
 	PageSize int             `json:"page_size"`
+
+	ServerAutoRetryIdentities map[int64]OpsServerAutoRetryIdentity `json:"-"`
+}
+
+// Retry-only enrichment is kept out of the generic system-log JSON response.
+type OpsServerAutoRetryIdentity struct {
+	UserID      *int64
+	UserName    string
+	UserEmail   string
+	AccountName string
 }
 
 type OpsSystemLogCleanupAudit struct {

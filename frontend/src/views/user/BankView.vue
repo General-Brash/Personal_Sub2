@@ -75,7 +75,7 @@
                 <Icon name="lock" size="sm" />
                 {{ t('bank.autoExchange.currentDeposit') }}
               </span>
-              <span data-test="auto-exchange-frozen-deposit" class="break-all font-mono">{{ formatMoneyDisplay(autoExchangePreference.frozen_deposit, 8) }}</span>
+              <span data-test="auto-exchange-frozen-deposit" class="break-all font-mono">{{ formatAmount(autoExchangePreference.frozen_deposit) }}</span>
             </div>
             <p v-if="isNegative(status.permanent_balance)" class="mt-3 text-xs text-red-600 dark:text-red-400">
               {{ t('bank.balances.negativeBlocked') }}
@@ -608,7 +608,7 @@
               <tbody class="divide-y divide-gray-100 bg-white dark:divide-dark-700 dark:bg-dark-800">
                 <tr v-for="item in ledgerItems" :key="item.id" data-test="ledger-row" class="text-gray-700 dark:text-gray-300">
                   <td class="whitespace-nowrap px-5 py-3">{{ formatDateTime(item.created_at) }}</td>
-                  <td class="whitespace-nowrap px-5 py-3 font-medium text-gray-900 dark:text-white">{{ operationLabel(item.operation) }}</td>
+                  <td class="whitespace-nowrap px-5 py-3 font-medium text-gray-900 dark:text-white">{{ operationLabel(item) }}</td>
                   <td class="whitespace-nowrap px-5 py-3 text-right font-mono" :class="deltaClass(item.permanent_delta)">{{ formatSignedAmount(item.permanent_delta) }}</td>
                   <td class="whitespace-nowrap px-5 py-3 text-right font-mono" :class="deltaClass(item.temporary_delta)">{{ formatSignedAmount(item.temporary_delta) }}</td>
                   <td class="whitespace-nowrap px-5 py-3 text-right font-mono" :class="deltaClass(item.debt_delta, true)">{{ formatSignedAmount(item.debt_delta) }}</td>
@@ -668,11 +668,12 @@
             :disabled="autoExchangeSaving"
             :aria-invalid="Boolean(autoExchangeThresholdError)"
             aria-describedby="bank-auto-exchange-threshold-feedback"
+            @input="markAutoExchangeFieldDirty('threshold')"
           />
           <p id="bank-auto-exchange-threshold-feedback" class="mt-1.5" :class="autoExchangeThresholdError ? 'input-error-text' : 'input-hint'">
-            {{ autoExchangeThresholdError || (parseScaledAmount(autoExchangeDraft.threshold) === 0n
+            {{ autoExchangeThresholdError || (parseScaledAmount(autoExchangeAmountValue('threshold')) === 0n
               ? t('bank.autoExchange.triggerExhausted')
-              : t('bank.autoExchange.triggerBelow', { amount: formatMoneyDisplay(autoExchangeDraft.threshold, 8) })) }}
+              : t('bank.autoExchange.triggerBelow', { amount: formatAmount(autoExchangeAmountValue('threshold')) })) }}
           </p>
         </div>
         <div>
@@ -689,21 +690,22 @@
             :disabled="autoExchangeSaving"
             :aria-invalid="Boolean(autoExchangeAmountError)"
             :aria-describedby="autoExchangeAmountError ? 'bank-auto-exchange-amount-error' : undefined"
+            @input="markAutoExchangeFieldDirty('exchange_amount')"
           />
           <p v-if="autoExchangeAmountError" id="bank-auto-exchange-amount-error" class="input-error-text mt-1.5">{{ autoExchangeAmountError }}</p>
         </div>
         <dl class="space-y-3 border-t border-gray-100 pt-4 text-sm dark:border-dark-700" aria-live="polite">
           <div class="flex flex-wrap items-start justify-between gap-2">
             <dt class="text-gray-500 dark:text-gray-400">{{ t('bank.autoExchange.requiredDeposit') }}</dt>
-            <dd class="min-w-0 break-all font-mono text-gray-900 dark:text-white"><output for="bank-auto-exchange-amount" data-test="auto-exchange-deposit-preview">{{ prospectiveAutoExchangeDeposit === null ? t('bank.common.unavailable') : formatMoneyDisplay(prospectiveAutoExchangeDeposit, 8) }}</output></dd>
+            <dd class="min-w-0 break-all font-mono text-gray-900 dark:text-white"><output for="bank-auto-exchange-amount" data-test="auto-exchange-deposit-preview">{{ prospectiveAutoExchangeDeposit === null ? t('bank.common.unavailable') : formatAmount(prospectiveAutoExchangeDeposit) }}</output></dd>
           </div>
           <div class="flex flex-wrap items-start justify-between gap-2">
             <dt class="text-gray-500 dark:text-gray-400">{{ t('bank.autoExchange.currentDeposit') }}</dt>
-            <dd class="min-w-0 break-all font-mono text-gray-900 dark:text-white">{{ autoExchangePreference ? formatMoneyDisplay(autoExchangePreference.frozen_deposit, 8) : t('bank.common.unavailable') }}</dd>
+            <dd class="min-w-0 break-all font-mono text-gray-900 dark:text-white">{{ autoExchangePreference ? formatAmount(autoExchangePreference.frozen_deposit) : t('bank.common.unavailable') }}</dd>
           </div>
           <div v-if="autoExchangeDepositChange !== null && autoExchangeDepositChange !== 0n" class="flex flex-wrap items-start justify-between gap-2">
             <dt class="text-gray-500 dark:text-gray-400">{{ t(autoExchangeDepositChange > 0n ? 'bank.autoExchange.freezeOnSave' : 'bank.autoExchange.releaseOnSave') }}</dt>
-            <dd data-test="auto-exchange-deposit-change" class="min-w-0 break-all font-mono text-gray-900 dark:text-white">{{ formatMoneyDisplay(formatScaledAmount(autoExchangeDepositChange > 0n ? autoExchangeDepositChange : -autoExchangeDepositChange), 8) }}</dd>
+            <dd data-test="auto-exchange-deposit-change" class="min-w-0 break-all font-mono text-gray-900 dark:text-white">{{ formatAmount(formatScaledAmount(autoExchangeDepositChange > 0n ? autoExchangeDepositChange : -autoExchangeDepositChange)) }}</dd>
           </div>
         </dl>
         <p v-if="autoExchangeError" data-test="auto-exchange-save-error" role="alert" class="input-error-text">{{ autoExchangeError }}</p>
@@ -850,6 +852,8 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { bankOperationLabel } from '@/components/finance/bankOperation'
+import type { FinanceTranslate } from '@/components/finance/financialDisplay'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
@@ -935,9 +939,15 @@ const autoExchangeSaving = ref(false)
 const autoExchangeError = ref('')
 const autoExchangeDraft = reactive<BankAutoExchangeSettings>({
   enabled: false,
+  threshold: '1.00',
+  exchange_amount: '1.00',
+})
+type AutoExchangeAmountField = 'threshold' | 'exchange_amount'
+const autoExchangeExactValues = reactive<Record<AutoExchangeAmountField, string>>({
   threshold: '1.00000000',
   exchange_amount: '1.00000000',
 })
+const autoExchangeDirtyFields = reactive(new Set<AutoExchangeAmountField>())
 interface AutoExchangePendingMutation {
   accountId: number
   payload: string
@@ -975,19 +985,19 @@ const settingsForm = reactive<SettingsForm>({
 })
 
 const autoExchangeThresholdError = computed(() => {
-  const threshold = parseScaledAmount(autoExchangeDraft.threshold)
+  const threshold = parseScaledAmount(autoExchangeAmountValue('threshold'))
   return threshold === null || threshold < 0n || threshold > 5n * amountScale
     ? t('bank.autoExchange.invalidThreshold')
     : ''
 })
 const autoExchangeAmountError = computed(() => {
-  const amount = parseScaledAmount(autoExchangeDraft.exchange_amount)
+  const amount = parseScaledAmount(autoExchangeAmountValue('exchange_amount'))
   return amount === null || amount < amountScale / 2n || amount > 5n * amountScale
     ? t('bank.autoExchange.invalidAmount')
     : ''
 })
 const prospectiveAutoExchangeDeposit = computed(() => {
-  const amount = parseScaledAmount(autoExchangeDraft.exchange_amount)
+  const amount = parseScaledAmount(autoExchangeAmountValue('exchange_amount'))
   return amount === null || autoExchangeAmountError.value ? null : formatScaledAmount(amount * 2n)
 })
 const autoExchangeDepositChange = computed(() => {
@@ -1386,11 +1396,16 @@ async function loadAutoExchange(): Promise<void> {
     const preference = await getBankAutoExchange()
     if (request !== latestAutoExchangeRequest || accountId !== authStore.user?.id) return
     autoExchangePreference.value = { ...preference }
-    Object.assign(autoExchangeDraft, {
-      enabled: preference.enabled,
+    Object.assign(autoExchangeExactValues, {
       threshold: preference.threshold,
       exchange_amount: preference.exchange_amount,
     })
+    Object.assign(autoExchangeDraft, {
+      enabled: preference.enabled,
+      threshold: formatAmount(preference.threshold),
+      exchange_amount: formatAmount(preference.exchange_amount),
+    })
+    autoExchangeDirtyFields.clear()
     if (status.value) status.value = { ...status.value, auto_exchange: preference }
   } catch (error) {
     if (request !== latestAutoExchangeRequest || accountId !== authStore.user?.id) return
@@ -1409,10 +1424,21 @@ function closeAutoExchange(): void {
   autoExchangeError.value = ''
 }
 
+function markAutoExchangeFieldDirty(field: AutoExchangeAmountField): void {
+  autoExchangeDirtyFields.add(field)
+}
+
+function autoExchangeAmountValue(field: AutoExchangeAmountField): string {
+  // Keep display rounding out of validation, deposit math and unedited saves.
+  return (autoExchangeDirtyFields.has(field)
+    ? autoExchangeDraft[field]
+    : autoExchangeExactValues[field]).trim()
+}
+
 async function saveAutoExchange(): Promise<void> {
   if (!canSaveAutoExchange.value || authStore.user?.id === undefined) return
-  const threshold = parseScaledAmount(autoExchangeDraft.threshold)
-  const amount = parseScaledAmount(autoExchangeDraft.exchange_amount)
+  const threshold = parseScaledAmount(autoExchangeAmountValue('threshold'))
+  const amount = parseScaledAmount(autoExchangeAmountValue('exchange_amount'))
   if (threshold === null || amount === null) return
   const settings: BankAutoExchangeSettings = {
     enabled: autoExchangeDraft.enabled,
@@ -1795,19 +1821,8 @@ function formatDateTime(value: string | null | undefined): string {
   }).format(date)
 }
 
-function operationLabel(operation: string): string {
-  const key = ({
-    advance: 'bank.operations.advance',
-    exchange: 'bank.operations.exchange',
-    auto_exchange_deposit_freeze: 'bank.operations.autoExchangeDepositFreeze',
-    auto_exchange_deposit_release: 'bank.operations.autoExchangeDepositRelease',
-    debt_offset: 'bank.operations.debtOffset',
-    permanent_settlement: 'bank.operations.permanentSettlement',
-    unused_advance_repayment: 'bank.operations.unusedAdvanceRepayment',
-    early_repay_temporary: 'bank.operations.earlyRepayTemporary',
-    early_repay_permanent: 'bank.operations.earlyRepayPermanent',
-  } as Record<string, string>)[operation]
-  return key ? t(key) : operation
+function operationLabel(item: BankLedgerItem): string {
+  return bankOperationLabel(item.operation, t as FinanceTranslate, item.metadata)
 }
 
 function advanceStatusLabel(statusValue: string): string {
