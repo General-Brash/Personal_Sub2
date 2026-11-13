@@ -15,11 +15,13 @@ func TestFinancialLedgerCTEAggregatesUsageByBeijingDayAndRequestedModel(t *testi
 		"md5(concat_ws('|',",
 		"COALESCE(NULLIF(ul.requested_model, ''), ul.model) || '模型费用' AS label",
 		"SUM(ul.total_cost) AS amount",
-		"COUNT(*)::bigint AS item_count",
-		"(ul.created_at AT TIME ZONE 'Asia/Shanghai')::date",
+		"COALESCE(SUM(ul.request_count),0)::bigint AS item_count",
+		"MAX(ul.last_created_at) AS created_at",
+		"FROM usage_statistics AS ul JOIN users AS u ON u.id = ul.user_id",
+		"(ul.financial_created_at AT TIME ZONE 'Asia/Shanghai')::date",
 		"COALESCE(NULLIF(ul.requested_model, ''), ul.model)",
 		"AND ul.user_id = $1",
-		"AND ul.created_at >= $2 AND ul.created_at < $3",
+		"AND ul.financial_created_at >= $2 AND ul.financial_created_at < $3",
 		"WHERE mp.status = 'completed'",
 		"AND mp.created_at >= $2 AND mp.created_at < $3",
 		"WHERE po.status = 'COMPLETED'",
@@ -31,6 +33,9 @@ func TestFinancialLedgerCTEAggregatesUsageByBeijingDayAndRequestedModel(t *testi
 		if !strings.Contains(cte.sql, fragment) {
 			t.Fatalf("financial ledger CTE missing %q", fragment)
 		}
+	}
+	if strings.Contains(cte.sql, "FROM usage_logs") || strings.Contains(cte.sql, "JOIN usage_logs") {
+		t.Fatal("financial ledger must use durable usage statistics without double-counting raw usage logs")
 	}
 	if strings.Contains(cte.sql, "MAX(ul.id) AS id") || strings.Contains(cte.sql, "ul.id AS id") {
 		t.Fatal("aggregated model rows must not expose a branch-level usage_logs id")

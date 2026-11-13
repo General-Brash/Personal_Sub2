@@ -482,6 +482,15 @@ func createGroupUsageRollupTriggerTestSchema(t *testing.T, ctx context.Context, 
 	`+usageLogsDDL)
 	require.NoError(t, err)
 
+	// This trigger-only fixture has no archived rows. Expose the raw statistics
+	// projection; usage_compaction_integration_test.go covers archival semantics.
+	_, err = tx.ExecContext(ctx, `
+		CREATE VIEW usage_statistics AS
+		SELECT id, user_id, group_id, actual_cost, created_at
+		FROM usage_logs;
+	`)
+	require.NoError(t, err)
+
 	for _, migrationName := range []string{
 		"222_group_usage_daily_rollups.sql",
 		"223_group_usage_rollup_timezone.sql",
