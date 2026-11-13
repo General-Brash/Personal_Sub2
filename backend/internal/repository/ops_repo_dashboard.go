@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -26,6 +27,22 @@ func (r *opsRepository) GetDashboardOverview(ctx context.Context, filter *servic
 	}
 	if filter.StartTime.IsZero() || filter.EndTime.IsZero() {
 		return nil, fmt.Errorf("start_time/end_time required")
+	}
+	history, err := r.GetDashboardHistoryMetadata(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if history.IncludesHistory {
+		// Never merge a whole historical day into multiple hourly head/tail
+		// fragments, or reuse stale pre-compaction percentile aggregates.
+		out, err := r.getDashboardOverviewRaw(ctx, filter)
+		if err == nil {
+			out.Duration = service.OpsPercentiles{}
+			out.TTFT = service.OpsPercentiles{}
+			out.QPS.Current, out.QPS.Peak = 0, 0
+			out.TPS.Current, out.TPS.Peak = 0, 0
+		}
+		return out, err
 	}
 
 	mode := filter.QueryMode
@@ -789,13 +806,13 @@ func maxTime(a, b time.Time) time.Time {
 }
 
 func (r *opsRepository) queryUsageCounts(ctx context.Context, filter *service.OpsDashboardFilter, start, end time.Time) (successCount int64, tokenConsumed int64, err error) {
-	join, where, args, _ := buildUsageWhere(filter, start, end, 1)
+	join, where, args := buildUsageStatisticsWhere(filter, start, end)
 
 	q := `
 SELECT
-  COALESCE(COUNT(*), 0) AS success_count,
+  COALESCE(SUM(request_count), 0) AS success_count,
   COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens), 0) AS token_consumed
-FROM usage_logs ul
+FROM usage_statistics_range($1, $2) ul
 ` + join + `
 ` + where
 
@@ -810,6 +827,12 @@ FROM usage_logs ul
 }
 
 func (r *opsRepository) queryUsageLatency(ctx context.Context, filter *service.OpsDashboardFilter, start, end time.Time) (duration service.OpsPercentiles, ttft service.OpsPercentiles, ttftSampleCount int64, err error) {
+	historyFilter := *filter
+	historyFilter.StartTime, historyFilter.EndTime = start, end
+	metadata, err := r.GetDashboardHistoryMetadata(ctx, &historyFilter)
+	if err != nil || metadata.IncludesHistory {
+		return duration, ttft, 0, err
+	}
 	join, where, args, _ := buildUsageWhere(filter, start, end, 1)
 	q := `
 SELECT
@@ -904,6 +927,12 @@ FROM ops_error_logs
 
 func (r *opsRepository) queryCurrentRates(ctx context.Context, filter *service.OpsDashboardFilter, end time.Time) (qpsCurrent float64, tpsCurrent float64, err error) {
 	windowStart := end.Add(-1 * time.Minute)
+	historyFilter := *filter
+	historyFilter.StartTime, historyFilter.EndTime = windowStart, end
+	metadata, err := r.GetDashboardHistoryMetadata(ctx, &historyFilter)
+	if err != nil || metadata.IncludesHistory {
+		return 0, 0, err
+	}
 
 	successCount1m, token1m, err := r.queryUsageCounts(ctx, filter, windowStart, end)
 	if err != nil {
@@ -920,6 +949,12 @@ func (r *opsRepository) queryCurrentRates(ctx context.Context, filter *service.O
 }
 
 func (r *opsRepository) queryPeakRates(ctx context.Context, filter *service.OpsDashboardFilter, start, end time.Time) (qpsPeak float64, tpsPeak float64, err error) {
+	historyFilter := *filter
+	historyFilter.StartTime, historyFilter.EndTime = start, end
+	metadata, err := r.GetDashboardHistoryMetadata(ctx, &historyFilter)
+	if err != nil || metadata.IncludesHistory {
+		return 0, 0, err
+	}
 	usageJoin, usageWhere, usageArgs, next := buildUsageWhere(filter, start, end, 1)
 	errorWhere, errorArgs, _ := buildErrorWhere(filter, start, end, next)
 
@@ -981,7 +1016,7 @@ func buildUsageWhere(filter *service.OpsDashboardFilter, start, end time.Time, s
 	}
 
 	idx := startIndex
-	clauses := make([]string, 0, 4)
+	clauses := []string{"ul.compacted_at IS NULL"}
 	args = make([]any, 0, 4)
 
 	args = append(args, start)
@@ -1062,6 +1097,26 @@ func safeDivideFloat64(numerator float64, denominator float64) float64 {
 
 func roundTo1DP(v float64) float64 {
 	return math.Round(v*10) / 10
+}
+
+func buildUsageStatisticsWhere(filter *service.OpsDashboardFilter, start, end time.Time) (join, where string, args []any) {
+	args = []any{start, end}
+	clauses := []string{"TRUE"}
+	if filter != nil && filter.GroupID != nil && *filter.GroupID > 0 {
+		args = append(args, *filter.GroupID)
+		clauses = append(clauses, fmt.Sprintf("ul.group_id = $%d", len(args)))
+	}
+	if filter != nil && strings.TrimSpace(filter.Platform) != "" {
+		join = "LEFT JOIN groups g ON g.id = ul.group_id LEFT JOIN accounts a ON a.id = ul.account_id"
+		args = append(args, strings.ToLower(strings.TrimSpace(filter.Platform)))
+		clauses = append(clauses, fmt.Sprintf("%s = $%d", usageStatsEffectivePlatformExpr, len(args)))
+	}
+	return join, "WHERE " + strings.Join(clauses, " AND "), args
+}
+
+func (r *opsRepository) GetDashboardHistoryMetadata(ctx context.Context, filter *service.OpsDashboardFilter) (usagestats.HistoryMetadata, error) {
+	join, where, args := buildUsageStatisticsWhere(filter, filter.StartTime, filter.EndTime)
+	return usageHistoryMetadata(ctx, r.db, "usage_statistics_range($1, $2) ul "+join+" "+where, args)
 }
 
 func roundTo4DP(v float64) float64 {

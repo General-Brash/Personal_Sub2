@@ -178,19 +178,46 @@ func (s *openAIFirstOutputStage) prepareWrite(incoming int) error {
 	return nil
 }
 
+type openAIFirstOutputDownstreamWriteError struct {
+	cause error
+}
+
+func (e *openAIFirstOutputDownstreamWriteError) Error() string {
+	return "write first-output stage to downstream: " + e.cause.Error()
+}
+
+func (e *openAIFirstOutputDownstreamWriteError) Unwrap() error { return e.cause }
+
+type openAIFirstOutputCommitWriter struct {
+	dst io.Writer
+}
+
+func (w openAIFirstOutputCommitWriter) Write(p []byte) (int, error) {
+	n, err := w.dst.Write(p)
+	if err == nil && n < len(p) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		return n, &openAIFirstOutputDownstreamWriteError{cause: err}
+	}
+	return n, nil
+}
+
 func (s *openAIFirstOutputStage) CommitTo(dst io.Writer) error {
 	if s == nil || s.closed {
 		return os.ErrClosed
 	}
+	// Wrap only destination writes; spool seek/read failures remain local errors.
+	commitWriter := openAIFirstOutputCommitWriter{dst: dst}
 	if s.tempFile == nil {
-		if _, err := io.Copy(dst, bytes.NewReader(s.memory.Bytes())); err != nil {
+		if _, err := io.Copy(commitWriter, bytes.NewReader(s.memory.Bytes())); err != nil {
 			return err
 		}
 	} else {
 		if _, err := s.tempFile.Seek(0, io.SeekStart); err != nil {
 			return fmt.Errorf("seek first-output spool: %w", err)
 		}
-		if _, err := io.CopyN(dst, s.tempFile, s.size); err != nil {
+		if _, err := io.CopyN(commitWriter, s.tempFile, s.size); err != nil {
 			return err
 		}
 	}

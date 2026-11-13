@@ -62,7 +62,7 @@ func (r *usageLogRepository) getAllGroupUsageSummaryFromRollups(ctx context.Cont
 					WHERE ul.created_at >= $2
 						AND ul.created_at < $1
 				), 0) AS yesterday_cost
-			FROM usage_logs ul
+			FROM usage_statistics ul
 			CROSS JOIN state
 			WHERE ul.created_at >= state.tail_start
 			GROUP BY ul.group_id
@@ -168,7 +168,7 @@ func (r *dashboardAggregationRepository) syncGroupUsageRollupsInTx(ctx context.C
 	}
 
 	var earliest sql.NullTime
-	if err := scanSingleRow(ctx, r.sql, "SELECT MIN(created_at) FROM usage_logs", nil, &earliest); err != nil {
+	if err := scanSingleRow(ctx, r.sql, "SELECT MIN(created_at) FROM usage_statistics", nil, &earliest); err != nil {
 		return fmt.Errorf("读取最早用量记录: %w", err)
 	}
 	retainedFrom := todayStart
@@ -205,7 +205,7 @@ func (r *dashboardAggregationRepository) syncGroupUsageRollupsInTx(ctx context.C
 			group_id,
 			COALESCE(SUM(actual_cost), 0) AS actual_cost,
 			NOW()
-		FROM usage_logs
+		FROM usage_statistics
 		WHERE group_id IS NOT NULL
 			AND created_at >= $1
 			AND created_at < $2

@@ -25,9 +25,10 @@ type dashboardSnapshotV2Stats struct {
 type dashboardSnapshotV2Response struct {
 	GeneratedAt string `json:"generated_at"`
 
-	StartDate   string `json:"start_date"`
-	EndDate     string `json:"end_date"`
-	Granularity string `json:"granularity"`
+	StartDate   string                     `json:"start_date"`
+	EndDate     string                     `json:"end_date"`
+	Granularity string                     `json:"granularity"`
+	Statistics  usagestats.HistoryMetadata `json:"statistics"`
 
 	Stats      *dashboardSnapshotV2Stats        `json:"stats,omitempty"`
 	Trend      []usagestats.TrendDataPoint      `json:"trend,omitempty"`
@@ -155,7 +156,13 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 	includeStats, includeTrend, includeModels, includeGroups, includeUsersTrend bool,
 	usersTrendLimit int,
 ) (*dashboardSnapshotV2Response, error) {
+	statistics, err := h.aggregationService.GetUsageHistoryMetadata(ctx, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	granularity = usagestats.EffectiveGranularity(granularity, statistics.IncludesHistory)
 	resp := &dashboardSnapshotV2Response{
+		Statistics:  statistics,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		StartDate:   startTime.Format("2006-01-02"),
 		EndDate:     endTime.Add(-24 * time.Hour).Format("2006-01-02"),

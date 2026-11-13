@@ -1,6 +1,7 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
+      <UsageHistoryNotice :statistics="historyStatistics" :granularity="granularity" />
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-12">
         <LoadingSpinner />
@@ -356,6 +357,8 @@ import type {
   UserSpendingRankingItem
 } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import UsageHistoryNotice from '@/components/usage/UsageHistoryNotice.vue'
+import type { UsageHistoryMetadata } from '@/types/usageStatistics'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
@@ -400,6 +403,7 @@ const rankingError = ref(false)
 
 // Chart data
 const trendData = ref<TrendDataPoint[]>([])
+const historyStatistics = ref<UsageHistoryMetadata | null>(null)
 const modelStats = ref<ModelStat[]>([])
 const userTrend = ref<UserUsageTrendPoint[]>([])
 const rankingItems = ref<UserSpendingRankingItem[]>([])
@@ -653,6 +657,8 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
       include_users_trend: false
     })
     if (currentSeq !== chartLoadSeq) return
+    historyStatistics.value = response.statistics || null
+    granularity.value = response.granularity === 'hour' ? 'hour' : 'day'
     if (includeStats && response.stats) {
       stats.value = response.stats
     }

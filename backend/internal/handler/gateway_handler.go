@@ -24,6 +24,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -1575,7 +1576,10 @@ func (h *GatewayHandler) Usage(c *gin.Context) {
 
 	// Best-effort: 获取用量统计（按当前 API Key 过滤），失败不影响基础响应
 	usageData := h.buildUsageData(ctx, apiKey.ID)
-	dailyUsage := h.buildAPIKeyDailyUsage(c, subject.UserID, apiKey.ID, days)
+	dailyUsage, err := h.buildAPIKeyDailyUsage(c, subject.UserID, apiKey.ID, days)
+	if err != nil {
+		logger.LegacyPrintf("handler.gateway", "API key daily usage unavailable: %v", err)
+	}
 
 	// Best-effort: 获取模型统计
 	var modelStats any
@@ -1651,20 +1655,29 @@ func (h *GatewayHandler) buildUsageData(ctx context.Context, apiKeyID int64) gin
 	}
 }
 
-func (h *GatewayHandler) buildAPIKeyDailyUsage(c *gin.Context, userID, apiKeyID int64, days int) any {
+type apiKeyDailyUsage struct {
+	Items      []usagestats.APIKeyDailyUsagePoint
+	Statistics usagestats.HistoryMetadata
+}
+
+func (h *GatewayHandler) buildAPIKeyDailyUsage(c *gin.Context, userID, apiKeyID int64, days int) (*apiKeyDailyUsage, error) {
 	if h.usageService == nil {
-		return nil
+		return nil, nil
 	}
 	startTime, endTime := apiKeyDailyUsageRange(days, c.Query("timezone"))
+	statistics, err := h.usageService.GetAPIKeyUsageHistoryMetadata(c.Request.Context(), startTime, endTime, userID, apiKeyID)
+	if err != nil {
+		return nil, err
+	}
 	stats, err := h.usageService.GetAPIKeyDailyUsage(c.Request.Context(), userID, apiKeyID, startTime, endTime)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return stats
+	return &apiKeyDailyUsage{Items: stats, Statistics: statistics}, nil
 }
 
 // usageQuotaLimited 处理 quota_limited 模式的响应
-func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, apiKey *service.APIKey, usageData gin.H, dailyUsage any, modelStats any) {
+func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, apiKey *service.APIKey, usageData gin.H, dailyUsage *apiKeyDailyUsage, modelStats any) {
 	resp := gin.H{
 		"mode":    "quota_limited",
 		"isValid": apiKey.Status == service.StatusAPIKeyActive || apiKey.Status == service.StatusAPIKeyQuotaExhausted || apiKey.Status == service.StatusAPIKeyExpired,
@@ -1747,7 +1760,9 @@ func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, 
 		resp["usage"] = usageData
 	}
 	if dailyUsage != nil {
-		resp["daily_usage"] = dailyUsage
+		resp["daily_usage"] = dailyUsage.Items
+		resp["daily_usage_statistics"] = dailyUsage.Statistics
+		resp["daily_usage_granularity"] = "day"
 	}
 	if modelStats != nil {
 		resp["model_stats"] = modelStats
@@ -1757,7 +1772,7 @@ func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, 
 }
 
 // usageUnrestricted 处理 unrestricted 模式的响应（向后兼容）
-func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, usageData gin.H, dailyUsage any, modelStats any) {
+func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, usageData gin.H, dailyUsage *apiKeyDailyUsage, modelStats any) {
 	// 订阅模式
 	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() {
 		resp := gin.H{
@@ -1788,7 +1803,9 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 			resp["usage"] = usageData
 		}
 		if dailyUsage != nil {
-			resp["daily_usage"] = dailyUsage
+			resp["daily_usage"] = dailyUsage.Items
+			resp["daily_usage_statistics"] = dailyUsage.Statistics
+			resp["daily_usage_granularity"] = "day"
 		}
 		if modelStats != nil {
 			resp["model_stats"] = modelStats
@@ -1816,7 +1833,9 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 		resp["usage"] = usageData
 	}
 	if dailyUsage != nil {
-		resp["daily_usage"] = dailyUsage
+		resp["daily_usage"] = dailyUsage.Items
+		resp["daily_usage_statistics"] = dailyUsage.Statistics
+		resp["daily_usage_granularity"] = "day"
 	}
 	if modelStats != nil {
 		resp["model_stats"] = modelStats

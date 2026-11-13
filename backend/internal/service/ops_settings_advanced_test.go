@@ -46,6 +46,16 @@ func TestUpdateOpsAdvancedSettings_PersistsOpenAITokenStatsVisibility(t *testing
 	if updated.DisplayAlertEvents {
 		t.Fatalf("DisplayAlertEvents = true, want false")
 	}
+	var persisted OpsAdvancedSettings
+	if err := json.Unmarshal([]byte(repo.values[SettingKeyOpsAdvancedSettings]), &persisted); err != nil {
+		t.Fatalf("decode persisted ops settings: %v", err)
+	}
+	if !persisted.DisplayOpenAITokenStats || persisted.DisplayAlertEvents {
+		t.Fatalf("persisted display flags = %+v, want token stats visible and alerts hidden", persisted)
+	}
+	if repo.compareAndSetCalls != 1 {
+		t.Fatalf("CompareAndSetMultiple calls = %d, want 1", repo.compareAndSetCalls)
+	}
 	readsAfterUpdate := repo.getValueCalls + repo.getMultipleCalls
 
 	reloaded, err := svc.GetOpsAdvancedSettings(context.Background())

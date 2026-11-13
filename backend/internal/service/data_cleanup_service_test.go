@@ -106,15 +106,17 @@ func TestDataCleanupExecuteUsesSnapshotBoundAndIndependentAudit(t *testing.T) {
 	mock.ExpectExec("DELETE FROM ops_error_logs AS target").
 		WithArgs(start, end, int64(10), int64(2)).
 		WillReturnResult(sqlmock.NewResult(0, 2))
-	mock.ExpectCommit()
-	mock.ExpectExec("UPDATE data_cleanup_audits").
-		WithArgs(int64(3), "succeeded", int64(2), "").
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE data_cleanup_audits SET status='succeeded',deleted_rows=$2,finished_at=NOW() WHERE id=$1")).
+		WithArgs(int64(3), int64(2)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
 	result, err := svc.Execute(context.Background(), filter, 2, "DELETE ops_error_logs 2", token, DataCleanupOperator{
 		UserID: 7, Email: "admin@example.com", AuthMethod: "jwt",
 	})
 	require.NoError(t, err)
+	require.Equal(t, int64(3), result.AuditID)
+	require.Equal(t, "succeeded", result.Status)
 	require.Equal(t, int64(2), result.DeletedRows)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

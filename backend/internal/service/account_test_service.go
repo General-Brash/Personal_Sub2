@@ -1680,6 +1680,7 @@ func (s *AccountTestService) testGrokRealtime(c *gin.Context, ctx context.Contex
 	}
 
 	dialCtx, cancel := context.WithTimeout(ctx, grokRealtimeProbeTimeout)
+	dialCtx = withAccountProxyTraffic(dialCtx, account, s.grokTestProxyURL(account))
 	defer cancel()
 
 	conn, status, _, dialErr := dialer.Dial(dialCtx, wsURL, headers, s.grokTestProxyURL(account))

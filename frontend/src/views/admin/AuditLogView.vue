@@ -73,10 +73,6 @@
               <button type="button" class="btn btn-secondary" :disabled="loading" @click="resetFilters">
                 {{ t('common.reset') }}
               </button>
-              <button type="button" class="btn btn-danger" @click="openClearDialog">
-                <Icon name="trash" size="sm" class="mr-1.5" />
-                {{ t('admin.audit.clearAll') }}
-              </button>
             </div>
           </div>
         </div>
@@ -301,53 +297,6 @@
       </template>
     </BaseDialog>
 
-    <!-- Clear confirmation → step-up TOTP -->
-    <ConfirmDialog
-      :show="clearConfirmVisible"
-      :title="t('admin.audit.clearConfirm.title')"
-      :message="t('admin.audit.clearConfirm.message')"
-      :confirm-text="t('admin.audit.clearAll')"
-      :cancel-text="t('common.cancel')"
-      danger
-      @confirm="onClearConfirmed"
-      @cancel="clearConfirmVisible = false"
-    />
-
-    <!-- TOTP prompt for the clear operation -->
-    <BaseDialog
-      :show="clearTotpVisible"
-      :title="t('admin.audit.clearConfirm.totpTitle')"
-      width="narrow"
-      :z-index="60"
-      @close="cancelClearTotp"
-    >
-      <div class="py-2">
-        <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('admin.audit.clearConfirm.totpHint') }}</p>
-        <input
-          v-model.trim="clearTotpCode"
-          type="text"
-          inputmode="numeric"
-          maxlength="6"
-          autocomplete="one-time-code"
-          class="input mt-4 text-center text-lg tracking-[0.5em]"
-          placeholder="••••••"
-          @keyup.enter="submitClear"
-        />
-      </div>
-      <template #footer>
-        <button type="button" class="btn btn-secondary" :disabled="clearing" @click="cancelClearTotp">
-          {{ t('common.cancel') }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-danger"
-          :disabled="clearing || clearTotpCode.length !== 6"
-          @click="submitClear"
-        >
-          {{ clearing ? t('common.loading') : t('admin.audit.clearAll') }}
-        </button>
-      </template>
-    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -355,7 +304,6 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI, type AuditLog } from '@/api/admin'
-import { totpAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
@@ -363,7 +311,6 @@ import type { Column } from '@/components/common/types'
 import Pagination from '@/components/common/Pagination.vue'
 import Select from '@/components/common/Select.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 
@@ -600,60 +547,6 @@ function prettyBody(body: string): string {
     return JSON.stringify(JSON.parse(body), null, 2)
   } catch {
     return body
-  }
-}
-
-// Clear-all flow: confirm → TOTP → clear
-const clearConfirmVisible = ref(false)
-const clearTotpVisible = ref(false)
-const clearTotpCode = ref('')
-const clearing = ref(false)
-const checkingTotpStatus = ref(false)
-
-// 与其他敏感操作一致：未启用 2FA 时直接提示去个人资料启用 TOTP，
-// 而不是弹出一个无法完成的验证码输入框（后端会以 TOTP_NOT_SETUP 拒绝）。
-async function openClearDialog() {
-  if (checkingTotpStatus.value) return
-  checkingTotpStatus.value = true
-  try {
-    const status = await totpAPI.getStatus()
-    if (!status.enabled) {
-      appStore.showError(t('stepUp.notEnabled'))
-      return
-    }
-  } catch (err: any) {
-    appStore.showError(err?.message || t('admin.audit.loadFailed'))
-    return
-  } finally {
-    checkingTotpStatus.value = false
-  }
-  clearConfirmVisible.value = true
-}
-
-function onClearConfirmed() {
-  clearConfirmVisible.value = false
-  clearTotpCode.value = ''
-  clearTotpVisible.value = true
-}
-
-function cancelClearTotp() {
-  if (clearing.value) return
-  clearTotpVisible.value = false
-}
-
-async function submitClear() {
-  if (clearTotpCode.value.length !== 6) return
-  clearing.value = true
-  try {
-    const res = await adminAPI.audit.clear(clearTotpCode.value)
-    clearTotpVisible.value = false
-    appStore.showSuccess(t('admin.audit.clearConfirm.success', { count: res.deleted }))
-    search()
-  } catch (err: any) {
-    appStore.showError(err?.message || t('admin.audit.clearConfirm.failed'))
-    clearTotpCode.value = ''
-  } finally {
-    clearing.value = false
   }
 }
 

@@ -225,7 +225,7 @@ func TestDashboardAggregationService_CleanupRetentionFailure_DoesNotRecord(t *te
 	svc.maybeCleanupRetention(context.Background(), time.Now().UTC())
 
 	require.Nil(t, svc.lastRetentionCleanup.Load())
-	require.Equal(t, 1, repo.cleanupUsageCalls)
+	require.Zero(t, repo.cleanupUsageCalls, "dashboard cache cleanup must not delete raw usage or billing history")
 	require.Equal(t, 1, repo.cleanupDedupCalls)
 }
 

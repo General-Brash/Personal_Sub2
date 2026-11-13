@@ -118,6 +118,7 @@ export default {
       azure_resource_mismatch: 'Azure400 resource mismatch',
       azure400_resource_mismatch: 'Azure400 resource mismatch',
       rate_limit: 'Empty response: rate limit',
+      failed_error_null: 'Empty response: failed with null error',
       zero_usage_empty: 'Empty response: explicit zero usage',
       no_output_terminal_missing: 'Empty response: EOF / missing terminal',
       unknown: 'Unknown'
@@ -140,6 +141,7 @@ export default {
       positive_usage_observed: 'Positive usage already observed',
       semantic_output_or_positive_usage: 'Output or positive usage observed',
       response_output_or_canceled: 'Response output or client cancellation',
+      downstream_write_error: 'Downstream write failed',
       response_committed: 'Response already committed',
       safety_policy: 'Blocked by safety policy',
       admin_passthrough: 'Administrator passthrough rule',

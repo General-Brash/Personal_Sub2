@@ -7,6 +7,7 @@ import type { OpsLatencyHistogramResponse } from '@/api/admin/ops'
 import type { ChartState } from '../types'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { opsChartHistoryMessages } from '../opsChartHistoryMessages'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -16,7 +17,8 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const { t } = useI18n()
+const { t } = useI18n({ useScope: 'global' })
+const { t: historyT } = useI18n({ useScope: 'local', messages: opsChartHistoryMessages })
 
 const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
 const colors = computed(() => ({
@@ -25,7 +27,10 @@ const colors = computed(() => ({
   text: isDarkMode.value ? '#9ca3af' : '#6b7280'
 }))
 
-const hasData = computed(() => (props.latencyData?.total_requests ?? 0) > 0)
+const unavailable = computed(() => props.latencyData?.available === false ||
+  props.latencyData?.includes_history === true ||
+  props.latencyData?.latency_statistics === 'unavailable_after_compaction')
+const hasData = computed(() => !unavailable.value && (props.latencyData?.total_requests ?? 0) > 0)
 
 const state = computed<ChartState>(() => {
   if (hasData.value) return 'ready'
@@ -94,6 +99,11 @@ const options = computed(() => {
       <Bar v-if="state === 'ready' && chartData" :data="chartData" :options="options" />
       <div v-else class="flex h-full items-center justify-center">
         <div v-if="state === 'loading'" class="animate-pulse text-sm text-gray-400">{{ t('common.loading') }}</div>
+        <EmptyState
+          v-else-if="unavailable"
+          :title="t('admin.ops.accountAvailability.unavailable')"
+          :description="historyT('latencyUnavailable')"
+        />
         <EmptyState v-else :title="t('common.noData')" :description="t('admin.ops.charts.emptyRequest')" />
       </div>
     </div>

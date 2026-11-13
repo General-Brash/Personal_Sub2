@@ -461,7 +461,13 @@ func (h *UsageHandler) DashboardTrend(c *gin.Context) {
 		return
 	}
 	granularity := c.DefaultQuery("granularity", "day")
+	statistics, err := h.usageService.GetUsageHistoryMetadata(c.Request.Context(), parsed.StartTime, parsed.EndTime, parsed.Filters.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
+	granularity = usagestats.EffectiveGranularity(granularity, statistics.IncludesHistory)
 	trend, err := h.usageService.GetUsageTrendWithFilters(c.Request.Context(), parsed.StartTime, parsed.EndTime, granularity, parsed.Filters)
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -473,6 +479,7 @@ func (h *UsageHandler) DashboardTrend(c *gin.Context) {
 		"start_date":  parsed.StartTime.Format("2006-01-02"),
 		"end_date":    parsed.EndTime.Add(-24 * time.Hour).Format("2006-01-02"),
 		"granularity": granularity,
+		"statistics":  statistics,
 	})
 }
 
@@ -496,7 +503,13 @@ func (h *UsageHandler) DashboardModels(c *gin.Context) {
 		return
 	}
 
+	statistics, err := h.usageService.GetUsageHistoryMetadata(c.Request.Context(), parsed.StartTime, parsed.EndTime, parsed.Filters.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	response.Success(c, gin.H{
+		"statistics": statistics,
 		"models":     userModelStatsFromUsageStats(stats),
 		"start_date": parsed.StartTime.Format("2006-01-02"),
 		"end_date":   parsed.EndTime.Add(-24 * time.Hour).Format("2006-01-02"),
@@ -511,10 +524,13 @@ func (h *UsageHandler) DashboardSnapshotV2(c *gin.Context) {
 		return
 	}
 
-	granularity := strings.TrimSpace(c.DefaultQuery("granularity", "day"))
-	if granularity != "hour" {
-		granularity = "day"
+	granularity := c.DefaultQuery("granularity", "day")
+	statistics, err := h.usageService.GetUsageHistoryMetadata(c.Request.Context(), parsed.StartTime, parsed.EndTime, parsed.Filters.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
 	}
+	granularity = usagestats.EffectiveGranularity(granularity, statistics.IncludesHistory)
 	includeTrend, ok := parseBoolQueryWithDefault(c, "include_trend", true)
 	if !ok {
 		return
@@ -530,6 +546,7 @@ func (h *UsageHandler) DashboardSnapshotV2(c *gin.Context) {
 
 	resp := gin.H{
 		"generated_at": time.Now().UTC().Format(time.RFC3339),
+		"statistics":   statistics,
 		"start_date":   parsed.StartTime.Format("2006-01-02"),
 		"end_date":     parsed.EndTime.Add(-24 * time.Hour).Format("2006-01-02"),
 		"granularity":  granularity,
@@ -698,6 +715,11 @@ func (h *UsageHandler) GetMyAPIKeyDailyUsage(c *gin.Context) {
 
 	userTZ := c.Query("timezone")
 	startTime, endTime := apiKeyDailyUsageRange(days, userTZ)
+	statistics, err := h.usageService.GetAPIKeyUsageHistoryMetadata(c.Request.Context(), startTime, endTime, subject.UserID, apiKeyID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	items, err := h.usageService.GetAPIKeyDailyUsage(c.Request.Context(), subject.UserID, apiKeyID, startTime, endTime)
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -705,9 +727,11 @@ func (h *UsageHandler) GetMyAPIKeyDailyUsage(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"items":      items,
-		"days":       days,
-		"start_date": startTime.Format("2006-01-02"),
-		"end_date":   endTime.AddDate(0, 0, -1).Format("2006-01-02"),
+		"items":       items,
+		"days":        days,
+		"start_date":  startTime.Format("2006-01-02"),
+		"end_date":    endTime.AddDate(0, 0, -1).Format("2006-01-02"),
+		"statistics":  statistics,
+		"granularity": "day",
 	})
 }

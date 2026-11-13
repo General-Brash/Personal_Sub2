@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './client'
+import type { UsageHistoryMetadata } from '@/types/usageStatistics'
 import type {
   UsageLog,
   UsageQueryParams,
@@ -70,6 +71,7 @@ export interface TrendParams {
 }
 
 export interface TrendResponse {
+  statistics?: UsageHistoryMetadata
   trend: TrendDataPoint[]
   start_date: string
   end_date: string
@@ -77,6 +79,7 @@ export interface TrendResponse {
 }
 
 export interface ModelStatsResponse {
+  statistics?: UsageHistoryMetadata
   models: ModelStat[]
   start_date: string
   end_date: string
@@ -95,6 +98,8 @@ export interface ApiKeyDailyUsagePoint {
 }
 
 export interface ApiKeyDailyUsageResponse {
+  statistics?: UsageHistoryMetadata
+  granularity?: 'day'
   items: ApiKeyDailyUsagePoint[]
   days: number
   start_date: string
@@ -108,6 +113,7 @@ export interface UsageDashboardSnapshotV2Params extends TrendParams {
 }
 
 export interface UsageDashboardSnapshotV2Response {
+  statistics?: UsageHistoryMetadata
   generated_at: string
   start_date: string
   end_date: string

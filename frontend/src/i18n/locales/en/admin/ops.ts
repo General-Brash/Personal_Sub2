@@ -296,6 +296,7 @@ export default {
           account_auth: 'Account Auth',
           routing: 'Routing',
           upstream: 'Upstream',
+          downstream: 'Downstream write',
           network: 'Network',
           internal: 'Internal'
         },

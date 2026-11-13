@@ -36,8 +36,9 @@ type UsageCleanupService struct {
 	workerCtx    context.Context
 	workerCancel context.CancelFunc
 
-	completionMu   sync.RWMutex
-	completionHook func(context.Context, *UsageCleanupTask, string, error)
+	completionMu       sync.RWMutex
+	completionHook     func(context.Context, *UsageCleanupTask, string, error)
+	retentionScheduler func(context.Context, time.Time) (int64, error)
 }
 
 func NewUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboard *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
@@ -152,32 +153,25 @@ func (s *UsageCleanupService) ListTasks(ctx context.Context, params pagination.P
 	return s.repo.ListTasks(ctx, params)
 }
 
-// RunRetention removes usage rows older than cutoff through the same bounded
-// repository path used by cleanup tasks. Scheduling and leader election are
-// owned by OpsCleanupService, so this method does not start another worker.
+func (s *UsageCleanupService) setRetentionScheduler(schedule func(context.Context, time.Time) (int64, error)) {
+	s.completionMu.Lock()
+	s.retentionScheduler = schedule
+	s.completionMu.Unlock()
+}
+
+// RunRetention only schedules durable compaction; the unified worker owns all
+// batches, recovery and cancellation. No rows are deleted by the scheduler.
 func (s *UsageCleanupService) RunRetention(ctx context.Context, cutoff time.Time) (int64, error) {
 	if s == nil || s.repo == nil {
 		return 0, fmt.Errorf("cleanup service not ready")
 	}
-	filters := UsageCleanupFilters{
-		StartTime: time.Unix(0, 0).UTC(),
-		EndTime:   cutoff.UTC(),
+	s.completionMu.RLock()
+	schedule := s.retentionScheduler
+	s.completionMu.RUnlock()
+	if schedule == nil {
+		return 0, errors.New("durable usage retention scheduler not initialized")
 	}
-	var total int64
-	for {
-		deleted, err := s.repo.DeleteUsageLogsBatch(ctx, filters, s.batchSize())
-		if err != nil {
-			return total, err
-		}
-		total += deleted
-		if deleted < int64(s.batchSize()) {
-			break
-		}
-	}
-	if total > 0 && s.dashboard != nil {
-		_ = s.dashboard.TriggerRecomputeRange(filters.StartTime, filters.EndTime)
-	}
-	return total, nil
+	return schedule(ctx, cutoff)
 }
 
 func (s *UsageCleanupService) CreateTask(ctx context.Context, filters UsageCleanupFilters, createdBy int64) (*UsageCleanupTask, error) {
@@ -296,7 +290,7 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 			}
 			batchFilters.DataCleanupSnapshotChunk = int(deletedTotal / int64(batchSize))
 		}
-		deleted, err := s.repo.DeleteUsageLogsBatch(ctx, batchFilters, deleteLimit)
+		result, err := s.compactBatch(ctx, batchFilters, deleteLimit)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				// 任务被中断（例如服务停止/超时），保持 running 状态，后续通过 stale reclaim 续跑。
@@ -308,6 +302,7 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 			s.notifyDataCleanupCompletion(context.Background(), task, UsageCleanupStatusFailed, err)
 			return
 		}
+		deleted := result.ProcessedRows
 		deletedTotal += deleted
 		if deleted > 0 {
 			updateCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

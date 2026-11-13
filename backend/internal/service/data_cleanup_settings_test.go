@@ -32,6 +32,17 @@ func TestValidateOpsAdvancedSettingsRejectsInvalidCleanupCron(t *testing.T) {
 	require.ErrorContains(t, validateOpsAdvancedSettings(cfg), "cleanup_schedule")
 }
 
+func dataCleanupSettingsAdminContext(t *testing.T) context.Context {
+	t.Helper()
+	auth := NewAdminPermissionService(&adminPermissionRepoStub{record: &AdminPrincipalRecord{
+		UserID: 1, Role: RoleSuperAdmin, Status: StatusActive,
+	}}, AdminPermissionModeEnforce)
+	ctx := ContextWithAdminAuthorization(context.Background(), auth)
+	principal, err := auth.ResolvePrincipal(ctx, 1)
+	require.NoError(t, err)
+	return ContextWithAdminPrincipal(ctx, principal)
+}
+
 func TestUpdateDataCleanupSettingsRollsBackBothSettingsWhenReloadFails(t *testing.T) {
 	repo := newRuntimeSettingRepoStub()
 	oldAdvanced := defaultOpsAdvancedSettings()
@@ -45,13 +56,18 @@ func TestUpdateDataCleanupSettingsRollsBackBothSettingsWhenReloadFails(t *testin
 	svc := &OpsService{settingRepo: repo, cleanupReloader: reloader}
 	newRetention := oldAdvanced.DataRetention
 	newRetention.CleanupSchedule = "5 3 * * *"
-	newRetention.Targets["ops_error_logs"] = OpsRetentionPolicy{Enabled: true, RetentionDays: 7}
+	newRetention.Targets = map[string]OpsRetentionPolicy{
+		"ops_error_logs": {Enabled: true, RetentionDays: 7},
+	}
 
-	_, err = svc.UpdateDataCleanupSettings(context.Background(), newRetention, 30)
+	_, err = svc.UpdateDataCleanupSettings(dataCleanupSettingsAdminContext(t), newRetention, 30)
 	require.ErrorContains(t, err, "reload cleanup schedule")
 	require.Equal(t, string(oldRaw), repo.values[SettingKeyOpsAdvancedSettings])
 	require.Equal(t, "180", repo.values[SettingKeyAuditLogRetentionDays])
+	require.Equal(t, 2, repo.compareAndSetCalls)
+	require.Equal(t, 4, repo.setCalls)
 	require.Equal(t, 2, reloader.calls)
+	require.Equal(t, oldAdvanced.DataRetention, svc.OpsAdvancedSettingsSnapshot().DataRetention)
 }
 
 func TestUpdateDataCleanupSettingsValidatesBeforeWriting(t *testing.T) {
@@ -64,11 +80,15 @@ func TestUpdateDataCleanupSettingsValidatesBeforeWriting(t *testing.T) {
 
 	invalid := advanced.DataRetention
 	invalid.CleanupSchedule = "bad cron"
-	svc := &OpsService{settingRepo: repo}
-	_, err = svc.UpdateDataCleanupSettings(context.Background(), invalid, 30)
+	reloader := &cleanupReloadSequence{}
+	svc := &OpsService{settingRepo: repo, cleanupReloader: reloader}
+	_, err = svc.UpdateDataCleanupSettings(dataCleanupSettingsAdminContext(t), invalid, 30)
 	require.ErrorContains(t, err, "cleanup_schedule")
 	require.Equal(t, string(oldRaw), repo.values[SettingKeyOpsAdvancedSettings])
 	require.Equal(t, "180", repo.values[SettingKeyAuditLogRetentionDays])
+	require.Zero(t, repo.compareAndSetCalls)
+	require.Zero(t, repo.setCalls)
+	require.Zero(t, reloader.calls)
 }
 
 func TestApplyScheduleLockedKeepsPreviousCronOnInvalidStoredSchedule(t *testing.T) {

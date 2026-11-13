@@ -161,16 +161,8 @@ describe('PromptAuditView', () => {
     await wrapper.get('[data-test="tab-events"]').trigger('click')
     await wrapper.get('[data-test="preview"]').trigger('click')
     await flushPromises()
-    expect(wrapper.find('[data-test="filter-delete-dialog"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="filter-delete-dialog"]').exists()).toBe(false)
     expect(mocks.previewDelete).not.toHaveBeenCalled()
-    await wrapper.get('[data-test="dialog-preview"]').trigger('click')
-    await flushPromises()
-    expect(mocks.previewDelete).toHaveBeenCalledOnce()
-    expect(wrapper.get('[data-test="dialog-preview-state"]').text()).toBe('2')
-    await wrapper.get('[data-test="change-filter"]').trigger('click')
-    await flushPromises()
-    expect(wrapper.find('[data-test="filter-delete-dialog"]').exists()).toBe(true)
-    expect(wrapper.get('[data-test="dialog-preview-state"]').text()).toBe('none')
   })
 
   it('uses native labeled switches and a responsive fixed save surface', async () => {
@@ -184,58 +176,25 @@ describe('PromptAuditView', () => {
     expect(wrapper.html()).toContain('flex-wrap')
   })
 
-  it('executes single, selected-batch, and preview-confirmed filter deletion flows', async () => {
+  it('does not execute deletion from the old log page', async () => {
     const wrapper = mountView()
     await flushPromises()
-
     await wrapper.get('[data-test="delete-one"]').trigger('click')
-    await wrapper.get('[data-test="confirm-action"]').trigger('click')
-    await flushPromises()
-    expect(mocks.deleteEvent).toHaveBeenCalledWith(5)
-
     await wrapper.get('[data-test="select-batch"]').trigger('click')
     await wrapper.get('[data-test="delete-batch"]').trigger('click')
-    await wrapper.get('[data-test="confirm-action"]').trigger('click')
     await flushPromises()
-    expect(mocks.batchDeleteEvents).toHaveBeenCalledWith([5, 6])
-
-    await wrapper.get('[data-test="preview"]').trigger('click')
-    await flushPromises()
-    await wrapper.get('[data-test="dialog-preview"]').trigger('click')
-    await flushPromises()
-    expect(mocks.previewDelete).toHaveBeenCalledWith(expect.objectContaining({ start_at: '2026-07-15T00:00', end_at: '2026-07-16T00:00' }))
-    await wrapper.get('[data-test="dialog-confirm"]').trigger('click')
-    await flushPromises()
-    expect(mocks.deleteEventsByFilter).toHaveBeenCalledWith(expect.objectContaining({
-      start_at: '2026-07-15T00:00',
-      end_at: '2026-07-16T00:00',
-    }), expect.objectContaining({
-      snapshot_max_id: 10,
-      confirmation_token: 'opaque-confirmation',
-    }))
-    expect(wrapper.find('[data-test="filter-delete-dialog"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="confirm-action"]').exists()).toBe(false)
+    expect(mocks.deleteEvent).not.toHaveBeenCalled()
+    expect(mocks.batchDeleteEvents).not.toHaveBeenCalled()
   })
 
-  it('mints the confirmation token on the fly for one-click filter deletion without a manual preview', async () => {
+  it('does not mint a cleanup token from the old page', async () => {
     const wrapper = mountView()
     await flushPromises()
-
     await wrapper.get('[data-test="preview"]').trigger('click')
     await flushPromises()
-    expect(wrapper.find('[data-test="filter-delete-dialog"]').exists()).toBe(true)
-    expect(mocks.previewDelete).not.toHaveBeenCalled()
-
-    await wrapper.get('[data-test="dialog-confirm"]').trigger('click')
-    await flushPromises()
-    expect(mocks.previewDelete).toHaveBeenCalledOnce()
-    expect(mocks.previewDelete).toHaveBeenCalledWith(expect.objectContaining({ start_at: '2026-07-15T00:00', end_at: '2026-07-16T00:00' }))
-    expect(mocks.deleteEventsByFilter).toHaveBeenCalledWith(expect.objectContaining({
-      start_at: '2026-07-15T00:00',
-      end_at: '2026-07-16T00:00',
-    }), expect.objectContaining({
-      snapshot_max_id: 10,
-      confirmation_token: 'opaque-confirmation',
-    }))
     expect(wrapper.find('[data-test="filter-delete-dialog"]').exists()).toBe(false)
+    expect(mocks.previewDelete).not.toHaveBeenCalled()
+    expect(mocks.deleteEventsByFilter).not.toHaveBeenCalled()
   })
 })

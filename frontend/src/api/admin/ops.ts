@@ -6,6 +6,7 @@
 
 import { apiClient, buildGatewayUrl } from '../client'
 import type { PaginatedResponse } from '@/types'
+import type { UsageHistoryMetadata } from '@/types/usageStatistics'
 
 export type OpsQueryMode = 'auto' | 'raw' | 'preagg'
 
@@ -29,7 +30,9 @@ export type OpsUpstreamErrorEvent = {
   detail?: string
 }
 
-export interface OpsDashboardOverview {
+export interface OpsDashboardOverview extends UsageHistoryMetadata {
+  latency_statistics?: string
+  rate_statistics?: string
   start_time: string
   end_time: string
   platform: string
@@ -57,13 +60,13 @@ export interface OpsDashboardOverview {
   upstream_529_count: number
 
   qps: {
-    current: number
-    peak: number
+    current: number | null
+    peak: number | null
     avg: number
   }
   tps: {
-    current: number
-    peak: number
+    current: number | null
+    peak: number | null
     avg: number
   }
 
@@ -102,7 +105,11 @@ export interface OpsThroughputGroupBreakdownItem {
   token_consumed: number
 }
 
-export interface OpsThroughputTrendResponse {
+export interface OpsThroughputTrendResponse extends UsageHistoryMetadata {
+  bucket_timezone?: string
+  rate_statistics?: 'raw_requests' | 'approximate_daily_average'
+  error_statistics?: 'retained_error_logs_only'
+  switch_statistics?: 'retained_error_logs_only'
   bucket: string
   points: OpsThroughputTrendPoint[]
   by_platform?: OpsThroughputPlatformBreakdownItem[]
@@ -170,13 +177,15 @@ export interface OpsLatencyHistogramBucket {
   count: number
 }
 
-export interface OpsLatencyHistogramResponse {
+export interface OpsLatencyHistogramResponse extends UsageHistoryMetadata {
+  available?: boolean
+  latency_statistics?: 'raw_requests' | 'unavailable_after_compaction'
   start_time: string
   end_time: string
   platform: string
   group_id?: number | null
 
-  total_requests: number
+  total_requests: number | null
   buckets: OpsLatencyHistogramBucket[]
 }
 
@@ -830,6 +839,20 @@ export interface DataCleanupFilter {
   mode: DataCleanupMode
   start_time?: string
   end_time?: string
+  month?: string
+  start_date?: string
+  end_date?: string
+  prompt_filter?: {
+    decision?: string
+    risk_level?: string
+    endpoint?: string
+    group_id?: number
+    user_id?: number
+    api_key_id?: number
+    request_id?: string
+    prompt_hash?: string
+    keyword?: string
+  }
 }
 
 export interface DataCleanupPreview {
@@ -842,6 +865,7 @@ export interface DataCleanupPreview {
   max_range_days: number
   deletion_warning?: string
   preview_token: string
+  estimated_bytes?: number
 }
 
 export interface DataCleanupExecuteRequest extends DataCleanupFilter {

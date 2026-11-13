@@ -8,6 +8,8 @@ import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
 import finance from './finance'
+import dataCleanup from './dataCleanup'
+import usageStatistics from './usageStatistics'
 
 export default {
   ...landing,
@@ -20,4 +22,6 @@ export default {
   admin,
   ...misc,
   ...finance,
+  ...dataCleanup,
+  ...usageStatistics,
 }

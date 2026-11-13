@@ -11,14 +11,15 @@ import (
 )
 
 type runtimeSettingRepoStub struct {
-	values           map[string]string
-	deleted          map[string]bool
-	setCalls         int
-	getValueCalls    int
-	getMultipleCalls int
-	getValueFn       func(key string) (string, error)
-	setFn            func(key, value string) error
-	deleteFn         func(key string) error
+	values             map[string]string
+	deleted            map[string]bool
+	setCalls           int
+	compareAndSetCalls int
+	getValueCalls      int
+	getMultipleCalls   int
+	getValueFn         func(key string) (string, error)
+	setFn              func(key, value string) error
+	deleteFn           func(key string) error
 }
 
 func newRuntimeSettingRepoStub() *runtimeSettingRepoStub {
@@ -75,6 +76,35 @@ func (s *runtimeSettingRepoStub) SetMultiple(_ context.Context, settings map[str
 		s.values[key] = value
 	}
 	return nil
+}
+
+func (s *runtimeSettingRepoStub) CompareAndSetMultiple(ctx context.Context, expected, updates map[string]string) (bool, error) {
+	s.compareAndSetCalls++
+	if ctx != nil && ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	// Missing keys compare as empty strings, matching the repository's initialization.
+	for key, value := range expected {
+		if s.values[key] != value {
+			return false, nil
+		}
+	}
+	// Check every injected write error before publishing any part of the bundle.
+	if s.setFn != nil {
+		for key, value := range updates {
+			if err := s.setFn(key, value); err != nil {
+				return false, err
+			}
+		}
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	for key, value := range updates {
+		s.values[key] = value
+		s.setCalls++
+	}
+	return true, nil
 }
 
 func (s *runtimeSettingRepoStub) GetAll(_ context.Context) (map[string]string, error) {

@@ -118,6 +118,7 @@ export default {
       azure_resource_mismatch: 'Azure400 资源不匹配',
       azure400_resource_mismatch: 'Azure400 资源不匹配',
       rate_limit: '空回：限速',
+      failed_error_null: '空回：failed 且 error 为空',
       zero_usage_empty: '空回：明确全零用量',
       no_output_terminal_missing: '空回：EOF / 缺终止',
       unknown: '未知'
@@ -140,6 +141,7 @@ export default {
       positive_usage_observed: '已观察到非零用量',
       semantic_output_or_positive_usage: '已有输出或非零用量',
       response_output_or_canceled: '响应已输出或客户端取消',
+      downstream_write_error: '下游写入失败',
       response_committed: '响应已提交',
       safety_policy: '安全策略阻断',
       admin_passthrough: '命中管理员错误透传规则',

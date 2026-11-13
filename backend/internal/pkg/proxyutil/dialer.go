@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxytraffic"
 	"golang.org/x/net/proxy"
 )
 
@@ -61,10 +62,21 @@ func ConfigureTransportProxy(transport *http.Transport, proxyURL *url.URL) error
 	switch scheme {
 	case "http", "https":
 		transport.Proxy = http.ProxyURL(proxyURL)
+		//nolint:staticcheck // Legacy dial hooks affect net/http's automatic HTTP/2 selection.
+		if transport.Protocols == nil && transport.TLSNextProto == nil && !transport.ForceAttemptHTTP2 &&
+			transport.DialContext == nil && transport.Dial == nil && transport.TLSClientConfig == nil &&
+			transport.DialTLSContext == nil && transport.DialTLS == nil {
+			protocols := new(http.Protocols)
+			protocols.SetHTTP1(true)
+			protocols.SetHTTP2(true)
+			transport.Protocols = protocols
+		}
+		transport.DialContext = proxytraffic.WrapDialContext(transport.DialContext, proxyURL.String())
 		return nil
 
 	case "socks5", "socks5h":
-		dialer, err := proxy.FromURL(proxyURL, socks5ForwardDialer)
+		forward := proxytraffic.WrapDialer(socks5ForwardDialer, proxyURL.String())
+		dialer, err := proxy.FromURL(proxyURL, forward)
 		if err != nil {
 			return fmt.Errorf("create socks5 dialer: %w", err)
 		}

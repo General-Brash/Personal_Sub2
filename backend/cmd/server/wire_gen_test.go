@@ -70,8 +70,10 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // cnProviderBalanceCheck
 		codexVersionSyncSvc,
 		proxyExpirySvc,
+		nil, // proxyTraffic
 		subscriptionExpirySvc,
 		&service.UsageCleanupService{},
+		nil, // dataCleanup
 		idempotencyCleanupSvc,
 		&service.BatchImageCleanupService{},
 		nil, // batchImageWorker

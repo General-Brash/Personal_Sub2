@@ -42,6 +42,7 @@
       </div>
 
       <template v-else-if="stats">
+        <UsageHistoryNotice :statistics="stats.statistics" :granularity="stats.granularity" />
         <!-- Row 1: Main Stats Cards -->
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <!-- 30-Day Total Cost -->
@@ -500,6 +501,7 @@ import {
 import { Line } from 'vue-chartjs'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import UsageHistoryNotice from '@/components/usage/UsageHistoryNotice.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import EndpointDistributionChart from '@/components/charts/EndpointDistributionChart.vue'
 import Icon from '@/components/icons/Icon.vue'

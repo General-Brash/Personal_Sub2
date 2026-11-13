@@ -21,6 +21,22 @@ func (r *opsRepository) GetLatencyHistogram(ctx context.Context, filter *service
 
 	start := filter.StartTime.UTC()
 	end := filter.EndTime.UTC()
+	history, err := r.GetDashboardHistoryMetadata(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if history.IncludesHistory {
+		return &service.OpsLatencyHistogramResponse{
+			HistoryMetadata:   history,
+			Available:         false,
+			LatencyStatistics: "unavailable_after_compaction",
+			StartTime:         start,
+			EndTime:           end,
+			Platform:          strings.TrimSpace(filter.Platform),
+			GroupID:           filter.GroupID,
+			Buckets:           make([]*service.OpsLatencyHistogramBucket, 0),
+		}, nil
+	}
 
 	join, where, args, _ := buildUsageWhere(filter, start, end, 1)
 	rangeExpr := latencyHistogramRangeCaseExpr("ul.duration_ms")
@@ -69,11 +85,14 @@ ORDER BY 3 ASC`
 	}
 
 	return &service.OpsLatencyHistogramResponse{
-		StartTime:     start,
-		EndTime:       end,
-		Platform:      strings.TrimSpace(filter.Platform),
-		GroupID:       filter.GroupID,
-		TotalRequests: total,
-		Buckets:       buckets,
+		HistoryMetadata:   history,
+		Available:         true,
+		LatencyStatistics: "raw_requests",
+		StartTime:         start,
+		EndTime:           end,
+		Platform:          strings.TrimSpace(filter.Platform),
+		GroupID:           filter.GroupID,
+		TotalRequests:     &total,
+		Buckets:           buckets,
 	}, nil
 }

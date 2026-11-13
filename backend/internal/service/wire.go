@@ -18,6 +18,12 @@ import (
 	"go.uber.org/zap"
 )
 
+func ProvideProxyTrafficService(repo ProxyTrafficRepository, proxyRepo ProxyRepository) *ProxyTrafficService {
+	svc := NewProxyTrafficService(repo, proxyRepo)
+	svc.Start()
+	return svc
+}
+
 // ProvideTemporaryCreditService wires the expiring-credit ledger service.
 func ProvideTemporaryCreditService(repo TemporaryCreditRepository, availableCreditInvalidator AvailableCreditInvalidator, settings *SettingService) *TemporaryCreditService {
 	svc := NewTemporaryCreditServiceWithAvailableCreditInvalidator(repo, availableCreditInvalidator)
@@ -588,8 +594,16 @@ func ProvideOpsCleanupService(
 	return svc
 }
 
-func ProvideDataCleanupService(db *sql.DB, settingService *SettingService, usageCleanup *UsageCleanupService) *DataCleanupService {
-	return NewDataCleanupService(db, settingService, usageCleanup)
+func ProvideDataCleanupService(db *sql.DB, settingService *SettingService, usageCleanup *UsageCleanupService, redisClient *redis.Client) *DataCleanupService {
+	var deletePromptPayloads func(context.Context, ...string) error
+	if redisClient != nil {
+		deletePromptPayloads = func(ctx context.Context, keys ...string) error {
+			return redisClient.Del(ctx, keys...).Err()
+		}
+	}
+	svc := NewDataCleanupService(db, settingService, usageCleanup, deletePromptPayloads)
+	svc.Start()
+	return svc
 }
 
 func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
@@ -877,6 +891,7 @@ var ProviderSet = wire.NewSet(
 	NewCompositeRouteResolver,
 	NewAccountService,
 	NewProxyService,
+	ProvideProxyTrafficService,
 	NewRedeemService,
 	NewPromoService,
 	ProvideUsageService,

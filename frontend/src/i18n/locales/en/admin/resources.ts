@@ -89,6 +89,7 @@ export default {
         location: 'Location',
         status: 'Status',
         accounts: 'Accounts',
+        traffic: 'Traffic Usage',
         latency: 'Latency',
         expiry: 'Validity',
         createdAt: 'Created',

@@ -591,7 +591,7 @@ func (s *UsageLogRepoSuite) TestGetByID_ReturnsRequestTypeAndLegacyFallback() {
 
 // --- Delete ---
 
-func (s *UsageLogRepoSuite) TestDelete() {
+func (s *UsageLogRepoSuite) TestDelete_RejectsProtectedHistory() {
 	user := mustCreateUser(s.T(), s.client, &service.User{Email: "delete@test.com"})
 	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-delete", Name: "k"})
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-delete"})
@@ -599,10 +599,20 @@ func (s *UsageLogRepoSuite) TestDelete() {
 	log := s.createUsageLog(user, apiKey, account, 10, 20, 0.5, time.Now())
 
 	err := s.repo.Delete(s.ctx, log.ID)
-	s.Require().NoError(err, "Delete")
+	s.Require().ErrorContains(err, "usage history is protected; use closed-month compaction")
 
-	_, err = s.repo.GetByID(s.ctx, log.ID)
-	s.Require().Error(err, "expected error after delete")
+	got, err := s.repo.GetByID(s.ctx, log.ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(got)
+	s.Require().Equal(log.ID, got.ID)
+	s.Require().Equal(log.UserID, got.UserID)
+	s.Require().Equal(log.APIKeyID, got.APIKeyID)
+	s.Require().Equal(log.AccountID, got.AccountID)
+	s.Require().Equal(log.InputTokens, got.InputTokens)
+	s.Require().Equal(log.OutputTokens, got.OutputTokens)
+	s.Require().Equal(log.TotalCost, got.TotalCost)
+	s.Require().Equal(log.ActualCost, got.ActualCost)
+	s.Require().Equal(log.RequestID, got.RequestID)
 }
 
 // --- ListByUser ---

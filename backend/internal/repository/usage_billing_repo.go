@@ -137,7 +137,9 @@ func (r *usageBillingRepository) claimUsageBillingRequest(ctx context.Context, t
 		SELECT request_fingerprint
 		FROM usage_billing_dedup_archive
 		WHERE request_id = $1 AND api_key_id = $2
-	`, requestID, apiKeyID).Scan(&archivedFingerprint)
+		UNION ALL SELECT $3::text FROM usage_request_archive WHERE request_id=$1 AND api_key_id=$2
+		LIMIT 1
+	`, requestID, apiKeyID, requestFingerprint).Scan(&archivedFingerprint)
 	if err == nil {
 		if strings.TrimSpace(archivedFingerprint) != strings.TrimSpace(requestFingerprint) {
 			return false, service.ErrUsageBillingRequestConflict

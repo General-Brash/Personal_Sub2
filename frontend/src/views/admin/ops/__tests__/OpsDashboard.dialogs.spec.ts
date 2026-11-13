@@ -104,7 +104,7 @@ afterEach(() => {
 })
 
 describe('OpsDashboard dialog state', () => {
-  it('设置与清理弹窗互斥，返回恢复设置，Escape 只关闭当前顶层', async () => {
+  it('设置弹窗独立，运维页不再挂载清理中心', async () => {
     const wrapper = mount(OpsDashboard, {
       global: {
         stubs: {
@@ -139,29 +139,11 @@ describe('OpsDashboard dialog state', () => {
     expect(wrapper.findAll('[data-modal-visible="true"]')).toHaveLength(1)
     expect(document.body.classList.contains('modal-open')).toBe(true)
 
-    await wrapper.get('[data-testid="open-cleanup"]').trigger('click')
-    await flushPromises()
-    expect(wrapper.find('[data-testid="settings-dialog"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="cleanup-dialog"]').exists()).toBe(true)
-    expect(wrapper.findAll('[data-modal-visible="true"]')).toHaveLength(1)
-    expect(document.body.classList.contains('modal-open')).toBe(true)
-
+    expect(wrapper.findComponent({ name: 'OpsDataCleanupDialog' }).exists()).toBe(false)
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
-    expect(wrapper.find('[data-testid="cleanup-dialog"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="settings-dialog"]').exists()).toBe(false)
     expect(document.body.classList.contains('modal-open')).toBe(false)
-
-    await wrapper.get('[data-testid="open-settings"]').trigger('click')
-    await wrapper.get('[data-testid="open-cleanup"]').trigger('click')
-    await flushPromises()
-    await wrapper.get('[data-testid="back-settings"]').trigger('click')
-    await flushPromises()
-    expect(wrapper.find('[data-testid="cleanup-dialog"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="settings-dialog"]').exists()).toBe(true)
-    expect(wrapper.findAll('[data-modal-visible="true"]')).toHaveLength(1)
-    expect(document.body.classList.contains('modal-open')).toBe(true)
-
     wrapper.unmount()
   })
 })

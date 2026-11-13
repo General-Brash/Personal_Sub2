@@ -614,14 +614,14 @@ func financialLedgerCTE(userID int64, start, end time.Time) financialLedgerCTEDa
 	args = append(args, start)
 	endPosition := len(args) + 1
 	args = append(args, end)
-	usageTimeFilter := fmt.Sprintf(" AND ul.created_at >= $%d AND ul.created_at < $%d", startPosition, endPosition)
+	usageTimeFilter := fmt.Sprintf(" AND ul.financial_created_at >= $%d AND ul.financial_created_at < $%d", startPosition, endPosition)
 	mallTimeFilter := fmt.Sprintf(" AND mp.created_at >= $%d AND mp.created_at < $%d", startPosition, endPosition)
 	paymentTimeFilter := fmt.Sprintf(" AND COALESCE(po.completed_at, po.paid_at, po.created_at) >= $%d AND COALESCE(po.completed_at, po.paid_at, po.created_at) < $%d", startPosition, endPosition)
 	bankTimeFilter := fmt.Sprintf(" AND bl.created_at >= $%d AND bl.created_at < $%d", startPosition, endPosition)
 	sqlText := `
 	SELECT -(('x' || substr(md5(concat_ws('|',
 	           ul.user_id::text,
-	           (ul.created_at AT TIME ZONE 'Asia/Shanghai')::date::text,
+	           (ul.financial_created_at AT TIME ZONE 'Asia/Shanghai')::date::text,
 	           COALESCE(NULLIF(ul.requested_model, ''), ul.model))), 1, 15))::bit(60)::bigint) AS id,
 	       ul.user_id, COALESCE(NULLIF(u.username, ''), u.email) AS username, u.email,
        'usage' AS source, 'model' AS category,
@@ -634,11 +634,11 @@ func financialLedgerCTE(userID int64, start, end time.Time) financialLedgerCTEDa
        NULL::text AS permanent_balance_before, NULL::text AS permanent_balance_after,
        NULL::text AS temporary_balance_before, NULL::text AS temporary_balance_after,
 	       NULL::numeric AS debt_before, NULL::numeric AS debt_after,
-	       COUNT(*)::bigint AS item_count, MAX(ul.created_at) AS created_at
-FROM usage_logs AS ul JOIN users AS u ON u.id = ul.user_id
+	       COALESCE(SUM(ul.request_count),0)::bigint AS item_count, MAX(ul.last_created_at) AS created_at
+FROM usage_statistics AS ul JOIN users AS u ON u.id = ul.user_id
 WHERE ul.total_cost > 0` + userFilterUsage + usageTimeFilter + `
 GROUP BY ul.user_id, u.username, u.email,
-         (ul.created_at AT TIME ZONE 'Asia/Shanghai')::date,
+         (ul.financial_created_at AT TIME ZONE 'Asia/Shanghai')::date,
          COALESCE(NULLIF(ul.requested_model, ''), ul.model)
 UNION ALL
 SELECT mp.id, mp.user_id, COALESCE(NULLIF(u.username, ''), u.email), u.email,

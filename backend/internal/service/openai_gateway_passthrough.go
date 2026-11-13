@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
@@ -1412,7 +1413,14 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	startTime time.Time,
 	originalModel string,
 	mappedModel string,
-) (*openaiStreamingResultPassthrough, error) {
+) (streamResult *openaiStreamingResultPassthrough, streamErr error) {
+	defer func() {
+		if streamErr != nil {
+			if writeErr, ok := GetOpsDownstreamWriteError(c); ok {
+				streamErr = writeErr
+			}
+		}
+	}()
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
 		observer = beginUpstreamResponseModelObservation(c)
@@ -1447,16 +1455,12 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	}
 
 	w := c.Writer
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		return nil, errors.New("streaming not supported")
-	}
 
 	usage := &OpenAIUsage{}
 	imageCounter := newOpenAIImageOutputCounter()
 	var firstTokenMs *int
 	responseID := ""
-	clientDisconnected := false
+	_, clientDisconnected := GetOpsDownstreamWriteError(c)
 	sawDone := false
 	sawTerminalEvent := false
 	sawFailedEvent := false
@@ -1473,8 +1477,12 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		if clientDisconnected || !flushPending {
 			return
 		}
-		flusher.Flush()
 		flushPending = false
+		if err := httputil.FlushResponse(w); err != nil {
+			markOpenAIDownstreamWriteError(ctx, c, account, err, "stream_flush")
+			clientDisconnected = true
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Client disconnected during streaming flush, continue draining upstream for usage: account=%d", account.ID)
+		}
 	}
 	defer flushPendingOutput()
 	writePendingLines := func() bool {
@@ -1483,6 +1491,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		}
 		for _, pending := range pendingLines {
 			if _, err := fmt.Fprintln(w, pending); err != nil {
+				markOpenAIDownstreamWriteError(ctx, c, account, err, "preamble_commit")
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
 				return false
@@ -1522,7 +1531,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			dataBytes := []byte(data)
 			trimmedData := strings.TrimSpace(data)
 			rawEventType := strings.TrimSpace(gjson.GetBytes(dataBytes, "type").String())
-			if observeRetryEvents {
+			if !clientDisconnected && observeRetryEvents {
 				if targetErr := s.serverAutoRetryStreamEvent(c, account, resp, dataBytes, rawEventType); targetErr != nil {
 					return resultWithUsage(), targetErr
 				}
@@ -1574,7 +1583,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 					})
 				}
 
-				if GetOpsCyberPolicy(c) == nil && !openAIStreamClientOutputStarted(c, clientOutputStarted) {
+				if !clientDisconnected && GetOpsCyberPolicy(c) == nil && !openAIStreamClientOutputStarted(c, clientOutputStarted) {
 					if compactErr := newOpenAICompactFallbackSignal(c, dataBytes, failedMessage); compactErr != nil {
 						return resultWithUsage(), compactErr
 					}
@@ -1627,7 +1636,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			// response.completed (no output, no usage, no error, nothing sent
 			// to the client) are silent upstream refusals: fail over instead of
 			// recording a successful 0/0 usage turn (issue #5009).
-			if !guardRetry && (eventType == "response.completed" || eventType == "response.done") &&
+			if !clientDisconnected && !guardRetry && (eventType == "response.completed" || eventType == "response.done") &&
 				!sawFailedEvent && !semanticOutputSeen && !clientOutputStarted &&
 				openAIResponsesCompletedEventIsEmpty(dataBytes, usage) {
 				return resultWithUsage(), newOpenAIResponsesEmptyCompletedFailoverError(c, account, upstreamRequestID)
@@ -1660,6 +1669,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				applyAttemptHeaders()
 			}
 			if _, err := fmt.Fprintln(w, line); err != nil {
+				markOpenAIDownstreamWriteError(ctx, c, account, err, "stream_write")
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
 			} else {
@@ -1671,10 +1681,17 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			}
 		}
 	}
+	flushPendingOutput()
+	if writeErr, ok := GetOpsDownstreamWriteError(c); ok && (!sawDone && !sawTerminalEvent || sawFailedEvent) {
+		return resultWithUsage(), writeErr
+	}
 	if err := documentScanner.Err(); err != nil {
 		if (sawDone || sawTerminalEvent) && !sawFailedEvent {
 			s.clearOpenAIProxyStreamDisconnect(account)
 			return resultWithUsage(), nil
+		}
+		if writeErr, ok := GetOpsDownstreamWriteError(c); ok {
+			return resultWithUsage(), writeErr
 		}
 		if sawFailedEvent {
 			return resultWithUsage(), fmt.Errorf("upstream response failed: %s", failedMessage)

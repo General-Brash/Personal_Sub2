@@ -396,6 +396,9 @@ func defaultOpsRetentionPolicies(errorDays, minuteDays, hourlyDays int) map[stri
 		"ops_metrics_hourly":            {Enabled: true, RetentionDays: hourlyDays},
 		"ops_metrics_daily":             {Enabled: true, RetentionDays: hourlyDays},
 		"usage_logs":                    {Enabled: false, RetentionDays: 90},
+		"server_auto_retry":             {Enabled: false, RetentionDays: 7},
+		"http_access":                   {Enabled: false, RetentionDays: 7},
+		"audit_statistics":              {Enabled: false, RetentionDays: 7},
 	}
 }
 
@@ -520,46 +523,13 @@ func (s *OpsService) UpdateOpsAdvancedSettings(ctx context.Context, cfg *OpsAdva
 		return nil, errors.New("invalid config")
 	}
 
-	normalizeOpsAdvancedSettings(cfg)
-	if err := validateOpsAdvancedSettings(cfg); err != nil {
-		return nil, err
-	}
-	raw, err := json.Marshal(cfg)
-	if err != nil {
-		return nil, err
-	}
-	previousRaw, previousErr := s.settingRepo.GetValue(ctx, SettingKeyOpsAdvancedSettings)
-	if previousErr != nil && !errors.Is(previousErr, ErrSettingNotFound) {
-		return nil, previousErr
-	}
-	if err := s.settingRepo.Set(ctx, SettingKeyOpsAdvancedSettings, string(raw)); err != nil {
-		return nil, err
-	}
-
-	// notify cleanup service to reload schedule/enabled.
-	if s.cleanupReloader != nil {
-		if rerr := s.cleanupReloader.Reload(ctx); rerr != nil {
-			rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			rollbackErr := restoreSettingValue(rollbackCtx, s.settingRepo, SettingKeyOpsAdvancedSettings, previousRaw, previousErr == nil)
-			if rollbackErr == nil {
-				rollbackErr = s.cleanupReloader.Reload(rollbackCtx)
-			}
-			cancel()
-			if rollbackErr != nil {
-				return nil, fmt.Errorf("reload cleanup schedule: %v; rollback failed: %w", rerr, rollbackErr)
-			}
-			return nil, fmt.Errorf("reload cleanup schedule: %w", rerr)
-		}
-	}
-	s.storeAdvancedSettingsSnapshot(cfg)
-	// Push the new quota auto-pause settings only after cleanup reload succeeds.
-	if s.quotaAutoPauseSink != nil {
-		s.quotaAutoPauseSink(cfg.OpenAIAccountQuotaAutoPause)
-	}
-
-	updated := &OpsAdvancedSettings{}
-	_ = json.Unmarshal(raw, updated)
-	return updated, nil
+	return s.updateOpsSettingsAtomically(ctx, func(current *OpsAdvancedSettings) (*OpsAdvancedSettings, map[string]string, error) {
+		updated := *cfg
+		// The cleanup center owns retention. Use the same DB version that the
+		// write compares, not an admin handler's runtime snapshot.
+		updated.DataRetention = current.DataRetention
+		return &updated, nil, nil
+	})
 }
 
 func (s *OpsService) UpdateDataCleanupSettings(ctx context.Context, retention OpsDataRetentionSettings, auditRetentionDays int) (*OpsAdvancedSettings, error) {
@@ -569,77 +539,124 @@ func (s *OpsService) UpdateDataCleanupSettings(ctx context.Context, retention Op
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if auditRetentionDays < 0 || auditRetentionDays > 3650 {
-		return nil, infraerrors.BadRequest("DATA_CLEANUP_AUDIT_RETENTION_INVALID", "audit log retention days must be between 0 and 3650")
-	}
-	advanced, err := s.GetOpsAdvancedSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	advanced.DataRetention = retention
-	normalizeOpsAdvancedSettings(advanced)
-	if err := validateOpsAdvancedSettings(advanced); err != nil {
-		return nil, err
-	}
-	raw, err := json.Marshal(advanced)
-	if err != nil {
-		return nil, err
+	return s.updateOpsSettingsAtomically(ctx, func(current *OpsAdvancedSettings) (*OpsAdvancedSettings, map[string]string, error) {
+		canManageOps := AuthorizeAdminRequest(ctx, "ops.manage", nil) == nil
+		canManageAudit := AuthorizeAdminRequest(ctx, "audit.manage", nil) == nil
+		if !canManageOps && !canManageAudit {
+			return nil, nil, ErrAdminPermissionDenied
+		}
+		schedule := strings.TrimSpace(retention.CleanupSchedule)
+		if schedule == "" {
+			schedule = opsCleanupDefaultSchedule
+		}
+		if retention.CleanupEnabled != current.DataRetention.CleanupEnabled || schedule != current.DataRetention.CleanupSchedule {
+			if !canManageOps || !canManageAudit {
+				return nil, nil, ErrAdminPermissionDenied
+			}
+			current.DataRetention.CleanupEnabled = retention.CleanupEnabled
+			current.DataRetention.CleanupSchedule = schedule
+		}
+		for category, policy := range retention.Targets {
+			if _, ok := defaultOpsRetentionPolicies(30, 30, 30)[category]; !ok {
+				return nil, nil, infraerrors.BadRequest("DATA_CLEANUP_TARGET_INVALID", fmt.Sprintf("unsupported cleanup target %q", category))
+			}
+			isAudit := category == "audit_statistics" || category == "prompt_audit" || category == "audit_logs"
+			if (isAudit && canManageAudit) || (!isAudit && canManageOps) {
+				current.DataRetention.Targets[category] = policy
+			}
+		}
+		if canManageOps {
+			current.DataRetention.ErrorLogRetentionDays = retention.ErrorLogRetentionDays
+			current.DataRetention.MinuteMetricsRetentionDays = retention.MinuteMetricsRetentionDays
+			current.DataRetention.HourlyMetricsRetentionDays = retention.HourlyMetricsRetentionDays
+		}
+		updates := map[string]string{}
+		if canManageAudit {
+			if auditRetentionDays < 0 || auditRetentionDays > 3650 {
+				return nil, nil, infraerrors.BadRequest("DATA_CLEANUP_AUDIT_RETENTION_INVALID", "audit log retention days must be between 0 and 3650")
+			}
+			updates[SettingKeyAuditLogRetentionDays] = fmt.Sprintf("%d", auditRetentionDays)
+		}
+		return current, updates, nil
+	})
+}
+
+// Retry the complete read/merge on conflicts. Repositories without
+// cross-process CAS must fail closed rather than use a racy SetMultiple.
+func (s *OpsService) updateOpsSettingsAtomically(ctx context.Context, merge func(*OpsAdvancedSettings) (*OpsAdvancedSettings, map[string]string, error)) (*OpsAdvancedSettings, error) {
+	repo, ok := s.settingRepo.(AtomicSettingPolicyRepository)
+	if !ok {
+		return nil, infraerrors.ServiceUnavailable("OPS_SETTINGS_ATOMIC_UPDATE_UNAVAILABLE", "atomic settings updates are not available")
 	}
 	keys := []string{SettingKeyOpsAdvancedSettings, SettingKeyAuditLogRetentionDays}
-	previous, err := s.settingRepo.GetMultiple(ctx, keys)
-	if err != nil {
-		return nil, err
-	}
-	updates := map[string]string{
-		SettingKeyOpsAdvancedSettings:   string(raw),
-		SettingKeyAuditLogRetentionDays: fmt.Sprintf("%d", auditRetentionDays),
-	}
-	if err := s.settingRepo.SetMultiple(ctx, updates); err != nil {
-		return nil, err
-	}
-	if s.cleanupReloader != nil {
-		if reloadErr := s.cleanupReloader.Reload(ctx); reloadErr != nil {
-			rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			rollbackErr := restoreSettingValues(rollbackCtx, s.settingRepo, keys, previous)
-			if rollbackErr == nil {
-				rollbackErr = s.cleanupReloader.Reload(rollbackCtx)
+	for attempt := 0; attempt < 5; attempt++ {
+		previous, err := s.settingRepo.GetMultiple(ctx, keys)
+		if err != nil {
+			return nil, err
+		}
+		current := defaultOpsAdvancedSettings()
+		if raw := strings.TrimSpace(previous[SettingKeyOpsAdvancedSettings]); raw != "" {
+			if err := json.Unmarshal([]byte(raw), current); err != nil {
+				return nil, fmt.Errorf("decode persisted ops settings: %w", err)
 			}
+		}
+		normalizeOpsAdvancedSettings(current)
+		updated, updates, err := merge(current)
+		if err != nil {
+			return nil, err
+		}
+		normalizeOpsAdvancedSettings(updated)
+		if err := validateOpsAdvancedSettings(updated); err != nil {
+			return nil, err
+		}
+		raw, err := json.Marshal(updated)
+		if err != nil {
+			return nil, err
+		}
+		if updates == nil {
+			updates = map[string]string{}
+		}
+		updates[SettingKeyOpsAdvancedSettings] = string(raw)
+		expected := make(map[string]string, len(keys))
+		for _, key := range keys {
+			expected[key] = previous[key]
+		}
+		applied, err := repo.CompareAndSetMultiple(ctx, expected, updates)
+		if err != nil {
+			return nil, err
+		}
+		if !applied {
+			continue
+		}
+		if reloadErr := s.RefreshRuntimeSettings(ctx); reloadErr != nil {
+			// Restore only if the entire observed bundle still belongs to us.
+			rollbackExpected := make(map[string]string, len(expected))
+			rollbackValues := make(map[string]string, len(updates))
+			for key, value := range expected {
+				rollbackExpected[key] = value
+			}
+			for key, value := range updates {
+				rollbackExpected[key] = value
+				rollbackValues[key] = previous[key]
+			}
+			rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			restored, rollbackErr := repo.CompareAndSetMultiple(rollbackCtx, rollbackExpected, rollbackValues)
+			refreshErr := s.RefreshRuntimeSettings(rollbackCtx)
 			cancel()
-			if rollbackErr != nil {
-				return nil, fmt.Errorf("reload cleanup schedule: %v; rollback failed: %w", reloadErr, rollbackErr)
+			if rollbackErr != nil || refreshErr != nil {
+				return nil, fmt.Errorf("reload cleanup schedule: %v; rollback/refresh failed: %w", reloadErr, errors.Join(rollbackErr, refreshErr))
+			}
+			if !restored {
+				return nil, fmt.Errorf("reload cleanup schedule: %w; concurrent settings update preserved", reloadErr)
 			}
 			return nil, fmt.Errorf("reload cleanup schedule: %w", reloadErr)
 		}
-	}
-	s.storeAdvancedSettingsSnapshot(advanced)
-	return advanced, nil
-}
-
-func restoreSettingValue(ctx context.Context, repo SettingRepository, key, value string, existed bool) error {
-	if existed {
-		return repo.Set(ctx, key, value)
-	}
-	return repo.Delete(ctx, key)
-}
-
-func restoreSettingValues(ctx context.Context, repo SettingRepository, keys []string, previous map[string]string) error {
-	toRestore := make(map[string]string, len(previous))
-	for _, key := range keys {
-		if value, ok := previous[key]; ok {
-			toRestore[key] = value
+		if s.quotaAutoPauseSink != nil {
+			s.quotaAutoPauseSink(s.OpsAdvancedSettingsSnapshot().OpenAIAccountQuotaAutoPause)
 		}
+		return updated, nil
 	}
-	if err := repo.SetMultiple(ctx, toRestore); err != nil {
-		return err
-	}
-	for _, key := range keys {
-		if _, ok := previous[key]; !ok {
-			if err := repo.Delete(ctx, key); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return nil, infraerrors.Conflict("OPS_SETTINGS_CONFLICT", "settings changed concurrently; retry the update")
 }
 
 // =========================

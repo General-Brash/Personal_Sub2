@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -28,10 +29,26 @@ const (
 )
 
 type DataCleanupFilter struct {
-	Category  string     `json:"category"`
-	Mode      string     `json:"mode"`
-	StartTime *time.Time `json:"start_time,omitempty"`
-	EndTime   *time.Time `json:"end_time,omitempty"`
+	Category     string                   `json:"category"`
+	Mode         string                   `json:"mode"`
+	StartTime    *time.Time               `json:"start_time,omitempty"`
+	EndTime      *time.Time               `json:"end_time,omitempty"`
+	Month        string                   `json:"month,omitempty"`
+	StartDate    string                   `json:"start_date,omitempty"`
+	EndDate      string                   `json:"end_date,omitempty"`
+	PromptFilter *DataCleanupPromptFilter `json:"prompt_filter,omitempty"`
+}
+
+type DataCleanupPromptFilter struct {
+	Decision   string `json:"decision,omitempty"`
+	RiskLevel  string `json:"risk_level,omitempty"`
+	Endpoint   string `json:"endpoint,omitempty"`
+	GroupID    *int64 `json:"group_id,omitempty"`
+	UserID     *int64 `json:"user_id,omitempty"`
+	APIKeyID   *int64 `json:"api_key_id,omitempty"`
+	RequestID  string `json:"request_id,omitempty"`
+	PromptHash string `json:"prompt_hash,omitempty"`
+	Keyword    string `json:"keyword,omitempty"`
 }
 
 type DataCleanupPreview struct {
@@ -44,6 +61,7 @@ type DataCleanupPreview struct {
 	RequiresTOTP    bool   `json:"requires_totp"`
 	MaxRangeDays    int    `json:"max_range_days"`
 	DeletionWarning string `json:"deletion_warning,omitempty"`
+	EstimatedBytes  int64  `json:"estimated_bytes"`
 
 	snapshotMaxID     int64
 	snapshotStart     *time.Time
@@ -109,12 +127,16 @@ var dataCleanupTargets = map[string]dataCleanupTarget{
 	"ops_error_logs":                {table: "ops_error_logs", timeColumn: "created_at"},
 	"ops_alert_events":              {table: "ops_alert_events", timeColumn: "created_at"},
 	"ops_system_logs":               {table: "ops_system_logs", timeColumn: "created_at"},
+	"server_auto_retry":             {table: "ops_system_logs", timeColumn: "created_at", extraWhere: "target.message='server_auto_retry.retry_attempt' AND EXISTS (SELECT 1 FROM ops_system_logs f WHERE f.request_id=target.request_id AND f.message='server_auto_retry.final')"},
+	"http_access":                   {table: "ops_system_logs", timeColumn: "created_at", extraWhere: "target.component = 'http.access' AND target.extra->>'status_code' IN ('200','201','204','304') AND CASE WHEN jsonb_typeof(target.extra->'latency_ms')='number' THEN (target.extra->>'latency_ms')::numeric < 60000 ELSE false END AND NOT EXISTS (SELECT 1 FROM ops_error_logs e WHERE e.request_id=target.request_id) AND NOT EXISTS (SELECT 1 FROM ops_system_logs f WHERE f.request_id=target.request_id AND f.message='server_auto_retry.final' AND f.extra->>'outcome'='failed')"},
+	"audit_statistics":              {table: "audit_logs", timeColumn: "created_at", sensitive: true, extraWhere: "target.action IN ('admin.accounts.today_stats.batch.create','admin.dashboard.users_usage.create') AND target.status_code BETWEEN 200 AND 299"},
 	"ops_system_log_cleanup_audits": {table: "ops_system_log_cleanup_audits", timeColumn: "created_at"},
 	"ops_system_metrics":            {table: "ops_system_metrics", timeColumn: "created_at"},
 	"ops_metrics_hourly":            {table: "ops_metrics_hourly", timeColumn: "bucket_start"},
 	"ops_metrics_daily":             {table: "ops_metrics_daily", timeColumn: "bucket_date", castDate: true},
 	"usage_logs":                    {table: "usage_logs", timeColumn: "created_at"},
 	"audit_logs":                    {table: "audit_logs", timeColumn: "created_at", sensitive: true},
+	"prompt_audit":                  {table: "prompt_audit_events", timeColumn: "created_at", sensitive: true},
 	"mall_purchases": {
 		table:      "mall_purchases",
 		timeColumn: "created_at",
@@ -133,16 +155,19 @@ var dataCleanupTargets = map[string]dataCleanupTarget{
 }
 
 // DataCleanupService owns the destructive, allowlisted cleanup workflow and its
-// independent audit trail. Automatic scheduling remains in the existing ops,
-// usage and audit services.
+// independent audit trail. Existing ops, usage and audit services trigger automatic
+// scheduling; usage retention tasks are queued and executed here.
 type DataCleanupService struct {
-	db           *sql.DB
-	settings     *SettingService
-	usageCleanup *UsageCleanupService
-	previewKey   []byte
+	db                   *sql.DB
+	settings             *SettingService
+	usageCleanup         *UsageCleanupService
+	previewKey           []byte
+	workerCancel         context.CancelFunc
+	workerWG             sync.WaitGroup
+	deletePromptPayloads func(context.Context, ...string) error
 }
 
-func NewDataCleanupService(db *sql.DB, settings *SettingService, usageCleanup *UsageCleanupService) *DataCleanupService {
+func NewDataCleanupService(db *sql.DB, settings *SettingService, usageCleanup *UsageCleanupService, deletePromptPayloads ...func(context.Context, ...string) error) *DataCleanupService {
 	key := make([]byte, sha256.Size)
 	if settings != nil && settings.cfg != nil && strings.TrimSpace(settings.cfg.JWT.Secret) != "" {
 		digest := sha256.Sum256([]byte("data-cleanup-preview:" + strings.TrimSpace(settings.cfg.JWT.Secret)))
@@ -151,8 +176,12 @@ func NewDataCleanupService(db *sql.DB, settings *SettingService, usageCleanup *U
 		panic(fmt.Sprintf("generate data cleanup preview key: %v", err))
 	}
 	svc := &DataCleanupService{db: db, settings: settings, usageCleanup: usageCleanup, previewKey: key}
+	if len(deletePromptPayloads) > 0 {
+		svc.deletePromptPayloads = deletePromptPayloads[0]
+	}
 	if usageCleanup != nil {
 		usageCleanup.SetDataCleanupCompletionHook(svc.completeUsageCleanupAudit)
+		usageCleanup.setRetentionScheduler(svc.queueUsageRetention)
 	}
 	return svc
 }
@@ -198,6 +227,9 @@ func (s *DataCleanupService) Preview(ctx context.Context, filter DataCleanupFilt
 		if s.usageCleanup != nil {
 			batchSize = s.usageCleanup.batchSize()
 		}
+		if batchSize > 10000 {
+			batchSize = 10000
+		}
 	}
 	digests, snapshotRows, err := dataCleanupSnapshotDigests(ctx, tx, normalized, target, snapshotMaxID, batchSize, orderBy)
 	if err != nil {
@@ -215,7 +247,7 @@ func (s *DataCleanupService) Preview(ctx context.Context, filter DataCleanupFilt
 		MatchedRows:       matched,
 		BlockedRows:       blocked,
 		Confirmation:      dataCleanupConfirmation(normalized, matched),
-		RequiresTOTP:      target.sensitive || normalized.Mode == DataCleanupModeAll,
+		RequiresTOTP:      target.sensitive || normalized.Mode == DataCleanupModeAll || normalized.Category == "usage_logs",
 		MaxRangeDays:      dataCleanupMaxRangeDays,
 		DeletionWarning:   target.warning,
 		snapshotMaxID:     snapshotMaxID,
@@ -228,6 +260,8 @@ func (s *DataCleanupService) Preview(ctx context.Context, filter DataCleanupFilt
 	if err != nil {
 		return nil, err
 	}
+	_ = s.db.QueryRowContext(ctx, `SELECT CASE WHEN COALESCE(reltuples,0)>0
+	 THEN (pg_total_relation_size(oid)::numeric * $2 / reltuples)::bigint ELSE 0 END FROM pg_class WHERE oid=to_regclass($1)`, target.table, matched).Scan(&preview.EstimatedBytes)
 	return preview, nil
 }
 
@@ -260,6 +294,7 @@ func (s *DataCleanupService) Execute(
 		Category:          normalized.Category,
 		Mode:              normalized.Mode,
 		MatchedRows:       token.PreviewRows,
+		PreviewToken:      strings.TrimSpace(previewToken),
 		BlockedRows:       token.BlockedRows,
 		snapshotMaxID:     token.SnapshotMaxID,
 		snapshotStart:     token.SnapshotStart,
@@ -271,19 +306,26 @@ func (s *DataCleanupService) Execute(
 		return nil, infraerrors.BadRequest("DATA_CLEANUP_CONFIRMATION_INVALID", "confirmation text does not match")
 	}
 
-	if normalized.Category == "usage_logs" {
+	if normalized.Category == "usage_logs" || normalized.Category == "prompt_audit" {
 		matched, blocked, _, _, _, err := s.countRows(ctx, nil, normalized, target, &token.SnapshotMaxID)
 		if err != nil {
 			return nil, err
 		}
-		digests, snapshotRows, err := dataCleanupSnapshotDigests(ctx, s.db, normalized, target, token.SnapshotMaxID, token.SnapshotBatchSize, "target.created_at, target.id")
+		orderBy := "target.id"
+		if normalized.Category == "usage_logs" {
+			orderBy = "target.created_at, target.id"
+		}
+		digests, snapshotRows, err := dataCleanupSnapshotDigests(ctx, s.db, normalized, target, token.SnapshotMaxID, token.SnapshotBatchSize, orderBy)
 		if err != nil {
 			return nil, err
 		}
 		if matched != token.PreviewRows || blocked != token.BlockedRows || !sameDataCleanupSnapshot(digests, snapshotRows, token.SnapshotDigests, token.PreviewRows) {
 			return nil, infraerrors.Conflict("DATA_CLEANUP_PREVIEW_STALE", "cleanup preview row identity changed; preview again before executing")
 		}
-		return s.queueUsageCleanup(ctx, normalized, preview, operator)
+		return s.queueCleanup(ctx, normalized, preview, operator)
+	}
+	if token.PreviewRows > dataCleanupBatchSize {
+		return s.queueCleanup(ctx, normalized, preview, operator)
 	}
 	return s.executeTransactional(ctx, normalized, target, preview, operator)
 }
@@ -297,11 +339,13 @@ func (s *DataCleanupService) ListAudits(ctx context.Context, limit int) ([]DataC
 	}
 	rows, err := s.db.QueryContext(ctx, `
 SELECT id, operator_id, operator_email, auth_method, category, cleanup_mode,
-       filters::text, preview_rows, blocked_rows, deleted_rows, status,
+       (filters-'preview_token'-'worker')::text, preview_rows, blocked_rows, deleted_rows, status,
        error_message, started_at, finished_at, created_at
 FROM data_cleanup_audits
-ORDER BY id DESC
-LIMIT $1`, limit)
+WHERE status IN ('pending','running') OR id IN (
+    SELECT id FROM data_cleanup_audits WHERE status NOT IN ('pending','running') ORDER BY id DESC LIMIT $1
+)
+ORDER BY (status IN ('pending','running')) DESC, id DESC`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -328,9 +372,58 @@ func validateDataCleanupFilter(filter DataCleanupFilter) (dataCleanupTarget, Dat
 	if filter.Mode == "" {
 		filter.Mode = DataCleanupModeRange
 	}
+	if filter.Month != "" {
+		month, err := time.ParseInLocation("2006-01", filter.Month, timezone.Location())
+		if err != nil || filter.Category != "usage_logs" {
+			return dataCleanupTarget{}, filter, infraerrors.BadRequest("DATA_CLEANUP_USAGE_MONTH_REQUIRED", "invalid usage month")
+		}
+		end := month.AddDate(0, 1, 0)
+		filter.StartTime, filter.EndTime = &month, &end
+	}
+	for _, date := range []struct {
+		value  string
+		target **time.Time
+	}{{filter.StartDate, &filter.StartTime}, {filter.EndDate, &filter.EndTime}} {
+		if date.value == "" {
+			continue
+		}
+		parsed, err := time.ParseInLocation("2006-01-02", date.value, timezone.Location())
+		if err != nil {
+			return dataCleanupTarget{}, filter, infraerrors.BadRequest("DATA_CLEANUP_RANGE_INVALID", "invalid cleanup date")
+		}
+		*date.target = &parsed
+	}
+	filter.Month, filter.StartDate, filter.EndDate = "", "", ""
 	target, ok := dataCleanupTargets[filter.Category]
 	if !ok {
 		return dataCleanupTarget{}, filter, infraerrors.BadRequest("DATA_CLEANUP_CATEGORY_INVALID", "unsupported cleanup category")
+	}
+	if filter.Category != "prompt_audit" && filter.PromptFilter != nil {
+		return target, filter, infraerrors.BadRequest("DATA_CLEANUP_FILTER_INVALID", "prompt filters require the prompt_audit category")
+	}
+	if filter.Category == "prompt_audit" {
+		prompt := DataCleanupPromptFilter{}
+		if filter.PromptFilter != nil {
+			prompt = *filter.PromptFilter
+		}
+		prompt.Decision = strings.ToLower(strings.TrimSpace(prompt.Decision))
+		prompt.RiskLevel = strings.ToLower(strings.TrimSpace(prompt.RiskLevel))
+		prompt.Endpoint = strings.TrimSpace(prompt.Endpoint)
+		prompt.RequestID = strings.TrimSpace(prompt.RequestID)
+		prompt.PromptHash = strings.ToLower(strings.TrimSpace(prompt.PromptHash))
+		prompt.Keyword = strings.TrimSpace(prompt.Keyword)
+		if keyword := []rune(prompt.Keyword); len(keyword) > 128 {
+			prompt.Keyword = string(keyword[:128]) + "\u2026"
+		}
+		for _, id := range []*int64{prompt.GroupID, prompt.UserID, prompt.APIKeyID} {
+			if id != nil && *id <= 0 {
+				return target, filter, infraerrors.BadRequest("DATA_CLEANUP_FILTER_INVALID", "prompt filter IDs must be positive")
+			}
+		}
+		filter.PromptFilter = &prompt
+	}
+	if target.sensitive && (filter.Category == "bank_ledger" || filter.Category == "payment_orders" || filter.Category == "mall_purchases") {
+		return target, filter, infraerrors.BadRequest("DATA_CLEANUP_FINANCIAL_PROTECTED", "financial records cannot be deleted by data cleanup")
 	}
 	if filter.Mode != DataCleanupModeRange && filter.Mode != DataCleanupModeAll {
 		return dataCleanupTarget{}, filter, infraerrors.BadRequest("DATA_CLEANUP_MODE_INVALID", "cleanup mode must be range or all")
@@ -338,6 +431,9 @@ func validateDataCleanupFilter(filter DataCleanupFilter) (dataCleanupTarget, Dat
 	if filter.Mode == DataCleanupModeAll {
 		filter.StartTime = nil
 		filter.EndTime = nil
+		if filter.Category == "usage_logs" {
+			return target, filter, infraerrors.BadRequest("DATA_CLEANUP_USAGE_MONTH_REQUIRED", "usage compaction requires an explicit closed month")
+		}
 		return target, filter, nil
 	}
 	if filter.StartTime == nil || filter.EndTime == nil {
@@ -346,7 +442,14 @@ func validateDataCleanupFilter(filter DataCleanupFilter) (dataCleanupTarget, Dat
 	if !filter.EndTime.After(*filter.StartTime) {
 		return dataCleanupTarget{}, filter, infraerrors.BadRequest("DATA_CLEANUP_RANGE_INVALID", "end_time must be after start_time")
 	}
-	if filter.EndTime.Sub(*filter.StartTime) > dataCleanupMaxRangeDays*24*time.Hour {
+	if filter.Category == "usage_logs" {
+		start := timezone.StartOfMonth(*filter.StartTime)
+		end := start.AddDate(0, 1, 0)
+		if !filter.StartTime.Equal(start) || !filter.EndTime.Equal(end) || end.After(UsageCompactionEnd(time.Now())) {
+			return target, filter, infraerrors.BadRequest("DATA_CLEANUP_USAGE_MONTH_REQUIRED", "select a complete month before the current month")
+		}
+	}
+	if filter.Category != "usage_logs" && filter.Category != "prompt_audit" && filter.EndTime.Sub(*filter.StartTime) > dataCleanupMaxRangeDays*24*time.Hour {
 		return dataCleanupTarget{}, filter, infraerrors.BadRequest("DATA_CLEANUP_RANGE_TOO_LARGE", fmt.Sprintf("date range exceeds %d days", dataCleanupMaxRangeDays))
 	}
 	startUTC := filter.StartTime.UTC()
@@ -357,6 +460,9 @@ func validateDataCleanupFilter(filter DataCleanupFilter) (dataCleanupTarget, Dat
 }
 
 func dataCleanupConfirmation(filter DataCleanupFilter, matched int64) string {
+	if filter.Category == "usage_logs" {
+		return fmt.Sprintf("COMPACT usage_logs %d", matched)
+	}
 	if filter.Mode == DataCleanupModeAll {
 		return "DELETE ALL " + filter.Category
 	}
@@ -388,6 +494,10 @@ func (s *DataCleanupService) signPreviewToken(filter DataCleanupFilter, preview 
 }
 
 func (s *DataCleanupService) verifyPreviewToken(token string) (*dataCleanupPreviewToken, error) {
+	return s.decodePreviewToken(token, true)
+}
+
+func (s *DataCleanupService) decodePreviewToken(token string, checkExpiry bool) (*dataCleanupPreviewToken, error) {
 	if s == nil || len(s.previewKey) == 0 || token == "" {
 		return nil, infraerrors.BadRequest("DATA_CLEANUP_PREVIEW_TOKEN_INVALID", "a valid cleanup preview token is required")
 	}
@@ -412,7 +522,7 @@ func (s *DataCleanupService) verifyPreviewToken(token string) (*dataCleanupPrevi
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, infraerrors.BadRequest("DATA_CLEANUP_PREVIEW_TOKEN_INVALID", "cleanup preview token is invalid")
 	}
-	if payload.ExpiresAtUnix <= time.Now().UTC().Unix() {
+	if checkExpiry && payload.ExpiresAtUnix <= time.Now().UTC().Unix() {
 		return nil, infraerrors.Conflict("DATA_CLEANUP_PREVIEW_EXPIRED", "cleanup preview expired; preview again before executing")
 	}
 	expectedChunks := 0
@@ -422,6 +532,9 @@ func (s *DataCleanupService) verifyPreviewToken(token string) (*dataCleanupPrevi
 	if payload.SnapshotBatchSize <= 0 || len(payload.SnapshotDigests) != expectedChunks {
 		return nil, infraerrors.BadRequest("DATA_CLEANUP_PREVIEW_TOKEN_INVALID", "cleanup preview token is missing row identity data")
 	}
+	if payload.PreviewRows < 0 || payload.BlockedRows < 0 || payload.SnapshotMaxID < 0 || payload.SnapshotBatchSize > 10000 {
+		return nil, infraerrors.BadRequest("DATA_CLEANUP_PREVIEW_TOKEN_INVALID", "invalid cleanup snapshot")
+	}
 	return &payload, nil
 }
 
@@ -429,7 +542,9 @@ func sameDataCleanupFilter(left, right DataCleanupFilter) bool {
 	if left.Category != right.Category || left.Mode != right.Mode {
 		return false
 	}
-	return sameOptionalTime(left.StartTime, right.StartTime) && sameOptionalTime(left.EndTime, right.EndTime)
+	leftPrompt, _ := json.Marshal(left.PromptFilter)
+	rightPrompt, _ := json.Marshal(right.PromptFilter)
+	return sameOptionalTime(left.StartTime, right.StartTime) && sameOptionalTime(left.EndTime, right.EndTime) && hmac.Equal(leftPrompt, rightPrompt)
 }
 
 func sameOptionalTime(left, right *time.Time) bool {
@@ -450,8 +565,40 @@ func dataCleanupWhere(filter DataCleanupFilter, target dataCleanupTarget, snapsh
 				dataCleanupDateBoundary(*filter.EndTime, timezone.Location()),
 			)
 		} else {
-			conditions = append(conditions, "target."+target.timeColumn+" >= $1", "target."+target.timeColumn+" < $2")
+			endOperator := " < "
+			if filter.Category == "prompt_audit" {
+				endOperator = " <= "
+			}
+			conditions = append(conditions, "target."+target.timeColumn+" >= $1", "target."+target.timeColumn+endOperator+"$2")
 			args = append(args, filter.StartTime.UTC(), filter.EndTime.UTC())
+		}
+	}
+	if filter.Category == "prompt_audit" && filter.PromptFilter != nil {
+		prompt := filter.PromptFilter
+		for _, field := range []struct{ column, value string }{
+			{"decision", prompt.Decision}, {"risk_level", prompt.RiskLevel}, {"endpoint", prompt.Endpoint},
+			{"request_id", prompt.RequestID}, {"prompt_hash", prompt.PromptHash},
+		} {
+			if field.value != "" {
+				args = append(args, field.value)
+				conditions = append(conditions, fmt.Sprintf("target.%s = $%d", field.column, len(args)))
+			}
+		}
+		for _, field := range []struct {
+			column string
+			value  *int64
+		}{
+			{"group_id", prompt.GroupID}, {"user_id", prompt.UserID}, {"api_key_id", prompt.APIKeyID},
+		} {
+			if field.value != nil {
+				args = append(args, *field.value)
+				conditions = append(conditions, fmt.Sprintf("target.%s = $%d", field.column, len(args)))
+			}
+		}
+		if prompt.Keyword != "" {
+			args = append(args, "%"+prompt.Keyword+"%")
+			conditions = append(conditions, fmt.Sprintf(`(target.request_id ILIKE $%[1]d OR target.prompt_hash ILIKE $%[1]d OR target.redacted_preview ILIKE $%[1]d
+			 OR target.username_snapshot ILIKE $%[1]d OR target.user_email_snapshot ILIKE $%[1]d OR target.api_key_name_snapshot ILIKE $%[1]d)`, len(args)))
 		}
 	}
 	if snapshotMaxID != nil {
@@ -460,6 +607,10 @@ func dataCleanupWhere(filter DataCleanupFilter, target dataCleanupTarget, snapsh
 	}
 	if target.extraWhere != "" {
 		conditions = append(conditions, target.extraWhere)
+	}
+	if filter.Category == "usage_logs" {
+		conditions = append(conditions, "target.compacted_at IS NULL", fmt.Sprintf("target.created_at < $%d", len(args)+1))
+		args = append(args, UsageCompactionEnd(time.Now()))
 	}
 	if len(conditions) == 0 {
 		return "TRUE", args
@@ -510,6 +661,14 @@ func (s *DataCleanupService) countRows(
 		}
 		if blockedMaxID > maxID {
 			maxID = blockedMaxID
+		}
+	}
+	if filter.Category == "usage_logs" {
+		protectedQuery := fmt.Sprintf(`SELECT COUNT(*) FROM usage_logs target WHERE %s AND
+			(EXISTS(SELECT 1 FROM temporary_credit_consumptions t WHERE t.usage_log_id=target.id)
+			 OR EXISTS(SELECT 1 FROM billing_usage_entries b WHERE b.usage_log_id=target.id))`, where)
+		if err := queryer.QueryRowContext(ctx, protectedQuery, args...).Scan(&blocked); err != nil {
+			return 0, 0, 0, nil, nil, err
 		}
 	}
 	var snapshotStart, snapshotEnd *time.Time
@@ -634,16 +793,15 @@ func (s *DataCleanupService) executeTransactional(
 		s.finishAuditFailureDetached(auditID, filter, preview, operator, err)
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE data_cleanup_audits
+		SET status='succeeded',deleted_rows=$2,finished_at=NOW() WHERE id=$1`, auditID, deleted); err != nil {
+		_ = tx.Rollback()
 		s.finishAuditFailureDetached(auditID, filter, preview, operator, err)
 		return nil, err
 	}
-	finishCtx, finishCancel := context.WithTimeout(context.Background(), dataCleanupAuditTimeout)
-	finishErr := s.finishAudit(finishCtx, auditID, "succeeded", deleted, nil)
-	finishCancel()
-	if finishErr != nil {
-		s.insertFailureAuditDetached(filter, preview, operator, fmt.Errorf("cleanup committed but audit finalization failed: %w", finishErr))
-		return nil, fmt.Errorf("cleanup committed but audit finalization failed: %w", finishErr)
+	if err := tx.Commit(); err != nil {
+		s.finishAuditFailureDetached(auditID, filter, preview, operator, err)
+		return nil, err
 	}
 	return &DataCleanupExecuteResult{AuditID: auditID, Status: "succeeded", DeletedRows: deleted}, nil
 }
@@ -687,83 +845,21 @@ WHERE target.id IN (SELECT id FROM batch)`, target.table, where, limitPos, targe
 	return total, nil
 }
 
-func (s *DataCleanupService) queueUsageCleanup(ctx context.Context, filter DataCleanupFilter, preview *DataCleanupPreview, operator DataCleanupOperator) (*DataCleanupExecuteResult, error) {
-	if s.usageCleanup == nil {
-		return nil, errors.New("usage cleanup service not initialized")
-	}
-	auditCtx, auditCancel := context.WithTimeout(context.Background(), dataCleanupAuditTimeout)
-	auditID, err := insertDataCleanupAudit(auditCtx, s.db, filter, preview, operator, "pending")
-	auditCancel()
-	if err != nil {
-		return nil, err
-	}
-	usageFilter := buildDataCleanupUsageFilters(filter, preview, auditID)
-	task, err := s.usageCleanup.CreateTask(ctx, usageFilter, operator.UserID)
-	if err != nil {
-		s.finishAuditFailureDetached(auditID, filter, preview, operator, err)
-		return nil, err
-	}
-	filtersJSON, _ := json.Marshal(map[string]any{
-		"category":              filter.Category,
-		"mode":                  filter.Mode,
-		"start_time":            filter.StartTime,
-		"end_time":              filter.EndTime,
-		"snapshot_max_id":       preview.snapshotMaxID,
-		"usage_cleanup_task_id": task.ID,
-	})
-	updateCtx, updateCancel := context.WithTimeout(context.Background(), dataCleanupAuditTimeout)
-	_, _ = s.db.ExecContext(updateCtx, "UPDATE data_cleanup_audits SET filters = $2::jsonb WHERE id = $1", auditID, string(filtersJSON))
-	updateCancel()
-	return &DataCleanupExecuteResult{AuditID: auditID, Status: "pending", TaskID: &task.ID}, nil
-}
-
-func buildDataCleanupUsageFilters(filter DataCleanupFilter, preview *DataCleanupPreview, auditID int64) UsageCleanupFilters {
-	usageFilter := UsageCleanupFilters{
-		All:                          filter.Mode == DataCleanupModeAll,
-		DataCleanupAuditID:           auditID,
-		DataCleanupSnapshotMaxID:     preview.snapshotMaxID,
-		DataCleanupSnapshotRows:      preview.MatchedRows,
-		DataCleanupSnapshotBatchSize: preview.snapshotBatchSize,
-		DataCleanupSnapshotDigests:   append([]string(nil), preview.snapshotDigests...),
-	}
-	if filter.StartTime != nil {
-		usageFilter.StartTime = filter.StartTime.UTC()
-	}
-	if filter.EndTime != nil {
-		usageFilter.EndTime = filter.EndTime.UTC()
-	}
-	if usageFilter.All {
-		now := time.Now().UTC()
-		usageFilter.StartTime = now
-		usageFilter.EndTime = now.Add(time.Microsecond)
-		if preview.snapshotStart != nil {
-			usageFilter.StartTime = preview.snapshotStart.UTC()
-		}
-		if preview.snapshotEnd != nil {
-			usageFilter.EndTime = preview.snapshotEnd.UTC().Add(time.Microsecond)
-		}
-	}
-	return usageFilter
-}
-
 func insertDataCleanupAudit(ctx context.Context, executor interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, filter DataCleanupFilter, preview *DataCleanupPreview, operator DataCleanupOperator, status string) (int64, error) {
-	filtersJSON, _ := json.Marshal(map[string]any{
-		"category":              filter.Category,
-		"mode":                  filter.Mode,
-		"start_time":            filter.StartTime,
-		"end_time":              filter.EndTime,
-		"snapshot_max_id":       preview.snapshotMaxID,
-		"snapshot_batch_size":   preview.snapshotBatchSize,
-		"snapshot_digest_count": len(preview.snapshotDigests),
-	})
+	filtersJSON, _ := json.Marshal(struct {
+		DataCleanupFilter
+		SnapshotMaxID       int64 `json:"snapshot_max_id"`
+		SnapshotBatchSize   int   `json:"snapshot_batch_size"`
+		SnapshotDigestCount int   `json:"snapshot_digest_count"`
+	}{filter, preview.snapshotMaxID, preview.snapshotBatchSize, len(preview.snapshotDigests)})
 	var id int64
 	err := executor.QueryRowContext(ctx, `
 INSERT INTO data_cleanup_audits (
     operator_id, operator_email, auth_method, category, cleanup_mode,
     filters, preview_rows, blocked_rows, status
-) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
+) VALUES (NULLIF($1::bigint,0), $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
 RETURNING id`, operator.UserID, truncateString(operator.Email, 255), truncateString(operator.AuthMethod, 32),
 		filter.Category, filter.Mode, string(filtersJSON), preview.MatchedRows, preview.BlockedRows, status).Scan(&id)
 	return id, err
@@ -803,7 +899,7 @@ func (s *DataCleanupService) finishAudit(ctx context.Context, auditID int64, sta
 	_, err := s.db.ExecContext(ctx, `
 UPDATE data_cleanup_audits
 SET status = $2, deleted_rows = $3, error_message = $4, finished_at = NOW()
-WHERE id = $1`, auditID, status, deleted, errText)
+WHERE id = $1 AND status NOT IN ('succeeded','canceled')`, auditID, status, deleted, errText)
 	return err
 }
 
@@ -813,5 +909,13 @@ func (s *DataCleanupService) completeUsageCleanupAudit(ctx context.Context, task
 	}
 	auditCtx, cancel := context.WithTimeout(context.Background(), dataCleanupAuditTimeout)
 	defer cancel()
-	_ = s.finishAudit(auditCtx, task.Filters.DataCleanupAuditID, status, task.DeletedRows, completionErr)
+	_, _ = s.db.ExecContext(auditCtx, `UPDATE data_cleanup_audits SET status=$2,error_message=$3,finished_at=NOW()
+		WHERE id=$1 AND status<>'canceled'`, task.Filters.DataCleanupAuditID, status, errorString(completionErr))
+}
+
+func errorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return truncateString(err.Error(), 500)
 }

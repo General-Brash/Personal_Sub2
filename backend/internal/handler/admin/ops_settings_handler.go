@@ -218,6 +218,13 @@ func (h *OpsHandler) UpdateAdvancedSettings(c *gin.Context) {
 		return
 	}
 
+	current, err := h.opsService.GetOpsAdvancedSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	// Retention has one owner; saving unrelated ops settings cannot overwrite it.
+	req.DataRetention = current.DataRetention
 	updated, err := h.opsService.UpdateOpsAdvancedSettings(c.Request.Context(), &req)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())

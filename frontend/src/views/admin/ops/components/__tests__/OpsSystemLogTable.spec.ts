@@ -6,14 +6,12 @@ import enLocale from '@/i18n/locales/en'
 import zhLocale from '@/i18n/locales/zh'
 
 const mockListSystemLogs = vi.fn()
-const mockCleanupSystemLogs = vi.fn()
 const mockGetSystemLogSinkHealth = vi.fn()
 const mockGetRuntimeLogConfig = vi.fn()
 
 vi.mock('@/api/admin/ops', () => ({
   opsAPI: {
     listSystemLogs: (...args: any[]) => mockListSystemLogs(...args),
-    cleanupSystemLogs: (...args: any[]) => mockCleanupSystemLogs(...args),
     getSystemLogSinkHealth: (...args: any[]) => mockGetSystemLogSinkHealth(...args),
     getRuntimeLogConfig: (...args: any[]) => mockGetRuntimeLogConfig(...args),
   },
@@ -73,7 +71,6 @@ const sinkHealth = {
 describe('OpsSystemLogTable host support', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     mockListSystemLogs.mockResolvedValue({
       items: [
         {
@@ -89,12 +86,11 @@ describe('OpsSystemLogTable host support', () => {
       page: 1,
       page_size: 20,
     })
-    mockCleanupSystemLogs.mockResolvedValue({ deleted: 1 })
     mockGetSystemLogSinkHealth.mockResolvedValue(sinkHealth)
     mockGetRuntimeLogConfig.mockResolvedValue(runtimeConfig)
   })
 
-  it('renders the host and sends it with list and cleanup filters', async () => {
+  it('renders and filters hosts without exposing a legacy cleanup action', async () => {
     const wrapper = mount(OpsSystemLogTable, {
       global: {
         stubs: {
@@ -119,11 +115,16 @@ describe('OpsSystemLogTable host support', () => {
     expect(mockListSystemLogs).toHaveBeenLastCalledWith(expect.objectContaining({ host: 'api-node-2' }))
 
     const cleanupButton = wrapper.findAll('button').find((button) => button.text() === 'admin.ops.systemLogs.cleanCurrentFilters')
-    expect(cleanupButton).toBeDefined()
-    await cleanupButton!.trigger('click')
+    expect(cleanupButton).toBeUndefined()
+
+    const resetButton = wrapper.findAll('button').find((button) => button.text() === 'common.reset')
+    expect(resetButton).toBeDefined()
+    await resetButton!.trigger('click')
     await flushPromises()
 
-    expect(mockCleanupSystemLogs).toHaveBeenCalledWith(expect.objectContaining({ host: 'api-node-2' }))
+    expect(hostLabel!.find<HTMLInputElement>('input').element.value).toBe('')
+    expect(mockListSystemLogs).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, time_range: '1h' }))
+    expect(mockListSystemLogs.mock.calls.at(-1)?.[0]).not.toHaveProperty('host')
   })
 
   it.each([

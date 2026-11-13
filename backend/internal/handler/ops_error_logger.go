@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -605,10 +606,20 @@ func (w *opsCaptureWriter) WriteHeaderNow() {
 }
 
 func (w *opsCaptureWriter) Flush() {
-	if w.ResponseWriter == nil {
-		return
+	if err := w.FlushError(); err != nil {
+		service.MarkOpsDownstreamWriteError(w.ctx, err, "stream_flush")
 	}
-	w.ResponseWriter.Flush()
+}
+
+func (w *opsCaptureWriter) FlushError() error {
+	if w.ResponseWriter == nil {
+		return nil
+	}
+	return httputil.FlushResponse(w.ResponseWriter)
+}
+
+func (w *opsCaptureWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (w *opsCaptureWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -708,9 +719,10 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			return
 		}
 
+		downstreamErr, downstreamWriteError := service.GetOpsDownstreamWriteError(c)
 		status := c.Writer.Status()
 		var retryFinal *service.OpsServerAutoRetryMetadata
-		if value, ok := c.Get("server_auto_retry_final"); ok {
+		if value, ok := c.Get("server_auto_retry_final"); ok && !downstreamWriteError {
 			if fields, ok := value.(map[string]any); ok {
 				metadata := service.DecodeOpsServerAutoRetryMetadata(fields)
 				if metadata.Outcome == "failed" {
@@ -729,7 +741,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				}
 			}
 		}
-		if status < 400 {
+		if status < 400 && !downstreamWriteError {
 			// Even when the client request succeeds, we still want to persist upstream error attempts
 			// (retries/failover) so ops can observe upstream instability that gets "covered" by retries.
 			var events []*service.OpsUpstreamErrorEvent
@@ -989,7 +1001,19 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		}
 
 		body := w.buf.Bytes()
-		if retryFinal != nil {
+		if downstreamWriteError {
+			payload := gin.H{
+				"error": gin.H{"type": "downstream_write_error", "code": downstreamErr.Code,
+					"stage": downstreamErr.Stage, "message": downstreamErr.Message},
+				"wire_status": status,
+			}
+			if value, ok := c.Get("server_auto_retry_final"); ok {
+				if fields, ok := value.(map[string]any); ok {
+					payload["server_auto_retry"] = service.DecodeOpsServerAutoRetryMetadata(fields)
+				}
+			}
+			body, _ = json.Marshal(payload)
+		} else if retryFinal != nil {
 			body, _ = json.Marshal(gin.H{
 				"error": gin.H{"type": "upstream_error", "code": retryFinal.Reason,
 					"message": "Server auto retry failed: " + retryFinal.Reason + " (" + retryFinal.StopReason + ")"},
@@ -1041,7 +1065,15 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 
 		normalizedType := normalizeOpsErrorType(parsed.ErrorType, parsed.Code)
 
-		phase, isBusinessLimited, errorOwner, errorSource := classifyOpsErrorLog(c, normalizedType, parsed.Message, parsed.Code, status)
+		var phase, errorOwner, errorSource string
+		var isBusinessLimited bool
+		if downstreamWriteError {
+			normalizedType = "downstream_write_error"
+			phase, errorOwner, errorSource = "downstream", "platform", "gateway"
+			parsed.Message = downstreamErr.Message
+		} else {
+			phase, isBusinessLimited, errorOwner, errorSource = classifyOpsErrorLog(c, normalizedType, parsed.Message, parsed.Code, status)
+		}
 
 		entry := &service.OpsInsertErrorLogInput{
 			RequestID:       requestID,
@@ -1294,6 +1326,9 @@ func applyOpsLatencyFieldsFromContext(c *gin.Context, entry *service.OpsInsertEr
 }
 
 func applyOpsServerAutoRetryFinal(entry *service.OpsInsertErrorLogInput, metadata *service.OpsServerAutoRetryMetadata) {
+	if entry.ErrorType == "downstream_write_error" {
+		return
+	}
 	entry.ErrorType = "server_auto_retry_error"
 	entry.ErrorPhase, entry.ErrorOwner, entry.ErrorSource = "upstream", "provider", "upstream_http"
 	entry.IsBusinessLimited = false
@@ -1328,6 +1363,15 @@ func applyOpsServerAutoRetryFinal(entry *service.OpsInsertErrorLogInput, metadat
 // prior inference statuses remain available in UpstreamErrors.
 func applyOpsUpstreamFieldsFromContext(c *gin.Context, entry *service.OpsInsertErrorLogInput) {
 	if c == nil || entry == nil {
+		return
+	}
+	if entry.ErrorType == "downstream_write_error" {
+		// Historical attempts remain in details, not in the final write failure's fields.
+		if v, ok := c.Get(service.OpsUpstreamErrorsKey); ok {
+			if events, ok := v.([]*service.OpsUpstreamErrorEvent); ok {
+				entry.UpstreamErrors = events
+			}
+		}
 		return
 	}
 	if v, ok := c.Get(service.OpsUpstreamStatusCodeKey); ok {

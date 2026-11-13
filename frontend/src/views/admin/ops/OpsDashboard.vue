@@ -40,6 +40,11 @@
       />
 
       <!-- Row: Concurrency + Throughput -->
+      <UsageHistoryNotice
+        :statistics="throughputTrend?.includes_history ? throughputTrend : overview"
+        :granularity="throughputTrend?.bucket === '1d' ? 'day' : undefined"
+        ops
+      />
       <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6 lg:grid-cols-4">
         <div class="lg:col-span-1 min-h-[360px]">
           <OpsConcurrencyCard :platform-filter="platform" :group-id-filter="groupId" :refresh-token="dashboardRefreshToken" />
@@ -54,6 +59,9 @@
         </div>
         <div class="lg:col-span-2 h-[360px]">
           <OpsThroughputTrendChart
+            :bucket="throughputTrend?.bucket"
+            :bucket-timezone="throughputTrend?.bucket_timezone"
+            :includes-history="throughputTrend?.includes_history"
             :points="throughputTrend?.points ?? []"
             :by-platform="throughputTrend?.by_platform ?? []"
             :top-groups="throughputTrend?.top_groups ?? []"
@@ -109,13 +117,6 @@
           :show="showSettingsDialog"
           @close="showSettingsDialog = false"
           @saved="onSettingsSaved"
-          @open-cleanup="openDataCleanup"
-        />
-        <OpsDataCleanupDialog
-          :show="showDataCleanupDialog"
-          @close="showDataCleanupDialog = false"
-          @back="backToOpsSettings"
-          @saved="onSettingsSaved"
         />
 
         <BaseDialog :show="showAlertRulesCard" :title="t('admin.ops.alertRules.title')" width="extra-wide" @close="showAlertRulesCard = false">
@@ -150,11 +151,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useDebounceFn, useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import UsageHistoryNotice from '@/components/usage/UsageHistoryNotice.vue'
+import type { UsageHistoryMetadata } from '@/types/usageStatistics'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import {
   opsAPI,
@@ -181,7 +184,6 @@ import OpsOpenAITokenStatsCard from './components/OpsOpenAITokenStatsCard.vue'
 import OpsSystemLogTable from './components/OpsSystemLogTable.vue'
 import OpsRequestDetailsModal, { type OpsRequestDetailsPreset } from './components/OpsRequestDetailsModal.vue'
 import OpsSettingsDialog from './components/OpsSettingsDialog.vue'
-import OpsDataCleanupDialog from './components/OpsDataCleanupDialog.vue'
 import OpsAlertRulesCard from './components/OpsAlertRulesCard.vue'
 
 const route = useRoute()
@@ -358,7 +360,7 @@ const syncQueryToRoute = useDebounceFn(async () => {
   }
 }, 250)
 
-const overview = ref<OpsDashboardOverview | null>(null)
+const overview = ref<(OpsDashboardOverview & UsageHistoryMetadata) | null>(null)
 const metricThresholds = ref<OpsMetricThresholds | null>(null)
 
 const throughputTrend = ref<OpsThroughputTrendResponse | null>(null)
@@ -390,20 +392,8 @@ const requestDetailsPreset = ref<OpsRequestDetailsPreset>({
 })
 
 const showSettingsDialog = ref(false)
-const showDataCleanupDialog = ref(false)
 const showAlertRulesCard = ref(false)
 
-async function openDataCleanup() {
-  showSettingsDialog.value = false
-  await nextTick()
-  showDataCleanupDialog.value = true
-}
-
-async function backToOpsSettings() {
-  showDataCleanupDialog.value = false
-  await nextTick()
-  showSettingsDialog.value = true
-}
 
 applyRouteQueryToState()
 

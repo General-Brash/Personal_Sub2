@@ -448,7 +448,17 @@ func (s *DefaultModelPricingService) Save(ctx context.Context, model, version st
 		return nil, ErrDefaultPricingVersionConflict
 	}
 	if loaded := s.snapshot.Load(); loaded != nil && current.Revision < loaded.Revision {
-		return nil, ErrServiceUnavailable
+		// A concurrent save may have committed and published after the first read.
+		current, raw, err = s.read(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if current.Revision < loaded.Revision {
+			return nil, ErrServiceUnavailable
+		}
+		if version != strconv.FormatUint(current.Revision, 10) {
+			return nil, ErrDefaultPricingVersionConflict
+		}
 	}
 	previous := current.Models[key]
 	next, err := mergeDefaultPricingPatch(previous, patch)
