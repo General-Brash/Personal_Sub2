@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { emptyEventFilters } from '../viewModel'
+import { emptyEventFilters, promptCleanupFilter } from '../viewModel'
+import { dataCleanupAPI } from '@/api/admin/dataCleanup'
+import type { DataCleanupPreview } from '@/api/admin/ops'
 
 const client = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), delete: vi.fn() }))
 vi.mock('@/api/client', () => ({ apiClient: client }))
@@ -29,16 +31,33 @@ describe('Prompt Audit API', () => {
     expect(JSON.stringify(result)).not.toContain('api-canary-secret')
   })
 
-  it('passes a server preview token through the confirmed filter-delete contract', async () => {
-    client.post.mockResolvedValue({ data: { deleted_events: 2, deleted_jobs: 2 } })
+  it('previews prompt filters centrally and passes the server token, count, confirmation and TOTP to execution', async () => {
     const filters = emptyEventFilters()
     filters.start_at = '2026-07-15T00:00'
     filters.end_at = '2026-07-16T00:00'
-    await promptAuditAPI.deleteEventsByFilter(filters, {
-      matched_count: 2, filter_summary: {}, snapshot_max_id: 10, filter_hash: 'a'.repeat(64), confirmation_token: 'opaque-token', expires_at: '2026-07-16T00:05:00Z',
+    filters.decision = 'critical'
+    filters.api_key_id = '2'
+    const filter = promptCleanupFilter(filters)
+    expect(filter).toMatchObject({
+      category: 'prompt_audit', mode: 'range',
+      start_time: new Date(filters.start_at).toISOString(), end_time: new Date(filters.end_at).toISOString(),
+      prompt_filter: { decision: 'critical', api_key_id: 2 },
     })
-    expect(client.post).toHaveBeenCalledWith('/admin/prompt-audit/events/delete-by-filter', expect.objectContaining({
-      snapshot_max_id: 10, filter_hash: 'a'.repeat(64), confirmation_token: 'opaque-token', confirm: true,
-    }))
+    const preview: DataCleanupPreview = {
+      category: 'prompt_audit', mode: 'range', matched_rows: 2, blocked_rows: 0,
+      confirmation: 'DELETE prompt_audit 2', requires_totp: true, max_range_days: 31, preview_token: 'opaque-token',
+    }
+    client.post.mockResolvedValueOnce({ data: preview })
+    const result = await dataCleanupAPI.preview(filter)
+    expect(result).toEqual(preview)
+    expect(client.post).toHaveBeenNthCalledWith(1, '/admin/data-cleanup/preview', filter, { signal: undefined })
+    const request = {
+      ...filter, preview_rows: result.matched_rows, preview_token: result.preview_token,
+      confirmation: result.confirmation, totp_code: '123456',
+    }
+    client.post.mockResolvedValueOnce({ data: { audit_id: 1, status: 'pending', deleted_rows: 0, task_id: 1 } })
+    expect(await dataCleanupAPI.execute(request)).toMatchObject({ status: 'pending', task_id: 1 })
+    expect(client.post).toHaveBeenNthCalledWith(2, '/admin/data-cleanup/execute', request)
+    expect(promptAuditAPI).not.toHaveProperty('deleteEventsByFilter')
   })
 })

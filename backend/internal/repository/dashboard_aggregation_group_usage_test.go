@@ -5,12 +5,13 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"errors"
+	"database/sql/driver"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,12 +43,12 @@ func TestDashboardAggregationRepositorySyncGroupUsageRollupsRebuildsWhenTimezone
 	mock.ExpectQuery(`SELECT closed_before::text, retained_from.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"closed_before", "retained_from", "timezone_name"}).
 			AddRow("2026-03-09", time.Unix(0, 0).UTC(), "Asia/Shanghai"))
-	mock.ExpectQuery(`SELECT MIN\(created_at\) FROM usage_logs`).
+	mock.ExpectQuery(`^SELECT MIN\(created_at\) FROM usage_statistics$`).
 		WillReturnRows(sqlmock.NewRows([]string{"min"}).AddRow(retainedFrom))
 	mock.ExpectExec(`DELETE FROM usage_group_daily_rollups`).
 		WithArgs("2026-03-01", "2026-03-01", "2026-03-09").
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`INSERT INTO usage_group_daily_rollups`).
+	mock.ExpectExec(`INSERT INTO usage_group_daily_rollups \(bucket_date, group_id, actual_cost, computed_at\) SELECT \(created_at AT TIME ZONE \$3::text\)::date AS bucket_date, group_id, COALESCE\(SUM\(actual_cost\), 0\) AS actual_cost, NOW\(\) FROM usage_statistics WHERE group_id IS NOT NULL AND created_at >= \$1 AND created_at < \$2 GROUP BY 1, 2 ON CONFLICT \(bucket_date, group_id\) DO UPDATE SET actual_cost = EXCLUDED.actual_cost, computed_at = EXCLUDED.computed_at`).
 		WithArgs(retainedFrom, todayStart, "America/New_York").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
@@ -71,12 +72,12 @@ func TestDashboardAggregationRepositorySyncGroupUsageRollupsPublishesWatermarkLa
 	mock.ExpectQuery(`SELECT closed_before::text, retained_from.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"closed_before", "retained_from", "timezone_name"}).
 			AddRow("2026-08-13", time.Unix(0, 0).UTC(), "Asia/Shanghai"))
-	mock.ExpectQuery(`SELECT MIN\(created_at\) FROM usage_logs`).
+	mock.ExpectQuery(`^SELECT MIN\(created_at\) FROM usage_statistics$`).
 		WillReturnRows(sqlmock.NewRows([]string{"min"}).AddRow(retainedFrom))
 	mock.ExpectExec(`DELETE FROM usage_group_daily_rollups`).
 		WithArgs("2026-05-01", "2026-08-13", "2026-08-14").
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`INSERT INTO usage_group_daily_rollups`).
+	mock.ExpectExec(`INSERT INTO usage_group_daily_rollups \(bucket_date, group_id, actual_cost, computed_at\) SELECT \(created_at AT TIME ZONE \$3::text\)::date AS bucket_date, group_id, COALESCE\(SUM\(actual_cost\), 0\) AS actual_cost, NOW\(\) FROM usage_statistics WHERE group_id IS NOT NULL AND created_at >= \$1 AND created_at < \$2 GROUP BY 1, 2 ON CONFLICT \(bucket_date, group_id\) DO UPDATE SET actual_cost = EXCLUDED.actual_cost, computed_at = EXCLUDED.computed_at`).
 		WithArgs(rebuildStart, todayStart, "Asia/Shanghai").
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
@@ -151,9 +152,9 @@ func TestDashboardAggregationRepositoryRecomputeRangeRebuildsGroupRollupsBeforeC
 		`DELETE FROM usage_dashboard_hourly_users WHERE`,
 		`DELETE FROM usage_dashboard_daily WHERE`,
 		`DELETE FROM usage_dashboard_daily_users WHERE`,
-		`INSERT INTO usage_dashboard_hourly_users`,
+		`INSERT INTO usage_dashboard_hourly_users \(bucket_start, user_id\) SELECT DISTINCT date_trunc\('hour', created_at AT TIME ZONE \$3\) AT TIME ZONE \$3 AS bucket_start, user_id FROM usage_statistics WHERE created_at >= \$1 AND created_at < \$2 ON CONFLICT DO NOTHING`,
 		`INSERT INTO usage_dashboard_daily_users`,
-		`INSERT INTO usage_dashboard_hourly`,
+		`WITH hourly AS \( SELECT date_trunc\('hour', created_at AT TIME ZONE \$3\) AT TIME ZONE \$3 AS bucket_start, COALESCE\(SUM\(request_count\),\s*0\) AS total_requests, COALESCE\(SUM\(input_tokens\), 0\) AS input_tokens, COALESCE\(SUM\(output_tokens\), 0\) AS output_tokens, COALESCE\(SUM\(cache_creation_tokens\), 0\) AS cache_creation_tokens, COALESCE\(SUM\(cache_read_tokens\), 0\) AS cache_read_tokens, COALESCE\(SUM\(total_cost\), 0\) AS total_cost, COALESCE\(SUM\(actual_cost\), 0\) AS actual_cost, COALESCE\(SUM\(COALESCE\(account_stats_cost, total_cost\) \* COALESCE\(account_rate_multiplier, 1\)\), 0\) AS account_cost, COALESCE\(SUM\(COALESCE\(duration_ms, 0\)\), 0\) AS total_duration_ms FROM usage_statistics WHERE created_at >= \$1 AND created_at < \$2 GROUP BY 1`,
 		`INSERT INTO usage_dashboard_daily`,
 	} {
 		mock.ExpectExec(query).WillReturnResult(sqlmock.NewResult(0, 1))
@@ -161,12 +162,12 @@ func TestDashboardAggregationRepositoryRecomputeRangeRebuildsGroupRollupsBeforeC
 	mock.ExpectQuery(`SELECT closed_before::text, retained_from.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"closed_before", "retained_from", "timezone_name"}).
 			AddRow(startDate, time.Unix(0, 0).UTC(), "Asia/Shanghai"))
-	mock.ExpectQuery(`SELECT MIN\(created_at\) FROM usage_logs`).
+	mock.ExpectQuery(`^SELECT MIN\(created_at\) FROM usage_statistics$`).
 		WillReturnRows(sqlmock.NewRows([]string{"min"}).AddRow(start))
 	mock.ExpectExec(`DELETE FROM usage_group_daily_rollups`).
 		WithArgs(startDate, startDate, service.GroupUsageDate(todayStart)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`INSERT INTO usage_group_daily_rollups`).
+	mock.ExpectExec(`INSERT INTO usage_group_daily_rollups \(bucket_date, group_id, actual_cost, computed_at\) SELECT \(created_at AT TIME ZONE \$3::text\)::date AS bucket_date, group_id, COALESCE\(SUM\(actual_cost\), 0\) AS actual_cost, NOW\(\) FROM usage_statistics WHERE group_id IS NOT NULL AND created_at >= \$1 AND created_at < \$2 GROUP BY 1, 2 ON CONFLICT \(bucket_date, group_id\) DO UPDATE SET actual_cost = EXCLUDED.actual_cost, computed_at = EXCLUDED.computed_at`).
 		WithArgs(rebuildStart.UTC(), todayStart.UTC(), "Asia/Shanghai").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
@@ -178,104 +179,70 @@ func TestDashboardAggregationRepositoryRecomputeRangeRebuildsGroupRollupsBeforeC
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestDashboardAggregationRepositoryCleanupUsageLogsNonPartitionedInvalidatesEachBatchAndSyncs(t *testing.T) {
+func TestDashboardAggregationRepositoryCleanupUsageLogsCompactsMultipleBatches(t *testing.T) {
 	setGroupUsageRollupTestTimezone(t)
 	db, mock := newSQLMock(t)
 	repo := newDashboardAggregationRepositoryWithSQL(db)
 	cutoff := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
-	earliestDeletedAt := time.Date(2026, 5, 3, 2, 0, 0, 0, time.UTC)
 	fixedNow := time.Date(2026, 8, 14, 8, 0, 0, 0, time.UTC)
 	repo.clock = func() time.Time { return fixedNow }
-	todayStart := service.GroupUsageTodayStart(fixedNow)
 
-	mock.ExpectQuery(`SELECT EXISTS`).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING created_at`).
-		WithArgs(cutoff, usageLogsCleanupBatchSize).
-		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).
-			AddRow(earliestDeletedAt.Add(time.Hour)).
-			AddRow(earliestDeletedAt))
-	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
-		WithArgs(earliestDeletedAt, "Asia/Shanghai").
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
-	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT closed_before::text, retained_from.*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"closed_before", "retained_from", "timezone_name"}).
-			AddRow(service.GroupUsageDate(todayStart), time.Unix(0, 0).UTC(), "Asia/Shanghai"))
-	mock.ExpectCommit()
-
-	require.NoError(t, repo.CleanupUsageLogs(context.Background(), cutoff))
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestDashboardAggregationRepositoryCleanupUsageLogsPartitionedSortsAndInvalidatesEachDropBeforeSync(t *testing.T) {
-	setGroupUsageRollupTestTimezone(t)
-	db, mock := newSQLMock(t)
-	repo := newDashboardAggregationRepositoryWithSQL(db)
-	cutoff := time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC)
-	aprilStart := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
-	juneStart := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
-	fixedNow := time.Date(2026, 8, 14, 8, 0, 0, 0, time.UTC)
-	repo.clock = func() time.Time { return fixedNow }
-	todayStart := service.GroupUsageTodayStart(fixedNow)
-
-	mock.ExpectQuery(`SELECT EXISTS`).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectQuery(`SELECT c.relname`).
-		WillReturnRows(sqlmock.NewRows([]string{"relname"}).
-			AddRow("usage_logs_202606").
-			AddRow("usage_logs_invalid").
-			AddRow("usage_logs_202604").
-			AddRow("usage_logs_202607"))
-
-	for _, partition := range []struct {
-		name  string
-		start time.Time
-	}{
-		{name: "usage_logs_202604", start: aprilStart},
-		{name: "usage_logs_202606", start: juneStart},
-	} {
-		mock.ExpectBegin()
-		mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-		mock.ExpectExec(`UPDATE usage_group_rollup_state`).
-			WithArgs(partition.start, "Asia/Shanghai").
-			WillReturnResult(sqlmock.NewResult(0, 1))
-		mock.ExpectExec(`DROP TABLE IF EXISTS "` + partition.name + `"`).
-			WillReturnResult(sqlmock.NewResult(0, 0))
-		mock.ExpectCommit()
+	ids := make([]int64, 10000)
+	rows := sqlmock.NewRows([]string{"id"})
+	for i := range ids {
+		ids[i] = int64(i + 1)
+		rows.AddRow(ids[i])
 	}
-	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT closed_before::text, retained_from.*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"closed_before", "retained_from", "timezone_name"}).
-			AddRow(service.GroupUsageDate(todayStart), time.Unix(0, 0).UTC(), "Asia/Shanghai"))
+	expectDashboardUsageCompactionCandidates(t, mock, cutoff, rows)
+	mock.ExpectQuery(`^SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch\(\$1,\$2\)$`).
+		WithArgs(pq.Array(ids), "Asia/Shanghai").
+		WillReturnRows(sqlmock.NewRows([]string{"processed_rows", "deleted_rows", "protected_rows"}).
+			AddRow(int64(10000), int64(0), int64(10000)))
+	mock.ExpectCommit()
+
+	expectDashboardUsageCompactionCandidates(t, mock, cutoff, sqlmock.NewRows([]string{"id"}).AddRow(int64(10001)))
+	mock.ExpectQuery(`^SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch\(\$1,\$2\)$`).
+		WithArgs(pq.Array([]int64{10001}), "Asia/Shanghai").
+		WillReturnRows(sqlmock.NewRows([]string{"processed_rows", "deleted_rows", "protected_rows"}).
+			AddRow(int64(1), int64(1), int64(0)))
 	mock.ExpectCommit()
 
 	require.NoError(t, repo.CleanupUsageLogs(context.Background(), cutoff))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestDashboardAggregationRepositoryCleanupUsageLogsNonPartitionedFailureRollsBackWithoutSync(t *testing.T) {
+func TestDashboardAggregationRepositoryCleanupUsageLogsCapsCutoffWithoutDeletingPartitions(t *testing.T) {
+	setGroupUsageRollupTestTimezone(t)
+	db, mock := newSQLMock(t)
+	repo := newDashboardAggregationRepositoryWithSQL(db)
+	cutoff := time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC)
+	fixedNow := time.Date(2026, 8, 14, 8, 0, 0, 0, time.UTC)
+	repo.clock = func() time.Time { return fixedNow }
+	completedMonthEnd := service.UsageCompactionEnd(fixedNow)
+	require.Equal(t, time.Date(2026, 7, 31, 16, 0, 0, 0, time.UTC), completedMonthEnd)
+
+	expectDashboardUsageCompactionCandidates(t, mock, completedMonthEnd, sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	mock.ExpectQuery(`^SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch\(\$1,\$2\)$`).
+		WithArgs(pq.Array([]int64{42}), "Asia/Shanghai").
+		WillReturnRows(sqlmock.NewRows([]string{"processed_rows", "deleted_rows", "protected_rows"}).
+			AddRow(int64(1), int64(0), int64(1)))
+	mock.ExpectCommit()
+
+	require.NoError(t, repo.CleanupUsageLogs(context.Background(), cutoff))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardAggregationRepositoryCleanupUsageLogsCompactionFailureRollsBackAndStops(t *testing.T) {
 	setGroupUsageRollupTestTimezone(t)
 	db, mock := newSQLMock(t)
 	repo := newDashboardAggregationRepositoryWithSQL(db)
 	cutoff := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
-	deletedAt := time.Date(2026, 5, 3, 2, 0, 0, 0, time.UTC)
+	fixedNow := time.Date(2026, 8, 14, 8, 0, 0, 0, time.UTC)
+	repo.clock = func() time.Time { return fixedNow }
 
-	mock.ExpectQuery(`SELECT EXISTS`).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)SELECT ctid.*ORDER BY created_at ASC, id ASC.*DELETE FROM usage_logs.*RETURNING created_at`).
-		WithArgs(cutoff, usageLogsCleanupBatchSize).
-		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(deletedAt))
-	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
-		WithArgs(deletedAt, "Asia/Shanghai").
+	expectDashboardUsageCompactionCandidates(t, mock, cutoff, sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	mock.ExpectQuery(`^SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch\(\$1,\$2\)$`).
+		WithArgs(pq.Array([]int64{42}), "Asia/Shanghai").
 		WillReturnError(sql.ErrConnDone)
 	mock.ExpectRollback()
 
@@ -284,33 +251,52 @@ func TestDashboardAggregationRepositoryCleanupUsageLogsNonPartitionedFailureRoll
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestDashboardAggregationRepositoryCleanupUsageLogsPartitionFailureRollsBackAndStops(t *testing.T) {
+func TestDashboardAggregationRepositoryCleanupUsageLogsProcessedCountMismatchRollsBackAndStops(t *testing.T) {
 	setGroupUsageRollupTestTimezone(t)
 	db, mock := newSQLMock(t)
 	repo := newDashboardAggregationRepositoryWithSQL(db)
 	cutoff := time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC)
-	aprilStart := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
-	dropErr := errors.New("drop partition failed")
+	fixedNow := time.Date(2026, 8, 14, 8, 0, 0, 0, time.UTC)
+	repo.clock = func() time.Time { return fixedNow }
 
-	mock.ExpectQuery(`SELECT EXISTS`).
-		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectQuery(`SELECT c.relname`).
-		WillReturnRows(sqlmock.NewRows([]string{"relname"}).
-			AddRow("usage_logs_202606").
-			AddRow("usage_logs_202604"))
-	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
-		WithArgs(aprilStart, "Asia/Shanghai").
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`DROP TABLE IF EXISTS "usage_logs_202604"`).
-		WillReturnError(dropErr)
+	expectDashboardUsageCompactionCandidates(t, mock, cutoff, sqlmock.NewRows([]string{"id"}).AddRow(int64(42)).AddRow(int64(43)))
+	mock.ExpectQuery(`^SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch\(\$1,\$2\)$`).
+		WithArgs(pq.Array([]int64{42, 43}), "Asia/Shanghai").
+		WillReturnRows(sqlmock.NewRows([]string{"processed_rows", "deleted_rows", "protected_rows"}).
+			AddRow(int64(1), int64(1), int64(0)))
 	mock.ExpectRollback()
 
 	err := repo.CleanupUsageLogs(context.Background(), cutoff)
-	require.ErrorIs(t, err, dropErr)
+	require.ErrorIs(t, err, service.ErrUsageCleanupSnapshotMismatch)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func expectDashboardUsageCompactionCandidates(t *testing.T, mock sqlmock.Sqlmock, cutoff time.Time, rows *sqlmock.Rows) {
+	t.Helper()
+	mock.ExpectBegin()
+	mock.ExpectExec(`^SELECT pg_advisory_xact_lock\(\$1\)$`).
+		WithArgs(usageCompactionLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`^SELECT id FROM usage_group_rollup_state WHERE id=1 FOR UPDATE NOWAIT$`).
+		WithArgs().
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`^SELECT id FROM usage_logs WHERE created_at >= \$1 AND created_at < \$2 AND compacted_at IS NULL AND created_at < \$3 ORDER BY created_at,id LIMIT \$4 FOR UPDATE NOWAIT$`).
+		WithArgs(time.Unix(0, 0).UTC(), cutoff.UTC(), dashboardUsageCompactionEndMatcher{startedAt: time.Now()}, 10000).
+		WillReturnRows(rows).
+		RowsWillBeClosed()
+}
+
+type dashboardUsageCompactionEndMatcher struct {
+	startedAt time.Time
+}
+
+func (m dashboardUsageCompactionEndMatcher) Match(value driver.Value) bool {
+	end, ok := value.(time.Time)
+	if !ok {
+		return false
+	}
+	// Accept only the actual month boundary, including a rollover during the call.
+	return end.Equal(service.UsageCompactionEnd(m.startedAt)) || end.Equal(service.UsageCompactionEnd(time.Now()))
 }
 
 func setGroupUsageRollupTestTimezone(t *testing.T) {

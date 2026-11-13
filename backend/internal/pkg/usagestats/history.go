@@ -5,8 +5,8 @@ import "time"
 // HistoryMetadata describes the loss of sub-day precision after compaction.
 // History bounds are half-open and cover only the included archived buckets.
 type HistoryMetadata struct {
-	IncludesHistory    bool       `json:"includes_history"`
-	Approximate        bool       `json:"approximate"`
+	IncludesHistory    bool       `json:"includes_history,omitempty"`
+	Approximate        bool       `json:"approximate,omitempty"`
 	HistoryGranularity string     `json:"history_granularity,omitempty"`
 	HistoryRangePolicy string     `json:"history_range_policy,omitempty"`
 	HistoryTimezone    string     `json:"history_timezone,omitempty"`

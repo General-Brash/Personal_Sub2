@@ -38,12 +38,22 @@ func TestHTTPUpstreamTrafficCountsWireBytesForCompressedStreamErrorsAndRetries(t
 			_, _ = io.WriteString(compressed, strings.Repeat("x", 1<<20))
 			_ = compressed.Close()
 		case "/stream":
+			flusher, ok := w.(http.Flusher)
+			if !ok {
+				t.Error("stream response writer does not support flushing")
+				return
+			}
 			w.Header().Set("Content-Type", "text/event-stream")
 			_, _ = io.WriteString(w, "data: first\n\n")
-			w.(http.Flusher).Flush()
+			flusher.Flush()
 			_, _ = io.WriteString(w, "data: second\n\n")
 		case "/broken":
-			conn, _, err := w.(http.Hijacker).Hijack()
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				t.Error("broken response writer does not support hijacking")
+				return
+			}
+			conn, _, err := hijacker.Hijack()
 			if err == nil {
 				_ = conn.Close()
 			}
@@ -140,7 +150,13 @@ func startTrafficConnectProxy(t *testing.T, targetAddr string) string {
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
-		client, buffered, err := w.(http.Hijacker).Hijack()
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("CONNECT response writer does not support hijacking")
+			_ = target.Close()
+			return
+		}
+		client, buffered, err := hijacker.Hijack()
 		if err != nil {
 			_ = target.Close()
 			return
@@ -180,7 +196,9 @@ func TestHTTPUpstreamTrafficTLSHTTP2PreservesProtocolAndCountsEncryptedBytes(t *
 	require.NoError(t, err)
 	transport, err := buildUpstreamTransport(defaultPoolSettings(nil), proxyURL, upstreamProtocolModeOpenAIH2)
 	require.NoError(t, err)
-	transport.TLSClientConfig = &tls.Config{RootCAs: target.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs}
+	targetTransport, ok := target.Client().Transport.(*http.Transport)
+	require.True(t, ok, "TLS test client must use an HTTP transport")
+	transport.TLSClientConfig = &tls.Config{RootCAs: targetTransport.TLSClientConfig.RootCAs}
 	client := &http.Client{Transport: transport}
 	t.Cleanup(client.CloseIdleConnections)
 	resp, err := client.Get(target.URL)
@@ -217,7 +235,8 @@ func TestHTTPUpstreamTrafficTLSFingerprintRecordsConnectAndFailedHandshake(t *te
 }
 
 func TestHTTPUpstreamTrafficNodeIdentitySeparatesSharedProxyPools(t *testing.T) {
-	upstream := NewHTTPUpstream(nil).(*httpUpstreamService)
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok, "upstream must expose the concrete HTTP service")
 	first, err := upstream.getClientEntryForNode("http://same.example:8080", 1, 1, service.HTTPUpstreamProfileDefault, false, false, 7)
 	require.NoError(t, err)
 	second, err := upstream.getClientEntryForNode("http://same.example:8080", 1, 1, service.HTTPUpstreamProfileDefault, false, false, 8)

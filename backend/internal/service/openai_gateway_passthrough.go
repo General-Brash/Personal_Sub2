@@ -1682,7 +1682,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		}
 	}
 	flushPendingOutput()
-	if writeErr, ok := GetOpsDownstreamWriteError(c); ok && (!(sawDone || sawTerminalEvent) || sawFailedEvent) {
+	if writeErr, ok := GetOpsDownstreamWriteError(c); ok && (!sawDone && !sawTerminalEvent || sawFailedEvent) {
 		return resultWithUsage(), writeErr
 	}
 	if err := documentScanner.Err(); err != nil {

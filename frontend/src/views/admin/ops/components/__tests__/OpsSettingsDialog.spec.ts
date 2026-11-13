@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import OpsSettingsDialog from '../OpsSettingsDialog.vue'
+import { opsAPI } from '@/api/admin/ops'
 
 const mockGetAlertRuntimeSettings = vi.fn()
 const mockGetEmailNotificationConfig = vi.fn()
@@ -56,7 +57,7 @@ const SelectStub = defineComponent({
 })
 
 describe('OpsSettingsDialog', () => {
-  it('提供醒目的独立数据清理入口，并从高级设置移除重复表单', async () => {
+  it('keeps cleanup out of ops settings while loading and saving advanced settings', async () => {
     mockGetAlertRuntimeSettings.mockResolvedValue({
       evaluation_interval_seconds: 60,
       distributed_lock: { enabled: false, key: '', ttl_seconds: 60 },
@@ -123,13 +124,24 @@ describe('OpsSettingsDialog', () => {
     await wrapper.setProps({ show: true })
     await flushPromises()
 
-    const cleanupSection = wrapper.get('[data-testid="ops-data-cleanup-section"]')
     const advancedSection = wrapper.get('[data-testid="ops-advanced-settings"]')
 
-    expect(cleanupSection.text()).toContain('admin.ops.settings.dataCleanup')
+    expect(mockGetAdvancedSettings).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="ops-data-cleanup-section"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('admin.ops.settings.dataCleanup')
     expect(advancedSection.get('summary').text()).toBe('admin.ops.settings.advancedSettings')
     expect(advancedSection.text()).not.toContain('admin.ops.settings.dataRetention')
-    await cleanupSection.trigger('click')
-    expect(wrapper.emitted('openCleanup')).toEqual([[]])
+    await advancedSection.get('[data-testid="ops-quota-auto-pause-5h"]').setValue(75)
+    const saveButton = wrapper.findAll('button').find((button) => button.text() === 'common.save')
+    expect(saveButton).toBeDefined()
+    await saveButton!.trigger('click')
+    await flushPromises()
+    expect(opsAPI.updateAdvancedSettings).toHaveBeenCalledWith(expect.objectContaining({
+      openai_account_quota_auto_pause: { default_threshold_5h: 0.75, default_threshold_7d: 0 },
+      data_retention: expect.objectContaining({ cleanup_schedule: '0 2 * * *' }),
+    }))
+    expect(wrapper.emitted('saved')).toEqual([[]])
+    expect(wrapper.emitted('close')).toEqual([[]])
+    expect(wrapper.emitted('openCleanup')).toBeUndefined()
   })
 })

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import enLocale from '@/i18n/locales/en'
 
 import type { CheckinStatus } from '@/api/checkin'
 import DashboardView from '../DashboardView.vue'
@@ -61,6 +63,7 @@ function deferred<T>() {
 function mountDashboard() {
   return mount(DashboardView, {
     global: {
+      plugins: [createI18n({ legacy: false, locale: 'en', messages: { en: enLocale } })],
       stubs: {
         AppLayout: { template: '<main><slot /></main>' },
         LoadingSpinner: true,
@@ -93,7 +96,7 @@ describe('DashboardView daily check-in integration', () => {
     vi.setSystemTime(new Date('2026-07-16T04:00:00Z'))
     refreshUser.mockResolvedValue(undefined)
     getDashboardStats.mockResolvedValue({ by_platform: [] })
-    getDashboardTrend.mockResolvedValue({ trend: [] })
+    getDashboardTrend.mockResolvedValue({ trend: [], granularity: 'day' })
     getDashboardModels.mockResolvedValue({ models: [] })
     getByDateRange.mockResolvedValue({ items: [] })
     getMyPlatformQuotas.mockResolvedValue({ platform_quotas: [] })

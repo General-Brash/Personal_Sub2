@@ -1054,7 +1054,7 @@ func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
 	// lists.  Without the exemption the entire streaming-path cyber sink would be invisible.
 	// Explicit downstream write failures also retain their committed wire status.
 	if !opsFilterIncludesRecoveredProviderRows(filter, phaseFilter) {
-		clauses = append(clauses, "(COALESCE(e.status_code, 0) >= 400 OR e.error_type IN ('cyber_policy', 'downstream_write_error'))")
+		clauses = append(clauses, "(COALESCE(e.status_code, 0) >= 400 OR e.error_type = 'cyber_policy' OR e.error_type = 'downstream_write_error')")
 	}
 
 	if filter.StartTime != nil && !filter.StartTime.IsZero() {

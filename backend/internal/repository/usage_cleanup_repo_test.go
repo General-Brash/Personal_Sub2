@@ -21,11 +21,6 @@ func newSQLMock(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
 	return db, mock
 }
 
-func setUsageCleanupRollupTestTimezone(t *testing.T) {
-	t.Helper()
-	useGroupUsageRepositoryTestTimezone(t, "Asia/Shanghai")
-}
-
 func TestNewUsageCleanupRepository(t *testing.T) {
 	db, _ := newSQLMock(t)
 	repo := NewUsageCleanupRepository(nil, db)

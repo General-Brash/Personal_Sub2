@@ -16,7 +16,6 @@ import (
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
-	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -156,19 +155,19 @@ var dataCleanupTargets = map[string]dataCleanupTarget{
 }
 
 // DataCleanupService owns the destructive, allowlisted cleanup workflow and its
-// independent audit trail. Automatic scheduling remains in the existing ops,
-// usage and audit services.
+// independent audit trail. Existing ops, usage and audit services trigger automatic
+// scheduling; usage retention tasks are queued and executed here.
 type DataCleanupService struct {
-	db             *sql.DB
-	settings       *SettingService
-	usageCleanup   *UsageCleanupService
-	previewKey     []byte
-	workerCancel   context.CancelFunc
-	workerWG       sync.WaitGroup
-	promptPayloads redis.Cmdable
+	db                   *sql.DB
+	settings             *SettingService
+	usageCleanup         *UsageCleanupService
+	previewKey           []byte
+	workerCancel         context.CancelFunc
+	workerWG             sync.WaitGroup
+	deletePromptPayloads func(context.Context, ...string) error
 }
 
-func NewDataCleanupService(db *sql.DB, settings *SettingService, usageCleanup *UsageCleanupService, promptPayloads ...redis.Cmdable) *DataCleanupService {
+func NewDataCleanupService(db *sql.DB, settings *SettingService, usageCleanup *UsageCleanupService, deletePromptPayloads ...func(context.Context, ...string) error) *DataCleanupService {
 	key := make([]byte, sha256.Size)
 	if settings != nil && settings.cfg != nil && strings.TrimSpace(settings.cfg.JWT.Secret) != "" {
 		digest := sha256.Sum256([]byte("data-cleanup-preview:" + strings.TrimSpace(settings.cfg.JWT.Secret)))
@@ -177,8 +176,8 @@ func NewDataCleanupService(db *sql.DB, settings *SettingService, usageCleanup *U
 		panic(fmt.Sprintf("generate data cleanup preview key: %v", err))
 	}
 	svc := &DataCleanupService{db: db, settings: settings, usageCleanup: usageCleanup, previewKey: key}
-	if len(promptPayloads) > 0 {
-		svc.promptPayloads = promptPayloads[0]
+	if len(deletePromptPayloads) > 0 {
+		svc.deletePromptPayloads = deletePromptPayloads[0]
 	}
 	if usageCleanup != nil {
 		usageCleanup.SetDataCleanupCompletionHook(svc.completeUsageCleanupAudit)
@@ -844,35 +843,6 @@ WHERE target.id IN (SELECT id FROM batch)`, target.table, where, limitPos, targe
 		}
 	}
 	return total, nil
-}
-
-func buildDataCleanupUsageFilters(filter DataCleanupFilter, preview *DataCleanupPreview, auditID int64) UsageCleanupFilters {
-	usageFilter := UsageCleanupFilters{
-		All:                          filter.Mode == DataCleanupModeAll,
-		DataCleanupAuditID:           auditID,
-		DataCleanupSnapshotMaxID:     preview.snapshotMaxID,
-		DataCleanupSnapshotRows:      preview.MatchedRows,
-		DataCleanupSnapshotBatchSize: preview.snapshotBatchSize,
-		DataCleanupSnapshotDigests:   append([]string(nil), preview.snapshotDigests...),
-	}
-	if filter.StartTime != nil {
-		usageFilter.StartTime = filter.StartTime.UTC()
-	}
-	if filter.EndTime != nil {
-		usageFilter.EndTime = filter.EndTime.UTC()
-	}
-	if usageFilter.All {
-		now := time.Now().UTC()
-		usageFilter.StartTime = now
-		usageFilter.EndTime = now.Add(time.Microsecond)
-		if preview.snapshotStart != nil {
-			usageFilter.StartTime = preview.snapshotStart.UTC()
-		}
-		if preview.snapshotEnd != nil {
-			usageFilter.EndTime = preview.snapshotEnd.UTC().Add(time.Microsecond)
-		}
-	}
-	return usageFilter
 }
 
 func insertDataCleanupAudit(ctx context.Context, executor interface {

@@ -595,7 +595,13 @@ func ProvideOpsCleanupService(
 }
 
 func ProvideDataCleanupService(db *sql.DB, settingService *SettingService, usageCleanup *UsageCleanupService, redisClient *redis.Client) *DataCleanupService {
-	svc := NewDataCleanupService(db, settingService, usageCleanup, redisClient)
+	var deletePromptPayloads func(context.Context, ...string) error
+	if redisClient != nil {
+		deletePromptPayloads = func(ctx context.Context, keys ...string) error {
+			return redisClient.Del(ctx, keys...).Err()
+		}
+	}
+	svc := NewDataCleanupService(db, settingService, usageCleanup, deletePromptPayloads)
 	svc.Start()
 	return svc
 }

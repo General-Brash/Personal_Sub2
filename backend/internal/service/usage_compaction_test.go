@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/stretchr/testify/require"
 )
@@ -46,28 +47,28 @@ func TestQueuedCleanupPreviewSurvivesSubmissionExpiryButNotTampering(t *testing.
 	require.Error(t, err)
 }
 
-type auditRetentionProbe struct {
-	AuditLogRepository
-	calls int
-}
-
-func (p *auditRetentionProbe) DeleteBefore(context.Context, time.Time, int) (int64, error) {
-	p.calls++
-	return 0, nil
-}
-
 func TestAuditLogRetentionHonorsUnifiedCleanupSwitch(t *testing.T) {
 	repo := newRuntimeSettingRepoStub()
 	repo.values[SettingKeyAuditLogRetentionDays] = "1"
-	probe := &auditRetentionProbe{}
-	svc := NewAuditLogService(probe, NewSettingService(repo, nil))
-	defer svc.Stop()
-	svc.runRetentionOnce()
-	require.Zero(t, probe.calls, "missing master setting defaults to protected")
-	repo.values[SettingKeyOpsAdvancedSettings] = `{"data_retention":{"cleanup_enabled":false}}`
-	svc.runRetentionOnce()
-	require.Zero(t, probe.calls)
-	repo.values[SettingKeyOpsAdvancedSettings] = `{"data_retention":{"cleanup_enabled":true}}`
-	svc.runRetentionOnce()
-	require.Equal(t, 1, probe.calls)
+	svc := NewOpsCleanupService(nil, nil, nil, &config.Config{}, nil, repo)
+
+	for _, tc := range []struct {
+		name           string
+		settings       string
+		cleanupEnabled bool
+	}{
+		{name: "missing master setting defaults to protected"},
+		{name: "disabled master setting protects audit logs", settings: `{"data_retention":{"cleanup_enabled":false}}`},
+		{name: "enabled master setting permits audit retention", settings: `{"data_retention":{"cleanup_enabled":true}}`, cleanupEnabled: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.settings != "" {
+				repo.values[SettingKeyOpsAdvancedSettings] = tc.settings
+			}
+			// Scheduled cleanup refreshes this policy before checking the master switch.
+			require.NoError(t, svc.refreshEffectiveBeforeRun(context.Background()))
+			require.Equal(t, tc.cleanupEnabled, svc.effective.Enabled)
+			require.Equal(t, OpsRetentionPolicy{Enabled: true, RetentionDays: 1}, svc.snapshotEffectiveTargets()["audit_logs"])
+		})
+	}
 }

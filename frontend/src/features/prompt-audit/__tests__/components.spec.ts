@@ -7,6 +7,7 @@ import EventWorkspace from '../components/EventWorkspace.vue'
 import EventDetailDialog from '../components/EventDetailDialog.vue'
 import FilterDeleteDialog from '../components/FilterDeleteDialog.vue'
 import type { PromptAuditDraft, PromptAuditEndpointDraft, PromptAuditEvent, PromptEventFilters } from '../types'
+import type { DataCleanupPreview } from '@/api/admin/ops'
 import { emptyEventFilters, resolveDeleteRangeFilters, SCANNER_CATALOG } from '../viewModel'
 
 vi.mock('vue-i18n', async () => {
@@ -21,6 +22,12 @@ const endpoint = (): PromptAuditEndpointDraft => ({
   id: 'guard-1', name: 'Guard One', protocol: 'openai_compatible', base_url: 'http://127.0.0.1:8000',
   model: 'guard-model', timeout_ms: 3000, input_limit: 4000, enabled: true,
   has_token: true, token_status: 'configured', token: '', clear_token: false,
+})
+
+const cleanupPreview = (matchedRows: number, requiresTotp = true): DataCleanupPreview => ({
+  category: 'prompt_audit', mode: 'range', matched_rows: matchedRows, blocked_rows: 0,
+  confirmation: `DELETE prompt_audit ${matchedRows}`, requires_totp: requiresTotp,
+  max_range_days: 31, preview_token: 'opaque-token',
 })
 
 describe('Prompt Audit components', () => {
@@ -122,14 +129,10 @@ describe('Prompt Audit components', () => {
     expect(wrapper.get<HTMLInputElement>('[data-test="range-preset-7d"]').element.checked).toBe(true)
     expect(wrapper.find('[data-test="custom-range"]').exists()).toBe(false)
     expect(wrapper.get('[data-test="delete-preview-empty"]').exists()).toBeTruthy()
-    // A valid preset is enough: confirm is armed immediately (one-click flow)
-    // and needs no disabled-reason hint.
-    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).not.toHaveProperty('disabled')
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
     expect(wrapper.find('[data-test="confirm-disabled-reason"]').exists()).toBe(false)
     await wrapper.get('[data-test="confirm-filter-delete"]').trigger('click')
-    const directConfirm = wrapper.emitted('confirm')?.at(-1)?.[0] as PromptEventFilters
-    expect(directConfirm.start_at).toBe('1970-01-01T00:00:00.000Z')
-    expect(Date.now() - new Date(directConfirm.end_at).getTime()).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 * 1000)
+    expect(wrapper.emitted('confirm')).toBeUndefined()
 
     await wrapper.get('[data-test="range-preset-30d"]').setValue()
     expect(wrapper.emitted('criteria-change')?.length).toBeGreaterThan(0)
@@ -149,23 +152,54 @@ describe('Prompt Audit components', () => {
     await wrapper.get('[data-test="custom-range"] [aria-label="admin.promptAudit.events.startAt"]').setValue('2026-07-01T00:00')
     await wrapper.get('[data-test="custom-range"] [aria-label="admin.promptAudit.events.endAt"]').setValue('2026-07-02T00:00')
     expect(wrapper.get('[data-test="run-delete-preview"]').attributes()).not.toHaveProperty('disabled')
-    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).not.toHaveProperty('disabled')
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
     expect(wrapper.find('[data-test="confirm-disabled-reason"]').exists()).toBe(false)
     await wrapper.get('[data-test="run-delete-preview"]').trigger('click')
     const customPreview = wrapper.emitted('preview')?.at(-1)?.[0] as PromptEventFilters
     expect(customPreview.start_at).toBe('2026-07-01T00:00')
     expect(customPreview.end_at).toBe('2026-07-02T00:00')
 
-    await wrapper.setProps({
-      preview: { matched_count: 3, filter_summary: {}, snapshot_max_id: 9, filter_hash: 'b'.repeat(64), confirmation_token: 'tok', expires_at: '2026-07-16T00:05:00Z' },
-    })
+    const preview = cleanupPreview(3)
+    await wrapper.setProps({ preview })
     expect(wrapper.get('[data-test="delete-preview-result"]').text()).toContain('admin.promptAudit.events.filterDeleteCount')
     expect(wrapper.find('[data-test="confirm-disabled-reason"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
+    await wrapper.get('[aria-label="dataCleanup.confirmation"]').setValue('wrong confirmation')
+    await wrapper.get('[aria-label="dataCleanup.totp"]').setValue('123456')
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
+    await wrapper.get('[aria-label="dataCleanup.confirmation"]').setValue(preview.confirmation)
+    await wrapper.get('[aria-label="dataCleanup.totp"]').setValue('12345')
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
+    await wrapper.get('[aria-label="dataCleanup.totp"]').setValue('12345x')
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
+    await wrapper.get('[aria-label="dataCleanup.totp"]').setValue('123456')
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).not.toHaveProperty('disabled')
+    await wrapper.setProps({ previewing: true })
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
+    await wrapper.setProps({ previewing: false, deleting: true })
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
+    await wrapper.setProps({ deleting: false })
+    await wrapper.get('[data-test="confirm-filter-delete"]').trigger('click')
+    expect(wrapper.emitted('confirm')).toEqual([[preview.confirmation, '123456']])
+
+    await wrapper.get('[data-test="delete-decision"]').setValue('critical')
+    expect(wrapper.emitted('criteria-change')?.length).toBeGreaterThan(0)
+    expect(wrapper.get<HTMLInputElement>('[aria-label="dataCleanup.confirmation"]').element.value).toBe('')
+    expect(wrapper.get<HTMLInputElement>('[aria-label="dataCleanup.totp"]').element.value).toBe('')
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
+
+    const nextPreview = cleanupPreview(4, false)
+    await wrapper.setProps({ preview: nextPreview })
+    expect(wrapper.find('[aria-label="dataCleanup.totp"]').exists()).toBe(false)
+    await wrapper.get('[aria-label="dataCleanup.confirmation"]').setValue(nextPreview.confirmation)
     expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).not.toHaveProperty('disabled')
     await wrapper.get('[data-test="confirm-filter-delete"]').trigger('click')
-    const confirmed = wrapper.emitted('confirm')?.at(-1)?.[0] as PromptEventFilters
-    expect(confirmed.start_at).toBe('2026-07-01T00:00')
-    expect(confirmed.end_at).toBe('2026-07-02T00:00')
+    expect(wrapper.emitted('confirm')?.at(-1)).toEqual([nextPreview.confirmation, ''])
+
+    await wrapper.setProps({ preview: cleanupPreview(5) })
+    expect(wrapper.get<HTMLInputElement>('[aria-label="dataCleanup.confirmation"]').element.value).toBe('')
+    expect(wrapper.get<HTMLInputElement>('[aria-label="dataCleanup.totp"]').element.value).toBe('')
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
   })
 
   it('explains that a zero-match preview leaves nothing to delete', async () => {
@@ -173,12 +207,15 @@ describe('Prompt Audit components', () => {
       props: {
         show: true,
         initialFilters: emptyEventFilters(),
-        preview: { matched_count: 0, filter_summary: {}, snapshot_max_id: 0, filter_hash: 'c'.repeat(64), confirmation_token: 'tok', expires_at: '2026-07-16T00:05:00Z' },
+        preview: cleanupPreview(0),
         previewing: false,
         deleting: false,
       },
       global: { stubs: { BaseDialog: DialogStub } },
     })
+    expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
+    await wrapper.get('[aria-label="dataCleanup.confirmation"]').setValue(cleanupPreview(0).confirmation)
+    await wrapper.get('[aria-label="dataCleanup.totp"]').setValue('123456')
     expect(wrapper.get('[data-test="confirm-filter-delete"]').attributes()).toHaveProperty('disabled')
     expect(wrapper.get('[data-test="confirm-disabled-reason"]').text()).toBe('admin.promptAudit.events.filterDeleteConfirmNoMatches')
     await wrapper.setProps({ previewing: true })

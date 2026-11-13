@@ -393,14 +393,14 @@ func (s *DataCleanupService) flushPromptCleanupPayloads(parent context.Context, 
 		return err
 	}
 	if len(jobIDs) > 0 {
-		if s.promptPayloads == nil {
+		if s.deletePromptPayloads == nil {
 			return errCleanupPromptPayload
 		}
 		keys := make([]string, 0, len(jobIDs))
 		for _, jobID := range jobIDs {
 			keys = append(keys, fmt.Sprintf("sub2api:prompt_audit:payload:%d", jobID))
 		}
-		if err = s.promptPayloads.Del(ctx, keys...).Err(); err != nil {
+		if err = s.deletePromptPayloads(ctx, keys...); err != nil {
 			return fmt.Errorf("%w: %v", errCleanupPromptPayload, err)
 		}
 	}
