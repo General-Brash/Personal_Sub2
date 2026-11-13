@@ -16,17 +16,18 @@ import (
 
 type defaultPricingRepoStub struct {
 	SettingRepository
-	mu      sync.Mutex
-	values  map[string]string
-	fail    bool
-	writes  int
-	failCAS bool
+	mu        sync.Mutex
+	values    map[string]string
+	fail      bool
+	writes    int
+	failCAS   bool
+	afterRead func()
 }
 
 func (r *defaultPricingRepoStub) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.fail {
+		r.mu.Unlock()
 		return nil, errors.New("database offline")
 	}
 	out := map[string]string{}
@@ -34,6 +35,12 @@ func (r *defaultPricingRepoStub) GetMultiple(ctx context.Context, keys []string)
 		if value, ok := r.values[key]; ok {
 			out[key] = value
 		}
+	}
+	afterRead := r.afterRead
+	r.afterRead = nil
+	r.mu.Unlock()
+	if afterRead != nil {
+		afterRead()
 	}
 	return out, nil
 }
@@ -220,6 +227,63 @@ func TestDefaultModelPricingValidationAndVersionProtection(t *testing.T) {
 	p, _, _, ok := defaults.Lookup("another-model")
 	require.True(t, ok)
 	require.Equal(t, 0.5, *p.PerRequestPrice)
+}
+
+func TestDefaultModelPricingSaveRechecksPersistedRevision(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		restore bool
+		fail    bool
+		wantErr error
+	}{
+		{name: "concurrent_writer", wantErr: ErrDefaultPricingVersionConflict},
+		{name: "persisted_revision_regression", restore: true, wantErr: ErrServiceUnavailable},
+		{name: "reread_error", fail: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, defaults, repo := newDefaultPricingFixture(t)
+			ctx := context.Background()
+			patch := defaultPatch(t, `{"billing_mode":"token","input_price":0,"output_price":0}`)
+			var committedRaw string
+			repo.mu.Lock()
+			// Commit between copying the first DB read and loading the memory snapshot.
+			repo.afterRead = func() {
+				change, err := defaults.Save(ctx, "winning-model", "0", patch, DefaultPricingFields{}, false)
+				require.NoError(t, err)
+				require.Equal(t, "1", change.NewVersion)
+				require.Equal(t, "1", defaults.LoadedVersion())
+				repo.mu.Lock()
+				defer repo.mu.Unlock()
+				committedRaw = repo.values[SettingKeyModelDefaultPricing]
+				if tc.restore {
+					repo.values[SettingKeyModelDefaultPricing] = ""
+				}
+				repo.fail = tc.fail
+			}
+			repo.mu.Unlock()
+			change, err := defaults.Save(ctx, "losing-model", "0", patch, DefaultPricingFields{}, false)
+			require.Nil(t, change)
+			if tc.fail {
+				require.EqualError(t, err, "database offline")
+			} else {
+				require.ErrorIs(t, err, tc.wantErr)
+			}
+			require.Equal(t, "1", defaults.LoadedVersion())
+			_, _, _, exists := defaults.Lookup("winning-model")
+			require.True(t, exists)
+			_, _, _, exists = defaults.Lookup("losing-model")
+			require.False(t, exists)
+			repo.mu.Lock()
+			writes, persistedRaw := repo.writes, repo.values[SettingKeyModelDefaultPricing]
+			repo.mu.Unlock()
+			require.Equal(t, 1, writes)
+			if tc.restore {
+				require.Empty(t, persistedRaw)
+			} else {
+				require.Equal(t, committedRaw, persistedRaw)
+			}
+		})
+	}
 }
 
 func TestDefaultModelPricingExactAliasesAndReload(t *testing.T) {
