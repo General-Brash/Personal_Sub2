@@ -100,8 +100,10 @@ func provideCleanup(
 	cnProviderBalanceCheck *service.CNProviderBalanceCheckService,
 	codexVersionSync *service.OpenAICodexVersionSyncService,
 	proxyExpiry *service.ProxyExpiryService,
+	proxyTraffic *service.ProxyTrafficService,
 	subscriptionExpiry *service.SubscriptionExpiryService,
 	usageCleanup *service.UsageCleanupService,
+	dataCleanup *service.DataCleanupService,
 	idempotencyCleanup *service.IdempotencyCleanupService,
 	batchImageCleanup *service.BatchImageCleanupService,
 	batchImageWorker *service.BatchImageWorkerRuntime,
@@ -143,6 +145,12 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"DataCleanupService", func() error {
+				if dataCleanup != nil {
+					dataCleanup.Stop()
+				}
+				return nil
+			}},
 			{"OpenAIQuotaAutoResetService", func() error {
 				if openAIAutoReset != nil {
 					openAIAutoReset.Stop()
@@ -397,6 +405,12 @@ func provideCleanup(
 		}
 
 		infraSteps := []cleanupStep{
+			{"ProxyTrafficService", func() error {
+				if proxyTraffic != nil {
+					proxyTraffic.Stop()
+				}
+				return nil
+			}},
 			{"Redis", func() error {
 				if rdb == nil {
 					return nil

@@ -403,112 +403,76 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatchMissingRange(t *testing.T) {
 }
 
 func TestUsageCleanupRepositoryDeleteUsageLogsBatch(t *testing.T) {
-	setUsageCleanupRollupTestTimezone(t)
 	db, mock := newSQLMock(t)
 	repo := &usageCleanupRepository{sql: db}
-
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	end := start.Add(24 * time.Hour)
-	userID := int64(3)
-	model := " gpt-4 "
-	filters := service.UsageCleanupFilters{
-		StartTime: start,
-		EndTime:   end,
-		UserID:    &userID,
-		Model:     &model,
-	}
+	filters := service.UsageCleanupFilters{StartTime: start, EndTime: start.Add(24 * time.Hour)}
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery("DELETE FROM usage_logs").
-		WithArgs(start, end, userID, "gpt-4", 2).
-		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(start.Add(time.Hour)).AddRow(start.Add(2 * time.Hour)))
-	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
-		WithArgs(start.Add(time.Hour), "Asia/Shanghai").
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(usageCompactionLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT id FROM usage_group_rollup_state").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT id FROM usage_logs").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)).AddRow(int64(2)))
+	mock.ExpectQuery("SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch").WillReturnRows(sqlmock.NewRows([]string{"processed_rows", "deleted_rows", "protected_rows"}).AddRow(int64(2), int64(1), int64(1)))
 	mock.ExpectCommit()
-
-	deleted, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
+	n, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
 	require.NoError(t, err)
-	require.Equal(t, int64(2), deleted)
+	require.Equal(t, int64(2), n)
+
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestUsageCleanupRepositoryDeleteUsageLogsBatchAtomicallyInvalidatesGroupRollups(t *testing.T) {
-	setUsageCleanupRollupTestTimezone(t)
 	db, mock := newSQLMock(t)
 	repo := &usageCleanupRepository{sql: db}
-
-	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	end := start.Add(24 * time.Hour)
-	firstDeletedAt := time.Date(2026, 8, 1, 3, 0, 0, 0, time.UTC)
-	secondDeletedAt := firstDeletedAt.Add(time.Hour)
-	filters := service.UsageCleanupFilters{StartTime: start, EndTime: end}
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	filters := service.UsageCleanupFilters{StartTime: start, EndTime: start.Add(24 * time.Hour)}
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING created_at`).
-		WithArgs(start, end, 2).
-		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).
-			AddRow(firstDeletedAt).
-			AddRow(secondDeletedAt))
-	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
-		WithArgs(firstDeletedAt, "Asia/Shanghai").
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(usageCompactionLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT id FROM usage_group_rollup_state").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT id FROM usage_logs").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)).AddRow(int64(2)))
+	mock.ExpectQuery("SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch").WillReturnRows(sqlmock.NewRows([]string{"processed_rows", "deleted_rows", "protected_rows"}).AddRow(int64(2), int64(1), int64(1)))
 	mock.ExpectCommit()
-
-	deleted, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
+	n, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
 	require.NoError(t, err)
-	require.Equal(t, int64(2), deleted)
+	require.Equal(t, int64(2), n)
+
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestUsageCleanupRepositoryDeleteUsageLogsBatchRollsBackWhenInvalidationFails(t *testing.T) {
-	setUsageCleanupRollupTestTimezone(t)
 	db, mock := newSQLMock(t)
 	repo := &usageCleanupRepository{sql: db}
-
-	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	end := start.Add(24 * time.Hour)
-	deletedAt := time.Date(2026, 8, 1, 3, 0, 0, 0, time.UTC)
-	filters := service.UsageCleanupFilters{StartTime: start, EndTime: end}
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	filters := service.UsageCleanupFilters{StartTime: start, EndTime: start.Add(24 * time.Hour)}
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING created_at`).
-		WithArgs(start, end, 1).
-		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(deletedAt))
-	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
-		WithArgs(deletedAt, "Asia/Shanghai").
-		WillReturnError(sql.ErrConnDone)
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(usageCompactionLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT id FROM usage_group_rollup_state").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT id FROM usage_logs").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)).AddRow(int64(2)))
+	mock.ExpectQuery("SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch").WillReturnError(sql.ErrConnDone)
 	mock.ExpectRollback()
-
-	_, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 1)
+	n, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
 	require.ErrorIs(t, err, sql.ErrConnDone)
+	require.Zero(t, n)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestUsageCleanupRepositoryDeleteUsageLogsBatchQueryError(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := &usageCleanupRepository{sql: db}
-
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	end := start.Add(24 * time.Hour)
-	filters := service.UsageCleanupFilters{StartTime: start, EndTime: end}
+	filters := service.UsageCleanupFilters{StartTime: start, EndTime: start.Add(24 * time.Hour)}
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery("DELETE FROM usage_logs").
-		WithArgs(start, end, 5).
-		WillReturnError(sql.ErrConnDone)
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(usageCompactionLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT id FROM usage_group_rollup_state").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT id FROM usage_logs").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)).AddRow(int64(2)))
+	mock.ExpectQuery("SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch").WillReturnError(sql.ErrConnDone)
 	mock.ExpectRollback()
-
-	_, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 5)
-	require.Error(t, err)
+	n, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
+	require.ErrorIs(t, err, sql.ErrConnDone)
+	require.Zero(t, n)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -604,72 +568,40 @@ func TestBuildUsageCleanupWhereDataCleanupSnapshot(t *testing.T) {
 }
 
 func TestUsageCleanupRepositorySnapshotBatchRejectsSameCountReplacementAfterWorkerDelay(t *testing.T) {
-	setUsageCleanupRollupTestTimezone(t)
 	db, mock := newSQLMock(t)
 	repo := &usageCleanupRepository{sql: db}
-	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	end := start.Add(24 * time.Hour)
-	filters := service.UsageCleanupFilters{
-		StartTime:                    start,
-		EndTime:                      end,
-		DataCleanupAuditID:           7,
-		DataCleanupSnapshotMaxID:     10,
-		DataCleanupSnapshotRows:      2,
-		DataCleanupSnapshotBatchSize: 2,
-		DataCleanupSnapshotDigests:   []string{service.UsageCleanupRowIdentityDigest([]int64{1, 2})},
-	}
-
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	filters := service.UsageCleanupFilters{StartTime: start, EndTime: start.Add(24 * time.Hour)}
+	filters.DataCleanupSnapshotDigests = []string{service.UsageCleanupRowIdentityDigest([]int64{1, 2})}
+	filters.DataCleanupSnapshotChunk = 0
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT id FROM usage_group_rollup_state.*FOR UPDATE").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery("SELECT id, created_at.*FROM usage_logs").
-		WithArgs(start, end, int64(10), 2).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).
-			AddRow(int64(1), start.Add(time.Hour)).
-			AddRow(int64(3), start.Add(2*time.Hour)))
-	mock.ExpectRollback()
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(usageCompactionLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT id FROM usage_group_rollup_state").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT id FROM usage_logs").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)).AddRow(int64(3)))
 
-	_, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
+	mock.ExpectRollback()
+	n, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
 	require.ErrorIs(t, err, service.ErrUsageCleanupSnapshotMismatch)
+	require.Zero(t, n)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestUsageCleanupRepositorySnapshotBatchPreservesDailyRollupInvalidation(t *testing.T) {
-	setUsageCleanupRollupTestTimezone(t)
 	db, mock := newSQLMock(t)
 	repo := &usageCleanupRepository{sql: db}
-	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	end := start.Add(24 * time.Hour)
-	firstDeletedAt := start.Add(time.Hour)
-	secondDeletedAt := start.Add(2 * time.Hour)
-	filters := service.UsageCleanupFilters{
-		StartTime:                    start,
-		EndTime:                      end,
-		DataCleanupAuditID:           7,
-		DataCleanupSnapshotMaxID:     10,
-		DataCleanupSnapshotRows:      2,
-		DataCleanupSnapshotBatchSize: 2,
-		DataCleanupSnapshotDigests:   []string{service.UsageCleanupRowIdentityDigest([]int64{1, 2})},
-	}
-
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	filters := service.UsageCleanupFilters{StartTime: start, EndTime: start.Add(24 * time.Hour)}
+	filters.DataCleanupSnapshotDigests = []string{service.UsageCleanupRowIdentityDigest([]int64{1, 2})}
+	filters.DataCleanupSnapshotChunk = 0
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT id FROM usage_group_rollup_state.*FOR UPDATE").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery("SELECT id, created_at.*FROM usage_logs").
-		WithArgs(start, end, int64(10), 2).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).
-			AddRow(int64(1), firstDeletedAt).
-			AddRow(int64(2), secondDeletedAt))
-	mock.ExpectQuery("DELETE FROM usage_logs WHERE id = ANY").
-		WithArgs(sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(firstDeletedAt).AddRow(secondDeletedAt))
-	mock.ExpectExec("UPDATE usage_group_rollup_state").
-		WithArgs(firstDeletedAt, "Asia/Shanghai").
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(usageCompactionLockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT id FROM usage_group_rollup_state").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT id FROM usage_logs").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)).AddRow(int64(2)))
+	mock.ExpectQuery("SELECT processed_rows,deleted_rows,protected_rows FROM compact_usage_batch").WillReturnRows(sqlmock.NewRows([]string{"processed_rows", "deleted_rows", "protected_rows"}).AddRow(int64(2), int64(1), int64(1)))
 	mock.ExpectCommit()
-
-	deleted, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
+	n, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
 	require.NoError(t, err)
-	require.Equal(t, int64(2), deleted)
+	require.Equal(t, int64(2), n)
+
 	require.NoError(t, mock.ExpectationsWereMet())
 }

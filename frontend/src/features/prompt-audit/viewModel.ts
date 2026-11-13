@@ -5,6 +5,7 @@ import type {
   PromptAuditUpdateRequest,
   PromptEventFilters,
 } from './types'
+import type { DataCleanupFilter } from '@/api/admin/ops'
 
 export const DEFAULT_GUARD_MODEL = 'sileader/qwen3guard:0.6b'
 
@@ -131,6 +132,20 @@ export function eventQueryParams(filters: PromptEventFilters): Record<string, st
 
 export function eventFilterPayload(filters: PromptEventFilters): Record<string, unknown> {
   return eventQueryParams(filters)
+}
+
+export function promptCleanupFilter(filters: PromptEventFilters): DataCleanupFilter {
+  const params = eventQueryParams(filters)
+  const text = (key: string) => typeof params[key] === 'string' ? params[key] as string : undefined
+  const id = (key: string) => typeof params[key] === 'number' ? params[key] as number : undefined
+  return {
+    category: 'prompt_audit', mode: 'range', start_time: text('start_at'), end_time: text('end_at'),
+    prompt_filter: {
+      decision: text('decision'), risk_level: text('risk_level'), endpoint: text('endpoint'),
+      group_id: id('group_id'), user_id: id('user_id'), api_key_id: id('api_key_id'),
+      request_id: text('request_id'), prompt_hash: text('prompt_hash'), keyword: text('keyword'),
+    },
+  }
 }
 
 export function hasExplicitDeleteRange(filters: PromptEventFilters): boolean {

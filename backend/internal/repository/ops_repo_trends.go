@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 func (r *opsRepository) GetThroughputTrend(ctx context.Context, filter *service.OpsDashboardFilter, bucketSeconds int) (*service.OpsThroughputTrendResponse, error) {
@@ -32,18 +34,34 @@ func (r *opsRepository) GetThroughputTrend(ctx context.Context, filter *service.
 	start := filter.StartTime.UTC()
 	end := filter.EndTime.UTC()
 
-	usageJoin, usageWhere, usageArgs, next := buildUsageWhere(filter, start, end, 1)
-	errorWhere, errorArgs, _ := buildErrorWhere(filter, start, end, next)
+	history, err := r.GetDashboardHistoryMetadata(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	usageJoin, usageWhere, usageArgs := buildUsageStatisticsWhere(filter, start, end)
+	errorWhere, errorArgs, _ := buildErrorWhere(filter, start, end, len(usageArgs)+1)
 
 	usageBucketExpr := opsBucketExprForUsage(bucketSeconds)
 	errorBucketExpr := opsBucketExprForError(bucketSeconds)
+	var dailyLocation *time.Location
+	if history.IncludesHistory {
+		bucketSeconds = 86400
+		dailyLocation, err = time.LoadLocation(history.HistoryTimezone)
+		if err != nil {
+			return nil, fmt.Errorf("load historical bucket timezone: %w", err)
+		}
+		tz := pq.QuoteLiteral(history.HistoryTimezone)
+		// Preserve each archived calendar day without splitting or prorating it.
+		usageBucketExpr = "date_trunc('day', ul.created_at AT TIME ZONE COALESCE(ul.bucket_timezone, " + tz + ")) AT TIME ZONE " + tz
+		errorBucketExpr = "date_trunc('day', created_at AT TIME ZONE " + tz + ") AT TIME ZONE " + tz
+	}
 
 	q := `
 WITH usage_buckets AS (
   SELECT ` + usageBucketExpr + ` AS bucket,
-         COUNT(*) AS success_count,
+         COALESCE(SUM(ul.request_count), 0) AS success_count,
          COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens), 0) AS token_consumed
-  FROM usage_logs ul
+  FROM usage_statistics_range($1, $2) ul
   ` + usageJoin + `
   ` + usageWhere + `
   GROUP BY 1
@@ -124,11 +142,15 @@ ORDER BY bucket ASC`
 		}
 
 		denom := float64(bucketSeconds)
-		if denom <= 0 {
-			denom = 60
+		if dailyLocation != nil {
+			denom = bucket.In(dailyLocation).AddDate(0, 0, 1).Sub(bucket).Seconds()
 		}
 		qps := roundTo1DP(float64(requests) / denom)
 		tps := roundTo1DP(float64(tokenConsumed) / denom)
+		if dailyLocation != nil {
+			qps = roundTo4DP(float64(requests) / denom)
+			tps = roundTo4DP(float64(tokenConsumed) / denom)
+		}
 
 		points = append(points, &service.OpsThroughputTrendPoint{
 			BucketStart:   bucket.UTC(),
@@ -144,7 +166,11 @@ ORDER BY bucket ASC`
 	}
 
 	// Fill missing buckets with zeros so charts render continuous timelines.
-	points = fillOpsThroughputBuckets(start, end, bucketSeconds, points)
+	if dailyLocation != nil {
+		points = fillOpsThroughputDailyBuckets(start, end, dailyLocation, points)
+	} else {
+		points = fillOpsThroughputBuckets(start, end, bucketSeconds, points)
+	}
 
 	var byPlatform []*service.OpsThroughputPlatformBreakdownItem
 	var topGroups []*service.OpsThroughputGroupBreakdownItem
@@ -175,9 +201,20 @@ ORDER BY bucket ASC`
 		topGroups = items
 	}
 
+	rateStatistics := "raw_requests"
+	bucketTimezone := ""
+	if history.IncludesHistory {
+		rateStatistics = "approximate_daily_average"
+		bucketTimezone = history.HistoryTimezone
+	}
 	return &service.OpsThroughputTrendResponse{
-		Bucket: opsBucketLabel(bucketSeconds),
-		Points: points,
+		HistoryMetadata:  history,
+		BucketTimezone:   bucketTimezone,
+		RateStatistics:   rateStatistics,
+		ErrorStatistics:  "retained_error_logs_only",
+		SwitchStatistics: "retained_error_logs_only",
+		Bucket:           opsBucketLabel(bucketSeconds),
+		Points:           points,
 
 		ByPlatform: byPlatform,
 		TopGroups:  topGroups,
@@ -187,13 +224,12 @@ ORDER BY bucket ASC`
 func (r *opsRepository) getThroughputBreakdownByPlatform(ctx context.Context, start, end time.Time) ([]*service.OpsThroughputPlatformBreakdownItem, error) {
 	q := `
 WITH usage_totals AS (
-  SELECT COALESCE(NULLIF(g.platform,''), a.platform) AS platform,
-         COUNT(*) AS success_count,
+  SELECT ` + usageStatsEffectivePlatformExpr + ` AS platform,
+         COALESCE(SUM(ul.request_count), 0) AS success_count,
          COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens), 0) AS token_consumed
-  FROM usage_logs ul
+  FROM usage_statistics_range($1, $2) ul
   LEFT JOIN groups g ON g.id = ul.group_id
   LEFT JOIN accounts a ON a.id = ul.account_id
-  WHERE ul.created_at >= $1 AND ul.created_at < $2
   GROUP BY 1
 ),
 error_totals AS (
@@ -260,12 +296,13 @@ func (r *opsRepository) getThroughputTopGroupsByPlatform(ctx context.Context, st
 WITH usage_totals AS (
   SELECT ul.group_id AS group_id,
          g.name AS group_name,
-         COUNT(*) AS success_count,
+         COALESCE(SUM(ul.request_count), 0) AS success_count,
          COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens), 0) AS token_consumed
-  FROM usage_logs ul
-  JOIN groups g ON g.id = ul.group_id
-  WHERE ul.created_at >= $1 AND ul.created_at < $2
-    AND g.platform = $3
+  FROM usage_statistics_range($1, $2) ul
+  LEFT JOIN groups g ON g.id = ul.group_id
+  LEFT JOIN accounts a ON a.id = ul.account_id
+  WHERE ` + usageStatsEffectivePlatformExpr + ` = $3
+    AND ul.group_id IS NOT NULL
   GROUP BY 1, 2
 ),
 error_totals AS (
@@ -355,6 +392,9 @@ func opsBucketExprForError(bucketSeconds int) string {
 }
 
 func opsBucketLabel(bucketSeconds int) string {
+	if bucketSeconds == 86400 {
+		return "1d"
+	}
 	if bucketSeconds <= 0 {
 		return "1m"
 	}
@@ -422,6 +462,46 @@ func fillOpsThroughputBuckets(start, end time.Time, bucketSeconds int, points []
 			TPS:           0,
 		})
 	}
+	return out
+}
+
+func fillOpsThroughputDailyBuckets(start, end time.Time, location *time.Location, points []*service.OpsThroughputTrendPoint) []*service.OpsThroughputTrendPoint {
+	if !start.Before(end) {
+		return points
+	}
+	dayStart := func(t time.Time) time.Time {
+		t = t.In(location)
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, location)
+	}
+	first, last := dayStart(start), dayStart(end.Add(-time.Nanosecond))
+	existing := make(map[int64]*service.OpsThroughputTrendPoint, len(points))
+	for _, p := range points {
+		if p == nil {
+			continue
+		}
+		existing[p.BucketStart.Unix()] = p
+		// Whole intersecting history days can extend beyond the requested range.
+		if p.BucketStart.Before(first) {
+			first = p.BucketStart.In(location)
+		}
+		if p.BucketStart.After(last) {
+			last = p.BucketStart.In(location)
+		}
+	}
+	out := make([]*service.OpsThroughputTrendPoint, 0, len(points))
+	for cursor := first; !cursor.After(last); cursor = cursor.AddDate(0, 0, 1) {
+		if p := existing[cursor.Unix()]; p != nil {
+			out = append(out, p)
+			delete(existing, cursor.Unix())
+		} else {
+			out = append(out, &service.OpsThroughputTrendPoint{BucketStart: cursor.UTC()})
+		}
+	}
+	// Never discard a returned bucket if timezone rules produce an unusual boundary.
+	for _, p := range existing {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].BucketStart.Before(out[j].BucketStart) })
 	return out
 }
 

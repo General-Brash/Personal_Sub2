@@ -2,6 +2,8 @@
  * Core Type Definitions for Sub2API Frontend
  */
 
+import type { UsageHistoryMetadata } from './usageStatistics'
+
 // ==================== Common Types ====================
 
 export interface SelectOption {
@@ -964,6 +966,8 @@ export interface Proxy {
   password?: string | null
   status: 'active' | 'inactive' | 'expired'
   account_count?: number // Number of accounts using this proxy
+  traffic_today_bytes?: number
+  traffic_30d_bytes?: number
   latency_ms?: number
   latency_status?: 'success' | 'failed'
   latency_message?: string
@@ -1911,7 +1915,7 @@ export interface DashboardStats {
   tpm: number // 近5分钟平均每分钟Token数
 }
 
-export interface UsageStatsResponse {
+export interface UsageStatsResponse extends UsageHistoryMetadata {
   period?: string
   total_requests: number
   total_input_tokens: number
@@ -2219,6 +2223,8 @@ export interface AccountUsageSummary {
 }
 
 export interface AccountUsageStatsResponse {
+  statistics?: UsageHistoryMetadata
+  granularity?: 'day'
   history: AccountUsageHistory[]
   summary: AccountUsageSummary
   models: ModelStat[]

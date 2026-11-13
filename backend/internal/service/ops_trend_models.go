@@ -1,6 +1,10 @@
 package service
 
-import "time"
+import (
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
+)
 
 type OpsThroughputTrendPoint struct {
 	BucketStart   time.Time `json:"bucket_start"`
@@ -25,6 +29,12 @@ type OpsThroughputGroupBreakdownItem struct {
 }
 
 type OpsThroughputTrendResponse struct {
+	usagestats.HistoryMetadata
+	BucketTimezone   string `json:"bucket_timezone,omitempty"`
+	RateStatistics   string `json:"rate_statistics"`
+	ErrorStatistics  string `json:"error_statistics"`
+	SwitchStatistics string `json:"switch_statistics"`
+
 	Bucket string `json:"bucket"`
 
 	Points []*OpsThroughputTrendPoint `json:"points"`

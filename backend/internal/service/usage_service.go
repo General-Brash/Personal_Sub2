@@ -43,6 +43,7 @@ type CreateUsageLogRequest struct {
 
 // UsageStats 使用统计
 type UsageStats struct {
+	usagestats.HistoryMetadata
 	TotalRequests            int64   `json:"total_requests"`
 	TotalInputTokens         int64   `json:"total_input_tokens"`
 	TotalOutputTokens        int64   `json:"total_output_tokens"`
@@ -265,6 +266,7 @@ func (s *UsageService) GetStatsByUser(ctx context.Context, userID int64, startTi
 	}
 
 	return &UsageStats{
+		HistoryMetadata:          stats.HistoryMetadata,
 		TotalRequests:            stats.TotalRequests,
 		TotalInputTokens:         stats.TotalInputTokens,
 		TotalOutputTokens:        stats.TotalOutputTokens,
@@ -286,6 +288,7 @@ func (s *UsageService) GetStatsByAPIKey(ctx context.Context, apiKeyID int64, sta
 	}
 
 	return &UsageStats{
+		HistoryMetadata:          stats.HistoryMetadata,
 		TotalRequests:            stats.TotalRequests,
 		TotalInputTokens:         stats.TotalInputTokens,
 		TotalOutputTokens:        stats.TotalOutputTokens,
@@ -307,6 +310,7 @@ func (s *UsageService) GetStatsByAccount(ctx context.Context, accountID int64, s
 	}
 
 	return &UsageStats{
+		HistoryMetadata:          stats.HistoryMetadata,
 		TotalRequests:            stats.TotalRequests,
 		TotalInputTokens:         stats.TotalInputTokens,
 		TotalOutputTokens:        stats.TotalOutputTokens,
@@ -328,6 +332,7 @@ func (s *UsageService) GetStatsByModel(ctx context.Context, modelName string, st
 	}
 
 	return &UsageStats{
+		HistoryMetadata:          stats.HistoryMetadata,
 		TotalRequests:            stats.TotalRequests,
 		TotalInputTokens:         stats.TotalInputTokens,
 		TotalOutputTokens:        stats.TotalOutputTokens,
@@ -356,10 +361,7 @@ func (s *UsageService) GetDailyStats(ctx context.Context, userID int64, days int
 
 // Delete 删除使用日志（管理员功能，谨慎使用）
 func (s *UsageService) Delete(ctx context.Context, id int64) error {
-	if err := s.usageRepo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("delete usage log: %w", err)
-	}
-	return nil
+	return fmt.Errorf("usage details are protected; compact a closed month in Data Cleanup")
 }
 
 // GetUserDashboardStats returns per-user dashboard summary stats.

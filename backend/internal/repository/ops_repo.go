@@ -1052,8 +1052,9 @@ func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
 	// status 200 (the SSE stream opened successfully before upstream returned response.failed),
 	// but they are always client-visible blocked requests that belong in admin + user error
 	// lists.  Without the exemption the entire streaming-path cyber sink would be invisible.
+	// Explicit downstream write failures also retain their committed wire status.
 	if !opsFilterIncludesRecoveredProviderRows(filter, phaseFilter) {
-		clauses = append(clauses, "(COALESCE(e.status_code, 0) >= 400 OR e.error_type = 'cyber_policy')")
+		clauses = append(clauses, "(COALESCE(e.status_code, 0) >= 400 OR e.error_type IN ('cyber_policy', 'downstream_write_error'))")
 	}
 
 	if filter.StartTime != nil && !filter.StartTime.IsZero() {

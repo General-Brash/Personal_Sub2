@@ -314,7 +314,7 @@ func TestUsageBillingRepositoryApply_RollsBackUsageLogAndTemporaryCreditWhenPerm
 		WithArgs("req-permanent-failure", int64(9), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
 	mock.ExpectQuery(`SELECT request_fingerprint\s+FROM usage_billing_dedup_archive`).
-		WithArgs("req-permanent-failure", int64(9)).
+		WithArgs("req-permanent-failure", int64(9), sqlmock.AnyArg()).
 		WillReturnError(sql.ErrNoRows)
 	expectUsageBillingAutoExchangeDisabled(mock, 42)
 	expectTemporaryCreditUserLock(mock, 42)

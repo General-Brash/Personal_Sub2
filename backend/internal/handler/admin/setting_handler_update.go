@@ -1608,7 +1608,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PasskeyEnabled:                      passkeyEnabled,
 		SessionBindingEnabled:               sessionBindingEnabled,
 		StepUpEnabled:                       stepUpEnabled,
-		AuditLogRetentionDays:               req.AuditLogRetentionDays,
+		AuditLogRetentionDays:               h.settingService.GetAuditLogRetentionDays(c.Request.Context()),
 		LoginAgreementEnabled:               req.LoginAgreementEnabled,
 		LoginAgreementMode:                  loginAgreementMode,
 		LoginAgreementUpdatedAt:             loginAgreementUpdatedAt,

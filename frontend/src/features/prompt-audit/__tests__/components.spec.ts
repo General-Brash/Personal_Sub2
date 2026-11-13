@@ -84,7 +84,7 @@ describe('Prompt Audit components', () => {
     expect(emitted.worker_count).toBe(6)
   })
 
-  it('keeps identity fields separate, supports selection, and opens filter deletion from the toolbar', async () => {
+  it('keeps identity fields separate and leaves cleanup to the dedicated center', async () => {
     const event: PromptAuditEvent = {
       id: 1, job_id: 1, decision: 'critical', risk_level: 'critical', action: 'Block', categories: ['pii'], matched_scanners: ['pii'], scanner_scores: { pii: 1 }, scanner_evidence: { pii: 'redacted' }, scanner_backend: 'qwen3guard-openai', scanner_version: '1', guard_endpoint_id: 'guard-1', policy_id: 'priority', policy_version: 1, config_version: 1, chunk_total: 1, latency_ms: 10, issue_summaries: [], created_at: '2026-07-16T00:00:00Z',
       snapshot: { request_id: 'req-1', user_id: 1, username: 'alice', user_email: 'alice@example.test', api_key_id: 2, api_key_name: 'alice-key', group_id: 3, group_name: 'Alpha', provider: 'openai', endpoint: '/v1/chat/completions', protocol: 'openai_chat', model: 'gpt-test', prompt_hash: 'a'.repeat(64), redacted_preview: 'redacted preview', full_prompt: 'full prompt text', prompt_length: 10, message_count: 1, stage: 'http' },
@@ -98,11 +98,8 @@ describe('Prompt Audit components', () => {
     expect(wrapper.text()).toContain('alice-key')
     expect(wrapper.text()).toContain('admin.promptAudit.decisions.critical · admin.promptAudit.riskLevels.critical')
     expect(wrapper.text()).toContain('admin.promptAudit.scanners.pii')
-    expect(wrapper.get('[data-test="filter-delete"]').attributes()).not.toHaveProperty('disabled')
-    await wrapper.get('[data-test="filter-delete"]').trigger('click')
-    expect(wrapper.emitted('preview-delete')).toHaveLength(1)
-    await wrapper.get('[aria-label="admin.promptAudit.events.selectEvent"]').setValue(true)
-    expect(wrapper.emitted('selection')?.at(-1)?.[0]).toEqual([1])
+    expect(wrapper.find('[data-test="filter-delete"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('common.delete')
   })
 
   it('resolves delete range presets to an epoch start and a cutoff end', () => {

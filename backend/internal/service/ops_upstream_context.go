@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,7 @@ const (
 	OpsUpstreamErrorDetailKey  = "ops_upstream_error_detail"
 	OpsUpstreamErrorsKey       = "ops_upstream_errors"
 	OpsUpstreamModelKey        = "ops_upstream_model"
+	OpsDownstreamWriteErrorKey = "ops_downstream_write_error"
 
 	// Optional stage latencies (milliseconds) for troubleshooting and alerting.
 	OpsAuthLatencyMsKey      = "ops_auth_latency_ms"
@@ -57,6 +59,59 @@ const (
 	OpsClientBusinessLimitedReasonLocalFeatureGate       = "local_feature_gate"
 	OpsClientBusinessLimitedReasonLocalPolicyDenied      = "local_policy_denied"
 )
+
+// OpsDownstreamWriteError captures a known response write failure separately
+// from upstream attempts. Cause retains the original transport error.
+type OpsDownstreamWriteError struct {
+	Code    string
+	Stage   string
+	Message string
+	Cause   error
+}
+
+func (e OpsDownstreamWriteError) Error() string {
+	return e.Message
+}
+
+func (e OpsDownstreamWriteError) Unwrap() error { return e.Cause }
+
+// MarkOpsDownstreamWriteError must only be called at a known downstream write
+// site. Request processing owns this first-error-wins marker.
+func MarkOpsDownstreamWriteError(c *gin.Context, err error, stage string) bool {
+	if c == nil || err == nil {
+		return false
+	}
+	if _, exists := c.Get(OpsDownstreamWriteErrorKey); exists {
+		return false
+	}
+	writeErr := OpsDownstreamWriteError{
+		Code:    "downstream_write_failed",
+		Stage:   strings.TrimSpace(stage),
+		Message: "Downstream response write failed",
+		Cause:   err,
+	}
+	if errors.Is(err, syscall.EPIPE) || strings.Contains(strings.ToLower(err.Error()), "broken pipe") {
+		writeErr.Code = "broken_pipe"
+		writeErr.Message = "Downstream connection closed (broken pipe)"
+	}
+	if detail := sanitizeUpstreamErrorMessage(strings.TrimSpace(err.Error())); detail != "" {
+		writeErr.Message = truncateString(writeErr.Message+": "+detail, 2048)
+	}
+	c.Set(OpsDownstreamWriteErrorKey, writeErr)
+	return true
+}
+
+func GetOpsDownstreamWriteError(c *gin.Context) (OpsDownstreamWriteError, bool) {
+	if c == nil {
+		return OpsDownstreamWriteError{}, false
+	}
+	v, ok := c.Get(OpsDownstreamWriteErrorKey)
+	if !ok {
+		return OpsDownstreamWriteError{}, false
+	}
+	writeErr, ok := v.(OpsDownstreamWriteError)
+	return writeErr, ok
+}
 
 // SetOpsUpstreamModel stores the effective model dispatched for the current
 // upstream attempt. It is intentionally request-local and contains no secrets.

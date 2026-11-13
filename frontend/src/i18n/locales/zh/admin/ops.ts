@@ -296,6 +296,7 @@ export default {
           account_auth: '账号认证',
           routing: '路由',
           upstream: '上游',
+          downstream: '下游写出',
           network: '网络',
           internal: '内部'
         },

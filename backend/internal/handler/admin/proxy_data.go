@@ -276,6 +276,7 @@ func (h *ProxyHandler) ImportData(c *gin.Context) {
 		// CreateProxy already triggers a latency probe, avoid double probing here.
 	}
 
+	h.refreshTrafficRoutes(ctx)
 	if len(latencyProbeIDs) > 0 {
 		ids := append([]int64(nil), latencyProbeIDs...)
 		go func() {

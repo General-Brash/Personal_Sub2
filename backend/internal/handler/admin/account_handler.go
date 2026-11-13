@@ -26,6 +26,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -1578,6 +1579,11 @@ func (h *AccountHandler) GetStats(c *gin.Context) {
 	now := timezone.Now()
 	endTime := timezone.StartOfDay(now.AddDate(0, 0, 1))
 	startTime := timezone.StartOfDay(now.AddDate(0, 0, -days+1))
+	statistics, err := h.accountUsageService.GetAccountUsageHistoryMetadata(c.Request.Context(), startTime, endTime, accountID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
 	stats, err := h.accountUsageService.GetAccountUsageStats(c.Request.Context(), accountID, startTime, endTime)
 	if err != nil {
@@ -1585,7 +1591,11 @@ func (h *AccountHandler) GetStats(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, stats)
+	response.Success(c, struct {
+		*usagestats.AccountUsageStatsResponse
+		Statistics  usagestats.HistoryMetadata `json:"statistics"`
+		Granularity string                     `json:"granularity"`
+	}{stats, statistics, "day"})
 }
 
 // ClearError handles clearing account error

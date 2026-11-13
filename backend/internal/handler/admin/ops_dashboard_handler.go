@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -50,10 +51,34 @@ func (h *OpsHandler) GetDashboardOverview(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, data)
+	metadata, err := h.opsService.GetDashboardHistoryMetadata(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	latencyStatus := "raw_requests"
+	if metadata.IncludesHistory {
+		latencyStatus = "unavailable_after_compaction"
+	} else if filter.QueryMode != service.OpsQueryModeRaw {
+		latencyStatus = "approximate_preaggregation"
+	}
+	var rates any = data.QPS
+	var tokens any = data.TPS
+	if metadata.IncludesHistory {
+		rates = gin.H{"current": nil, "peak": nil, "avg": data.QPS.Avg}
+		tokens = gin.H{"current": nil, "peak": nil, "avg": data.TPS.Avg}
+	}
+	response.Success(c, struct {
+		*service.OpsDashboardOverview
+		usagestats.HistoryMetadata
+		LatencyStatistics string `json:"latency_statistics"`
+		RateStatistics    string `json:"rate_statistics"`
+		QPS               any    `json:"qps"`
+		TPS               any    `json:"tps"`
+	}{data, metadata, latencyStatus, latencyStatus, rates, tokens})
 }
 
-// GetDashboardThroughputTrend returns throughput time series (raw path).
+// GetDashboardThroughputTrend returns history-aware throughput and retained error counts.
 // GET /api/v1/admin/ops/dashboard/throughput-trend
 func (h *OpsHandler) GetDashboardThroughputTrend(c *gin.Context) {
 	if h.opsService == nil {
@@ -95,7 +120,7 @@ func (h *OpsHandler) GetDashboardThroughputTrend(c *gin.Context) {
 	response.Success(c, data)
 }
 
-// GetDashboardLatencyHistogram returns the latency distribution histogram (success requests).
+// GetDashboardLatencyHistogram returns success latency buckets, or explicit history unavailability.
 // GET /api/v1/admin/ops/dashboard/latency-histogram
 func (h *OpsHandler) GetDashboardLatencyHistogram(c *gin.Context) {
 	if h.opsService == nil {

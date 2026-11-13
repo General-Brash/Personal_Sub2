@@ -6,7 +6,6 @@ import { opsAPI } from '@/api/admin/ops'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
-import Icon from '@/components/icons/Icon.vue'
 import type { OpsAlertRuntimeSettings, EmailNotificationConfig, AlertSeverity, OpsAdvancedSettings, OpsMetricThresholds } from '../types'
 
 const { t } = useI18n()
@@ -19,7 +18,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   saved: []
-  openCleanup: []
 }>()
 
 const loading = ref(false)
@@ -433,22 +431,6 @@ async function saveAllSettings() {
         </div>
       </div>
 
-      <!-- 独立数据清理中心 -->
-      <button
-        data-testid="ops-data-cleanup-section"
-        type="button"
-        class="flex w-full items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 p-5 text-left transition-colors hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-900/15 dark:hover:bg-amber-900/25"
-        @click="emit('openCleanup')"
-      >
-        <span class="flex items-center gap-4">
-          <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"><Icon name="trash" size="lg" /></span>
-          <span>
-            <span class="block text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.ops.settings.dataCleanup') }}</span>
-            <span class="mt-1 block text-xs text-gray-600 dark:text-gray-400">{{ t('admin.ops.cleanup.entryHint') }}</span>
-          </span>
-        </span>
-        <Icon name="chevronRight" size="md" class="text-gray-400" />
-      </button>
 
       <!-- 高级设置 -->
       <details data-testid="ops-advanced-settings" class="rounded-2xl bg-gray-50 dark:bg-dark-700/50">

@@ -215,6 +215,19 @@
             </span>
           </template>
 
+          <template #cell-traffic="{ row }">
+            <div class="min-w-0 max-w-full text-sm tabular-nums">
+              <div class="flex flex-wrap items-baseline gap-x-1.5">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('admin.users.today') }}:</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ formatProxyTraffic(row.traffic_today_bytes) }}</span>
+              </div>
+              <div class="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('admin.users.total') }}:</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ formatProxyTraffic(row.traffic_30d_bytes, '30d') }}</span>
+              </div>
+            </div>
+          </template>
+
           <template #cell-latency="{ row }">
             <div class="flex flex-col gap-1">
               <span
@@ -985,6 +998,7 @@ import { useSwipeSelect } from '@/composables/useSwipeSelect'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatDateTime } from '@/utils/format'
+import { formatProxyTraffic } from '@/utils/proxyTraffic'
 import { proxyExpiryBadgeClass, proxyExpiryLabelKey } from '@/utils/proxyExpiry'
 
 const { t } = useI18n()
@@ -994,6 +1008,7 @@ const { copyToClipboard } = useClipboard()
 const columns = computed<Column[]>(() => [
   { key: 'select', label: '', sortable: false },
   { key: 'name', label: t('admin.proxies.columns.name'), sortable: true },
+  { key: 'traffic', label: t('admin.proxies.columns.traffic'), sortable: false, class: 'min-w-[160px]' },
   { key: 'protocol', label: t('admin.proxies.columns.protocol'), sortable: true },
   { key: 'address', label: t('admin.proxies.columns.address'), sortable: false },
   { key: 'auth', label: t('admin.proxies.columns.auth'), sortable: false },

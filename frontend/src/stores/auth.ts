@@ -136,6 +136,7 @@ export const useAuthStore = defineStore('auth', () => {
       ['/admin/audit-logs', ['audit.read']], ['/admin/ops', ['ops.read']],
       ['/admin/plugins', ['plugins.execute']], ['/admin/settings', ['system.settings.manage']],
       ['/admin/server-auto-retry', ['system.settings.manage']],
+      ['/admin/data-cleanup', ['system.settings.manage']],
       ['/admin/proxies', ['channels.credentials.read']], ['/admin/announcements', ['system.settings.manage']],
       ['/admin/redeem', ['users.balance.adjust']], ['/admin/promo-codes', ['users.balance.adjust']],
       ['/admin/risk-control', ['audit.read']], ['/admin/prompt-audit', ['audit.read']],

@@ -10,10 +10,14 @@ import { formatHistoryLabel, sumNumbers } from '../utils/opsFormatters'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { formatNumber } from '@/utils/format'
+import { opsChartHistoryMessages } from '../opsChartHistoryMessages'
 
 ChartJS.register(Title, Tooltip, Legend, LineElement, LinearScale, PointElement, CategoryScale, Filler)
 
 interface Props {
+  bucket?: string
+  bucketTimezone?: string
+  includesHistory?: boolean
   points: OpsThroughputTrendPoint[]
   loading: boolean
   timeRange: string
@@ -23,7 +27,8 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const { t } = useI18n()
+const { t, locale } = useI18n({ useScope: 'global' })
+const { t: historyT } = useI18n({ useScope: 'local', messages: opsChartHistoryMessages })
 const emit = defineEmits<{
   (e: 'selectPlatform', platform: string): void
   (e: 'selectGroup', groupId: number): void
@@ -54,30 +59,40 @@ const colors = computed(() => ({
 }))
 
 const totalRequests = computed(() => sumNumbers(props.points.map((p) => p.request_count)))
+const isDaily = computed(() => props.bucket === '1d')
+const requestLabel = computed(() => isDaily.value ? t('admin.ops.requests') : 'QPS')
+const tokenLabel = computed(() => isDaily.value ? t('admin.ops.tokens') : t('admin.ops.tpsK'))
+
+function bucketLabel(bucketStart: string) {
+  if (!isDaily.value) return formatHistoryLabel(bucketStart, props.timeRange)
+  return new Intl.DateTimeFormat(locale.value, {
+    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: props.bucketTimezone || 'UTC'
+  }).format(new Date(bucketStart))
+}
 
 const chartData = computed(() => {
   if (!props.points.length || totalRequests.value <= 0) return null
   return {
-    labels: props.points.map((p) => formatHistoryLabel(p.bucket_start, props.timeRange)),
+    labels: props.points.map((p) => bucketLabel(p.bucket_start)),
     datasets: [
       {
-        label: 'QPS',
-        data: props.points.map((p) => p.qps ?? 0),
+        label: requestLabel.value,
+        data: props.points.map((p) => isDaily.value ? p.request_count : (p.qps ?? 0)),
         borderColor: colors.value.blue,
         backgroundColor: colors.value.blueAlpha,
         fill: true,
         tension: 0.4,
-        pointRadius: 0,
+        pointRadius: isDaily.value ? 3 : 0,
         pointHitRadius: 10
       },
       {
-        label: t('admin.ops.tpsK'),
-        data: props.points.map((p) => (p.tps ?? 0) / 1000),
+        label: tokenLabel.value,
+        data: props.points.map((p) => isDaily.value ? p.token_consumed : (p.tps ?? 0) / 1000),
         borderColor: colors.value.green,
         backgroundColor: colors.value.greenAlpha,
         fill: true,
         tension: 0.4,
-        pointRadius: 0,
+        pointRadius: isDaily.value ? 3 : 0,
         pointHitRadius: 10,
         yAxisID: 'y1'
       }
@@ -115,7 +130,7 @@ const options = computed(() => {
           label: (context: any) => {
             let label = context.dataset.label || ''
             if (label) label += ': '
-            if (context.raw !== null) label += context.parsed.y.toFixed(1)
+            if (context.raw !== null) label += context.parsed.y.toFixed(isDaily.value ? 0 : 1)
             return label
           }
         }
@@ -189,8 +204,8 @@ function downloadChart() {
         data-testid="throughput-chart-toolbar"
         class="flex w-full min-w-0 flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 sm:w-auto sm:justify-end"
       >
-        <span class="flex shrink-0 items-center gap-1"><span class="h-2 w-2 rounded-full bg-blue-500"></span>QPS</span>
-        <span class="flex shrink-0 items-center gap-1"><span class="h-2 w-2 rounded-full bg-green-500"></span>{{ t('admin.ops.tpsK') }}</span>
+        <span class="flex shrink-0 items-center gap-1"><span class="h-2 w-2 rounded-full bg-blue-500"></span>{{ requestLabel }}</span>
+        <span class="flex shrink-0 items-center gap-1"><span class="h-2 w-2 rounded-full bg-green-500"></span>{{ tokenLabel }}</span>
         <template v-if="!props.fullscreen">
           <button
             type="button"
@@ -222,6 +237,10 @@ function downloadChart() {
         </template>
       </div>
     </div>
+
+    <p v-if="isDaily || props.includesHistory" class="mb-3 text-xs text-amber-700 dark:text-amber-400" role="status">
+      {{ historyT('dailyCounts') }}. {{ historyT('retainedErrors') }}
+    </p>
 
     <!-- Drilldown chips (baseline interaction: click to set global filter) -->
     <div v-if="(props.topGroups?.length ?? 0) > 0" class="mb-3 flex flex-wrap gap-2">

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,6 +25,7 @@ const openAIImagesJSONKeepaliveKey = "openai_images_json_keepalive"
 type openAIImagesJSONKeepalive struct {
 	mu      sync.Mutex
 	writer  gin.ResponseWriter
+	ctx     *gin.Context
 	started bool
 	stopped bool
 	bytes   int
@@ -39,6 +41,7 @@ func StartOpenAIImagesJSONKeepalive(c *gin.Context, interval time.Duration) func
 	originalWriter := c.Writer
 	k := &openAIImagesJSONKeepalive{
 		writer: originalWriter,
+		ctx:    c,
 		stop:   make(chan struct{}),
 	}
 	c.Set(openAIImagesJSONKeepaliveKey, k)
@@ -91,11 +94,14 @@ func (k *openAIImagesJSONKeepalive) beat() bool {
 	}
 	n, err := k.writer.Write([]byte(" \n"))
 	k.bytes += n
+	if err == nil {
+		err = httputil.FlushResponse(k.writer)
+	}
 	if err != nil {
-		k.stopped = true
+		MarkOpsDownstreamWriteError(k.ctx, err, "keepalive")
+		k.markStoppedLocked()
 		return false
 	}
-	k.writer.Flush()
 	return true
 }
 
@@ -217,10 +223,21 @@ func (w *openAIImagesJSONKeepaliveWriter) WriteHeaderNow() {
 }
 
 func (w *openAIImagesJSONKeepaliveWriter) Flush() {
-	w.suspend()
-	if w.ResponseWriter != nil {
-		w.ResponseWriter.Flush()
+	if err := w.FlushError(); err != nil && w.k != nil {
+		MarkOpsDownstreamWriteError(w.k.ctx, err, "stream_flush")
 	}
+}
+
+func (w *openAIImagesJSONKeepaliveWriter) FlushError() error {
+	w.suspend()
+	if w.ResponseWriter == nil {
+		return nil
+	}
+	return httputil.FlushResponse(w.ResponseWriter)
+}
+
+func (w *openAIImagesJSONKeepaliveWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (w *openAIImagesJSONKeepaliveWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {

@@ -796,6 +796,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
     { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: () => flagOpsMonitoring() && flagAdminOps() },
     { path: '/admin/server-auto-retry', label: t('admin.serverAutoRetry.title'), icon: AutoRetryIcon },
+    { path: '/admin/data-cleanup', label: t('dataCleanup.title'), icon: ChartIcon },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
     {

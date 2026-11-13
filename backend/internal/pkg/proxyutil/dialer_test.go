@@ -1,6 +1,7 @@
 package proxyutil
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/url"
 	"testing"
@@ -26,7 +27,7 @@ func TestConfigureTransportProxy_HTTP(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.NotNil(t, transport.Proxy, "HTTP proxy should set Proxy")
-	assert.Nil(t, transport.DialContext, "HTTP proxy should not set DialContext")
+	assert.NotNil(t, transport.DialContext, "HTTP proxy should observe its TCP connection")
 }
 
 func TestConfigureTransportProxy_HTTPS(t *testing.T) {
@@ -37,7 +38,20 @@ func TestConfigureTransportProxy_HTTPS(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.NotNil(t, transport.Proxy, "HTTPS proxy should set Proxy")
-	assert.Nil(t, transport.DialContext, "HTTPS proxy should not set DialContext")
+	assert.NotNil(t, transport.DialContext, "HTTPS proxy should observe its TCP connection")
+}
+
+func TestConfigureTransportProxyPreservesDefaultAndExplicitProtocols(t *testing.T) {
+	proxyURL, err := url.Parse("http://node.example:8080")
+	require.NoError(t, err)
+	transport := &http.Transport{}
+	require.NoError(t, ConfigureTransportProxy(transport, proxyURL))
+	require.NotNil(t, transport.Protocols)
+	require.True(t, transport.Protocols.HTTP1())
+	require.True(t, transport.Protocols.HTTP2())
+	customTLS := &http.Transport{TLSClientConfig: &tls.Config{}}
+	require.NoError(t, ConfigureTransportProxy(customTLS, proxyURL))
+	require.Nil(t, customTLS.Protocols, "custom TLS protocol choice must not be changed")
 }
 
 func TestConfigureTransportProxy_SOCKS5(t *testing.T) {
@@ -87,7 +101,7 @@ func TestConfigureTransportProxy_CaseInsensitive(t *testing.T) {
 			require.NoError(t, err)
 			if tc.useProxy {
 				assert.NotNil(t, transport.Proxy)
-				assert.Nil(t, transport.DialContext)
+				assert.NotNil(t, transport.DialContext)
 			} else {
 				assert.Nil(t, transport.Proxy)
 				assert.NotNil(t, transport.DialContext)

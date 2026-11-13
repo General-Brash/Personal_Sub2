@@ -78,6 +78,7 @@ export default {
         location: '地理位置',
         status: '状态',
         accounts: '账号数',
+        traffic: '流量使用',
         latency: '延迟',
         expiry: '有效期',
         createdAt: '创建时间',

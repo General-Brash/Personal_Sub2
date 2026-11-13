@@ -801,6 +801,13 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				}
 			})
 		}
+		if _, downstreamWriteError := service.GetOpsDownstreamWriteError(c); downstreamWriteError {
+			submitResponsesUsage(result)
+			if retryContext.Governed {
+				retryContext.Final(c, false, "downstream_write_error")
+			}
+			return
+		}
 		if err != nil {
 			if result != nil && result.ImageCount > 0 {
 				reqLog.Warn("openai.forward_partial_error_with_image_result",

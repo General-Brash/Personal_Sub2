@@ -72,20 +72,26 @@
             <span>{{ t('admin.promptAudit.events.userId') }}</span>
             <input v-model="local.user_id" type="number" class="input mt-1 w-full" :aria-label="t('admin.promptAudit.events.userId')" @input="criteriaChanged" />
           </label>
+          <label class="text-xs text-gray-600 dark:text-dark-200">
+            <span>{{ t('admin.promptAudit.events.apiKeyId') }}</span>
+            <input v-model="local.api_key_id" type="number" min="1" class="input mt-1 w-full" :aria-label="t('admin.promptAudit.events.apiKeyId')" @input="criteriaChanged" />
+          </label>
+          <label class="text-xs text-gray-600 dark:text-dark-200">
+            <span>{{ t('admin.promptAudit.events.requestId') }}</span>
+            <input v-model="local.request_id" type="text" class="input mt-1 w-full" :aria-label="t('admin.promptAudit.events.requestId')" @input="criteriaChanged" />
+          </label>
+          <label class="text-xs text-gray-600 dark:text-dark-200 sm:col-span-2">
+            <span>{{ t('admin.promptAudit.events.promptHash') }}</span>
+            <input v-model="local.prompt_hash" type="text" class="input mt-1 w-full font-mono" :aria-label="t('admin.promptAudit.events.promptHash')" @input="criteriaChanged" />
+          </label>
         </div>
       </details>
 
       <div v-if="preview" class="rounded-xl border border-red-200 bg-red-50/60 px-4 py-3 dark:border-red-900/60 dark:bg-red-950/20" data-test="delete-preview-result">
-        <p class="text-sm font-semibold text-red-700 dark:text-red-300">{{ t('admin.promptAudit.events.filterDeleteCount', { count: preview.matched_count }) }}</p>
-        <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-dark-300">
-          <dt>{{ t('admin.promptAudit.events.snapshotMax') }}</dt>
-          <dd>{{ preview.snapshot_max_id }}</dd>
-          <dt>Filter SHA-256</dt>
-          <dd class="break-all font-mono">{{ preview.filter_hash }}</dd>
-          <dt>{{ t('admin.promptAudit.events.expiresAt') }}</dt>
-          <dd>{{ formatDate(preview.expires_at) }}</dd>
-        </dl>
+        <p class="text-sm font-semibold text-red-700 dark:text-red-300">{{ t('admin.promptAudit.events.filterDeleteCount', { count: preview.matched_rows }) }}</p>
         <p class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">{{ t('admin.promptAudit.events.filterDeleteWarning') }}</p>
+        <label class="mt-3 block text-xs">{{ t('dataCleanup.confirmation') }}: <strong class="break-all font-mono">{{ preview.confirmation }}</strong><input v-model="confirmation" class="input mt-1 w-full font-mono" autocomplete="off" :aria-label="t('dataCleanup.confirmation')" /></label>
+        <label v-if="preview.requires_totp" class="mt-3 block text-xs">{{ t('dataCleanup.totp') }}<input v-model="totp" class="input mt-1 w-full font-mono" inputmode="numeric" maxlength="6" autocomplete="one-time-code" :aria-label="t('dataCleanup.totp')" /></label>
       </div>
       <p v-else class="rounded-xl border border-dashed border-gray-300 px-4 py-3 text-xs text-gray-500 dark:border-dark-600 dark:text-dark-400" data-test="delete-preview-empty">
         {{ t('admin.promptAudit.events.filterDeleteNeedPreview') }}
@@ -120,7 +126,8 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import type { PromptDeletePreview, PromptEventFilters } from '../types'
+import type { PromptEventFilters } from '../types'
+import type { DataCleanupPreview } from '@/api/admin/ops'
 import {
   DELETE_RANGE_PRESETS,
   cloneData,
@@ -133,20 +140,23 @@ import {
 const props = defineProps<{
   show: boolean
   initialFilters: PromptEventFilters
-  preview: PromptDeletePreview | null
+  preview: DataCleanupPreview | null
   previewing: boolean
   deleting: boolean
 }>()
 const emit = defineEmits<{
   (event: 'close'): void
   (event: 'preview', value: PromptEventFilters): void
-  (event: 'confirm', value: PromptEventFilters): void
+  (event: 'confirm', confirmation: string, totpCode: string): void
   (event: 'criteria-change'): void
 }>()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 const preset = ref<DeleteRangePreset>('7d')
 const local = reactive<PromptEventFilters>(emptyEventFilters())
+const confirmation = ref('')
+const totp = ref('')
+watch(() => props.preview, () => { confirmation.value = ''; totp.value = '' })
 
 watch(
   () => props.show,
@@ -163,21 +173,20 @@ watch(
 
 const canPreview = computed(() => preset.value !== 'custom' || hasExplicitDeleteRange(local))
 
-// One-click flow: a valid criteria selection is enough to confirm — the parent
-// mints the server-side confirmation token on the fly. The button stays
-// disabled only when the range is invalid, work is in flight, or a fresh
-// preview already proved there is nothing to delete.
 const confirmDisabled = computed(
-  () => !canPreview.value || props.previewing || props.deleting || (props.preview !== null && props.preview.matched_count === 0),
+  () => !canPreview.value || props.previewing || props.deleting || !props.preview || props.preview.matched_rows === 0
+    || confirmation.value !== props.preview.confirmation || (props.preview.requires_totp && !/^\d{6}$/.test(totp.value)),
 )
 const confirmDisabledReason = computed(() => {
   if (props.previewing || props.deleting) return ''
   if (!canPreview.value) return 'admin.promptAudit.events.filterDeleteConfirmInvalidRange'
-  if (props.preview && props.preview.matched_count === 0) return 'admin.promptAudit.events.filterDeleteConfirmNoMatches'
+  if (props.preview && props.preview.matched_rows === 0) return 'admin.promptAudit.events.filterDeleteConfirmNoMatches'
   return ''
 })
 
 function criteriaChanged() {
+  confirmation.value = ''
+  totp.value = ''
   emit('criteria-change')
 }
 function requestPreview() {
@@ -186,9 +195,6 @@ function requestPreview() {
 }
 function requestConfirm() {
   if (confirmDisabled.value) return
-  emit('confirm', resolveDeleteRangeFilters(local, preset.value))
-}
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value))
+  emit('confirm', confirmation.value, totp.value)
 }
 </script>

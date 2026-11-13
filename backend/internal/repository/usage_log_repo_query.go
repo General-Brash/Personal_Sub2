@@ -88,8 +88,7 @@ func (r *usageLogRepository) ListByModelAndTimeRange(ctx context.Context, modelN
 }
 
 func (r *usageLogRepository) Delete(ctx context.Context, id int64) error {
-	_, err := r.sql.ExecContext(ctx, "DELETE FROM usage_logs WHERE id = $1", id)
-	return err
+	return fmt.Errorf("usage history is protected; use closed-month compaction")
 }
 
 // UsageLogFilters represents filters for usage log queries

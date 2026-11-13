@@ -117,6 +117,16 @@ func RegisterAdminRoutes(
 
 		// 运维监控（Ops）
 		registerOpsRoutes(admin, h)
+		if h.Admin.DataCleanup != nil {
+			cleanup := admin.Group("/data-cleanup")
+			cleanup.GET("/config", h.Admin.DataCleanup.GetConfig)
+			cleanup.PUT("/config", h.Admin.DataCleanup.UpdateConfig)
+			cleanup.GET("/overview", h.Admin.DataCleanup.Overview)
+			cleanup.POST("/preview", h.Admin.DataCleanup.Preview)
+			cleanup.POST("/execute", h.Admin.DataCleanup.Execute)
+			cleanup.GET("/audits", h.Admin.DataCleanup.ListAudits)
+			cleanup.POST("/tasks/:id/cancel", h.Admin.DataCleanup.CancelTask)
+		}
 
 		// 系统管理
 		registerSystemRoutes(admin, h)
@@ -175,10 +185,10 @@ func registerPromptAuditRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		promptAudit.GET("/runtime", h.Admin.PromptAudit.GetRuntime)
 		promptAudit.GET("/events", h.Admin.PromptAudit.ListEvents)
 		promptAudit.GET("/events/:id", h.Admin.PromptAudit.GetEvent)
-		promptAudit.DELETE("/events/:id", h.Admin.PromptAudit.DeleteEvent)
-		promptAudit.POST("/events/batch-delete", h.Admin.PromptAudit.BatchDelete)
-		promptAudit.POST("/events/delete-preview", h.Admin.PromptAudit.DeletePreview)
-		promptAudit.POST("/events/delete-by-filter", h.Admin.PromptAudit.DeleteByFilter)
+		promptAudit.DELETE("/events/:id", retiredCleanupEndpoint)
+		promptAudit.POST("/events/batch-delete", retiredCleanupEndpoint)
+		promptAudit.POST("/events/delete-preview", retiredCleanupEndpoint)
+		promptAudit.POST("/events/delete-by-filter", retiredCleanupEndpoint)
 	}
 }
 
@@ -188,7 +198,7 @@ func registerAuditLogRoutes(admin *gin.RouterGroup, h *handler.Handlers, _ middl
 		auditLogs.GET("", h.Admin.AuditLog.List)
 		auditLogs.GET("/:id", h.Admin.AuditLog.Get)
 		// 清空需现场 TOTP 校验（在 handler 内强制），不复用 step-up sudo 窗口
-		auditLogs.POST("/clear", h.Admin.AuditLog.Clear)
+		auditLogs.POST("/clear", retiredCleanupEndpoint)
 	}
 }
 
@@ -321,7 +331,7 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 		// Indexed system logs
 		ops.GET("/system-logs", h.Admin.Ops.ListSystemLogs)
-		ops.POST("/system-logs/cleanup", h.Admin.Ops.CleanupSystemLogs)
+		ops.POST("/system-logs/cleanup", retiredCleanupEndpoint)
 		ops.GET("/system-logs/health", h.Admin.Ops.GetSystemLogIngestionHealth)
 
 		// Dashboard (vNext - raw path for MVP)
@@ -765,7 +775,7 @@ func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		usage.GET("/search-users", h.Admin.Usage.SearchUsers)
 		usage.GET("/search-api-keys", h.Admin.Usage.SearchAPIKeys)
 		usage.GET("/cleanup-tasks", h.Admin.Usage.ListCleanupTasks)
-		usage.POST("/cleanup-tasks", h.Admin.Usage.CreateCleanupTask)
+		usage.POST("/cleanup-tasks", retiredCleanupEndpoint)
 		usage.POST("/cleanup-tasks/:id/cancel", h.Admin.Usage.CancelCleanupTask)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,6 +28,7 @@ const openAICompactSSEKeepaliveKey = "openai_compact_sse_keepalive"
 type openAICompactSSEKeepalive struct {
 	mu      sync.Mutex
 	writer  gin.ResponseWriter
+	ctx     *gin.Context
 	started bool
 	stopped bool
 	// bytes 是心跳已写出的注释字节数。心跳不构成语义响应，handler 的
@@ -49,6 +51,7 @@ func StartOpenAICompactSSEKeepalive(c *gin.Context, interval time.Duration) func
 	originalWriter := c.Writer
 	k := &openAICompactSSEKeepalive{
 		writer: originalWriter,
+		ctx:    c,
 		stop:   make(chan struct{}),
 	}
 	c.Set(openAICompactSSEKeepaliveKey, k)
@@ -105,11 +108,14 @@ func (k *openAICompactSSEKeepalive) beat() bool {
 	}
 	n, err := k.writer.Write([]byte(": keepalive\n\n"))
 	k.bytes += n
+	if err == nil {
+		err = httputil.FlushResponse(k.writer)
+	}
 	if err != nil {
-		k.stopped = true
+		MarkOpsDownstreamWriteError(k.ctx, err, "keepalive")
+		k.markStoppedLocked()
 		return false
 	}
-	k.writer.Flush()
 	return true
 }
 
@@ -240,11 +246,21 @@ func (w *openAICompactKeepaliveWriter) WriteHeaderNow() {
 }
 
 func (w *openAICompactKeepaliveWriter) Flush() {
+	if err := w.FlushError(); err != nil && w.k != nil {
+		MarkOpsDownstreamWriteError(w.k.ctx, err, "stream_flush")
+	}
+}
+
+func (w *openAICompactKeepaliveWriter) FlushError() error {
 	w.suspend()
 	if w.ResponseWriter == nil {
-		return
+		return nil
 	}
-	w.ResponseWriter.Flush()
+	return httputil.FlushResponse(w.ResponseWriter)
+}
+
+func (w *openAICompactKeepaliveWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (w *openAICompactKeepaliveWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {

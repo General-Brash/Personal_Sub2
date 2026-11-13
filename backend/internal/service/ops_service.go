@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log"
 	"math/rand/v2"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,6 +34,11 @@ const (
 type opsRuntimeSettingsSnapshot struct {
 	monitoringEnabled bool
 	advanced          OpsAdvancedSettings
+}
+
+type opsCleanupRuntimeSettings struct {
+	retention          OpsDataRetentionSettings
+	auditRetentionDays int
 }
 
 type OpsRuntimeSettingsRefreshHealth struct {
@@ -66,6 +72,8 @@ type OpsService struct {
 	// cleanupReloader 由 wire 在 OpsCleanupService 构造完成后通过 SetCleanupReloader 注入。
 	// 解耦避免 OpsService -> OpsCleanupService 的硬依赖（cleanup 也读 settings，会循环）。
 	cleanupReloader CleanupReloader
+	cleanupReloadMu sync.Mutex
+	cleanupApplied  *opsCleanupRuntimeSettings
 
 	// quotaAutoPauseSink 由 wire 注入（通常是 SettingService.SetOpenAIQuotaAutoPauseSettings）。
 	// UpdateOpsAdvancedSettings 写入新配置后调用，把最新的 quota auto-pause 全局默认阈值
@@ -97,7 +105,10 @@ func (s *OpsService) SetCleanupReloader(r CleanupReloader) {
 	if s == nil {
 		return
 	}
+	s.cleanupReloadMu.Lock()
 	s.cleanupReloader = r
+	s.cleanupApplied = nil
+	s.cleanupReloadMu.Unlock()
 }
 
 // SetOpenAIQuotaAutoPauseSettingsSink 由 wire 注入，把最新的 quota auto-pause 全局默认
@@ -192,14 +203,19 @@ func (s *OpsService) RefreshRuntimeSettings(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	s.runtimeSettingsMu.Lock()
-	defer s.runtimeSettingsMu.Unlock()
+	// Reload may read settings or wait for a cleanup job. Do not hold the
+	// runtime snapshot lock while invoking it.
+	s.cleanupReloadMu.Lock()
+	defer s.cleanupReloadMu.Unlock()
 
+	s.runtimeSettingsMu.Lock()
 	values, err := s.settingRepo.GetMultiple(ctx, []string{
 		SettingKeyOpsMonitoringEnabled,
 		SettingKeyOpsAdvancedSettings,
+		SettingKeyAuditLogRetentionDays,
 	})
 	if err != nil {
+		s.runtimeSettingsMu.Unlock()
 		return err
 	}
 
@@ -216,6 +232,22 @@ func (s *OpsService) RefreshRuntimeSettings(ctx context.Context) error {
 	normalizeOpsAdvancedSettings(advanced)
 
 	s.runtimeSettings.Store(&opsRuntimeSettingsSnapshot{monitoringEnabled: monitoringEnabled, advanced: *advanced})
+	s.runtimeSettingsMu.Unlock()
+	cleanup := &opsCleanupRuntimeSettings{
+		retention:          advanced.DataRetention,
+		auditRetentionDays: parseAuditLogRetentionDays(values[SettingKeyAuditLogRetentionDays]),
+	}
+	cleanup.retention.Targets = make(map[string]OpsRetentionPolicy, len(advanced.DataRetention.Targets))
+	for category, policy := range advanced.DataRetention.Targets {
+		cleanup.retention.Targets[category] = policy
+	}
+	if s.cleanupReloader != nil && !reflect.DeepEqual(s.cleanupApplied, cleanup) {
+		if err := s.cleanupReloader.Reload(ctx); err != nil {
+			return err
+		}
+		// Leave the marker unchanged on failure so the next refresh retries.
+		s.cleanupApplied = cleanup
+	}
 	return nil
 }
 
@@ -470,12 +502,19 @@ func (s *OpsService) prepareErrorLogInput(ctx context.Context, entry *OpsInsertE
 	if entry.ErrorType == "" {
 		entry.ErrorType = "api_error"
 	}
+	if entry.ErrorType == "downstream_write_error" {
+		entry.ErrorPhase, entry.ErrorOwner, entry.ErrorSource = "downstream", "platform", "gateway"
+		entry.IsBusinessLimited = false
+		entry.UpstreamStatusCode = nil
+		entry.UpstreamErrorMessage = nil
+		entry.UpstreamErrorDetail = nil
+	}
 
 	// Credential acquisition is a gateway/account-auth stage, not an inference
 	// HTTP attempt. Enforce that ownership at the persistence boundary so an
 	// earlier inference attempt cannot leak its status or text into top-level
 	// auth fields even if a caller supplied stale single-value context.
-	for i := len(entry.UpstreamErrors) - 1; i >= 0; i-- {
+	for i := len(entry.UpstreamErrors) - 1; i >= 0 && entry.ErrorType != "downstream_write_error"; i-- {
 		last := entry.UpstreamErrors[i]
 		if last == nil {
 			continue

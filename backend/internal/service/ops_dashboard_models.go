@@ -1,6 +1,10 @@
 package service
 
-import "time"
+import (
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
+)
 
 type OpsDashboardFilter struct {
 	StartTime time.Time
@@ -77,11 +81,15 @@ type OpsLatencyHistogramBucket struct {
 // OpsLatencyHistogramResponse is a coarse latency distribution histogram (success requests only).
 // It is used by the Ops dashboard to quickly identify tail latency regressions.
 type OpsLatencyHistogramResponse struct {
+	usagestats.HistoryMetadata
+	Available         bool   `json:"available"`
+	LatencyStatistics string `json:"latency_statistics"`
+
 	StartTime time.Time `json:"start_time"`
 	EndTime   time.Time `json:"end_time"`
 	Platform  string    `json:"platform"`
 	GroupID   *int64    `json:"group_id"`
 
-	TotalRequests int64                        `json:"total_requests"`
+	TotalRequests *int64                       `json:"total_requests"`
 	Buckets       []*OpsLatencyHistogramBucket `json:"buckets"`
 }

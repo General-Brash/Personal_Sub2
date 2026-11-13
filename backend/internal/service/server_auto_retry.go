@@ -631,6 +631,9 @@ func (r *ServerAutoRetryContext) Final(c *gin.Context, success bool, stop string
 	if r == nil || !r.Governed || r.Finalized {
 		return
 	}
+	if _, ok := GetOpsDownstreamWriteError(c); ok {
+		success, stop = false, "downstream_write_error"
+	}
 	r.Finalized = true
 	outcome := "failed"
 	if success {
@@ -796,6 +799,9 @@ func (s *OpenAIGatewayService) serverAutoRetryStreamEvent(c *gin.Context, accoun
 		r.HasSemanticOutput = true
 	}
 	r.Observe(payload, eventType)
+	if _, ok := GetOpsDownstreamWriteError(c); ok {
+		return nil
+	}
 	if string(bytes.TrimSpace(payload)) == "[DONE]" && !r.TerminalEventSeen && !r.HasSemanticOutput {
 		return s.serverAutoRetryTarget(c, account, resp, nil, "no_output_terminal_missing", nil)
 	}
@@ -819,6 +825,15 @@ func (s *OpenAIGatewayService) serverAutoRetryStreamEvent(c *gin.Context, accoun
 			if r.GuardStop != nil {
 				r.GuardStop()
 				r.GuardStop = nil
+			}
+			return nil
+		}
+		if r.AttemptEligible && eventType == "response.failed" && gjson.ValidBytes(payload) {
+			root := gjson.ParseBytes(payload)
+			response := root.Get("response")
+			responseError := response.Get("error")
+			if root.Get("type").String() == "response.failed" && response.IsObject() && responseError.Exists() && responseError.Type == gjson.Null && !serverAutoRetryHasError(payload) {
+				return s.serverAutoRetryTarget(c, account, resp, payload, "failed_error_null", nil)
 			}
 		}
 		return nil

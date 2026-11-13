@@ -310,6 +310,11 @@
                 </button>
               </div>
             </div>
+            <UsageHistoryNotice
+              :statistics="resultData?.daily_usage_statistics"
+              :granularity="resultData?.daily_usage_granularity"
+              class="px-8 py-3"
+            />
             <div v-if="dailyUsageRows.length > 0" class="overflow-x-auto">
               <table class="w-full">
                 <thead>
@@ -421,6 +426,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import UsageHistoryNotice from '@/components/usage/UsageHistoryNotice.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { buildGatewayUrl } from '@/api/client'
 import { formatDateLocalInput } from '@/utils/format'

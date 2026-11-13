@@ -273,6 +273,9 @@ function getTypeBadge(log: OpsErrorLog): { label: string; className: string } {
   if (phase === 'internal' && owner === 'platform') {
     return { label: t('admin.ops.errorLog.typeInternal'), className: 'bg-gray-100 text-gray-800 dark:bg-dark-700 dark:text-gray-200' }
   }
+  if (phase === 'downstream' && owner === 'platform') {
+    return { label: t('admin.ops.errorDetails.phase.downstream'), className: 'bg-gray-100 text-gray-800 dark:bg-dark-700 dark:text-gray-200' }
+  }
 
   const fallback = phase || owner || t('common.unknown')
   return { label: fallback, className: 'bg-gray-100 text-gray-800 dark:bg-dark-700 dark:text-gray-200' }

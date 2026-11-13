@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -16,12 +17,49 @@ import (
 // ProxyHandler handles admin proxy management
 type ProxyHandler struct {
 	adminService service.AdminService
+	traffic      *service.ProxyTrafficService
 }
 
 // NewProxyHandler creates a new admin proxy handler
 func NewProxyHandler(adminService service.AdminService) *ProxyHandler {
 	return &ProxyHandler{
 		adminService: adminService,
+	}
+}
+
+func ProvideProxyHandler(adminService service.AdminService, traffic *service.ProxyTrafficService) *ProxyHandler {
+	h := NewProxyHandler(adminService)
+	h.traffic = traffic
+	return h
+}
+
+func (h *ProxyHandler) attachTraffic(ctx context.Context, proxies []dto.AdminProxyWithAccountCount) {
+	if h.traffic == nil || len(proxies) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	ids := make([]int64, 0, len(proxies))
+	for i := range proxies {
+		ids = append(ids, proxies[i].ID)
+	}
+	usage, err := h.traffic.GetUsage(ctx, ids)
+	if err != nil {
+		logger.LegacyPrintf("handler.admin.proxy", "Load proxy traffic failed: %v", err)
+		return
+	}
+	for i := range proxies {
+		stats := usage[proxies[i].ID]
+		proxies[i].TrafficTodayBytes = &stats.TodayBytes
+		proxies[i].Traffic30DaysBytes = &stats.Days30Bytes
+	}
+}
+
+func (h *ProxyHandler) refreshTrafficRoutes(ctx context.Context) {
+	if h.traffic != nil {
+		if err := h.traffic.RefreshRoutes(ctx); err != nil {
+			logger.LegacyPrintf("handler.admin.proxy", "Refresh proxy traffic routes failed: %v", err)
+		}
 	}
 }
 
@@ -79,6 +117,7 @@ func (h *ProxyHandler) List(c *gin.Context) {
 	for i := range proxies {
 		out = append(out, *dto.ProxyWithAccountCountFromServiceAdmin(&proxies[i]))
 	}
+	h.attachTraffic(c.Request.Context(), out)
 	response.Paginated(c, out, total, page, pageSize)
 }
 
@@ -98,6 +137,7 @@ func (h *ProxyHandler) GetAll(c *gin.Context) {
 		for i := range proxies {
 			out = append(out, *dto.ProxyWithAccountCountFromServiceAdmin(&proxies[i]))
 		}
+		h.attachTraffic(c.Request.Context(), out)
 		response.Success(c, out)
 		return
 	}
@@ -163,6 +203,7 @@ func (h *ProxyHandler) Create(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
+		h.refreshTrafficRoutes(ctx)
 		return dto.ProxyFromServiceAdmin(proxy), nil
 	})
 }
@@ -205,6 +246,7 @@ func (h *ProxyHandler) Update(c *gin.Context) {
 		return
 	}
 
+	h.refreshTrafficRoutes(c.Request.Context())
 	response.Success(c, dto.ProxyFromServiceAdmin(proxy))
 }
 
@@ -223,6 +265,7 @@ func (h *ProxyHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	h.refreshTrafficRoutes(c.Request.Context())
 	response.Success(c, gin.H{"message": "Proxy deleted successfully"})
 }
 
@@ -245,6 +288,7 @@ func (h *ProxyHandler) BatchDelete(c *gin.Context) {
 		return
 	}
 
+	h.refreshTrafficRoutes(c.Request.Context())
 	response.Success(c, result)
 }
 
@@ -389,6 +433,7 @@ func (h *ProxyHandler) BatchCreate(c *gin.Context) {
 		created++
 	}
 
+	h.refreshTrafficRoutes(c.Request.Context())
 	response.Success(c, gin.H{
 		"created": created,
 		"skipped": skipped,

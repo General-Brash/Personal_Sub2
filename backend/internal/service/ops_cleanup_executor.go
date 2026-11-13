@@ -27,20 +27,30 @@ type opsCleanupTarget struct {
 }
 
 type opsCleanupDeletedCounts struct {
-	errorLogs      int64
-	ingressRejects int64
-	alertEvents    int64
-	systemLogs     int64
-	logAudits      int64
-	systemMetrics  int64
-	hourlyPreagg   int64
-	dailyPreagg    int64
-	usageLogs      int64
+	errorLogs       int64
+	ingressRejects  int64
+	alertEvents     int64
+	systemLogs      int64
+	logAudits       int64
+	systemMetrics   int64
+	hourlyPreagg    int64
+	dailyPreagg     int64
+	usageLogs       int64
+	serverAutoRetry int64
+	httpAccess      int64
+	auditStatistics int64
+	auditLogs       int64
+}
+
+func (c opsCleanupDeletedCounts) Total() int64 {
+	return c.errorLogs + c.ingressRejects + c.alertEvents + c.systemLogs + c.logAudits +
+		c.systemMetrics + c.hourlyPreagg + c.dailyPreagg + c.usageLogs +
+		c.serverAutoRetry + c.httpAccess + c.auditStatistics + c.auditLogs
 }
 
 func (c opsCleanupDeletedCounts) String() string {
 	return fmt.Sprintf(
-		"error_logs=%d ingress_rejects=%d alert_events=%d system_logs=%d log_audits=%d system_metrics=%d hourly_preagg=%d daily_preagg=%d usage_logs=%d",
+		"error_logs=%d ingress_rejects=%d alert_events=%d system_logs=%d log_audits=%d system_metrics=%d hourly_preagg=%d daily_preagg=%d usage_logs=%d server_auto_retry=%d http_access=%d audit_statistics=%d audit_logs=%d total=%d",
 		c.errorLogs,
 		c.ingressRejects,
 		c.alertEvents,
@@ -50,6 +60,11 @@ func (c opsCleanupDeletedCounts) String() string {
 		c.hourlyPreagg,
 		c.dailyPreagg,
 		c.usageLogs,
+		c.serverAutoRetry,
+		c.httpAccess,
+		c.auditStatistics,
+		c.auditLogs,
+		c.Total(),
 	)
 }
 

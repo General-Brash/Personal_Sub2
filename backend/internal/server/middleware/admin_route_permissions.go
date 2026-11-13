@@ -3,6 +3,13 @@ package middleware
 // Exact method + Gin route-pattern authorization inventory.
 // Unknown routes are never inferred from their prefix and are denied.
 var adminRoutePermissionMap = map[string]string{
+	"GET /api/v1/admin/data-cleanup/config":                                                 "system.settings.manage",
+	"PUT /api/v1/admin/data-cleanup/config":                                                 "system.settings.manage",
+	"GET /api/v1/admin/data-cleanup/overview":                                               "system.settings.manage",
+	"GET /api/v1/admin/data-cleanup/audits":                                                 "system.settings.manage",
+	"POST /api/v1/admin/data-cleanup/preview":                                               "system.settings.manage",
+	"POST /api/v1/admin/data-cleanup/execute":                                               "system.settings.manage",
+	"POST /api/v1/admin/data-cleanup/tasks/:id/cancel":                                      "system.settings.manage",
 	"GET /api/v1/admin/server-auto-retry/config":                                            "system.settings.manage",
 	"PUT /api/v1/admin/server-auto-retry/config":                                            "system.settings.manage",
 	"GET /api/v1/admin/server-auto-retry/events":                                            "system.settings.manage",

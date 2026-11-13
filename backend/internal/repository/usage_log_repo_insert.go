@@ -301,7 +301,8 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 
 	if err := scanSingleRow(ctx, sqlq, query, prepared.args, &log.ID, &log.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) && prepared.requestID != "" {
-			selectQuery := "SELECT id, created_at FROM usage_logs WHERE request_id = $1 AND api_key_id = $2"
+			selectQuery := `SELECT id, created_at FROM usage_logs WHERE request_id = $1 AND api_key_id = $2
+				UNION ALL SELECT usage_log_id, created_at FROM usage_request_archive WHERE request_id = $1 AND api_key_id = $2 LIMIT 1`
 			if err := scanSingleRow(ctx, sqlq, selectQuery, []any{prepared.requestID, log.APIKeyID}, &log.ID, &log.CreatedAt); err != nil {
 				return false, err
 			}
@@ -668,6 +669,14 @@ func (r *usageLogRepository) batchInsertUsageLogs(db *sql.DB, keys []string, pre
 	stateMap := make(map[string]usageLogBatchState, len(keys))
 	for _, row := range rows {
 		key := usageLogBatchKey(row.RequestID, row.APIKeyID)
+		// An INSERT may wait for compaction after taking its statement snapshot.
+		// Resolve its archived identity with a fresh snapshot before returning.
+		if row.ID <= 0 {
+			if err := db.QueryRowContext(ctx, `SELECT id,created_at FROM usage_logs WHERE request_id=$1 AND api_key_id=$2
+			 UNION ALL SELECT usage_log_id,created_at FROM usage_request_archive WHERE request_id=$1 AND api_key_id=$2 LIMIT 1`, row.RequestID, row.APIKeyID).Scan(&row.ID, &row.CreatedAt); err != nil {
+				return insertedMap, stateMap, false, err
+			}
+		}
 		insertedMap[key] = row.Inserted
 		stateMap[key] = usageLogBatchState{
 			ID:        row.ID,
@@ -914,8 +923,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				input.input_idx,
 				input.request_id,
 				input.api_key_id,
-				COALESCE(inserted.id, existing.id) AS id,
-				COALESCE(inserted.created_at, existing.created_at) AS created_at,
+				COALESCE(inserted.id, existing.id, archived.usage_log_id) AS id,
+				COALESCE(inserted.created_at, existing.created_at, archived.created_at) AS created_at,
 				(inserted.id IS NOT NULL) AS inserted
 			FROM input
 			LEFT JOIN inserted
@@ -924,6 +933,9 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			LEFT JOIN usage_logs existing
 				ON existing.request_id = input.request_id
 				AND existing.api_key_id = input.api_key_id
+			LEFT JOIN usage_request_archive archived
+				ON archived.request_id = input.request_id
+				AND archived.api_key_id = input.api_key_id
 		)
 		SELECT COALESCE(
 			json_agg(

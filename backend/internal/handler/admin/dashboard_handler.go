@@ -205,6 +205,11 @@ func (h *DashboardHandler) GetRealtimeMetrics(c *gin.Context) {
 func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
 	granularity := c.DefaultQuery("granularity", "day")
+	statistics, ok := h.usageRangeMetadata(c, startTime, endTime)
+	if !ok {
+		return
+	}
+	granularity = usagestats.EffectiveGranularity(granularity, statistics.IncludesHistory)
 
 	// Parse optional filter params
 	var userID, apiKeyID, accountID, groupID int64
@@ -280,6 +285,7 @@ func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 		"start_date":  startTime.Format("2006-01-02"),
 		"end_date":    endTime.Add(-24 * time.Hour).Format("2006-01-02"),
 		"granularity": granularity,
+		"statistics":  statistics,
 	})
 }
 
@@ -288,6 +294,10 @@ func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 // Query params: start_date, end_date (YYYY-MM-DD), user_id, api_key_id, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
+	statistics, ok := h.usageRangeMetadata(c, startTime, endTime)
+	if !ok {
+		return
+	}
 
 	// Parse optional filter params
 	var userID, apiKeyID, accountID, groupID int64
@@ -364,6 +374,7 @@ func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 
 	response.Success(c, gin.H{
 		"models":     stats,
+		"statistics": statistics,
 		"start_date": startTime.Format("2006-01-02"),
 		"end_date":   endTime.Add(-24 * time.Hour).Format("2006-01-02"),
 	})
@@ -374,6 +385,10 @@ func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 // Query params: start_date, end_date (YYYY-MM-DD), user_id, api_key_id, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
+	statistics, ok := h.usageRangeMetadata(c, startTime, endTime)
+	if !ok {
+		return
+	}
 
 	var userID, apiKeyID, accountID, groupID int64
 	var requestType *int16
@@ -441,6 +456,7 @@ func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
 
 	response.Success(c, gin.H{
 		"groups":     stats,
+		"statistics": statistics,
 		"start_date": startTime.Format("2006-01-02"),
 		"end_date":   endTime.Add(-24 * time.Hour).Format("2006-01-02"),
 	})
@@ -452,6 +468,11 @@ func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
 func (h *DashboardHandler) GetAPIKeyUsageTrend(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
 	granularity := c.DefaultQuery("granularity", "day")
+	statistics, ok := h.usageRangeMetadata(c, startTime, endTime)
+	if !ok {
+		return
+	}
+	granularity = usagestats.EffectiveGranularity(granularity, statistics.IncludesHistory)
 	limitStr := c.DefaultQuery("limit", "5")
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil || limit <= 0 {
@@ -470,6 +491,7 @@ func (h *DashboardHandler) GetAPIKeyUsageTrend(c *gin.Context) {
 		"start_date":  startTime.Format("2006-01-02"),
 		"end_date":    endTime.Add(-24 * time.Hour).Format("2006-01-02"),
 		"granularity": granularity,
+		"statistics":  statistics,
 	})
 }
 
@@ -479,6 +501,11 @@ func (h *DashboardHandler) GetAPIKeyUsageTrend(c *gin.Context) {
 func (h *DashboardHandler) GetUserUsageTrend(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
 	granularity := c.DefaultQuery("granularity", "day")
+	statistics, ok := h.usageRangeMetadata(c, startTime, endTime)
+	if !ok {
+		return
+	}
+	granularity = usagestats.EffectiveGranularity(granularity, statistics.IncludesHistory)
 	limitStr := c.DefaultQuery("limit", "12")
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil || limit <= 0 {
@@ -497,6 +524,7 @@ func (h *DashboardHandler) GetUserUsageTrend(c *gin.Context) {
 		"start_date":  startTime.Format("2006-01-02"),
 		"end_date":    endTime.Add(-24 * time.Hour).Format("2006-01-02"),
 		"granularity": granularity,
+		"statistics":  statistics,
 	})
 }
 

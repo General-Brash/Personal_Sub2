@@ -2,6 +2,7 @@
   <AppLayout>
     <div class="space-y-6">
       <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
+      <UsageHistoryNotice :statistics="usageStats" :granularity="granularity" />
 
       <div class="space-y-4">
         <div class="card p-4">
@@ -213,6 +214,7 @@
 </template>
 
 <script setup lang="ts">
+import UsageHistoryNotice from '@/components/usage/UsageHistoryNotice.vue'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -505,6 +507,7 @@ const loadChartData = async () => {
       include_group_stats: true,
     })
     if (seq !== chartReqSeq) return
+    granularity.value = snapshot.granularity === 'hour' ? 'hour' : 'day'
     trendData.value = snapshot.trend || []
     groupStats.value = snapshot.groups || []
   } catch (error) {

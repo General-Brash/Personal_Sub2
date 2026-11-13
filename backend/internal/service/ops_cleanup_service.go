@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -58,6 +57,7 @@ type OpsCleanupService struct {
 	// 而 Once 一旦触发就无法再次执行；改为 started/stopped 布尔配合 mu。
 	mu               sync.Mutex
 	cron             *cron.Cron
+	cronSchedule     string
 	started          bool
 	stopped          bool
 	effective        config.OpsCleanupConfig
@@ -96,9 +96,6 @@ func (s *OpsCleanupService) Start() {
 	if s == nil {
 		return
 	}
-	if s.cfg != nil && !s.cfg.Ops.Enabled {
-		return
-	}
 	if s.opsRepo == nil || s.db == nil {
 		logger.LegacyPrintf("service.ops_cleanup", "[OpsCleanup] not started (missing deps)")
 		return
@@ -121,26 +118,32 @@ func (s *OpsCleanupService) Stop() {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.stopped {
+		s.mu.Unlock()
 		return
 	}
 	s.stopped = true
-	s.stopCronLocked()
+	stopped := s.stopCronLocked()
+	s.mu.Unlock()
+	// A finishing cron job may need mu. Wait only after releasing it.
+	if stopped != nil {
+		select {
+		case <-stopped.Done():
+		case <-time.After(opsCleanupCronStopTimeout):
+			logger.LegacyPrintf("service.ops_cleanup", "[OpsCleanup] cron stop timed out")
+		}
+	}
 }
 
-// stopCronLocked 停掉当前 cron 实例（带 3s 超时）。调用方持锁。
-func (s *OpsCleanupService) stopCronLocked() {
+// stopCronLocked detaches the cron without waiting for jobs that may need mu.
+func (s *OpsCleanupService) stopCronLocked() context.Context {
 	if s.cron == nil {
-		return
+		return nil
 	}
-	ctx := s.cron.Stop()
-	select {
-	case <-ctx.Done():
-	case <-time.After(opsCleanupCronStopTimeout):
-		logger.LegacyPrintf("service.ops_cleanup", "[OpsCleanup] cron stop timed out")
-	}
+	stopped := s.cron.Stop()
 	s.cron = nil
+	s.cronSchedule = ""
+	return stopped
 }
 
 // applyScheduleLocked 重新计算 effective 配置并按其 schedule 重建 cron。调用方持锁。
@@ -149,7 +152,9 @@ func (s *OpsCleanupService) applyScheduleLocked(ctx context.Context) error {
 	previousEffective := s.effective
 	previousTargets := s.effectiveTargets
 	previousCron := s.cron
-	s.computeEffectiveLocked(ctx)
+	if err := s.computeEffectiveLocked(ctx); err != nil {
+		return err
+	}
 
 	if !s.effective.Enabled {
 		s.stopCronLocked()
@@ -160,6 +165,9 @@ func (s *OpsCleanupService) applyScheduleLocked(ctx context.Context) error {
 	schedule := strings.TrimSpace(s.effective.Schedule)
 	if schedule == "" {
 		schedule = opsCleanupDefaultSchedule
+	}
+	if s.cron != nil && s.cronSchedule == schedule {
+		return nil
 	}
 
 	loc := time.Local
@@ -179,6 +187,7 @@ func (s *OpsCleanupService) applyScheduleLocked(ctx context.Context) error {
 	s.stopCronLocked()
 	c.Start()
 	s.cron = c
+	s.cronSchedule = schedule
 	logger.LegacyPrintf("service.ops_cleanup",
 		"[OpsCleanup] scheduled (schedule=%q tz=%s retention_days=err:%d/min:%d/hour:%d)",
 		schedule, loc.String(),
@@ -212,37 +221,39 @@ func (s *OpsCleanupService) Reload(ctx context.Context) error {
 //   - Schedule：settings 非空时覆盖，否则保留 cfg
 //   - *RetentionDays：settings >=0 时覆盖（0=禁用），<0 沿用 cfg
 //
-// 若 settings 表无该 key（ErrSettingNotFound）或解析失败，整体 fallback 到 cfg.Ops.Cleanup。
-func (s *OpsCleanupService) computeEffectiveLocked(ctx context.Context) {
+// Missing settings use cfg; read/parse errors preserve the previous state for retry.
+func (s *OpsCleanupService) computeEffectiveLocked(ctx context.Context) (err error) {
 	base := config.OpsCleanupConfig{}
 	if s.cfg != nil {
 		base = s.cfg.Ops.Cleanup
 	}
 	targets := defaultOpsRetentionPolicies(base.ErrorLogRetentionDays, base.MinuteMetricsRetentionDays, base.HourlyMetricsRetentionDays)
 	defer func() {
-		s.effective = base
-		s.effectiveTargets = targets
+		if err == nil {
+			s.effective = base
+			s.effectiveTargets = targets
+		}
 	}()
 
 	if s.settingRepo == nil {
-		return
+		return nil
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	raw, err := s.settingRepo.GetValue(ctx, SettingKeyOpsAdvancedSettings)
+	values, err := s.settingRepo.GetMultiple(ctx, []string{SettingKeyOpsAdvancedSettings, SettingKeyAuditLogRetentionDays})
 	if err != nil {
-		if !errors.Is(err, ErrSettingNotFound) {
-			logger.LegacyPrintf("service.ops_cleanup",
-				"[OpsCleanup] read advanced settings failed, using cfg: %v", err)
-		}
-		return
+		return fmt.Errorf("read cleanup settings: %w", err)
+	}
+	auditDays := parseAuditLogRetentionDays(values[SettingKeyAuditLogRetentionDays])
+	targets["audit_logs"] = OpsRetentionPolicy{Enabled: auditDays > 0, RetentionDays: auditDays}
+	raw := strings.TrimSpace(values[SettingKeyOpsAdvancedSettings])
+	if raw == "" {
+		return nil
 	}
 	adv := *defaultOpsAdvancedSettings()
 	if err := json.Unmarshal([]byte(raw), &adv); err != nil {
-		logger.LegacyPrintf("service.ops_cleanup",
-			"[OpsCleanup] parse advanced settings failed, using cfg: %v", err)
-		return
+		return fmt.Errorf("parse cleanup settings: %w", err)
 	}
 	// 缓存原始（可能为负）retention 值：normalizeOpsAdvancedSettings 会把负数 clamp 成默认值，
 	// 覆盖判断需用原始值才能保留“<0 沿用 cfg”的语义。
@@ -264,10 +275,14 @@ func (s *OpsCleanupService) computeEffectiveLocked(ctx context.Context) {
 	if rawHour >= 0 {
 		base.HourlyMetricsRetentionDays = rawHour
 	}
-	targets = make(map[string]OpsRetentionPolicy, len(dr.Targets))
+	targets = make(map[string]OpsRetentionPolicy, len(dr.Targets)+1)
 	for key, policy := range dr.Targets {
 		targets[key] = policy
 	}
+	// Keep the existing independent retention_days value (0 means forever),
+	// but run it under the center's switch, cron, and leader lock.
+	targets["audit_logs"] = OpsRetentionPolicy{Enabled: auditDays > 0, RetentionDays: auditDays}
+	return nil
 }
 
 func (s *OpsCleanupService) snapshotEffectiveTargets() map[string]OpsRetentionPolicy {
@@ -280,12 +295,12 @@ func (s *OpsCleanupService) snapshotEffectiveTargets() map[string]OpsRetentionPo
 	return out
 }
 
-// refreshEffectiveBeforeRun 在 cron 触发时刷新 effective，让 retention 改动当次即生效。
-// schedule 改动不影响当次（cron 调度由库管理，需要 Reload 才换 schedule）。
-func (s *OpsCleanupService) refreshEffectiveBeforeRun(ctx context.Context) {
+// refreshEffectiveBeforeRun updates retention before a run. A stale schedule
+// is skipped until the runtime refresh reloads the cron.
+func (s *OpsCleanupService) refreshEffectiveBeforeRun(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.computeEffectiveLocked(ctx)
+	return s.computeEffectiveLocked(ctx)
 }
 
 func (s *OpsCleanupService) runScheduled() {
@@ -297,7 +312,19 @@ func (s *OpsCleanupService) runScheduled() {
 	defer cancel()
 
 	// 让 retention 改动当次生效（schedule/enabled 改动需要 Reload）。
-	s.refreshEffectiveBeforeRun(ctx)
+	if err := s.refreshEffectiveBeforeRun(ctx); err != nil {
+		logger.LegacyPrintf("service.ops_cleanup", "[OpsCleanup] settings refresh failed: %v", err)
+		return
+	}
+	s.mu.Lock()
+	enabled := s.effective.Enabled && !s.stopped
+	if s.cronSchedule != "" && s.cronSchedule != strings.TrimSpace(s.effective.Schedule) {
+		enabled = false // Do not execute a stale cron while waiting for Reload.
+	}
+	s.mu.Unlock()
+	if !enabled {
+		return
+	}
 
 	release, ok := s.tryAcquireLeaderLock(ctx)
 	if !ok {
@@ -311,9 +338,18 @@ func (s *OpsCleanupService) runScheduled() {
 	runAt := startedAt
 
 	counts, err := s.runCleanupOnce(ctx)
+	status, errText := "succeeded", ""
 	if err != nil {
-		s.recordHeartbeatError(runAt, time.Since(startedAt), err)
-		logger.LegacyPrintf("service.ops_cleanup", "[OpsCleanup] cleanup failed: %v", err)
+		status = "failed"
+		errText = truncateString(err.Error(), 500)
+	}
+	auditCtx, auditCancel := context.WithTimeout(context.WithoutCancel(ctx), dataCleanupAuditTimeout)
+	defer auditCancel()
+	_, _ = s.db.ExecContext(auditCtx, `INSERT INTO data_cleanup_audits(auth_method,category,cleanup_mode,filters,deleted_rows,status,error_message,started_at,finished_at)
+	 VALUES('scheduler','scheduled','range',jsonb_build_object('result',$1::text),$2,$3,$4,$5,NOW())`, counts.String(), counts.Total(), status, errText, startedAt)
+	if err != nil {
+		s.recordHeartbeatError(runAt, time.Since(startedAt), counts, err)
+		logger.LegacyPrintf("service.ops_cleanup", "[OpsCleanup] cleanup failed: %v; %s", err, counts.String())
 		return
 	}
 	s.recordHeartbeatSuccess(runAt, time.Since(startedAt), counts)
@@ -336,7 +372,6 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 		{policies["ops_error_logs"].RetentionDays, "ops_error_logs", "created_at", false, &out.errorLogs},
 		{policies["ops_ingress_reject_aggregates"].RetentionDays, "ops_ingress_reject_aggregates", "bucket_start", false, &out.ingressRejects},
 		{policies["ops_alert_events"].RetentionDays, "ops_alert_events", "created_at", false, &out.alertEvents},
-		{policies["ops_system_logs"].RetentionDays, "ops_system_logs", "created_at", false, &out.systemLogs},
 		{policies["ops_system_log_cleanup_audits"].RetentionDays, "ops_system_log_cleanup_audits", "created_at", false, &out.logAudits},
 		{policies["ops_system_metrics"].RetentionDays, "ops_system_metrics", "created_at", false, &out.systemMetrics},
 		{policies["ops_metrics_hourly"].RetentionDays, "ops_metrics_hourly", "bucket_start", false, &out.hourlyPreagg},
@@ -352,18 +387,51 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 			continue
 		}
 		n, err := opsCleanupRunOne(ctx, s.db, truncate, cutoff, t.table, t.timeCol, t.castDate, opsCleanupBatchSize)
+		*t.counter = n
 		if err != nil {
 			return out, err
 		}
-		*t.counter = n
 	}
 
 	if policy := policies["usage_logs"]; policy.Enabled && policy.RetentionDays > 0 && s.usageCleanup != nil {
-		deleted, err := s.usageCleanup.RunRetention(ctx, now.AddDate(0, 0, -policy.RetentionDays))
+		deleted, err := s.usageCleanup.RunRetention(ctx, UsageCompactionEnd(now))
+		out.usageLogs = deleted
 		if err != nil {
 			return out, err
 		}
-		out.usageLogs = deleted
+	}
+	for _, target := range []struct {
+		category string
+		counter  *int64
+	}{
+		{"server_auto_retry", &out.serverAutoRetry},
+		{"http_access", &out.httpAccess},
+		{"audit_statistics", &out.auditStatistics},
+	} {
+		category := target.category
+		policy := policies[category]
+		if !policy.Enabled || policy.RetentionDays <= 0 {
+			continue
+		}
+		n, err := cleanupCategoryRetention(ctx, s.db, category, now.AddDate(0, 0, -policy.RetentionDays))
+		*target.counter = n
+		if err != nil {
+			return out, err
+		}
+	}
+	if policy := policies["audit_logs"]; policy.Enabled && policy.RetentionDays > 0 {
+		n, err := deleteOldRowsByID(ctx, s.db, "audit_logs", "created_at", now.AddDate(0, 0, -policy.RetentionDays), opsCleanupBatchSize, false)
+		out.auditLogs = n
+		if err != nil {
+			return out, err
+		}
+	}
+	if policy := policies["ops_system_logs"]; policy.Enabled && policy.RetentionDays > 0 {
+		n, err := cleanupRuntimeRetention(ctx, s.db, policies, now)
+		out.systemLogs = n
+		if err != nil {
+			return out, err
+		}
 	}
 
 	// Channel monitor 每日维护（聚合昨日明细 + 软删过期明细/聚合）。
@@ -437,13 +505,14 @@ func (s *OpsCleanupService) recordHeartbeatSuccess(runAt time.Time, duration tim
 	})
 }
 
-func (s *OpsCleanupService) recordHeartbeatError(runAt time.Time, duration time.Duration, err error) {
+func (s *OpsCleanupService) recordHeartbeatError(runAt time.Time, duration time.Duration, counts opsCleanupDeletedCounts, err error) {
 	if s == nil || s.opsRepo == nil || err == nil {
 		return
 	}
 	now := time.Now().UTC()
 	durMs := duration.Milliseconds()
 	msg := truncateString(err.Error(), 2048)
+	result := truncateString(counts.String(), 2048)
 	ctx, cancel := context.WithTimeout(context.Background(), opsCleanupHeartbeatTimeout)
 	defer cancel()
 	_ = s.opsRepo.UpsertJobHeartbeat(ctx, &OpsUpsertJobHeartbeatInput{
@@ -451,6 +520,7 @@ func (s *OpsCleanupService) recordHeartbeatError(runAt time.Time, duration time.
 		LastRunAt:      &runAt,
 		LastErrorAt:    &now,
 		LastError:      &msg,
+		LastResult:     &result,
 		LastDurationMs: &durMs,
 	})
 }

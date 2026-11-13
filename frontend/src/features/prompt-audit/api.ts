@@ -5,14 +5,12 @@ import type {
   PromptAuditGroup,
   PromptAuditRuntime,
   PromptAuditUpdateRequest,
-  PromptDeletePreview,
-  PromptDeleteResult,
   PromptEventFilters,
   PromptEventPage,
   PromptProbeResult,
   PromptAuditEndpointDraft,
 } from './types'
-import { eventFilterPayload, eventQueryParams } from './viewModel'
+import { eventQueryParams } from './viewModel'
 
 const basePath = '/admin/prompt-audit'
 
@@ -64,38 +62,6 @@ export async function getEvent(id: number): Promise<PromptAuditEvent> {
   return data
 }
 
-export async function deleteEvent(id: number): Promise<PromptDeleteResult> {
-  const { data } = await apiClient.delete<PromptDeleteResult>(`${basePath}/events/${id}`)
-  return data
-}
-
-export async function batchDeleteEvents(ids: number[]): Promise<PromptDeleteResult> {
-  const { data } = await apiClient.post<PromptDeleteResult>(`${basePath}/events/batch-delete`, { ids })
-  return data
-}
-
-export async function previewDelete(filters: PromptEventFilters): Promise<PromptDeletePreview> {
-  const { data } = await apiClient.post<PromptDeletePreview>(
-    `${basePath}/events/delete-preview`,
-    eventFilterPayload(filters),
-  )
-  return data
-}
-
-export async function deleteEventsByFilter(
-  filters: PromptEventFilters,
-  preview: PromptDeletePreview,
-): Promise<PromptDeleteResult> {
-  const { data } = await apiClient.post<PromptDeleteResult>(`${basePath}/events/delete-by-filter`, {
-    filter: eventFilterPayload(filters),
-    snapshot_max_id: preview.snapshot_max_id,
-    filter_hash: preview.filter_hash,
-    confirmation_token: preview.confirmation_token,
-    confirm: true,
-  })
-  return data
-}
-
 export async function listGroups(): Promise<PromptAuditGroup[]> {
   const { data } = await apiClient.get<PromptAuditGroup[]>('/admin/groups/all', {
     params: { include_inactive: true },
@@ -110,10 +76,6 @@ export const promptAuditAPI = {
   getRuntime,
   listEvents,
   getEvent,
-  deleteEvent,
-  batchDeleteEvents,
-  previewDelete,
-  deleteEventsByFilter,
   listGroups,
 }
 
