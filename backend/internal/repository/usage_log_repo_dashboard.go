@@ -192,7 +192,7 @@ func (r *usageLogRepository) fillDashboardEntityStats(ctx context.Context, stats
 }
 
 func (r *usageLogRepository) fillDashboardUsageStatsAggregated(ctx context.Context, stats *DashboardStats, todayUTC, now time.Time) error {
-	// Lifetime totals must not depend on expiring dashboard cache buckets.
+	// Lifetime totals include durable legacy deltas, not expiring cache buckets.
 	return r.fillDashboardUsageStatsFromUsageLogs(ctx, stats, time.Unix(0, 0).UTC(), now, todayUTC, now)
 }
 
@@ -211,8 +211,17 @@ func (r *usageLogRepository) fillDashboardUsageStatsFromUsageLogs(ctx context.Co
 				actual_cost,
 				COALESCE(account_stats_cost, total_cost) * COALESCE(account_rate_multiplier, 1) AS account_cost,
 				COALESCE(duration_ms, 0) AS duration_ms
-				, duration_samples, request_count
+				, request_count
 			FROM usage_statistics_range(LEAST($1::timestamptz, $3::timestamptz), GREATEST($2::timestamptz, $4::timestamptz))
+			UNION ALL
+			SELECT
+				-- Legacy buckets restore totals, never today's request metrics.
+				NULL::timestamptz,
+				($1::timestamptz < $2::timestamptz AND bucket_start < $2::timestamptz AND bucket_end > $1::timestamptz),
+				input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+				total_cost, actual_cost, account_cost, total_duration_ms, total_requests
+			FROM usage_dashboard_legacy_daily_buckets
+			WHERE bucket_start < $2::timestamptz AND bucket_end > $1::timestamptz
 		)
 		SELECT
 			COALESCE(SUM(request_count) FILTER (WHERE in_total_range), 0) AS total_requests,
