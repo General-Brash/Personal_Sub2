@@ -95,6 +95,11 @@ func (r *usageBillingRepository) applyBatchImageCreditHoldOperation(
 		return nil, service.ErrBatchImageSettlementCostExceedsHold
 	}
 
+	// Match billing/bank order even on capture/release: user, batch/hold,
+	// then temporary grants. Settlement must not lock grants before its user.
+	if err := lockUsageBillingUser(ctx, tx, cmd.UserID, false); err != nil {
+		return nil, err
+	}
 	job, err := lockBatchImageBillingJob(ctx, tx, cmd.BatchID)
 	if err != nil {
 		return nil, err
@@ -679,7 +684,7 @@ func lockBatchImageUserBalance(ctx context.Context, tx *sql.Tx, userID int64) (f
 SELECT balance, COALESCE(frozen_balance, 0)
 FROM users
 WHERE id = $1 AND deleted_at IS NULL
-FOR UPDATE`, userID).Scan(&balance, &frozen)
+FOR NO KEY UPDATE`, userID).Scan(&balance, &frozen)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, 0, service.ErrUserNotFound
 	}

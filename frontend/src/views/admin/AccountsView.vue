@@ -693,6 +693,7 @@ const autoRefreshIntervalSeconds = ref<(typeof autoRefreshIntervals)[number]>(30
 const autoRefreshCountdown = ref(0)
 const autoRefreshETag = ref<string | null>(null)
 const autoRefreshFetching = ref(false)
+let autoRefreshController: AbortController | null = null
 const AUTO_REFRESH_SILENT_WINDOW_MS = 15000
 const autoRefreshSilentUntil = ref(0)
 const hasPendingListSync = ref(false)
@@ -717,9 +718,42 @@ const usageBatchRequestTokenByAccountId = ref<Record<string, number>>({})
 const usageBatchCache = new Map<number, { data: AccountUsageInfo; ts: number }>()
 const USAGE_BATCH_CACHE_TTL = 5 * 60 * 1000
 const pendingUsageBatchIds = new Set<number>()
+const pendingUsageBatchForceIds = new Set<number>()
+const followUpUsageBatchForceIds = new Set<number>()
+type UsageBatchRequest = { controller: AbortController; force: boolean; ids: Set<number> }
+const inFlightUsageByAccountId = new Map<number, UsageBatchRequest>()
 let usageBatchFlushTimer: ReturnType<typeof setTimeout> | null = null
-let queuedUsageBatchForce = false
 let usageBatchRequestToken = 0
+let accountsUnmounted = false
+let accountScopePending = false
+const deferredUsageBatch = new Map<number, boolean>()
+let accountListReqSeq = 0
+let todayStatsRequest: { key: string; controller: AbortController; promise: Promise<void> } | null = null
+
+const isCanceledRequest = (error: unknown) => {
+  const e = error as { name?: string; code?: string }
+  return e?.name === 'AbortError' || e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED'
+}
+
+const cancelUsageBatchRequests = () => {
+  if (usageBatchFlushTimer !== null) clearTimeout(usageBatchFlushTimer)
+  usageBatchFlushTimer = null
+  for (const request of new Set(inFlightUsageByAccountId.values())) request.controller.abort()
+  inFlightUsageByAccountId.clear()
+  pendingUsageBatchIds.clear()
+  pendingUsageBatchForceIds.clear()
+  followUpUsageBatchForceIds.clear()
+  deferredUsageBatch.clear()
+  usageBatchRequestTokenByAccountId.value = {}
+  usageBatchLoadingByAccountId.value = {}
+}
+
+const cancelTodayStatsRequest = () => {
+  todayStatsReqSeq.value += 1
+  todayStatsRequest?.controller.abort()
+  todayStatsRequest = null
+  todayStatsLoading.value = false
+}
 
 const buildDefaultTodayStats = (): WindowStats => ({
   requests: 0,
@@ -760,18 +794,24 @@ const setUsageBatchState = (accountID: number, usage: AccountUsageInfo | null, e
 }
 
 const handleAccountUsageLoaded = (accountID: number, usage: AccountUsageInfo) => {
+  if (accountsUnmounted || !accounts.value.some(account => account.id === accountID)) return
   if (usageBatchByAccountId.value[String(accountID)] === usage) return
   setUsageBatchState(accountID, usage, null)
 }
 
 const flushQueuedUsageBatch = async () => {
   usageBatchFlushTimer = null
-  const accountIDs = Array.from(pendingUsageBatchIds)
-  const force = queuedUsageBatchForce
+  const normalIDs = Array.from(pendingUsageBatchIds).filter(id => !pendingUsageBatchForceIds.has(id))
+  const forceIDs = Array.from(pendingUsageBatchForceIds)
   pendingUsageBatchIds.clear()
-  queuedUsageBatchForce = false
+  pendingUsageBatchForceIds.clear()
+  await Promise.all([sendUsageBatch(normalIDs, false), sendUsageBatch(forceIDs, true)])
+}
 
-  if (accountIDs.length === 0) return
+const sendUsageBatch = async (accountIDs: number[], force: boolean) => {
+  if (accountsUnmounted || accountIDs.length === 0) return
+  const request: UsageBatchRequest = { controller: new AbortController(), force, ids: new Set(accountIDs) }
+  accountIDs.forEach(id => inFlightUsageByAccountId.set(id, request))
 
   const requestTokensByAccount = accountIDs.reduce<Record<string, number>>((acc, accountID) => {
     acc[String(accountID)] = usageBatchRequestTokenByAccountId.value[String(accountID)] ?? 0
@@ -779,7 +819,8 @@ const flushQueuedUsageBatch = async () => {
   }, {})
 
   try {
-    const result = await adminAPI.accounts.getBatchUsage(accountIDs, force)
+    const result = await adminAPI.accounts.getBatchUsage(accountIDs, force, { signal: request.controller.signal })
+    if (request.controller.signal.aborted || accountsUnmounted) return
 
     const usageMap = result.usage ?? {}
     const errorMap = result.errors ?? {}
@@ -790,7 +831,7 @@ const flushQueuedUsageBatch = async () => {
 
     for (const accountID of accountIDs) {
       const key = String(accountID)
-      if ((usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
+      if (!request.ids.has(accountID) || (usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
         continue
       }
       const usage = usageMap[key] ?? null
@@ -808,11 +849,12 @@ const flushQueuedUsageBatch = async () => {
     usageBatchErrorByAccountId.value = nextErrors
     usageBatchLoadingByAccountId.value = nextLoading
   } catch (error) {
+    if (request.controller.signal.aborted || accountsUnmounted || isCanceledRequest(error)) return
     const nextErrors = { ...usageBatchErrorByAccountId.value }
     const nextLoading = { ...usageBatchLoadingByAccountId.value }
     for (const accountID of accountIDs) {
       const key = String(accountID)
-      if ((usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
+      if (!request.ids.has(accountID) || (usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
         continue
       }
       nextErrors[key] = 'Failed'
@@ -821,16 +863,49 @@ const flushQueuedUsageBatch = async () => {
     usageBatchErrorByAccountId.value = nextErrors
     usageBatchLoadingByAccountId.value = nextLoading
     console.error('Failed to load account usage batch:', error)
+  } finally {
+    for (const accountID of accountIDs) {
+      if (inFlightUsageByAccountId.get(accountID) !== request) continue
+      inFlightUsageByAccountId.delete(accountID)
+      if (followUpUsageBatchForceIds.delete(accountID)) {
+        const account = accounts.value.find(row => row.id === accountID)
+        if (account) queueBatchedUsage(account, { force: true })
+      } else {
+        setUsageBatchLoading(accountID, false)
+      }
+    }
   }
 }
 
 const queueBatchedUsage = (account: Account, options?: { force?: boolean }) => {
-  if (!isDesktopViewport.value) return
+  if (accountsUnmounted || !isDesktopViewport.value || hiddenColumns.has('usage')) return
+  if (!accounts.value.some(row => row.id === account.id)) return
   if (!accountSupportsBatchUsage(account)) return
 
   const force = options?.force === true
   const cacheKey = account.id
   const key = String(cacheKey)
+  if (accountScopePending) {
+    deferredUsageBatch.set(cacheKey, deferredUsageBatch.get(cacheKey) === true || force)
+    return
+  }
+
+  const inFlight = inFlightUsageByAccountId.get(cacheKey)
+  if (inFlight) {
+    if (force && !inFlight.force && !followUpUsageBatchForceIds.has(cacheKey)) {
+      usageBatchCache.delete(cacheKey)
+      followUpUsageBatchForceIds.add(cacheKey)
+      usageBatchRequestTokenByAccountId.value[key] = ++usageBatchRequestToken
+    }
+    return
+  }
+  if (pendingUsageBatchIds.has(cacheKey)) {
+    if (force) {
+      usageBatchCache.delete(cacheKey)
+      pendingUsageBatchForceIds.add(cacheKey)
+    }
+    return
+  }
 
   if (force) {
     usageBatchCache.delete(cacheKey)
@@ -853,7 +928,7 @@ const queueBatchedUsage = (account: Account, options?: { force?: boolean }) => {
   }
   setUsageBatchLoading(cacheKey, true)
   pendingUsageBatchIds.add(cacheKey)
-  queuedUsageBatchForce = queuedUsageBatchForce || force
+  if (force) pendingUsageBatchForceIds.add(cacheKey)
 
   if (usageBatchFlushTimer !== null) return
   usageBatchFlushTimer = setTimeout(() => {
@@ -861,48 +936,58 @@ const queueBatchedUsage = (account: Account, options?: { force?: boolean }) => {
   }, 0)
 }
 
-const refreshTodayStatsBatch = async () => {
+const refreshTodayStatsBatch = (force = false): Promise<void> => {
   // Why this checks both columns:
   // - today_stats column shows dedicated today's metrics.
   // - usage column also embeds today's stats for Key/Bedrock rows.
   // So we only skip fetching when BOTH columns are hidden.
-  if (hiddenColumns.has('today_stats') && hiddenColumns.has('usage')) {
-    todayStatsLoading.value = false
+  if (accountsUnmounted || (hiddenColumns.has('today_stats') && hiddenColumns.has('usage'))) {
+    cancelTodayStatsRequest()
     todayStatsError.value = null
-    return
+    return Promise.resolve()
   }
 
   const accountIDs = accounts.value.map(account => account.id)
-  const reqSeq = ++todayStatsReqSeq.value
   if (accountIDs.length === 0) {
+    cancelTodayStatsRequest()
     todayStatsByAccountId.value = {}
     todayStatsError.value = null
     todayStatsLoading.value = false
-    return
+    return Promise.resolve()
   }
+  const key = JSON.stringify([...accountIDs].sort((a, b) => a - b))
+  if (!force && todayStatsRequest?.key === key) return todayStatsRequest.promise
+  cancelTodayStatsRequest()
+  const reqSeq = todayStatsReqSeq.value
+  const controller = new AbortController()
 
   todayStatsLoading.value = true
   todayStatsError.value = null
 
-  try {
-    const result = await adminAPI.accounts.getBatchTodayStats(accountIDs)
-    if (reqSeq !== todayStatsReqSeq.value) return
-    const serverStats = result.stats ?? {}
-    const nextStats: Record<string, WindowStats> = {}
-    for (const accountID of accountIDs) {
-      const key = String(accountID)
-      nextStats[key] = serverStats[key] ?? buildDefaultTodayStats()
+  const promise = (async () => {
+    try {
+      const result = await adminAPI.accounts.getBatchTodayStats(accountIDs, { signal: controller.signal })
+      if (controller.signal.aborted || reqSeq !== todayStatsReqSeq.value) return
+      const serverStats = result.stats ?? {}
+      const nextStats: Record<string, WindowStats> = {}
+      for (const accountID of accountIDs) {
+        const key = String(accountID)
+        nextStats[key] = serverStats[key] ?? buildDefaultTodayStats()
+      }
+      todayStatsByAccountId.value = nextStats
+    } catch (error) {
+      if (controller.signal.aborted || reqSeq !== todayStatsReqSeq.value || isCanceledRequest(error)) return
+      todayStatsError.value = 'Failed'
+      console.error('Failed to load account today stats:', error)
+    } finally {
+      if (reqSeq === todayStatsReqSeq.value) {
+        todayStatsLoading.value = false
+        todayStatsRequest = null
+      }
     }
-    todayStatsByAccountId.value = nextStats
-  } catch (error) {
-    if (reqSeq !== todayStatsReqSeq.value) return
-    todayStatsError.value = 'Failed'
-    console.error('Failed to load account today stats:', error)
-  } finally {
-    if (reqSeq === todayStatsReqSeq.value) {
-      todayStatsLoading.value = false
-    }
-  }
+  })()
+  todayStatsRequest = { key, controller, promise }
+  return promise
 }
 
 const autoRefreshIntervalLabel = (sec: number) => {
@@ -1042,6 +1127,8 @@ const toggleColumn = (key: string) => {
     hiddenColumns.add(key)
   }
   saveColumnsToStorage()
+  if (key === 'usage' && hiddenColumns.has('usage')) cancelUsageBatchRequests()
+  if (hiddenColumns.has('today_stats') && hiddenColumns.has('usage')) cancelTodayStatsRequest()
   if ((key === 'today_stats' || key === 'usage') && wasHidden) {
     refreshTodayStatsBatch().catch((error) => {
       console.error('Failed to load account today stats after showing column:', error)
@@ -1144,6 +1231,9 @@ useSwipeSelect(accountTableRef, {
 
 const resetAutoRefreshCache = () => {
   autoRefreshETag.value = null
+  autoRefreshController?.abort()
+  autoRefreshController = null
+  autoRefreshFetching.value = false
 }
 
 const isFirstLoad = ref(true)
@@ -1159,6 +1249,7 @@ type AccountLoadOptions = {
 }
 
 const load = async (options: AccountLoadOptions = {}) => {
+  if (accountsUnmounted) return
   const requestParams = params as any
   markUpstreamBillingSortRefresh()
   syncAccountListDerivedParams()
@@ -1166,7 +1257,10 @@ const load = async (options: AccountLoadOptions = {}) => {
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = false
   requestParams.lite = '1'
+  const seq = ++accountListReqSeq
+  accountScopePending = true
   await baseLoad()
+  if (accountsUnmounted || seq !== accountListReqSeq) return
   if (isFirstLoad.value) {
     isFirstLoad.value = false
   }
@@ -1174,12 +1268,17 @@ const load = async (options: AccountLoadOptions = {}) => {
 }
 
 const reload = async () => {
+  if (accountsUnmounted) return
   markUpstreamBillingSortRefresh()
   syncAccountListDerivedParams()
   hasPendingListSync.value = false
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = false
-  await baseReload()
+  accountScopePending = true
+  const request = baseReload()
+  const seq = ++accountListReqSeq
+  await request
+  if (accountsUnmounted || seq !== accountListReqSeq) return
   await refreshTodayStatsBatch()
 }
 
@@ -1202,6 +1301,7 @@ const debouncedReload = () => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = true
+  accountScopePending = true
   baseDebouncedReload()
 }
 
@@ -1210,6 +1310,7 @@ const handlePageChange = (page: number) => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = true
+  accountScopePending = true
   baseHandlePageChange(page)
 }
 
@@ -1218,8 +1319,23 @@ const handlePageSizeChange = (size: number) => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = true
+  accountScopePending = true
   baseHandlePageSizeChange(size)
 }
+
+watch(
+  () => JSON.stringify([
+    params.platform, params.type, params.status, params.group, params.privacy_mode,
+    params.search, params.sort_by, params.sort_order, pagination.page, pagination.page_size
+  ]),
+  () => {
+    accountListReqSeq += 1
+    cancelUsageBatchRequests()
+    cancelTodayStatsRequest()
+    resetAutoRefreshCache()
+  },
+  { flush: 'sync' }
+)
 
 const handleSort = (key: string, order: AccountSortOrder) => {
   sortState.sort_by = key
@@ -1237,6 +1353,15 @@ const handleSort = (key: string, order: AccountSortOrder) => {
 
 watch(loading, (isLoading, wasLoading) => {
   if (wasLoading && !isLoading) {
+    accountScopePending = false
+    const deferred = new Map(deferredUsageBatch)
+    deferredUsageBatch.clear()
+    for (const [id, force] of deferred) {
+      const account = accounts.value.find(row => row.id === id)
+      if (account) queueBatchedUsage(account, { force })
+    }
+  }
+  if (wasLoading && !isLoading) {
     upstreamBillingNow.value = Date.now()
   }
   if (wasLoading && !isLoading && pendingTodayStatsRefresh.value) {
@@ -1249,6 +1374,22 @@ watch(loading, (isLoading, wasLoading) => {
 
 watch(accounts, (rows) => {
   const visibleIDs = new Set(rows.map((row) => String(row.id)))
+  for (const [id, request] of inFlightUsageByAccountId) {
+    if (visibleIDs.has(String(id))) continue
+    request.ids.delete(id)
+    inFlightUsageByAccountId.delete(id)
+    if (request.ids.size === 0) request.controller.abort()
+  }
+  for (const ids of [pendingUsageBatchIds, pendingUsageBatchForceIds, followUpUsageBatchForceIds]) {
+    for (const id of ids) if (!visibleIDs.has(String(id))) ids.delete(id)
+  }
+  for (const id of usageBatchCache.keys()) if (!visibleIDs.has(String(id))) usageBatchCache.delete(id)
+  todayStatsByAccountId.value = Object.fromEntries(
+    Object.entries(todayStatsByAccountId.value).filter(([key]) => visibleIDs.has(key))
+  )
+  if (todayStatsRequest && todayStatsRequest.key !== JSON.stringify(rows.map(row => row.id).sort((a, b) => a - b))) {
+    cancelTodayStatsRequest()
+  }
   usageBatchByAccountId.value = Object.fromEntries(
     Object.entries(usageBatchByAccountId.value).filter(([key]) => visibleIDs.has(key))
   )
@@ -1261,6 +1402,10 @@ watch(accounts, (rows) => {
   usageBatchRequestTokenByAccountId.value = Object.fromEntries(
     Object.entries(usageBatchRequestTokenByAccountId.value).filter(([key]) => visibleIDs.has(key))
   )
+}, { flush: 'sync' })
+
+watch(isDesktopViewport, (desktop) => {
+  if (!desktop) cancelUsageBatchRequests()
 })
 
 watch(upstreamBillingNow, () => {
@@ -1352,8 +1497,10 @@ const mergeAccountsIncrementally = (nextRows: Account[]) => {
 }
 
 const refreshAccountsIncrementally = async () => {
-  if (autoRefreshFetching.value) return
+  if (accountsUnmounted || autoRefreshFetching.value) return
   syncAccountListDerivedParams()
+  const controller = new AbortController()
+  autoRefreshController = controller
   autoRefreshFetching.value = true
   try {
     const result = await adminAPI.accounts.listWithEtag(
@@ -1370,8 +1517,9 @@ const refreshAccountsIncrementally = async () => {
         sort_order?: AccountSortOrder
 
       },
-      { etag: autoRefreshETag.value }
+      { etag: autoRefreshETag.value, signal: controller.signal }
     )
+    if (controller.signal.aborted || accountsUnmounted) return
 
     if (result.etag) {
       autoRefreshETag.value = result.etag
@@ -1387,14 +1535,20 @@ const refreshAccountsIncrementally = async () => {
 
     await refreshTodayStatsBatch()
   } catch (error) {
+    if (controller.signal.aborted || accountsUnmounted || isCanceledRequest(error)) return
     console.error('Auto refresh failed:', error)
   } finally {
-    autoRefreshFetching.value = false
+    if (autoRefreshController === controller) {
+      autoRefreshController = null
+      autoRefreshFetching.value = false
+    }
   }
 }
 
 const handleManualRefresh = async () => {
-  await Promise.all([load(), loadUpstreamBillingProbeGlobalState()])
+  await Promise.all([load({ refreshTodayStats: false }), loadUpstreamBillingProbeGlobalState()])
+  if (accountsUnmounted) return
+  await refreshTodayStatsBatch(true)
   // Force usage cells to refetch /usage on explicit user refresh.
   usageManualRefreshToken.value += 1
 }
@@ -2496,6 +2650,7 @@ onMounted(async () => {
     adminAPI.proxies.getAll(),
     adminAPI.groups.getAll()
   ])
+  if (accountsUnmounted) return
   if (proxiesResult.status === 'fulfilled') {
     proxies.value = proxiesResult.value
   } else {
@@ -2519,11 +2674,12 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (usageBatchFlushTimer !== null) {
-    clearTimeout(usageBatchFlushTimer)
-    usageBatchFlushTimer = null
-  }
-  pendingUsageBatchIds.clear()
+  accountsUnmounted = true
+  cancelUsageBatchRequests()
+  cancelTodayStatsRequest()
+  resetAutoRefreshCache()
+  usageBatchCache.clear()
+  pauseAutoRefresh()
   window.removeEventListener('scroll', handleScroll, true)
   window.removeEventListener('resize', handleViewportResize)
   document.removeEventListener('click', handleClickOutside)

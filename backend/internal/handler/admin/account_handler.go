@@ -2560,34 +2560,29 @@ func (h *AccountHandler) GetBatchTodayStats(c *gin.Context) {
 	}
 
 	cacheKey := buildAccountTodayStatsBatchCacheKey(accountIDs)
-	if cached, ok := accountTodayStatsBatchCache.Get(cacheKey); ok {
-		if cached.ETag != "" {
-			c.Header("ETag", cached.ETag)
-			c.Header("Vary", "If-None-Match")
-			if ifNoneMatchMatched(c.GetHeader("If-None-Match"), cached.ETag) {
-				c.Status(http.StatusNotModified)
-				return
-			}
+	usageService := h.accountUsageService
+	cached, hit, err := accountTodayStatsBatchCache.GetOrLoadContext(c.Request.Context(), cacheKey, func(loadCtx context.Context) (any, error) {
+		stats, err := usageService.GetTodayStatsBatch(loadCtx, accountIDs)
+		if err != nil {
+			return nil, err
 		}
-		c.Header("X-Snapshot-Cache", "hit")
-		response.Success(c, cached.Payload)
-		return
-	}
-
-	stats, err := h.accountUsageService.GetTodayStatsBatch(c.Request.Context(), accountIDs)
+		return gin.H{"stats": stats}, nil
+	})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 
-	payload := gin.H{"stats": stats}
-	cached := accountTodayStatsBatchCache.Set(cacheKey, payload)
 	if cached.ETag != "" {
 		c.Header("ETag", cached.ETag)
 		c.Header("Vary", "If-None-Match")
+		if hit && ifNoneMatchMatched(c.GetHeader("If-None-Match"), cached.ETag) {
+			c.Status(http.StatusNotModified)
+			return
+		}
 	}
-	c.Header("X-Snapshot-Cache", "miss")
-	response.Success(c, payload)
+	c.Header("X-Snapshot-Cache", cacheStatusValue(hit))
+	response.Success(c, cached.Payload)
 }
 
 // GetBatchUsage 批量获取多个账号的 current usage。

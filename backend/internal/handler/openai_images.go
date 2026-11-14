@@ -404,31 +404,33 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			upstreamModel = result.UpstreamModel
 		}
 		sessionID := service.ExtractClientSessionID(c)
+		usageInput := &service.OpenAIRecordUsageInput{
+			Result:             service.SnapshotOpenAIUsageResult(result, account),
+			APIKey:             apiKey,
+			User:               apiKey.User,
+			Account:            account,
+			Subscription:       subscription,
+			InboundEndpoint:    inboundEndpoint,
+			UpstreamEndpoint:   upstreamEndpoint,
+			UserAgent:          userAgent,
+			IPAddress:          clientIP,
+			RequestPayloadHash: requestPayloadHash,
+			APIKeyService:      h.apiKeyService,
+			QuotaPlatform:      quotaPlatform,
+			SessionID:          sessionID,
+			ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, requestModel, upstreamModel),
+		}
+		usageLogFields := []zap.Field{
+			zap.String("component", "handler.openai_gateway.images"),
+			zap.Int64("user_id", subject.UserID),
+			zap.Int64("api_key_id", apiKey.ID),
+			zap.Any("group_id", apiKey.GroupID),
+			zap.String("model", clientRequestModel),
+			zap.Int64("account_id", account.ID),
+		}
 		h.submitMandatoryUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-				Result:             result,
-				APIKey:             apiKey,
-				User:               apiKey.User,
-				Account:            account,
-				Subscription:       subscription,
-				InboundEndpoint:    inboundEndpoint,
-				UpstreamEndpoint:   upstreamEndpoint,
-				UserAgent:          userAgent,
-				IPAddress:          clientIP,
-				RequestPayloadHash: requestPayloadHash,
-				APIKeyService:      h.apiKeyService,
-				QuotaPlatform:      quotaPlatform,
-				SessionID:          sessionID,
-				ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, requestModel, upstreamModel),
-			}); err != nil {
-				logger.L().With(
-					zap.String("component", "handler.openai_gateway.images"),
-					zap.Int64("user_id", subject.UserID),
-					zap.Int64("api_key_id", apiKey.ID),
-					zap.Any("group_id", apiKey.GroupID),
-					zap.String("model", clientRequestModel),
-					zap.Int64("account_id", account.ID),
-				).Error("openai.images.record_usage_failed", zap.Error(err))
+			if err := h.gatewayService.RecordUsage(ctx, usageInput); err != nil {
+				logger.L().With(usageLogFields...).Error("openai.images.record_usage_failed", zap.Error(err))
 			}
 		})
 

@@ -326,9 +326,10 @@ export async function applyOAuthCredentials(
  * @param days - Number of days (default: 30)
  * @returns Account usage statistics with history, summary, and models
  */
-export async function getStats(id: number, days: number = 30): Promise<AccountUsageStatsResponse> {
+export async function getStats(id: number, days: number = 30, options?: { signal?: AbortSignal }): Promise<AccountUsageStatsResponse> {
   const { data } = await apiClient.get<AccountUsageStatsResponse>(`/admin/accounts/${id}/stats`, {
-    params: { days }
+    params: { days },
+    signal: options?.signal
   })
   return data
 }
@@ -348,12 +349,13 @@ export async function clearError(id: number): Promise<Account> {
  * @param id - Account ID
  * @returns Account usage info
  */
-export async function getUsage(id: number, source?: 'passive' | 'active', force?: boolean): Promise<AccountUsageInfo> {
+export async function getUsage(id: number, source?: 'passive' | 'active', force?: boolean, options?: { signal?: AbortSignal }): Promise<AccountUsageInfo> {
   const params: Record<string, string> = {}
   if (source) params.source = source
   if (force) params.force = 'true'
   const { data } = await apiClient.get<AccountUsageInfo>(`/admin/accounts/${id}/usage`, {
-    params: Object.keys(params).length > 0 ? params : undefined
+    params: Object.keys(params).length > 0 ? params : undefined,
+    signal: options?.signal
   })
   return data
 }
@@ -363,11 +365,11 @@ export interface BatchAccountUsageResponse {
   errors: Record<string, string>
 }
 
-export async function getBatchUsage(accountIds: number[], force?: boolean): Promise<BatchAccountUsageResponse> {
+export async function getBatchUsage(accountIds: number[], force?: boolean, options?: { signal?: AbortSignal }): Promise<BatchAccountUsageResponse> {
   const { data } = await apiClient.post<BatchAccountUsageResponse>('/admin/accounts/usage/batch', {
     account_ids: accountIds,
     force: force === true
-  })
+  }, { signal: options?.signal })
   return data
 }
 
@@ -536,8 +538,8 @@ export async function bulkUpdate(
  * @param id - Account ID
  * @returns Today's stats (requests, tokens, cost)
  */
-export async function getTodayStats(id: number): Promise<WindowStats> {
-  const { data } = await apiClient.get<WindowStats>(`/admin/accounts/${id}/today-stats`)
+export async function getTodayStats(id: number, options?: { signal?: AbortSignal }): Promise<WindowStats> {
+  const { data } = await apiClient.get<WindowStats>(`/admin/accounts/${id}/today-stats`, { signal: options?.signal })
   return data
 }
 
@@ -550,10 +552,10 @@ export interface BatchTodayStatsResponse {
  * @param accountIds - 账号 ID 列表
  * @returns 以账号 ID（字符串）为键的统计映射
  */
-export async function getBatchTodayStats(accountIds: number[]): Promise<BatchTodayStatsResponse> {
+export async function getBatchTodayStats(accountIds: number[], options?: { signal?: AbortSignal }): Promise<BatchTodayStatsResponse> {
   const { data } = await apiClient.post<BatchTodayStatsResponse>('/admin/accounts/today-stats/batch', {
     account_ids: accountIds
-  })
+  }, { signal: options?.signal })
   return data
 }
 

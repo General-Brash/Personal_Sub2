@@ -18,7 +18,7 @@
             <div class="ml-auto flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
               <div class="w-28">
-                <Select v-model="granularity" :options="granularityOptions" @change="loadChartData" />
+                <Select v-model="granularity" :options="granularityOptions" @change="loadChartData()" />
               </div>
             </div>
           </div>
@@ -154,6 +154,7 @@
         <div v-if="rankingMounted" v-show="activeTab === 'ranking'" class="overflow-hidden rounded-b-2xl">
           <UserTokenRanking
             ref="rankingRef"
+            :active="activeTab === 'ranking'"
             :start-date="startDate"
             :end-date="endDate"
             :filters="breakdownFilters"
@@ -226,6 +227,40 @@ let abortController: AbortController | null = null; let exportAbortController: A
 let chartReqSeq = 0
 let statsReqSeq = 0
 let modelStatsReqSeq = 0
+let usageUnmounted = false
+type RequestResource = 'logs' | 'stats' | 'models' | 'charts'
+type PageRequest = { key: string; force: boolean; controller: AbortController; promise: Promise<void> }
+const pageRequests: Record<RequestResource, PageRequest | null> = { logs: null, stats: null, models: null, charts: null }
+const modelSourceKeys: Partial<Record<ModelDistributionSource, string>> = {}
+let modelStatsFilterKey = ''
+let refreshScheduled = false
+let scheduledRefreshForce = false
+
+const isCanceledRequest = (error: unknown) => {
+  const e = error as { name?: string; code?: string }
+  return e?.name === 'AbortError' || e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED'
+}
+
+const runPageRequest = (
+  resource: RequestResource,
+  key: string,
+  force: boolean,
+  execute: (controller: AbortController) => Promise<void>
+): Promise<void> => {
+  if (usageUnmounted) return Promise.resolve()
+  const current = pageRequests[resource]
+  if (current?.key === key && !current.controller.signal.aborted && (!force || current.force)) return current.promise
+  current?.controller.abort()
+  const controller = new AbortController()
+  const request: PageRequest = { key, force, controller, promise: Promise.resolve() }
+  pageRequests[resource] = request
+  request.promise = Promise.resolve().then(() => {
+    if (!controller.signal.aborted) return execute(controller)
+  }).finally(() => {
+    if (pageRequests[resource] === request) pageRequests[resource] = null
+  })
+  return request.promise
+}
 const exportProgress = reactive({ show: false, progress: 0, current: 0, total: 0, estimatedTime: '' })
 // Balance history modal state
 const showBalanceHistoryModal = ref(false)
@@ -379,41 +414,44 @@ const buildUsageListParams = (
   }
 }
 
-const loadLogs = async () => {
-  abortController?.abort(); const c = new AbortController(); abortController = c; loading.value = true
-  try {
-    const res = await adminAPI.usage.list(
-      buildUsageListParams(pagination.page, pagination.page_size, false),
-      { signal: c.signal }
-    )
-    if(!c.signal.aborted) { usageLogs.value = res.items; pagination.total = res.total }
-  } catch (error: any) { if(error?.name !== 'AbortError') console.error('Failed to load usage logs:', error) } finally { if(abortController === c) loading.value = false }
+const loadLogs = (force = false) => {
+  const params = buildUsageListParams(pagination.page, pagination.page_size, false)
+  return runPageRequest('logs', JSON.stringify(params), force, async (c) => {
+    abortController = c
+    loading.value = true
+    try {
+      const res = await adminAPI.usage.list(params, { signal: c.signal })
+      if (c.signal.aborted) return
+      usageLogs.value = res.items
+      pagination.total = res.total
+    } catch (error) {
+      if (!c.signal.aborted && !isCanceledRequest(error)) console.error('Failed to load usage logs:', error)
+    } finally {
+      if (abortController === c) loading.value = false
+    }
+  })
 }
-const loadStats = async (force = false) => {
-  const seq = ++statsReqSeq
-  endpointStatsLoading.value = true
-  try {
-    const requestType = filters.value.request_type
-    const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
-    const s = await adminAPI.usage.getStats({
-      ...filters.value,
-      stream: legacyStream === null ? undefined : legacyStream,
-      ...(force ? { nocache: 1 } : {}),
-    })
-    if (seq !== statsReqSeq) return
-    usageStats.value = s
-    inboundEndpointStats.value = s.endpoints || []
-    upstreamEndpointStats.value = s.upstream_endpoints || []
-    endpointPathStats.value = s.endpoint_paths || []
-  } catch (error) {
-    if (seq !== statsReqSeq) return
-    console.error('Failed to load usage stats:', error)
-    inboundEndpointStats.value = []
-    upstreamEndpointStats.value = []
-    endpointPathStats.value = []
-  } finally {
-    if (seq === statsReqSeq) endpointStatsLoading.value = false
-  }
+const loadStats = (force = false) => {
+  const requestType = filters.value.request_type
+  const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
+  const params = { ...filters.value, stream: legacyStream === null ? undefined : legacyStream }
+  return runPageRequest('stats', JSON.stringify(params), force, async (c) => {
+    const seq = ++statsReqSeq
+    endpointStatsLoading.value = true
+    try {
+      const s = await adminAPI.usage.getStats({ ...params, ...(force ? { nocache: 1 } : {}) }, { signal: c.signal })
+      if (c.signal.aborted || seq !== statsReqSeq) return
+      usageStats.value = s
+      inboundEndpointStats.value = s.endpoints || []
+      upstreamEndpointStats.value = s.upstream_endpoints || []
+      endpointPathStats.value = s.endpoint_paths || []
+    } catch (error) {
+      if (c.signal.aborted || seq !== statsReqSeq || isCanceledRequest(error)) return
+      console.error('Failed to load usage stats:', error)
+    } finally {
+      if (seq === statsReqSeq) endpointStatsLoading.value = false
+    }
+  })
 }
 
 // 失效模型统计缓存:仅标记需要重取,保留旧数据直到新数据到达(避免刷新时图表闪空)。
@@ -423,112 +461,128 @@ const invalidateModelStatsCache = () => {
   loadedModelSources.mapping = false
 }
 
-const loadModelStats = async (source: ModelDistributionSource, force = false) => {
-  if (!force && loadedModelSources[source]) {
-    return
+const loadModelStats = (source: ModelDistributionSource, force = false) => {
+  const requestType = filters.value.request_type
+  const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
+  const params = {
+    start_date: filters.value.start_date || startDate.value,
+    end_date: filters.value.end_date || endDate.value,
+    user_id: filters.value.user_id,
+    model: filters.value.model,
+    api_key_id: filters.value.api_key_id,
+    account_id: filters.value.account_id,
+    group_id: filters.value.group_id,
+    request_type: requestType,
+    stream: legacyStream === null ? undefined : legacyStream,
+    billing_type: filters.value.billing_type,
+    upstream_model_mismatch: filters.value.upstream_model_mismatch,
+    model_source: source,
   }
-
-  const seq = ++modelStatsReqSeq
-  modelStatsLoading.value = true
-  try {
-    const requestType = filters.value.request_type
-    const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
-    const baseParams = {
-      start_date: filters.value.start_date || startDate.value,
-      end_date: filters.value.end_date || endDate.value,
-      user_id: filters.value.user_id,
-      model: filters.value.model,
-      api_key_id: filters.value.api_key_id,
-      account_id: filters.value.account_id,
-      group_id: filters.value.group_id,
-      request_type: requestType,
-      stream: legacyStream === null ? undefined : legacyStream,
-      billing_type: filters.value.billing_type,
-	  upstream_model_mismatch: filters.value.upstream_model_mismatch,
-    }
-
-    const response = await adminAPI.dashboard.getModelStats({ ...baseParams, model_source: source })
-
-    if (seq !== modelStatsReqSeq) return
-
-    const models = response.models || []
-    if (source === 'requested') {
-      requestedModelStats.value = models
-    } else if (source === 'upstream') {
-      upstreamModelStats.value = models
-    } else {
-      mappingModelStats.value = models
-    }
-    loadedModelSources[source] = true
-  } catch (error) {
-    if (seq !== modelStatsReqSeq) return
-    console.error('Failed to load model stats:', error)
-    if (source === 'requested') {
-      requestedModelStats.value = []
-    } else if (source === 'upstream') {
-      upstreamModelStats.value = []
-    } else {
-      mappingModelStats.value = []
-    }
-    loadedModelSources[source] = false
-  } finally {
-    if (seq === modelStatsReqSeq) modelStatsLoading.value = false
+  const key = JSON.stringify(params)
+  const filterKey = JSON.stringify({ ...params, model_source: undefined })
+  if (modelStatsFilterKey !== filterKey) {
+    invalidateModelStatsCache()
+    modelStatsFilterKey = filterKey
   }
+  const current = pageRequests.models
+  if (current?.key === key && !current.controller.signal.aborted && (!force || current.force)) return current.promise
+  if (!force && loadedModelSources[source] && modelSourceKeys[source] === key) {
+    current?.controller.abort()
+    pageRequests.models = null
+    modelStatsReqSeq += 1
+    modelStatsLoading.value = false
+    return Promise.resolve()
+  }
+  return runPageRequest('models', key, force, async (c) => {
+    const seq = ++modelStatsReqSeq
+    modelStatsLoading.value = true
+    try {
+      const response = await adminAPI.dashboard.getModelStats(params, { signal: c.signal })
+      if (c.signal.aborted || seq !== modelStatsReqSeq) return
+      const models = response.models || []
+      if (source === 'requested') requestedModelStats.value = models
+      else if (source === 'upstream') upstreamModelStats.value = models
+      else mappingModelStats.value = models
+      loadedModelSources[source] = true
+      modelSourceKeys[source] = key
+    } catch (error) {
+      if (c.signal.aborted || seq !== modelStatsReqSeq || isCanceledRequest(error)) return
+      console.error('Failed to load model stats:', error)
+      loadedModelSources[source] = false
+    } finally {
+      if (seq === modelStatsReqSeq) modelStatsLoading.value = false
+    }
+  })
 }
 
-const loadChartData = async () => {
-  const seq = ++chartReqSeq
-  chartsLoading.value = true
-  try {
-    const requestType = filters.value.request_type
-    const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
-    const snapshot = await adminAPI.dashboard.getSnapshotV2({
-      start_date: filters.value.start_date || startDate.value,
-      end_date: filters.value.end_date || endDate.value,
-      granularity: granularity.value,
-      user_id: filters.value.user_id,
-      model: filters.value.model,
-      api_key_id: filters.value.api_key_id,
-      account_id: filters.value.account_id,
-      group_id: filters.value.group_id,
-      request_type: requestType,
-      stream: legacyStream === null ? undefined : legacyStream,
-      billing_type: filters.value.billing_type,
-	  upstream_model_mismatch: filters.value.upstream_model_mismatch,
-      include_stats: false,
-      include_trend: true,
-      include_model_stats: false,
-      include_group_stats: true,
-      include_users_trend: false
-    })
-    if (seq !== chartReqSeq) return
-    granularity.value = snapshot.granularity === 'hour' ? 'hour' : 'day'
-    trendData.value = snapshot.trend || []
-    groupStats.value = snapshot.groups || []
-  } catch (error) { console.error('Failed to load chart data:', error) } finally { if (seq === chartReqSeq) chartsLoading.value = false }
+const loadChartData = (force = false) => {
+  const requestType = filters.value.request_type
+  const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
+  const params = {
+    start_date: filters.value.start_date || startDate.value,
+    end_date: filters.value.end_date || endDate.value,
+    granularity: granularity.value,
+    user_id: filters.value.user_id,
+    model: filters.value.model,
+    api_key_id: filters.value.api_key_id,
+    account_id: filters.value.account_id,
+    group_id: filters.value.group_id,
+    request_type: requestType,
+    stream: legacyStream === null ? undefined : legacyStream,
+    billing_type: filters.value.billing_type,
+    upstream_model_mismatch: filters.value.upstream_model_mismatch,
+    include_stats: false,
+    include_trend: true,
+    include_model_stats: false,
+    include_group_stats: true,
+    include_users_trend: false
+  }
+  return runPageRequest('charts', JSON.stringify(params), force, async (c) => {
+    const seq = ++chartReqSeq
+    chartsLoading.value = true
+    try {
+      const snapshot = await adminAPI.dashboard.getSnapshotV2(params, { signal: c.signal })
+      if (c.signal.aborted || seq !== chartReqSeq) return
+      granularity.value = snapshot.granularity === 'hour' ? 'hour' : 'day'
+      trendData.value = snapshot.trend || []
+      groupStats.value = snapshot.groups || []
+    } catch (error) {
+      if (c.signal.aborted || seq !== chartReqSeq || isCanceledRequest(error)) return
+      console.error('Failed to load chart data:', error)
+    } finally {
+      if (seq === chartReqSeq) chartsLoading.value = false
+    }
+  })
+}
+
+const scheduleRefresh = (force = false) => {
+  scheduledRefreshForce ||= force
+  if (refreshScheduled || usageUnmounted) return
+  refreshScheduled = true
+  queueMicrotask(() => {
+    refreshScheduled = false
+    const refreshForce = scheduledRefreshForce
+    scheduledRefreshForce = false
+    if (usageUnmounted) return
+    void loadLogs(refreshForce)
+    void loadStats(refreshForce)
+    void loadModelStats(modelDistributionSource.value, refreshForce)
+    void loadChartData(refreshForce)
+    if (activeTab.value === 'errors') void loadAdminErrors()
+    if (refreshForce) rankingRef.value?.reload()
+  })
 }
 const applyFilters = () => {
   pagination.page = 1
-  invalidateModelStatsCache()
-  loadLogs()
-  loadStats()
-  loadModelStats(modelDistributionSource.value, true)
-  loadChartData()
   errPage.value = 1
-  if (activeTab.value === 'errors') {
-    loadAdminErrors()
-  } else {
-    errRows.value = []
-  }
+  errReqSeq += 1
+  errLoading.value = false
+  if (activeTab.value !== 'errors') errRows.value = []
+  scheduleRefresh()
 }
 const refreshData = () => {
   invalidateModelStatsCache()
-  loadLogs()
-  loadStats(true)
-  loadModelStats(modelDistributionSource.value, true)
-  loadChartData()
-  if (activeTab.value === 'errors') loadAdminErrors()
-  if (rankingMounted.value) rankingRef.value?.reload()
+  scheduleRefresh(true)
 }
 const resetFilters = () => {
   const range = getLast24HoursRangeDates()
@@ -613,7 +667,12 @@ const exportToExcel = async () => {
       saveAs(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `usage_${filters.value.start_date}_to_${filters.value.end_date}.xlsx`)
       appStore.showSuccess(t('usage.exportSuccess'))
     }
-  } catch (error) { console.error('Failed to export:', error); appStore.showError('Export Failed') }
+  } catch (error) {
+    if (!c.signal.aborted && !isCanceledRequest(error)) {
+      console.error('Failed to export:', error)
+      appStore.showError('Export Failed')
+    }
+  }
   finally { if(exportAbortController === c) { exportAbortController = null; exporting.value = false; exportProgress.show = false } }
 }
 
@@ -797,6 +856,7 @@ const errPageSize = ref(20)
 const errTotal = ref(0)
 const errSortBy = ref('created_at')
 const errSortOrder = ref<'asc' | 'desc'>('desc')
+let errReqSeq = 0
 const showErrorModal = ref(false)
 const selectedErrorId = ref<number | null>(null)
 
@@ -805,6 +865,8 @@ const toRFC3339 = (d: string | undefined, endOfDay = false): string | undefined 
   d ? new Date(d + (endOfDay ? 'T23:59:59.999' : 'T00:00:00')).toISOString() : undefined
 
 const loadAdminErrors = async () => {
+  if (usageUnmounted) return
+  const seq = ++errReqSeq
   errLoading.value = true
   try {
     const resp = await listErrorLogs({
@@ -824,13 +886,15 @@ const loadAdminErrors = async () => {
       sort_by: errSortBy.value,
       sort_order: errSortOrder.value,
     })
+    if (usageUnmounted || seq !== errReqSeq) return
     errRows.value = resp.items
     errTotal.value = resp.total
   } catch (error) {
+    if (usageUnmounted || seq !== errReqSeq) return
     console.error('Failed to load admin errors:', error)
     appStore.showError(t('usage.errors.failedToLoad'))
   } finally {
-    errLoading.value = false
+    if (seq === errReqSeq) errLoading.value = false
   }
 }
 
@@ -856,17 +920,27 @@ const handleColumnClickOutside = (event: MouseEvent) => {
 onMounted(() => {
   applyRouteQueryFilters()
   void loadRouteUserFilterLabel()
-  loadLogs()
-  loadStats()
-  loadModelStats(modelDistributionSource.value, true)
-  window.setTimeout(() => {
-    void loadChartData()
-  }, 120)
+  scheduleRefresh()
   loadSavedColumns()
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)
 })
-onUnmounted(() => { abortController?.abort(); exportAbortController?.abort(); document.removeEventListener('click', handleColumnClickOutside) })
+onUnmounted(() => {
+  usageUnmounted = true
+  for (const request of Object.values(pageRequests)) request?.controller.abort()
+  abortController?.abort()
+  exportAbortController?.abort()
+  statsReqSeq += 1
+  modelStatsReqSeq += 1
+  chartReqSeq += 1
+  errReqSeq += 1
+  loading.value = false
+  endpointStatsLoading.value = false
+  modelStatsLoading.value = false
+  chartsLoading.value = false
+  errLoading.value = false
+  document.removeEventListener('click', handleColumnClickOutside)
+})
 
 watch(modelDistributionSource, (source) => {
   void loadModelStats(source)

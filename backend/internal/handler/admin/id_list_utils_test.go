@@ -5,6 +5,7 @@ package admin
 import (
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,14 +39,15 @@ func TestNormalizeInt64IDList(t *testing.T) {
 }
 
 func TestBuildAccountTodayStatsBatchCacheKey(t *testing.T) {
+	prefix := "accounts_today_stats:" + timezone.Today().Format("2006-01-02") + ":"
 	tests := []struct {
 		name string
 		ids  []int64
 		want string
 	}{
-		{"empty", nil, "accounts_today_stats_empty"},
-		{"single", []int64{42}, "accounts_today_stats:42"},
-		{"multiple", []int64{1, 2, 3}, "accounts_today_stats:1,2,3"},
+		{"empty", nil, prefix},
+		{"single", []int64{42}, prefix + "42"},
+		{"multiple", []int64{1, 2, 3}, prefix + "1,2,3"},
 	}
 
 	for _, tc := range tests {

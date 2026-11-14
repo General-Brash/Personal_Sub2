@@ -58,7 +58,7 @@ describe('UserTokenRanking', () => {
       end_date: '2026-07-08',
       sort_by: 'total_tokens',
       limit: 50,
-    }))
+    }), { signal: expect.any(AbortSignal) })
 
     const rows = wrapper.findAll('tbody tr')
     expect(rows).toHaveLength(2)
@@ -77,6 +77,48 @@ describe('UserTokenRanking', () => {
     await flushPromises()
 
     expect(getUserBreakdown).toHaveBeenCalledTimes(2)
-    expect(getUserBreakdown).toHaveBeenLastCalledWith(expect.objectContaining({ user_id: 9 }))
+    expect(getUserBreakdown).toHaveBeenLastCalledWith(
+      expect.objectContaining({ user_id: 9 }),
+      { signal: expect.any(AbortSignal) },
+    )
+  })
+
+  it('defers inactive requests and loads the latest filters when activated', async () => {
+    const wrapper = mountRanking({ active: false })
+    await flushPromises()
+    expect(getUserBreakdown).not.toHaveBeenCalled()
+
+    await wrapper.setProps({ filters: { user_id: 9 } })
+    await flushPromises()
+    expect(getUserBreakdown).not.toHaveBeenCalled()
+
+    await wrapper.setProps({ active: true })
+    await flushPromises()
+    expect(getUserBreakdown).toHaveBeenCalledTimes(1)
+    expect(getUserBreakdown).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 9 }),
+      { signal: expect.any(AbortSignal) },
+    )
+    wrapper.unmount()
+  })
+
+  it('aborts inactive requests and ignores their stale results after reactivation', async () => {
+    let resolveFirst!: (value: { users: ReturnType<typeof item>[] }) => void
+    getUserBreakdown.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve }))
+    const wrapper = mountRanking()
+    await flushPromises()
+    const firstSignal = getUserBreakdown.mock.calls[0][1].signal as AbortSignal
+
+    await wrapper.setProps({ active: false })
+    expect(firstSignal.aborted).toBe(true)
+    await wrapper.setProps({ active: true })
+    await flushPromises()
+    expect(getUserBreakdown).toHaveBeenCalledTimes(2)
+
+    resolveFirst({ users: [item(99, 999)] })
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('u99@test.com')
+    wrapper.unmount()
   })
 })

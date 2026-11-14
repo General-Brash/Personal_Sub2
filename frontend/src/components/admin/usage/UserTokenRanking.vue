@@ -9,7 +9,7 @@
           {{ t('admin.usage.tokenRanking.userCount', { count: items.length }) }}
         </span>
         <div class="w-28">
-          <Select v-model="limit" :options="limitOptions" @change="load" />
+          <Select v-model="limit" :options="limitOptions" @change="load()" />
         </div>
       </div>
     </div>
@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getUserBreakdown, type UserBreakdownParams } from '@/api/admin/dashboard'
 import { formatCompactNumber } from '@/utils/format'
@@ -89,12 +89,13 @@ import type { UserBreakdownItem } from '@/types'
 import Select from '@/components/common/Select.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   startDate: string
   endDate: string
   filters: Record<string, unknown>
   model?: string
-}>()
+  active?: boolean
+}>(), { active: true })
 
 defineEmits<{ (e: 'select-user', userId: number, email: string): void }>()
 
@@ -129,6 +130,12 @@ const loading = ref(false)
 const sortBy = ref<SortKey>('total_tokens')
 const limit = ref(50)
 let reqSeq = 0
+let unmounted = false
+let dirty = true
+let loadedKey = ''
+let scheduled = false
+let pendingForce = false
+let request: { key: string; force: boolean; controller: AbortController } | null = null
 
 const fmtTokens = (v: number) => formatCompactNumber(v)
 
@@ -138,35 +145,82 @@ const setSort = (key: SortKey) => {
   load()
 }
 
-const load = async () => {
+const cancelRequest = () => {
+  if (request) dirty = true
+  request?.controller.abort()
+  request = null
+  reqSeq += 1
+  loading.value = false
+}
+
+const buildParams = (): UserBreakdownParams => ({
+  ...props.filters,
+  start_date: props.startDate,
+  end_date: props.endDate,
+  sort_by: sortBy.value,
+  limit: limit.value,
+  ...(props.model ? { model: props.model } : {}),
+})
+
+const load = (force = false) => {
+  dirty = true
+  pendingForce ||= force
+  if (unmounted || !props.active) return
+  if (scheduled) return
+  scheduled = true
+  queueMicrotask(() => {
+    scheduled = false
+    if (unmounted || !props.active) return
+    const force = pendingForce
+    pendingForce = false
+    void executeLoad(force)
+  })
+}
+
+const executeLoad = async (force: boolean) => {
+  const params = buildParams()
+  const key = JSON.stringify(params)
+  if (request?.key === key && (!force || request.force)) return
+  cancelRequest()
+  const controller = new AbortController()
+  request = { key, force, controller }
   const seq = ++reqSeq
   loading.value = true
   try {
-    const params: UserBreakdownParams = {
-      ...props.filters,
-      start_date: props.startDate,
-      end_date: props.endDate,
-      sort_by: sortBy.value,
-      limit: limit.value,
-    }
-    if (props.model) params.model = props.model
-    const res = await getUserBreakdown(params)
-    if (seq !== reqSeq) return
+    const res = await getUserBreakdown(params, { signal: controller.signal })
+    if (controller.signal.aborted || seq !== reqSeq) return
     items.value = res.users || []
+    loadedKey = key
+    dirty = false
   } catch {
-    if (seq !== reqSeq) return
-    items.value = []
+    if (controller.signal.aborted || seq !== reqSeq) return
+    dirty = true
   } finally {
-    if (seq === reqSeq) loading.value = false
+    if (seq === reqSeq) {
+      request = null
+      loading.value = false
+    }
   }
 }
 
 // Reload when the shared filters / date range / model change.
 watch(
-  () => [props.startDate, props.endDate, props.model, JSON.stringify(props.filters)],
-  () => load(),
+  () => [props.active, JSON.stringify(buildParams())],
+  () => {
+    if (JSON.stringify(buildParams()) !== loadedKey) dirty = true
+    if (!props.active) {
+      cancelRequest()
+      return
+    }
+    if (dirty) load()
+  },
   { immediate: true }
 )
 
-defineExpose({ reload: load })
+onUnmounted(() => {
+  unmounted = true
+  cancelRequest()
+})
+
+defineExpose({ reload: () => load(true) })
 </script>

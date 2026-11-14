@@ -433,9 +433,11 @@ func parseBankAutoExchangePreference(preference *BankAutoExchangePreference) (th
 
 func lockBankAutoExchangeUser(ctx context.Context, tx TemporaryCreditSQLExecutor, userID int64) (balance, frozen, debt float64, err error) {
 	var balanceRaw, frozenRaw, debtRaw string
+	// Only non-key wallet/debt fields change; do not upgrade the caller's
+	// accounting lock or block unrelated foreign-key KEY SHARE readers.
 	err = scanBankAutoExchangeRow(ctx, tx, `
 SELECT balance::text, frozen_balance::text, temporary_credit_debt::text
-FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, []any{userID}, &balanceRaw, &frozenRaw, &debtRaw)
+FROM users WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE`, []any{userID}, &balanceRaw, &frozenRaw, &debtRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, 0, 0, ErrUserNotFound
 	}

@@ -300,6 +300,7 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 	// Parse date range
 	userTZ := c.Query("timezone")
 	now := timezone.NowInUserLocation(userTZ)
+	bypassCache := parseBoolQueryWithDefault(c.Query("nocache"), false)
 	var startTime, endTime time.Time
 
 	startDateStr := c.Query("start_date")
@@ -320,6 +321,10 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		// 与 SQL 条件 created_at < end 对齐，使用次日 00:00 作为上边界（DST-safe）。
 		endTime = endTime.AddDate(0, 0, 1)
 	} else {
+		if !bypassCache {
+			// Use the same bucket boundary for both the SQL range and its cache key.
+			now = now.Truncate(30 * time.Second)
+		}
 		period := c.DefaultQuery("period", "today")
 		switch period {
 		case "today":
@@ -353,7 +358,7 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 
 	var stats *usagestats.UsageStats
 	// nocache: 绕过缓存直接回源,刷新者本人拿最新;不回写缓存(管理台"我刷新我自己拿最新"语义,非全局失效)。
-	if parseBoolQueryWithDefault(c.Query("nocache"), false) {
+	if bypassCache {
 		s, err := h.usageService.GetStatsWithFilters(c.Request.Context(), filters)
 		if err != nil {
 			response.ErrorFrom(c, err)

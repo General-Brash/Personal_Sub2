@@ -187,10 +187,16 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 		return base
 	}
 	if clientRequestID, _ := parent.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
-		base = context.WithValue(base, ctxkey.ClientRequestID, strings.TrimSpace(clientRequestID))
+		base = context.WithValue(base, ctxkey.ClientRequestID, strings.Clone(strings.TrimSpace(clientRequestID)))
 	}
 	if requestID, _ := parent.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
-		base = context.WithValue(base, ctxkey.RequestID, strings.TrimSpace(requestID))
+		base = context.WithValue(base, ctxkey.RequestID, strings.Clone(strings.TrimSpace(requestID)))
+	}
+	if platform, _ := parent.Value(ctxkey.ForcePlatform).(string); strings.TrimSpace(platform) != "" {
+		base = context.WithValue(base, ctxkey.ForcePlatform, strings.Clone(platform))
+	}
+	if platform, ok := service.ResolvedTargetPlatformFromContext(parent); ok {
+		base = service.WithResolvedTargetPlatform(base, strings.Clone(platform))
 	}
 	return base
 }
@@ -199,8 +205,19 @@ func wrapUsageRecordTaskContext(parent context.Context, task service.UsageRecord
 	if task == nil {
 		return nil
 	}
+	// Snapshot while the request is active; never enqueue its context value chain.
+	snapshot := usageRecordContext(parent, context.Background())
+	var dynamicSnapshot *service.DynamicRatePricingSnapshot
+	if dynamic := service.DynamicRatePricingSnapshotFromContext(parent); dynamic != nil {
+		frozen := *dynamic
+		if dynamic.ImageBaseFactor != nil {
+			factor := *dynamic.ImageBaseFactor
+			frozen.ImageBaseFactor = &factor
+		}
+		dynamicSnapshot = &frozen
+	}
 	return func(ctx context.Context) {
-		task(usageRecordContext(parent, ctx))
+		task(service.WithDynamicRatePricingSnapshot(usageRecordContext(snapshot, ctx), dynamicSnapshot))
 	}
 }
 
@@ -761,6 +778,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			if res == nil {
 				return
 			}
+			res = service.SnapshotOpenAIUsageResult(res, account)
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
 			requestPayloadHash := service.HashUsageRequestPayload(body)
@@ -769,35 +787,38 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 			sessionID := service.ExtractClientSessionID(c)
 			cyberBlocked := service.GetOpsCyberPolicy(c) != nil
+			channelUsageFields := clientRequestedUsageFields(c, channelMapping, reqModel, res.UpstreamModel)
+			usageInput := &service.OpenAIRecordUsageInput{
+				Result:                   res,
+				RequestedReasoningEffort: res.RequestedReasoningEffort,
+				APIKey:                   apiKey,
+				User:                     apiKey.User,
+				Account:                  account,
+				Subscription:             subscription,
+				InboundEndpoint:          inboundEndpoint,
+				UpstreamEndpoint:         upstreamEndpoint,
+				UserAgent:                userAgent,
+				IPAddress:                clientIP,
+				RequestPayloadHash:       requestPayloadHash,
+				APIKeyService:            h.apiKeyService,
+				QuotaPlatform:            quotaPlatform,
+				SessionID:                sessionID,
+				ChannelUsageFields:       channelUsageFields,
+				PricingAt:                pricingAt,
+				CyberBlocked:             cyberBlocked,
+				NativeCompactionV2:       nativeV2,
+			}
+			usageLog := logger.L().With(
+				zap.String("component", "handler.openai_gateway.responses"),
+				zap.Int64("user_id", subject.UserID),
+				zap.Int64("api_key_id", apiKey.ID),
+				zap.Any("group_id", apiKey.GroupID),
+				zap.String("model", reqModel),
+				zap.Int64("account_id", account.ID),
+			)
 			h.submitOpenAIUsageRecordTask(c.Request.Context(), res, func(ctx context.Context) {
-				if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-					Result:                   res,
-					RequestedReasoningEffort: res.RequestedReasoningEffort,
-					APIKey:                   apiKey,
-					User:                     apiKey.User,
-					Account:                  account,
-					Subscription:             subscription,
-					InboundEndpoint:          inboundEndpoint,
-					UpstreamEndpoint:         upstreamEndpoint,
-					UserAgent:                userAgent,
-					IPAddress:                clientIP,
-					RequestPayloadHash:       requestPayloadHash,
-					APIKeyService:            h.apiKeyService,
-					QuotaPlatform:            quotaPlatform,
-					SessionID:                sessionID,
-					ChannelUsageFields:       clientRequestedUsageFields(c, channelMapping, reqModel, res.UpstreamModel),
-					PricingAt:                pricingAt,
-					CyberBlocked:             cyberBlocked,
-					NativeCompactionV2:       nativeV2,
-				}); err != nil {
-					logger.L().With(
-						zap.String("component", "handler.openai_gateway.responses"),
-						zap.Int64("user_id", subject.UserID),
-						zap.Int64("api_key_id", apiKey.ID),
-						zap.Any("group_id", apiKey.GroupID),
-						zap.String("model", reqModel),
-						zap.Int64("account_id", account.ID),
-					).Error("openai.record_usage_failed", zap.Error(err))
+				if err := h.gatewayService.RecordUsage(ctx, usageInput); err != nil {
+					usageLog.Error("openai.record_usage_failed", zap.Error(err))
 				}
 			})
 		}
@@ -1468,6 +1489,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			if res == nil {
 				return
 			}
+			res = service.SnapshotOpenAIUsageResult(res, account)
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
 			requestPayloadHash := service.HashUsageRequestPayload(body)
@@ -1476,34 +1498,37 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 			sessionID := service.ExtractClientSessionID(c)
 			cyberBlocked := service.GetOpsCyberPolicy(c) != nil
+			channelUsageFields := clientRequestedUsageFields(c, channelMappingMsg, reqModel, res.UpstreamModel)
+			usageInput := &service.OpenAIRecordUsageInput{
+				Result:                   res,
+				RequestedReasoningEffort: res.RequestedReasoningEffort,
+				APIKey:                   apiKey,
+				User:                     apiKey.User,
+				Account:                  account,
+				Subscription:             subscription,
+				InboundEndpoint:          inboundEndpoint,
+				UpstreamEndpoint:         upstreamEndpoint,
+				UserAgent:                userAgent,
+				IPAddress:                clientIP,
+				RequestPayloadHash:       requestPayloadHash,
+				APIKeyService:            h.apiKeyService,
+				QuotaPlatform:            quotaPlatform,
+				SessionID:                sessionID,
+				ChannelUsageFields:       channelUsageFields,
+				PricingAt:                pricingAt,
+				CyberBlocked:             cyberBlocked,
+			}
+			usageLog := logger.L().With(
+				zap.String("component", "handler.openai_gateway.messages"),
+				zap.Int64("user_id", subject.UserID),
+				zap.Int64("api_key_id", apiKey.ID),
+				zap.Any("group_id", apiKey.GroupID),
+				zap.String("model", reqModel),
+				zap.Int64("account_id", account.ID),
+			)
 			h.submitOpenAIUsageRecordTask(c.Request.Context(), res, func(ctx context.Context) {
-				if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-					Result:                   res,
-					RequestedReasoningEffort: res.RequestedReasoningEffort,
-					APIKey:                   apiKey,
-					User:                     apiKey.User,
-					Account:                  account,
-					Subscription:             subscription,
-					InboundEndpoint:          inboundEndpoint,
-					UpstreamEndpoint:         upstreamEndpoint,
-					UserAgent:                userAgent,
-					IPAddress:                clientIP,
-					RequestPayloadHash:       requestPayloadHash,
-					APIKeyService:            h.apiKeyService,
-					QuotaPlatform:            quotaPlatform,
-					SessionID:                sessionID,
-					ChannelUsageFields:       clientRequestedUsageFields(c, channelMappingMsg, reqModel, res.UpstreamModel),
-					PricingAt:                pricingAt,
-					CyberBlocked:             cyberBlocked,
-				}); err != nil {
-					logger.L().With(
-						zap.String("component", "handler.openai_gateway.messages"),
-						zap.Int64("user_id", subject.UserID),
-						zap.Int64("api_key_id", apiKey.ID),
-						zap.Any("group_id", apiKey.GroupID),
-						zap.String("model", reqModel),
-						zap.Int64("account_id", account.ID),
-					).Error("openai_messages.record_usage_failed", zap.Error(err))
+				if err := h.gatewayService.RecordUsage(ctx, usageInput); err != nil {
+					usageLog.Error("openai_messages.record_usage_failed", zap.Error(err))
 				}
 			})
 		}
@@ -3009,30 +3034,32 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				sessionID := service.ExtractClientSessionID(c)
 				turnRecordPricingAt := turnPricing.currentOr(turnStart)
 				cyberBlocked := service.GetOpsCyberPolicy(c) != nil
-				h.submitOpenAIUsageRecordTask(ctx, result, func(taskCtx context.Context) {
-					taskCtx = service.WithDynamicRatePricingSnapshot(taskCtx, turnPricing.snapshot())
-					if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
-						Result:                   result,
-						RequestedReasoningEffort: result.RequestedReasoningEffort,
-						APIKey:                   apiKey,
-						User:                     apiKey.User,
-						Account:                  account,
-						Subscription:             subscription,
-						InboundEndpoint:          inboundEndpoint,
-						UpstreamEndpoint:         upstreamEndpoint,
-						UserAgent:                userAgent,
-						IPAddress:                clientIP,
-						RequestPayloadHash:       requestPayloadHash,
-						APIKeyService:            h.apiKeyService,
-						QuotaPlatform:            quotaPlatform,
-						SessionID:                sessionID,
-						ChannelUsageFields:       turnUsageFields,
-						PricingAt:                turnRecordPricingAt,
-						CyberBlocked:             cyberBlocked,
-					}); err != nil {
+				result = service.SnapshotOpenAIUsageResult(result, account)
+				turnUsageContext := service.WithDynamicRatePricingSnapshot(usageRecordContext(ctx, context.Background()), turnPricing.snapshot())
+				usageInput := &service.OpenAIRecordUsageInput{
+					Result:                   result,
+					RequestedReasoningEffort: result.RequestedReasoningEffort,
+					APIKey:                   apiKey,
+					User:                     apiKey.User,
+					Account:                  account,
+					Subscription:             subscription,
+					InboundEndpoint:          inboundEndpoint,
+					UpstreamEndpoint:         upstreamEndpoint,
+					UserAgent:                userAgent,
+					IPAddress:                clientIP,
+					RequestPayloadHash:       requestPayloadHash,
+					APIKeyService:            h.apiKeyService,
+					QuotaPlatform:            quotaPlatform,
+					SessionID:                sessionID,
+					ChannelUsageFields:       turnUsageFields,
+					PricingAt:                turnRecordPricingAt,
+					CyberBlocked:             cyberBlocked,
+				}
+				h.submitOpenAIUsageRecordTask(turnUsageContext, result, func(taskCtx context.Context) {
+					if err := h.gatewayService.RecordUsage(taskCtx, usageInput); err != nil {
 						reqLog.Error("openai.websocket_record_usage_failed",
-							zap.Int64("account_id", account.ID),
-							zap.String("request_id", result.RequestID),
+							zap.Int64("account_id", usageInput.Account.ID),
+							zap.String("request_id", usageInput.Result.RequestID),
 							zap.Error(err),
 						)
 					}

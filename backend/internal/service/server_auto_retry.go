@@ -39,9 +39,11 @@ type ServerAutoRetryTarget struct {
 
 // A single logical request owns all dispatches, including Forward re-entry.
 type ServerAutoRetryContext struct {
-	Config                                                                                ServerAutoRetryConfig
-	OriginalContext                                                                       context.Context
-	OriginalFingerprint                                                                   string
+	Config              ServerAutoRetryConfig
+	OriginalContext     context.Context
+	OriginalFingerprint string
+	OriginalModel       string
+	// Bodies are immutable; rewrites must return a new slice.
 	OriginalBody, CompliantBody                                                           []byte
 	DispatchCount, RetryCount, SwitchCount                                                int
 	Wait                                                                                  time.Duration
@@ -92,8 +94,11 @@ func (s *OpenAIGatewayService) BeginServerAutoRetry(c *gin.Context, body []byte)
 		(path == "/v1/responses" || path == "/openai/v1/responses" || path == "/responses" || path == "/backend-api/codex/responses") &&
 		!isOpenAIResponsesCompactPath(c) && !isOpenAINativeCompactionV2(c) && !isOpenAICompatMessagesBridgeBody(body)
 	retry := &ServerAutoRetryContext{Config: config, OriginalContext: c.Request.Context(),
-		OriginalFingerprint: hex.EncodeToString(fingerprint[:]), OriginalBody: bytes.Clone(body), CompliantBody: bytes.Clone(body),
+		OriginalFingerprint: hex.EncodeToString(fingerprint[:]), OriginalModel: gjson.GetBytes(body, "model").String(),
 		CrossAccountSafe: serverAutoRetryReplaySafe(body), UsageEvidence: "unknown", RateLimitEligible: responsesEligible}
+	if config.Enabled {
+		retry.OriginalBody, retry.CompliantBody = body, body
+	}
 	retry.EmptyEligible = responsesEligible && serverAutoRetrySafeTools(body)
 	c.Set(serverAutoRetryKey, retry)
 	c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), serverAutoRetryContextKey{}, retry))
@@ -176,7 +181,7 @@ func (r *ServerAutoRetryContext) Matches(c *gin.Context, account *Account) bool 
 	if !containsID(scope.AccountIDs, account.ID) || !containsID(scope.GroupIDs, getOpenAIGroupIDFromContext(c)) {
 		return false
 	}
-	model := gjson.GetBytes(r.OriginalBody, "model").String()
+	model := r.OriginalModel
 	if len(scope.Models) != 0 {
 		for _, allowed := range scope.Models {
 			if allowed == model {
@@ -256,6 +261,9 @@ func (r *ServerAutoRetryContext) BodyForAttempt(body []byte) []byte {
 	// Carry only the existing Azure helper's compliant input, preserving the
 	// canonical model and the next account's ordinary request transformations.
 	if input := gjson.GetBytes(r.CompliantBody, "input"); input.Exists() {
+		if current := gjson.GetBytes(body, "input"); current.Raw == input.Raw {
+			return body
+		}
 		if patched, err := sjson.SetRawBytes(body, "input", []byte(input.Raw)); err == nil {
 			return patched
 		}
@@ -457,8 +465,8 @@ func (s *OpenAIGatewayService) serverAutoRetryTarget(c *gin.Context, account *Ac
 		UpstreamRequestID: resp.Header.Get("x-request-id"), UsageEvidence: r.UsageEvidence, HasSemanticOutput: r.HasSemanticOutput,
 		RetryAfter: serverAutoRetryAfter(resp.Header, time.Now())}
 	r.Governed, r.Last = true, target
-	if compliant != nil {
-		r.CompliantBody = bytes.Clone(compliant)
+	if compliant != nil && r.Config.Enabled {
+		r.CompliantBody = compliant
 	}
 	if !r.Config.Enabled {
 		target.StopReason = "disabled"

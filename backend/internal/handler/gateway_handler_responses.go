@@ -360,27 +360,29 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 		sessionID := service.ExtractClientSessionID(c)
+		usageInput := &service.RecordUsageInput{
+			Result:                   result,
+			RequestedReasoningEffort: result.RequestedReasoningEffort,
+			QuotaPlatform:            quotaPlatform,
+			APIKey:                   apiKey,
+			User:                     apiKey.User,
+			Account:                  account,
+			Subscription:             subscription,
+			PricingAt:                pricingAt,
+			InboundEndpoint:          inboundEndpoint,
+			UpstreamEndpoint:         upstreamEndpoint,
+			UserAgent:                userAgent,
+			IPAddress:                clientIP,
+			RequestPayloadHash:       requestPayloadHash,
+			APIKeyService:            h.apiKeyService,
+			SessionID:                sessionID,
+			ChannelUsageFields:       clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
+		}
+		accountID := account.ID
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
-				Result:                   result,
-				RequestedReasoningEffort: result.RequestedReasoningEffort,
-				QuotaPlatform:            quotaPlatform,
-				APIKey:                   apiKey,
-				User:                     apiKey.User,
-				Account:                  account,
-				Subscription:             subscription,
-				PricingAt:                pricingAt,
-				InboundEndpoint:          inboundEndpoint,
-				UpstreamEndpoint:         upstreamEndpoint,
-				UserAgent:                userAgent,
-				IPAddress:                clientIP,
-				RequestPayloadHash:       requestPayloadHash,
-				APIKeyService:            h.apiKeyService,
-				SessionID:                sessionID,
-				ChannelUsageFields:       clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
-			}); err != nil {
+			if err := h.gatewayService.RecordUsage(ctx, usageInput); err != nil {
 				reqLog.Error("gateway.responses.record_usage_failed",
-					zap.Int64("account_id", account.ID),
+					zap.Int64("account_id", accountID),
 					zap.Error(err),
 				)
 			}
