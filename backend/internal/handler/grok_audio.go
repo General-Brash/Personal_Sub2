@@ -279,31 +279,33 @@ func (h *OpenAIGatewayHandler) recordGrokVoiceUsage(
 		model = endpoint
 	}
 
+	usageInput := &service.OpenAIRecordUsageInput{
+		Result:             service.SnapshotOpenAIUsageResult(result, account),
+		APIKey:             apiKey,
+		User:               apiKey.User,
+		Account:            account,
+		Subscription:       subscription,
+		InboundEndpoint:    inboundEndpoint,
+		UpstreamEndpoint:   upstreamEndpoint,
+		UserAgent:          userAgent,
+		IPAddress:          clientIP,
+		RequestPayloadHash: requestPayloadHash,
+		APIKeyService:      h.apiKeyService,
+		QuotaPlatform:      quotaPlatform,
+		SessionID:          sessionID,
+		ChannelUsageFields: clientRequestedUsageFields(c, service.ChannelMappingResult{}, model, result.UpstreamModel),
+	}
+	usageLogFields := []zap.Field{
+		zap.String("component", "handler.openai_gateway.grok_voice"),
+		zap.Int64("user_id", apiKey.User.ID),
+		zap.Int64("api_key_id", apiKey.ID),
+		zap.Any("group_id", apiKey.GroupID),
+		zap.String("endpoint", endpoint),
+		zap.Int64("account_id", account.ID),
+	}
 	h.submitMandatoryUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-		if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-			Result:             result,
-			APIKey:             apiKey,
-			User:               apiKey.User,
-			Account:            account,
-			Subscription:       subscription,
-			InboundEndpoint:    inboundEndpoint,
-			UpstreamEndpoint:   upstreamEndpoint,
-			UserAgent:          userAgent,
-			IPAddress:          clientIP,
-			RequestPayloadHash: requestPayloadHash,
-			APIKeyService:      h.apiKeyService,
-			QuotaPlatform:      quotaPlatform,
-			SessionID:          sessionID,
-			ChannelUsageFields: clientRequestedUsageFields(c, service.ChannelMappingResult{}, model, result.UpstreamModel),
-		}); err != nil {
-			logger.L().With(
-				zap.String("component", "handler.openai_gateway.grok_voice"),
-				zap.Int64("user_id", apiKey.User.ID),
-				zap.Int64("api_key_id", apiKey.ID),
-				zap.Any("group_id", apiKey.GroupID),
-				zap.String("endpoint", endpoint),
-				zap.Int64("account_id", account.ID),
-			).Error("grok_voice.record_usage_failed", zap.Error(err))
+		if err := h.gatewayService.RecordUsage(ctx, usageInput); err != nil {
+			logger.L().With(usageLogFields...).Error("grok_voice.record_usage_failed", zap.Error(err))
 		}
 	})
 }

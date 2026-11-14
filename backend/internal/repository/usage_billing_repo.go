@@ -27,7 +27,7 @@ func (r *usageBillingRepository) SetAvailableCreditInvalidator(invalidator servi
 	}
 }
 
-func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (_ *service.UsageBillingApplyResult, err error) {
+func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (*service.UsageBillingApplyResult, error) {
 	if cmd == nil {
 		return &service.UsageBillingApplyResult{}, nil
 	}
@@ -45,38 +45,98 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		return nil, err
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if tx != nil {
-			_ = tx.Rollback()
+	var result *service.UsageBillingApplyResult
+	var committedUsageLog *service.UsageLog
+	err := runUsageBillingTransaction(ctx, r.db, func(tx *sql.Tx) (bool, error) {
+		// createSingle mutates ID, time and normalized log fields. Each attempt
+		// starts from the caller's unchanged value and publishes only after commit.
+		attemptCmd := *cmd
+		if cmd.UsageLog != nil {
+			usageLog := *cmd.UsageLog
+			attemptCmd.UsageLog = &usageLog
 		}
-	}()
-
-	if err := insertUsageBillingUsageLog(ctx, tx, cmd); err != nil {
-		return nil, err
-	}
-
-	applied, err := r.claimUsageBillingKey(ctx, tx, cmd)
+		if err := lockUsageBillingRows(ctx, tx, &attemptCmd); err != nil {
+			return false, err
+		}
+		if err := insertUsageBillingUsageLog(ctx, tx, &attemptCmd); err != nil {
+			return false, err
+		}
+		applied, err := r.claimUsageBillingKey(ctx, tx, &attemptCmd)
+		if err != nil {
+			return false, err
+		}
+		result = &service.UsageBillingApplyResult{Applied: applied}
+		if !applied {
+			return false, nil
+		}
+		if err := r.applyUsageBillingEffects(ctx, tx, &attemptCmd, result); err != nil {
+			return false, err
+		}
+		committedUsageLog = attemptCmd.UsageLog
+		return true, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if !applied {
-		return &service.UsageBillingApplyResult{Applied: false}, nil
+	if result.Applied && cmd.UsageLog != nil {
+		*cmd.UsageLog = *committedUsageLog
 	}
-
-	result := &service.UsageBillingApplyResult{Applied: true}
-	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	tx = nil
 	return result, nil
+}
+
+func lockUsageBillingRows(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) error {
+	// Lock mutable parents before INSERT can acquire foreign-key KEY SHARE:
+	// user, API key, subscription, account. Bank and grant rows follow the user.
+	if cmd.UserID > 0 || cmd.BalanceCost > 0 {
+		// Allocate still locks users FOR UPDATE for balance billing; acquire
+		// that mode now rather than upgrade after foreign-key checks. Other
+		// billing paths also lock the user before any API key/subscription.
+		if err := lockUsageBillingUser(ctx, tx, cmd.UserID, cmd.BalanceCost > 0); err != nil {
+			return err
+		}
+	}
+	var id int64
+	if cmd.APIKeyQuotaCost > 0 || cmd.APIKeyRateLimitCost > 0 {
+		err := tx.QueryRowContext(ctx, `SELECT id FROM api_keys WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE`, cmd.APIKeyID).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return service.ErrAPIKeyNotFound
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if cmd.SubscriptionCost > 0 && cmd.SubscriptionID != nil {
+		err := tx.QueryRowContext(ctx, `SELECT id FROM user_subscriptions WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE`, *cmd.SubscriptionID).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return service.ErrSubscriptionNotFound
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if cmd.AccountQuotaCost > 0 && (strings.EqualFold(cmd.AccountType, service.AccountTypeAPIKey) || strings.EqualFold(cmd.AccountType, service.AccountTypeBedrock)) {
+		err := tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE`, cmd.AccountID).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return service.ErrAccountNotFound
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func lockUsageBillingUser(ctx context.Context, tx *sql.Tx, userID int64, forUpdate bool) error {
+	query := `SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE`
+	if forUpdate {
+		query = `SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`
+	}
+	var id int64
+	err := tx.QueryRowContext(ctx, query, userID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return service.ErrUserNotFound
+	}
+	return err
 }
 
 func validateUsageBillingUsageLog(cmd *service.UsageBillingCommand) error {
@@ -168,7 +228,7 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 	ctx context.Context,
 	cmd *service.BatchImageBalanceHoldCommand,
 	operation batchImageHoldOperation,
-) (_ *service.BatchImageBalanceHoldResult, err error) {
+) (*service.BatchImageBalanceHoldResult, error) {
 	if cmd == nil {
 		return &service.BatchImageBalanceHoldResult{}, nil
 	}
@@ -182,35 +242,33 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 		return nil, service.ErrUsageBillingRequestIDRequired
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	var result *service.BatchImageBalanceHoldResult
+	var committedCmd service.BatchImageBalanceHoldCommand
+	err := runUsageBillingTransaction(ctx, r.db, func(tx *sql.Tx) (bool, error) {
+		attemptCmd := *cmd
+		var err error
+		result, err = r.applyBatchImageCreditHoldOperation(ctx, tx, &attemptCmd, operation)
+		if err != nil {
+			return false, err
+		}
+		if result == nil {
+			result = &service.BatchImageBalanceHoldResult{}
+		}
+		if operation == batchImageHoldOperationCapture && result.Applied && attemptCmd.DynamicRateSnapshot != nil {
+			groupID := attemptCmd.DynamicRateSnapshot.GroupID
+			dynamicCmd := &service.UsageBillingCommand{RequestID: attemptCmd.RequestID, APIKeyID: attemptCmd.APIKeyID, UserID: attemptCmd.UserID, BalanceCost: attemptCmd.ActualAmount, DynamicRateSnapshot: attemptCmd.DynamicRateSnapshot, UsageLog: &service.UsageLog{GroupID: &groupID}}
+			actual := decimal.NewFromFloat(result.TemporaryCapturedAmount).Add(decimal.NewFromFloat(result.PermanentCapturedAmount))
+			if err := incrementDynamicRateUsage(ctx, tx, dynamicCmd, actual); err != nil {
+				return false, err
+			}
+		}
+		committedCmd = attemptCmd
+		return true, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if tx != nil {
-			_ = tx.Rollback()
-		}
-	}()
-
-	result, err := r.applyBatchImageCreditHoldOperation(ctx, tx, cmd, operation)
-	if err != nil {
-		return nil, err
-	}
-	if result == nil {
-		result = &service.BatchImageBalanceHoldResult{}
-	}
-	if operation == batchImageHoldOperationCapture && result.Applied && cmd.DynamicRateSnapshot != nil {
-		groupID := cmd.DynamicRateSnapshot.GroupID
-		dynamicCmd := &service.UsageBillingCommand{RequestID: cmd.RequestID, APIKeyID: cmd.APIKeyID, UserID: cmd.UserID, BalanceCost: cmd.ActualAmount, DynamicRateSnapshot: cmd.DynamicRateSnapshot, UsageLog: &service.UsageLog{GroupID: &groupID}}
-		actual := decimal.NewFromFloat(result.TemporaryCapturedAmount).Add(decimal.NewFromFloat(result.PermanentCapturedAmount))
-		if err := incrementDynamicRateUsage(ctx, tx, dynamicCmd, actual); err != nil {
-			return nil, err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	tx = nil
+	*cmd = committedCmd
 	if result.AutoExchange != nil && r.availableCreditInvalidator != nil {
 		if invalidator, ok := r.availableCreditInvalidator.(interface {
 			InvalidateUserBalance(context.Context, int64) error

@@ -124,6 +124,7 @@ type UsageCache struct {
 	antigravityFlight singleflight.Group // 防止同一 Antigravity 账号的并发请求击穿缓存
 	openAIProbeCache  sync.Map           // accountID -> time.Time
 	grokProbeCache    sync.Map           // accountID -> last billing probe attempt
+	openAIWindowStats openAIWindowStatsCache
 }
 
 // NewUsageCache 创建 UsageCache 实例
@@ -290,19 +291,20 @@ type ClaudeUsageFetcher interface {
 
 // AccountUsageService 账号使用量查询服务
 type AccountUsageService struct {
-	accountRepo             AccountRepository
-	usageLogRepo            UsageLogRepository
-	usageFetcher            ClaudeUsageFetcher
-	geminiQuotaService      *GeminiQuotaService
-	antigravityQuotaFetcher *AntigravityQuotaFetcher
-	grokQuotaFetcher        *GrokQuotaFetcher
-	grokQuotaService        *GrokQuotaService
-	openAIQuotaService      *OpenAIQuotaService
-	cache                   *UsageCache
-	identityCache           IdentityCache
-	tlsFPProfileService     *TLSFingerprintProfileService
-	agentIdentityTaskMu     sync.Mutex
-	agentIdentityWS         agentIdentityWSConnectionInvalidator
+	accountRepo               AccountRepository
+	usageLogRepo              UsageLogRepository
+	usageFetcher              ClaudeUsageFetcher
+	geminiQuotaService        *GeminiQuotaService
+	antigravityQuotaFetcher   *AntigravityQuotaFetcher
+	grokQuotaFetcher          *GrokQuotaFetcher
+	grokQuotaService          *GrokQuotaService
+	openAIQuotaService        *OpenAIQuotaService
+	cache                     *UsageCache
+	identityCache             IdentityCache
+	tlsFPProfileService       *TLSFingerprintProfileService
+	agentIdentityTaskMu       sync.Mutex
+	agentIdentityWS           agentIdentityWSConnectionInvalidator
+	openAIWindowStatsFallback openAIWindowStatsCache
 }
 
 // NewAccountUsageService 创建AccountUsageService实例
@@ -346,6 +348,9 @@ func batchUsageErrorMessage(err error) string {
 }
 
 func (s *AccountUsageService) getUsageForAccount(ctx context.Context, account *Account, forceProbe bool) (*UsageInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if account == nil {
 		return nil, fmt.Errorf("account is required")
 	}
@@ -493,6 +498,9 @@ func (s *AccountUsageService) getUsageForAccount(ctx context.Context, account *A
 // Setup Token账号: 根据session_window推算5h窗口，7d数据不可用（没有profile scope）
 // API Key账号: 不支持usage查询
 func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, force ...bool) (*UsageInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	forceProbe := len(force) > 0 && force[0]
 
 	account, err := s.accountRepo.GetByID(ctx, accountID)
@@ -507,6 +515,9 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 // Anthropic OAuth/SetupToken 统一走 passive 链路，其他账号复用现有主动查询逻辑。
 // 单个账号失败不会中断整批请求，错误会按账号返回。
 func (s *AccountUsageService) GetUsageBatch(ctx context.Context, accountIDs []int64, force bool) (map[int64]*UsageInfo, map[int64]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	uniqueIDs := make([]int64, 0, len(accountIDs))
 	seen := make(map[int64]struct{}, len(accountIDs))
 	for _, accountID := range accountIDs {
@@ -527,6 +538,9 @@ func (s *AccountUsageService) GetUsageBatch(ctx context.Context, accountIDs []in
 	}
 
 	accounts, err := s.accountRepo.GetByIDs(ctx, uniqueIDs)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, nil, ctxErr
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("get accounts failed: %w", err)
 	}
@@ -538,26 +552,42 @@ func (s *AccountUsageService) GetUsageBatch(ctx context.Context, accountIDs []in
 		}
 		accountsByID[account.ID] = account
 	}
+	for _, accountID := range uniqueIDs {
+		if accountsByID[accountID] == nil {
+			errorsByAccount[accountID] = ErrAccountNotFound.Error()
+		}
+	}
 
+	now := time.Now()
 	var mu sync.Mutex
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(6)
 
 	for _, accountID := range uniqueIDs {
+		if gctx.Err() != nil {
+			break
+		}
 		id := accountID
 		account := accountsByID[id]
 		if account == nil {
-			errorsByAccount[id] = ErrAccountNotFound.Error()
 			continue
 		}
 
 		g.Go(func() error {
+			if err := gctx.Err(); err != nil {
+				return err
+			}
 			var usage *UsageInfo
 			var usageErr error
 			if supportsAnthropicPassiveUsage(account) {
 				usage, usageErr = s.getPassiveUsageForAccount(gctx, account)
+			} else if account.Platform == PlatformOpenAI && account.Type == AccountTypeOAuth {
+				usage, usageErr = s.getOpenAIQuotaUsage(gctx, account, force, now)
 			} else {
 				usage, usageErr = s.getUsageForAccount(gctx, account, force)
+			}
+			if err := gctx.Err(); err != nil {
+				return err
 			}
 
 			mu.Lock()
@@ -574,6 +604,36 @@ func (s *AccountUsageService) GetUsageBatch(ctx context.Context, accountIDs []in
 	if err := g.Wait(); err != nil {
 		return nil, nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	openAIUsage := make(map[int64]*UsageInfo)
+	for id, usage := range usageByAccount {
+		account := accountsByID[id]
+		if account.Platform == PlatformOpenAI && account.Type == AccountTypeOAuth {
+			openAIUsage[id] = usage
+		}
+	}
+	windowErrors, err := s.fillOpenAIWindowStats(ctx, openAIUsage, now)
+	if err != nil {
+		return nil, nil, err
+	}
+	for id, windowErr := range windowErrors {
+		errorsByAccount[id] = batchUsageErrorMessage(windowErr)
+		delete(usageByAccount, id)
+	}
+	for id := range openAIUsage {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		if windowErrors[id] == nil {
+			s.tryClearRecoverableAccountError(ctx, accountsByID[id])
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 
 	return usageByAccount, errorsByAccount, nil
 }
@@ -581,6 +641,9 @@ func (s *AccountUsageService) GetUsageBatch(ctx context.Context, accountIDs []in
 // GetPassiveUsage 从 Account.Extra 中的被动采样数据构建 UsageInfo，不调用外部 API。
 // 仅适用于 Anthropic OAuth / SetupToken 账号。
 func (s *AccountUsageService) GetPassiveUsage(ctx context.Context, accountID int64) (*UsageInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	account, err := s.accountRepo.GetByID(ctx, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("get account failed: %w", err)
@@ -590,6 +653,9 @@ func (s *AccountUsageService) GetPassiveUsage(ctx context.Context, accountID int
 }
 
 func (s *AccountUsageService) getPassiveUsageForAccount(ctx context.Context, account *Account) (*UsageInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if !supportsAnthropicPassiveUsage(account) {
 		return nil, fmt.Errorf("passive usage only supported for Anthropic OAuth/SetupToken accounts")
 	}
@@ -703,6 +769,24 @@ func (s *AccountUsageService) syncActiveToPassive(ctx context.Context, accountID
 
 func (s *AccountUsageService) getOpenAIUsage(ctx context.Context, account *Account, force bool) (*UsageInfo, error) {
 	now := time.Now()
+	usage, err := s.getOpenAIQuotaUsage(ctx, account, force, now)
+	if err != nil || account == nil {
+		return usage, err
+	}
+	windowErrors, err := s.fillOpenAIWindowStats(ctx, map[int64]*UsageInfo{account.ID: usage}, now)
+	if err != nil {
+		return nil, err
+	}
+	if err := windowErrors[account.ID]; err != nil {
+		return nil, err
+	}
+	return usage, nil
+}
+
+func (s *AccountUsageService) getOpenAIQuotaUsage(ctx context.Context, account *Account, force bool, now time.Time) (*UsageInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	usage := &UsageInfo{UpdatedAt: &now}
 
 	if account == nil {
@@ -740,22 +824,8 @@ func (s *AccountUsageService) getOpenAIUsage(ctx context.Context, account *Accou
 		}
 	}
 
-	if s.usageLogRepo == nil {
-		return usage, nil
-	}
-
-	if stats, err := s.usageLogRepo.GetAccountWindowStats(ctx, account.ID, codexWindowStatsStart(usage.FiveHour, 5*time.Hour, now)); err == nil {
-		if usage.FiveHour == nil {
-			usage.FiveHour = &UsageProgress{Utilization: 0}
-		}
-		usage.FiveHour.WindowStats = windowStatsFromAccountStats(stats)
-	}
-
-	if stats, err := s.usageLogRepo.GetAccountWindowStats(ctx, account.ID, codexWindowStatsStart(usage.SevenDay, 7*24*time.Hour, now)); err == nil {
-		if usage.SevenDay == nil {
-			usage.SevenDay = &UsageProgress{Utilization: 0}
-		}
-		usage.SevenDay.WindowStats = windowStatsFromAccountStats(stats)
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	return usage, nil
@@ -959,6 +1029,9 @@ func applyExtraToUsage(usage *UsageInfo, extra map[string]any, now time.Time) {
 }
 
 func (s *AccountUsageService) getGeminiUsage(ctx context.Context, account *Account) (*UsageInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	usage := &UsageInfo{
 		UpdatedAt: &now,
@@ -974,6 +1047,9 @@ func (s *AccountUsageService) getGeminiUsage(ctx context.Context, account *Accou
 	}
 
 	dayStart := geminiDailyWindowStart(now)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	stats, err := s.usageLogRepo.GetModelStatsWithFilters(ctx, dayStart, now, 0, 0, account.ID, 0, nil, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("get gemini usage stats failed: %w", err)
@@ -996,6 +1072,9 @@ func (s *AccountUsageService) getGeminiUsage(ctx context.Context, account *Accou
 	// Minute window (RPM) - fixed-window approximation: current minute [truncate(now), truncate(now)+1m)
 	minuteStart := now.Truncate(time.Minute)
 	minuteResetAt := minuteStart.Add(time.Minute)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	minuteStats, err := s.usageLogRepo.GetModelStatsWithFilters(ctx, minuteStart, now, 0, 0, account.ID, 0, nil, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("get gemini minute usage stats failed: %w", err)
@@ -1112,6 +1191,9 @@ func (s *AccountUsageService) getGrokUsage(ctx context.Context, account *Account
 	}
 
 	if account != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if s.usageLogRepo != nil {
 			if stats, err := s.usageLogRepo.GetAccountTodayStats(ctx, account.ID); err == nil && stats != nil {
 				usage.GrokLocalUsage = windowStatsFromAccountStats(stats)
@@ -1122,6 +1204,9 @@ func (s *AccountUsageService) getGrokUsage(ctx context.Context, account *Account
 			usage.GrokLocalUsage7d = billingProbeResult.LocalUsage7d
 			usage.GrokLocalUsageMonthly = billingProbeResult.LocalUsageMonthly
 		} else if s.usageLogRepo != nil {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			usage.GrokLocalUsage24h, usage.GrokLocalUsage7d, usage.GrokLocalUsageMonthly = grokLocalUsageForQuota(
 				ctx, s.usageLogRepo, account.ID, usage.GrokBilling, time.Now().UTC(),
 			)
@@ -1154,7 +1239,7 @@ func grokLocalUsageForQuota(
 }
 
 func grokLocalUsage24h(ctx context.Context, repo UsageLogRepository, accountID int64, now time.Time) *WindowStats {
-	if repo == nil || accountID <= 0 {
+	if repo == nil || accountID <= 0 || ctx.Err() != nil {
 		return nil
 	}
 	start := now.UTC().Add(-grokFreeQuotaWindow)
@@ -1175,7 +1260,7 @@ func grokLocalUsageForBilling(
 ) (*WindowStats, *WindowStats) {
 	var weekly *WindowStats
 	var monthly *WindowStats
-	if repo == nil || accountID <= 0 {
+	if repo == nil || accountID <= 0 || ctx.Err() != nil {
 		return weekly, monthly
 	}
 	if start, ok := currentGrokBillingWindow(billing, true, now); ok {
@@ -1184,6 +1269,9 @@ func grokLocalUsageForBilling(
 		} else {
 			slog.Warn("grok_window_usage_query_failed", "account_id", accountID, "window_start", start, "error", err)
 		}
+	}
+	if ctx.Err() != nil {
+		return weekly, monthly
 	}
 	if start, ok := currentGrokBillingWindow(billing, false, now); ok {
 		if stats, err := repo.GetAccountWindowStats(ctx, accountID, start); err == nil {
@@ -1334,6 +1422,9 @@ func enrichUsageWithAccountError(info *UsageInfo, account *Account) {
 // addWindowStats 为 usage 数据添加窗口期统计
 // 使用独立缓存（1 分钟），与 API 缓存分离
 func (s *AccountUsageService) addWindowStats(ctx context.Context, account *Account, usage *UsageInfo) {
+	if ctx.Err() != nil {
+		return
+	}
 	// 修复：即使 FiveHour 为 nil，也要尝试获取统计数据
 	// 因为 SevenDay/SevenDaySonnet/SevenDayFable 可能需要
 	if usage.FiveHour == nil && usage.SevenDay == nil && usage.SevenDaySonnet == nil && usage.SevenDayFable == nil {
@@ -1353,7 +1444,13 @@ func (s *AccountUsageService) addWindowStats(ctx context.Context, account *Accou
 		// 使用统一的窗口开始时间计算逻辑（考虑窗口过期情况）
 		startTime := account.GetCurrentWindowStartTime()
 
+		if ctx.Err() != nil {
+			return
+		}
 		stats, err := s.usageLogRepo.GetAccountWindowStats(ctx, account.ID, startTime)
+		if ctx.Err() != nil {
+			return
+		}
 		if err != nil {
 			log.Printf("Failed to get window stats for account %d: %v", account.ID, err)
 			return
@@ -1382,7 +1479,13 @@ func (s *AccountUsageService) addWindowStats(ctx context.Context, account *Accou
 
 // GetTodayStats 获取账号今日统计
 func (s *AccountUsageService) GetTodayStats(ctx context.Context, accountID int64) (*WindowStats, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	stats, err := s.usageLogRepo.GetAccountTodayStats(ctx, accountID)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get today stats failed: %w", err)
 	}
@@ -1396,8 +1499,11 @@ func (s *AccountUsageService) GetTodayStats(ctx context.Context, accountID int64
 	}, nil
 }
 
-// GetTodayStatsBatch 批量获取账号今日统计，优先走批量 SQL，失败时回退单账号查询。
+// GetTodayStatsBatch 批量获取账号今日统计，仅在仓库不支持批量 SQL 时使用单账号查询。
 func (s *AccountUsageService) GetTodayStatsBatch(ctx context.Context, accountIDs []int64) (map[int64]*WindowStats, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	uniqueIDs := make([]int64, 0, len(accountIDs))
 	seen := make(map[int64]struct{}, len(accountIDs))
 	for _, accountID := range accountIDs {
@@ -1417,26 +1523,42 @@ func (s *AccountUsageService) GetTodayStatsBatch(ctx context.Context, accountIDs
 	}
 
 	startTime := timezone.Today()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if batchReader, ok := s.usageLogRepo.(accountWindowStatsBatchReader); ok {
 		statsByAccount, err := batchReader.GetAccountWindowStatsBatch(ctx, uniqueIDs, startTime)
-		if err == nil {
-			for _, accountID := range uniqueIDs {
-				result[accountID] = windowStatsFromAccountStats(statsByAccount[accountID])
-			}
-			return result, nil
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
 		}
+		if err != nil {
+			return nil, fmt.Errorf("get today stats batch failed: %w", err)
+		}
+		for _, accountID := range uniqueIDs {
+			result[accountID] = windowStatsFromAccountStats(statsByAccount[accountID])
+		}
+		return result, nil
 	}
 
 	var mu sync.Mutex
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(8)
+	g.SetLimit(6)
 
 	for _, accountID := range uniqueIDs {
+		if gctx.Err() != nil {
+			break
+		}
 		id := accountID
 		g.Go(func() error {
+			if err := gctx.Err(); err != nil {
+				return err
+			}
 			stats, err := s.usageLogRepo.GetAccountWindowStats(gctx, id, startTime)
 			if err != nil {
-				return nil
+				return fmt.Errorf("get today stats for account %d failed: %w", id, err)
+			}
+			if err := gctx.Err(); err != nil {
+				return err
 			}
 			mu.Lock()
 			result[id] = windowStatsFromAccountStats(stats)
@@ -1445,12 +1567,11 @@ func (s *AccountUsageService) GetTodayStatsBatch(ctx context.Context, accountIDs
 		})
 	}
 
-	_ = g.Wait()
-
-	for _, accountID := range uniqueIDs {
-		if _, ok := result[accountID]; !ok {
-			result[accountID] = &WindowStats{}
-		}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return result, nil
 }
@@ -1501,7 +1622,7 @@ func buildCodexUsageProgressFromExtra(extra map[string]any, window string, now t
 	if resetAtRaw, ok := extra[resetAtKey]; ok {
 		if resetAt, err := parseTime(fmt.Sprint(resetAtRaw)); err == nil {
 			progress.ResetsAt = &resetAt
-			progress.RemainingSeconds = int(time.Until(resetAt).Seconds())
+			progress.RemainingSeconds = int(resetAt.Sub(now).Seconds())
 			if progress.RemainingSeconds < 0 {
 				progress.RemainingSeconds = 0
 			}
@@ -1517,7 +1638,7 @@ func buildCodexUsageProgressFromExtra(extra map[string]any, window string, now t
 			}
 			resetAt := base.Add(time.Duration(resetAfterSeconds) * time.Second)
 			progress.ResetsAt = &resetAt
-			progress.RemainingSeconds = int(time.Until(resetAt).Seconds())
+			progress.RemainingSeconds = int(resetAt.Sub(now).Seconds())
 			if progress.RemainingSeconds < 0 {
 				progress.RemainingSeconds = 0
 			}
@@ -1533,10 +1654,14 @@ func buildCodexUsageProgressFromExtra(extra map[string]any, window string, now t
 }
 
 func codexWindowStatsStart(progress *UsageProgress, fallbackWindow time.Duration, now time.Time) time.Time {
-	if progress != nil && progress.ResetsAt != nil && now.Before(*progress.ResetsAt) {
-		return progress.ResetsAt.Add(-fallbackWindow)
+	if progress != nil && progress.ResetsAt != nil {
+		if now.Before(*progress.ResetsAt) {
+			return progress.ResetsAt.Add(-fallbackWindow)
+		}
+		// Preserve the exact rolling fallback for an expired reset-backed window.
+		return now.Add(-fallbackWindow)
 	}
-	return now.Add(-fallbackWindow)
+	return now.Truncate(openAIWindowStatsBucket).Add(-fallbackWindow)
 }
 
 func (s *AccountUsageService) GetAccountUsageStats(ctx context.Context, accountID int64, startTime, endTime time.Time) (*usagestats.AccountUsageStatsResponse, error) {

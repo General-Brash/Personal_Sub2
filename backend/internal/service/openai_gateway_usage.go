@@ -47,6 +47,79 @@ type OpenAIRecordUsageInput struct {
 	ChannelUsageFields
 }
 
+// SnapshotOpenAIUsageResult excludes response headers and WS replay payloads from
+// queued billing and gives billing normalization its own mutable result.
+func SnapshotOpenAIUsageResult(result *OpenAIForwardResult, account *Account) *OpenAIForwardResult {
+	if result == nil {
+		return nil
+	}
+	cloneString := func(value *string) *string {
+		if value == nil {
+			return nil
+		}
+		cloned := strings.Clone(*value)
+		return &cloned
+	}
+	snapshot := &OpenAIForwardResult{
+		RequestID:                     strings.Clone(result.RequestID),
+		ResponseID:                    strings.Clone(result.ResponseID),
+		Usage:                         result.Usage,
+		Model:                         strings.Clone(result.Model),
+		BillingModel:                  strings.Clone(result.BillingModel),
+		UpstreamModel:                 strings.Clone(result.UpstreamModel),
+		UpstreamResponseModel:         strings.Clone(result.UpstreamResponseModel),
+		UpstreamResponseModelConflict: result.UpstreamResponseModelConflict,
+		UpstreamResponseServiceTier:   strings.Clone(result.UpstreamResponseServiceTier),
+		UpstreamEndpoint:              strings.Clone(result.UpstreamEndpoint),
+		ServiceTier:                   cloneString(result.ServiceTier),
+		ReasoningEffort:               cloneString(result.ReasoningEffort),
+		RequestedReasoningEffort:      cloneString(result.RequestedReasoningEffort),
+		Stream:                        result.Stream,
+		OpenAIWSMode:                  result.OpenAIWSMode,
+		Duration:                      result.Duration,
+		ImageCount:                    result.ImageCount,
+		ImageSize:                     strings.Clone(result.ImageSize),
+		ImageInputSize:                strings.Clone(result.ImageInputSize),
+		ImageOutputSize:               strings.Clone(result.ImageOutputSize),
+		ImageSizeSource:               strings.Clone(result.ImageSizeSource),
+		VideoCount:                    result.VideoCount,
+		VideoResolution:               strings.Clone(result.VideoResolution),
+		VideoDurationSeconds:          result.VideoDurationSeconds,
+		WebSearchCalls:                result.WebSearchCalls,
+		SearchCount:                   result.SearchCount,
+	}
+	if result.FirstTokenMs != nil {
+		firstTokenMs := *result.FirstTokenMs
+		snapshot.FirstTokenMs = &firstTokenMs
+	}
+	if result.AudioUsage != nil {
+		audio := *result.AudioUsage
+		audio.Mode = strings.Clone(audio.Mode)
+		snapshot.AudioUsage = &audio
+	}
+	if result.ImageOutputSizes != nil {
+		snapshot.ImageOutputSizes = make([]string, len(result.ImageOutputSizes))
+		for i, size := range result.ImageOutputSizes {
+			snapshot.ImageOutputSizes[i] = strings.Clone(size)
+		}
+	}
+	if result.ImageSizeBreakdown != nil {
+		snapshot.ImageSizeBreakdown = make(map[string]int, len(result.ImageSizeBreakdown))
+		for size, count := range result.ImageSizeBreakdown {
+			snapshot.ImageSizeBreakdown[strings.Clone(size)] = count
+		}
+	}
+	if !result.OpenAIWSMode {
+		if name := UpstreamRequestIDHeaderName(account); name != "" {
+			if id := result.UpstreamHeaders.Get(name); id != "" {
+				snapshot.UpstreamHeaders = make(http.Header, 1)
+				snapshot.UpstreamHeaders.Set(name, strings.Clone(id))
+			}
+		}
+	}
+	return snapshot
+}
+
 // CyberPolicyUsageInput 是 cyber 拒绝、未走正常 RecordUsage 的请求记录用量的入参。
 // 用量按上游真实 token 计费，与 WS cyber 及正常请求口径一致（InputTokens/OutputTokens
 // 取自上游 response.failed 报告的 usage，即 mark.UpstreamInTok/OutTok）。

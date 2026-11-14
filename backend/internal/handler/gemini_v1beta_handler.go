@@ -615,35 +615,37 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		forceCacheBilling := fs.ForceCacheBilling
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 		sessionID := service.ExtractClientSessionID(c)
+		usageInput := &service.RecordUsageLongContextInput{
+			Result:                result,
+			QuotaPlatform:         quotaPlatform,
+			APIKey:                apiKey,
+			User:                  apiKey.User,
+			Account:               account,
+			Subscription:          subscription,
+			PricingAt:             pricingAt,
+			InboundEndpoint:       inboundEndpoint,
+			UpstreamEndpoint:      upstreamEndpoint,
+			UserAgent:             userAgent,
+			IPAddress:             clientIP,
+			RequestPayloadHash:    requestPayloadHash,
+			LongContextThreshold:  200000, // Gemini 200K 阈值
+			LongContextMultiplier: 2.0,    // 超出部分双倍计费
+			ForceCacheBilling:     forceCacheBilling,
+			APIKeyService:         h.apiKeyService,
+			SessionID:             sessionID,
+			ChannelUsageFields:    clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
+		}
+		usageLogFields := []zap.Field{
+			zap.String("component", "handler.gemini_v1beta.models"),
+			zap.Int64("user_id", authSubject.UserID),
+			zap.Int64("api_key_id", apiKey.ID),
+			zap.Any("group_id", apiKey.GroupID),
+			zap.String("model", modelName),
+			zap.Int64("account_id", account.ID),
+		}
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-			if err := h.gatewayService.RecordUsageWithLongContext(ctx, &service.RecordUsageLongContextInput{
-				Result:                result,
-				QuotaPlatform:         quotaPlatform,
-				APIKey:                apiKey,
-				User:                  apiKey.User,
-				Account:               account,
-				Subscription:          subscription,
-				PricingAt:             pricingAt,
-				InboundEndpoint:       inboundEndpoint,
-				UpstreamEndpoint:      upstreamEndpoint,
-				UserAgent:             userAgent,
-				IPAddress:             clientIP,
-				RequestPayloadHash:    requestPayloadHash,
-				LongContextThreshold:  200000, // Gemini 200K 阈值
-				LongContextMultiplier: 2.0,    // 超出部分双倍计费
-				ForceCacheBilling:     forceCacheBilling,
-				APIKeyService:         h.apiKeyService,
-				SessionID:             sessionID,
-				ChannelUsageFields:    clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
-			}); err != nil {
-				logger.L().With(
-					zap.String("component", "handler.gemini_v1beta.models"),
-					zap.Int64("user_id", authSubject.UserID),
-					zap.Int64("api_key_id", apiKey.ID),
-					zap.Any("group_id", apiKey.GroupID),
-					zap.String("model", modelName),
-					zap.Int64("account_id", account.ID),
-				).Error("gemini.record_usage_failed", zap.Error(err))
+			if err := h.gatewayService.RecordUsageWithLongContext(ctx, usageInput); err != nil {
+				logger.L().With(usageLogFields...).Error("gemini.record_usage_failed", zap.Error(err))
 			}
 		})
 		reqLog.Debug("gemini.request_completed",

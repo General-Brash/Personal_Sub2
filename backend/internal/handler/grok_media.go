@@ -717,39 +717,44 @@ func recordGrokMediaUsage(
 			payloadForHash = []byte(videoTaskID)
 		}
 	}
-	h.submitOpenAIUsageRecordTask(c.Request.Context(), result, func(ctx context.Context) {
-		if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-			Result:             result,
-			APIKey:             apiKey,
-			User:               apiKey.User,
-			Account:            account,
-			Subscription:       subscription,
-			InboundEndpoint:    inboundEndpoint,
-			UpstreamEndpoint:   upstreamEndpoint,
-			UserAgent:          userAgent,
-			IPAddress:          clientIP,
-			RequestPayloadHash: service.HashUsageRequestPayload(payloadForHash),
-			APIKeyService:      h.apiKeyService,
-			QuotaPlatform:      quotaPlatform,
-			SessionID:          sessionID,
-			ChannelUsageFields: channelUsageFields,
-		}); err != nil {
+	requestPayloadHash := service.HashUsageRequestPayload(payloadForHash)
+	usageInput := &service.OpenAIRecordUsageInput{
+		Result:             service.SnapshotOpenAIUsageResult(result, account),
+		APIKey:             apiKey,
+		User:               apiKey.User,
+		Account:            account,
+		Subscription:       subscription,
+		InboundEndpoint:    inboundEndpoint,
+		UpstreamEndpoint:   upstreamEndpoint,
+		UserAgent:          userAgent,
+		IPAddress:          clientIP,
+		RequestPayloadHash: requestPayloadHash,
+		APIKeyService:      h.apiKeyService,
+		QuotaPlatform:      quotaPlatform,
+		SessionID:          sessionID,
+		ChannelUsageFields: channelUsageFields,
+	}
+	userID := subject.UserID
+	apiKeyID := apiKey.ID
+	usageLogFields := []zap.Field{
+		zap.String("component", "handler.openai_gateway.grok_media"),
+		zap.Int64("user_id", userID),
+		zap.Int64("api_key_id", apiKeyID),
+		zap.Any("group_id", apiKey.GroupID),
+		zap.String("model", requestModel),
+		zap.Int64("account_id", account.ID),
+	}
+	h.submitOpenAIUsageRecordTask(c.Request.Context(), usageInput.Result, func(ctx context.Context) {
+		if err := h.gatewayService.RecordUsage(ctx, usageInput); err != nil {
 			if videoTaskID != "" {
-				if releaseErr := h.gatewayService.ReleaseGrokVideoBilling(ctx, videoTaskID, subject.UserID, apiKey.ID); releaseErr != nil {
+				if releaseErr := h.gatewayService.ReleaseGrokVideoBilling(ctx, videoTaskID, userID, apiKeyID); releaseErr != nil {
 					reqLog.Warn("grok_media.video_billing_claim_release_failed",
 						zap.String("request_id", videoTaskID),
 						zap.Error(releaseErr),
 					)
 				}
 			}
-			logger.L().With(
-				zap.String("component", "handler.openai_gateway.grok_media"),
-				zap.Int64("user_id", subject.UserID),
-				zap.Int64("api_key_id", apiKey.ID),
-				zap.Any("group_id", apiKey.GroupID),
-				zap.String("model", requestModel),
-				zap.Int64("account_id", account.ID),
-			).Error("grok_media.record_usage_failed", zap.Error(err))
+			logger.L().With(usageLogFields...).Error("grok_media.record_usage_failed", zap.Error(err))
 			reqLog.Debug("grok_media.record_usage_failed", zap.Error(err))
 		}
 	})

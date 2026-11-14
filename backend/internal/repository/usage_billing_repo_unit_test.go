@@ -221,6 +221,9 @@ func TestUsageBillingRepositoryApply_RollsBackWhenUsageLogInsertFails(t *testing
 	defer func() { _ = db.Close() }()
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT id FROM users WHERE id = \$1 AND deleted_at IS NULL FOR NO KEY UPDATE`).
+		WithArgs(int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
 	mock.ExpectQuery(`INSERT INTO usage_logs`).
 		WillReturnError(errors.New("usage log insert failed"))
 	mock.ExpectRollback()
@@ -308,6 +311,7 @@ func TestUsageBillingRepositoryApply_RollsBackUsageLogAndTemporaryCreditWhenPerm
 	defer func() { _ = db.Close() }()
 
 	mock.ExpectBegin()
+	expectTemporaryCreditUserLock(mock, 42)
 	mock.ExpectQuery(`INSERT INTO usage_logs`).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(101), time.Now()))
 	mock.ExpectQuery(`INSERT INTO usage_billing_dedup`).

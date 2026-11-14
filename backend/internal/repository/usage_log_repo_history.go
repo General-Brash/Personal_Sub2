@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
@@ -11,12 +12,20 @@ import (
 )
 
 func usageHistoryMetadata(ctx context.Context, db sqlExecutor, source string, args []any) (usagestats.HistoryMetadata, error) {
+	// Callers supply the internal range function, optionally aliased as ul.
+	// Keep their filters and joins while excluding raw rows before aggregation.
+	source = strings.Replace(source, "usage_statistics_range(", "usage_statistics_archive_range(", 1)
+	rangeCall, suffix, _ := strings.Cut(source, ")")
+	if !strings.HasPrefix(strings.TrimSpace(suffix), "ul ") {
+		source = rangeCall + ") ul " + suffix
+	}
+
 	var m usagestats.HistoryMetadata
 	var first, last sql.NullTime
 	var tz sql.NullString
-	err := scanSingleRow(ctx, db, `SELECT COALESCE(BOOL_OR(is_archived), false),
-		MIN(created_at) FILTER (WHERE is_archived), MAX(bucket_end) FILTER (WHERE is_archived),
-		MIN(bucket_timezone) FILTER (WHERE is_archived) FROM `+source,
+	err := scanSingleRow(ctx, db, `SELECT COALESCE(BOOL_OR(ul.is_archived), false),
+		MIN(ul.created_at) FILTER (WHERE ul.is_archived), MAX(ul.bucket_end) FILTER (WHERE ul.is_archived),
+		MIN(ul.bucket_timezone) FILTER (WHERE ul.is_archived) FROM `+source,
 		args, &m.IncludesHistory, &first, &last, &tz)
 	if err != nil {
 		return m, err

@@ -258,33 +258,36 @@ func (h *OpenAIGatewayHandler) recordAlphaSearchUsage(
 	inboundEndpoint := GetInboundEndpoint(c)
 	upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
 	quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
+	pricingAt := service.OpenAIPricingAtFromContext(c.Request.Context())
 
+	usageInput := &service.OpenAIRecordUsageInput{
+		Result:             service.SnapshotOpenAIUsageResult(result, account),
+		APIKey:             apiKey,
+		User:               apiKey.User,
+		Account:            account,
+		Subscription:       subscription,
+		InboundEndpoint:    inboundEndpoint,
+		UpstreamEndpoint:   upstreamEndpoint,
+		UserAgent:          userAgent,
+		IPAddress:          clientIP,
+		RequestPayloadHash: requestPayloadHash,
+		APIKeyService:      h.apiKeyService,
+		QuotaPlatform:      quotaPlatform,
+		SessionID:          sessionID,
+		ChannelUsageFields: channelMapping.ToUsageFields(requestedModel, result.UpstreamModel),
+		PricingAt:          pricingAt,
+	}
+	usageLogFields := []zap.Field{
+		zap.String("component", "handler.openai_gateway.alpha_search"),
+		zap.Int64("user_id", userID),
+		zap.Int64("api_key_id", apiKey.ID),
+		zap.Any("group_id", apiKey.GroupID),
+		zap.String("model", requestedModel),
+		zap.Int64("account_id", account.ID),
+	}
 	h.submitMandatoryUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-		if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-			Result:             result,
-			APIKey:             apiKey,
-			User:               apiKey.User,
-			Account:            account,
-			Subscription:       subscription,
-			InboundEndpoint:    inboundEndpoint,
-			UpstreamEndpoint:   upstreamEndpoint,
-			UserAgent:          userAgent,
-			IPAddress:          clientIP,
-			RequestPayloadHash: requestPayloadHash,
-			APIKeyService:      h.apiKeyService,
-			QuotaPlatform:      quotaPlatform,
-			SessionID:          sessionID,
-			ChannelUsageFields: channelMapping.ToUsageFields(requestedModel, result.UpstreamModel),
-			PricingAt:          service.OpenAIPricingAtFromContext(c.Request.Context()),
-		}); err != nil {
-			logger.L().With(
-				zap.String("component", "handler.openai_gateway.alpha_search"),
-				zap.Int64("user_id", userID),
-				zap.Int64("api_key_id", apiKey.ID),
-				zap.Any("group_id", apiKey.GroupID),
-				zap.String("model", requestedModel),
-				zap.Int64("account_id", account.ID),
-			).Error("openai_alpha_search.record_usage_failed", zap.Error(err))
+		if err := h.gatewayService.RecordUsage(ctx, usageInput); err != nil {
+			logger.L().With(usageLogFields...).Error("openai_alpha_search.record_usage_failed", zap.Error(err))
 		}
 	})
 }

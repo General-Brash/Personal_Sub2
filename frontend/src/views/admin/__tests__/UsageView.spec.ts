@@ -376,7 +376,7 @@ describe('admin UsageView distribution metric toggles', () => {
       start_date: formatLocalDate(yesterday),
       end_date: formatLocalDate(now),
       granularity: 'hour'
-    }))
+    }), { signal: expect.any(AbortSignal) })
 
     const modelChart = wrapper.find('[data-test="model-chart"]')
     const groupChart = wrapper.find('[data-test="group-chart"]')

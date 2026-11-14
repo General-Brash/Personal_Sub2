@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -777,9 +778,11 @@ func usageStatsSummaryExpectation(source string) string {
 }
 
 func usageStatsHistoryExpectation(source string) string {
-	return "^" + regexp.QuoteMeta(`SELECT COALESCE(BOOL_OR(is_archived), false),
-		MIN(created_at) FILTER (WHERE is_archived), MAX(bucket_end) FILTER (WHERE is_archived),
-		MIN(bucket_timezone) FILTER (WHERE is_archived) FROM `+source) + "$"
+	rangeCall, suffix, _ := strings.Cut(source, ")")
+	source = strings.Replace(rangeCall, "usage_statistics_range(", "usage_statistics_archive_range(", 1) + ") ul" + suffix
+	return "^" + regexp.QuoteMeta(`SELECT COALESCE(BOOL_OR(ul.is_archived), false),
+		MIN(ul.created_at) FILTER (WHERE ul.is_archived), MAX(ul.bucket_end) FILTER (WHERE ul.is_archived),
+		MIN(ul.bucket_timezone) FILTER (WHERE ul.is_archived) FROM `+source) + "$"
 }
 
 func expectUsageStatsEndpointQueries(mock sqlmock.Sqlmock, filter string, args ...driver.Value) {
