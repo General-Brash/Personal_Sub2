@@ -302,7 +302,7 @@ func (a *httpAttempt) snapshot() httpAttemptSnapshot {
 	}
 	// Even one background dial can lose to a reused pooled connection. Do not
 	// attribute its DNS/TCP/TLS timings to acquisition of that pooled connection.
-	allowConnectionStages := !multiple && !(a.gotConn.count == 1 && a.connectionReused)
+	allowConnectionStages := !multiple && (a.gotConn.count != 1 || !a.connectionReused)
 	boundary := a.endedAt
 	if a.gotConn.count == 1 && (boundary.IsZero() || a.gotConn.at.Before(boundary)) {
 		boundary = a.gotConn.at
