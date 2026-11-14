@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/gatewaytiming"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
@@ -334,7 +335,9 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		if dispatchErr := retryContext.BeforeDispatch(c, account); dispatchErr != nil {
 			return nil, dispatchErr
 		}
+		upstreamReq, finishHTTPAttempt := gatewaytiming.StartHTTPAttempt(upstreamReq, account.ID)
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		finishHTTPAttempt(resp, err)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if err != nil {
 			// Transport-level failure (proxy/DNS/TCP/TLS — no HTTP response). Convert to
@@ -1644,6 +1647,9 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			if firstTokenMs == nil && openAIStreamDataStartsVisibleOutput(trimmedData, eventType) {
 				ms := int(time.Since(startTime).Milliseconds())
 				firstTokenMs = &ms
+				if c.Request != nil {
+					gatewaytiming.MarkFirstVisible(c.Request.Context())
+				}
 			}
 			s.parseSSEUsageBytes(dataBytes, usage)
 		}

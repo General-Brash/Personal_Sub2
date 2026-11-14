@@ -18,6 +18,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/gatewaytiming"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
@@ -318,6 +319,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	// 局部兜底：确保该 handler 内部任何 panic 都不会击穿到进程级。
 	streamStarted := false
 	defer h.recoverResponsesPanic(c, &streamStarted)
+	middleware2.BeginGatewayTiming(c)
+	gatewaytiming.Mark(c.Request.Context(), "handler_entered")
 	compactStartedAt := time.Now()
 	defer h.logOpenAIRemoteCompactOutcome(c, compactStartedAt)
 	setOpenAIClientTransportHTTP(c)
@@ -349,6 +352,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 	// Read request body
 	body, err := readLenientJSONRequestBodyWithPrealloc(c.Request, h.cfg)
+	finishPreflight := gatewaytiming.Observe(c.Request.Context(), "preflight")
+	defer finishPreflight()
 	if err != nil {
 		if maxErr, ok := extractMaxBytesError(err); ok {
 			h.errorResponse(c, http.StatusRequestEntityTooLarge, "invalid_request_error", buildBodyTooLargeMessage(maxErr.Limit))
@@ -510,10 +515,14 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	requestPlatform := openAICompatibleRequestPlatform(c.Request.Context(), apiKey)
 
+	finishPreflight()
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
 	routingStart := time.Now()
 
-	userReleaseFunc, acquired := h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted, reqLog)
+	userReleaseFunc, acquired := func() (func(), bool) {
+		defer gatewaytiming.Observe(c.Request.Context(), "user_slot_acquire")()
+		return h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted, reqLog)
+	}()
 	if !acquired {
 		return
 	}
@@ -523,7 +532,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	}
 
 	// 2. Re-check billing eligibility after wait
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+	if err := func() error {
+		defer gatewaytiming.Observe(c.Request.Context(), "billing_check")()
+		return h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey))
+	}(); err != nil {
 		reqLog.Info("openai.billing_eligibility_check_failed", zap.Error(err))
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -584,6 +596,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	selectRetryAccount := func(excluded map[int64]struct{}) (*service.AccountSelectionResult, service.OpenAIAccountScheduleDecision, error) {
 		selectionCtx, finishWait := retryContext.SelectionContext(c.Request.Context())
 		defer finishWait()
+		defer gatewaytiming.Observe(selectionCtx, "account_selection")()
 		return h.gatewayService.SelectAccountWithSchedulerForCapability(
 			selectionCtx, apiKey.GroupID, previousResponseID, sessionHash, forwardModel, excluded,
 			service.OpenAIUpstreamTransportAny, requiredCapability, requireCompact, false, !imageIntent, requestPlatform,
@@ -698,7 +711,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		reqLog.Debug("openai.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
 		setOpsSelectedAccount(c, account.ID, account.Platform)
 
-		accountReleaseFunc, slotResult := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
+		accountReleaseFunc, slotResult := func() (func(), openAISlotAcquireResult) {
+			defer gatewaytiming.Observe(c.Request.Context(), "account_slot_acquire")()
+			return h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
+		}()
 		if slotResult == openAISlotAcquireProfitVetoed {
 			// 利润终检否决：排除该账号重新选号，全池耗尽由下一轮选号报错；
 			// 否决次数达上限则直接终止，避免排队抢槽后才终检的延迟放大。
@@ -754,6 +770,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					accountReleaseFunc()
 				}
 			}()
+			defer gatewaytiming.Observe(c.Request.Context(), "forward")()
+			gatewaytiming.Mark(c.Request.Context(), "first_forward_started")
 			return h.gatewayService.Forward(c.Request.Context(), c, account, attemptBody)
 		}()
 		stampOpenAIRequestedReasoningEffort(result, c)
@@ -972,11 +990,14 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 									return
 								}
 							} else {
+								finishRetryBackoff := gatewaytiming.Observe(c.Request.Context(), "retry_backoff")
 								select {
 								case <-c.Request.Context().Done():
+									finishRetryBackoff()
 									return
 								case <-time.After(retryDelay):
 								}
+								finishRetryBackoff()
 							}
 							continue
 						}

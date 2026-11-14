@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"compress/zlib"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/gatewaytiming"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -22,6 +24,8 @@ const (
 	maxDecompressedBodySize = 64 << 20
 )
 
+type requestBodyReadContextKey struct{}
+
 // ReadRequestBodyWithPrealloc reads request body with preallocated buffer based
 // on content length, transparently decoding any Content-Encoding the upstream
 // client used to compress the body (zstd, gzip, deflate).
@@ -29,6 +33,23 @@ func ReadRequestBodyWithPrealloc(req *http.Request) ([]byte, error) {
 	if req == nil || req.Body == nil {
 		return nil, nil
 	}
+	ctx := req.Context()
+	firstRead := true
+	if gatewaytiming.FromContext(ctx) != nil {
+		alreadyRead, _ := ctx.Value(requestBodyReadContextKey{}).(bool)
+		firstRead = !alreadyRead
+		if firstRead {
+			// Preserve the first inbound read across request-body resets, including
+			// failed reads, without retaining body contents or losing context values.
+			ctx = context.WithValue(ctx, requestBodyReadContextKey{}, true)
+			*req = *req.WithContext(ctx)
+		}
+	}
+	readPhase, decodePhase := "body_read", "body_decode"
+	if !firstRead {
+		readPhase, decodePhase = "body_reread", "body_redecode"
+	}
+	encoding := req.Header.Get("Content-Encoding")
 
 	capHint := requestBodyReadInitCap
 	if req.ContentLength > 0 {
@@ -43,19 +64,41 @@ func ReadRequestBodyWithPrealloc(req *http.Request) ([]byte, error) {
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, capHint))
-	if _, err := io.Copy(buf, req.Body); err != nil {
+	finishBodyRead := gatewaytiming.Observe(ctx, readPhase)
+	defer finishBodyRead()
+	rawBytes, err := io.Copy(buf, req.Body)
+	finishBodyRead()
+	if err != nil {
+		if firstRead {
+			gatewaytiming.RecordRequestBody(ctx, rawBytes, -1, encoding, false)
+		}
 		return nil, err
+	}
+	if firstRead {
+		gatewaytiming.Mark(ctx, "body_read_done")
 	}
 	raw := buf.Bytes()
 
 	enc := strings.ToLower(strings.TrimSpace(req.Header.Get("Content-Encoding")))
 	if enc == "" || enc == "identity" {
+		if firstRead {
+			gatewaytiming.RecordRequestBody(ctx, rawBytes, int64(len(raw)), encoding, true)
+		}
 		return raw, nil
 	}
 
+	finishBodyDecode := gatewaytiming.Observe(ctx, decodePhase)
+	defer finishBodyDecode()
 	decoded, err := decompressRequestBody(enc, raw)
+	finishBodyDecode()
 	if err != nil {
+		if firstRead {
+			gatewaytiming.RecordRequestBody(ctx, rawBytes, -1, encoding, false)
+		}
 		return nil, fmt.Errorf("decode Content-Encoding %q: %w", enc, err)
+	}
+	if firstRead {
+		gatewaytiming.RecordRequestBody(ctx, rawBytes, int64(len(decoded)), encoding, true)
 	}
 
 	req.Header.Del("Content-Encoding")
@@ -71,6 +114,9 @@ func ReadLenientJSONRequestBodyWithPrealloc(req *http.Request, maxNormalizedByte
 	body, err := ReadRequestBodyWithPrealloc(req)
 	if err != nil {
 		return nil, err
+	}
+	if req != nil {
+		defer gatewaytiming.Observe(req.Context(), "body_normalize")()
 	}
 	return NormalizeLenientJSONRequestBody(body, maxNormalizedBytes)
 }

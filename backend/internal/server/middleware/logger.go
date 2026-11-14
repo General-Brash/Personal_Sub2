@@ -1,20 +1,51 @@
 package middleware
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/gatewaytiming"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
+const gatewayTimingStartTimeKey = "gateway_timing_logger_started_at"
+
+// BeginGatewayTiming activates timing from application Logger entry, excluding
+// client and reverse-proxy waiting before arrival. Without Logger, it starts now.
+func BeginGatewayTiming(c *gin.Context) {
+	if c == nil || c.Request == nil || gatewaytiming.FromContext(c.Request.Context()) != nil {
+		return
+	}
+	startTime, ok := c.Get(gatewayTimingStartTimeKey)
+	startedAt, valid := startTime.(time.Time)
+	if !ok || !valid {
+		startedAt = time.Now()
+	}
+	collector := gatewaytiming.New(startedAt)
+	c.Request = c.Request.WithContext(gatewaytiming.WithCollector(c.Request.Context(), collector))
+}
+
 // Logger 请求日志中间件
 func Logger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 开始时间
 		startTime := time.Now()
+		c.Set(gatewayTimingStartTimeKey, startTime)
+		if c.Request != nil && c.Request.Method == http.MethodPost {
+			switch c.FullPath() {
+			case "/v1/responses", "/v1/responses/*subpath",
+				"/responses", "/responses/*subpath",
+				"/backend-api/codex/responses", "/backend-api/codex/responses/*subpath":
+				// Start before composite routing reads the inbound body. Responses
+				// handled by another gateway may have only ingress timing and no
+				// OpenAI HTTP attempt.
+				BeginGatewayTiming(c)
+			}
+		}
 
 		// 请求路径
 		path := c.Request.URL.Path
@@ -79,7 +110,11 @@ func Logger() gin.HandlerFunc {
 		}
 
 		l := logger.FromContext(c.Request.Context()).With(fields...)
-		l.Info("http request completed", zap.Time("completed_at", endTime))
+		completionFields := []zap.Field{zap.Time("completed_at", endTime)}
+		if gatewaytiming.FromContext(c.Request.Context()) != nil {
+			completionFields = append(completionFields, zap.Any("gateway_timing", gatewaytiming.Snapshot(c.Request.Context(), endTime)))
+		}
+		l.Info("http request completed", completionFields...)
 
 		if len(c.Errors) > 0 {
 			l.Warn("http request contains gin errors", zap.String("errors", c.Errors.String()))

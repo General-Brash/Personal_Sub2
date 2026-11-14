@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/gatewaytiming"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -606,6 +607,9 @@ func (r *ServerAutoRetryContext) Sleep(c *gin.Context, delay time.Duration) erro
 	start := time.Now()
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
+	if c != nil && c.Request != nil {
+		defer gatewaytiming.Observe(c.Request.Context(), "retry_backoff")()
+	}
 	defer func() { r.Wait += time.Since(start) }()
 	select {
 	case <-r.OriginalContext.Done():

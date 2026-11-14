@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/gatewaytiming"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
@@ -155,6 +156,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		maxLineSize = s.cfg.Gateway.MaxLineSize
 	}
 	var firstTokenMs *int
+	firstVisibleMarked := false
 	firstOutputProgressObserved := false
 	bufferedWriter := bufio.NewWriterSize(w, 4*1024)
 	var firstOutputStage *openAIFirstOutputStage
@@ -665,6 +667,11 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			}
 			startsClientOutput := forceFlushFailedEvent || openAIStreamDataStartsClientOutput(data, eventType) || GetOpsCyberPolicy(c) != nil && eventType == "error"
 			startsVisibleOutput := openAIStreamDataStartsVisibleOutput(data, eventType)
+			// Record gateway detection before staging or downstream I/O, independently of TTFT.
+			if !firstVisibleMarked && startsVisibleOutput && c.Request != nil {
+				firstVisibleMarked = true
+				gatewaytiming.MarkFirstVisible(c.Request.Context())
+			}
 			if !clientDisconnected && guardRetry && startsClientOutput && !firstOutputProgressObserved && !firstOutputStage.closed {
 				applyAttemptResponseHeaders()
 				if stageErr := firstOutputStage.CommitTo(bufferedWriter); stageErr != nil {
