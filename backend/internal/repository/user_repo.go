@@ -910,12 +910,10 @@ func (r *userRepository) GetLatestUsedAtByUserIDs(ctx context.Context, userIDs [
 		return nil, fmt.Errorf("sql executor is not configured")
 	}
 
-	const query = `
-		SELECT user_id, MAX(last_created_at) AS last_used_at
-		FROM usage_statistics
-		WHERE user_id = ANY($1)
-		GROUP BY user_id
-	`
+	query := fmt.Sprintf(`
+		SELECT ids.user_id, %s AS last_used_at
+		FROM unnest($1::bigint[]) AS ids(user_id)
+	`, userLastUsedAtExpression("ids.user_id"))
 
 	rows, err := r.sql.QueryContext(ctx, query, pq.Array(userIDs))
 	if err != nil {
@@ -926,12 +924,15 @@ func (r *userRepository) GetLatestUsedAtByUserIDs(ctx context.Context, userIDs [
 	for rows.Next() {
 		var (
 			userID     int64
-			lastUsedAt time.Time
+			lastUsedAt sql.NullTime
 		)
 		if scanErr := rows.Scan(&userID, &lastUsedAt); scanErr != nil {
 			return nil, scanErr
 		}
-		ts := lastUsedAt.UTC()
+		if !lastUsedAt.Valid {
+			continue
+		}
+		ts := lastUsedAt.Time.UTC()
 		result[userID] = &ts
 	}
 	if err := rows.Err(); err != nil {
@@ -948,10 +949,17 @@ func (r *userRepository) GetLatestUsedAtByUserID(ctx context.Context, userID int
 	return latestByUserID[userID], nil
 }
 
+func userLastUsedAtExpression(userIDColumn string) string {
+	return fmt.Sprintf(`GREATEST(
+		(SELECT MAX(ul.created_at) FROM usage_logs ul WHERE ul.user_id = %[1]s AND ul.compacted_at IS NULL),
+		(SELECT MAX(uhd.last_created_at) FROM usage_history_daily uhd WHERE (uhd.dimensions->>'user_id')::bigint = %[1]s)
+	)`, userIDColumn)
+}
+
 func userLastUsedAtOrder(sortOrder string) []func(*entsql.Selector) {
 	orderExpr := func(direction, nulls string, tieOrder func(string) string) func(*entsql.Selector) {
 		return func(s *entsql.Selector) {
-			subquery := fmt.Sprintf("(SELECT MAX(last_created_at) FROM usage_statistics WHERE user_id = %s)", s.C(dbuser.FieldID))
+			subquery := userLastUsedAtExpression(s.C(dbuser.FieldID))
 			s.OrderExpr(entsql.Expr(subquery + " " + direction + " NULLS " + nulls))
 			s.OrderBy(tieOrder(s.C(dbuser.FieldID)))
 		}
